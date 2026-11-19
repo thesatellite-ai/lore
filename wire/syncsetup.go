@@ -213,6 +213,11 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 		}
 	}
 	a.forwardStoreMoves(ctx, a.pushNotes()) // D-699: a set-url move owed to an old address, once the new one has it
+	// D-699: the open refreshed each org entry from lore-org.yaml as its
+	// clone stood before this sync fetched; a move the fetch just brought
+	// (an admin's set-url) is copied now, so the teammate follows in this
+	// sync, not at their next command (local reads only, no network)
+	refreshOrgSources(ctx, a.opts.Home, nil)
 	if len(out.Data.Stores) == 0 {
 		out.Lines = append(out.Lines, "no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)")
 		return out, nil

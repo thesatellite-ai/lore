@@ -125,3 +125,96 @@ func TestJourneyTeamLeadStoreMovedToEmptyRepo(t *testing.T) {
 		}
 	})
 }
+
+// TestJourneyTeamLeadStoreMovedTeammatePushedToOldRepo: Ann pushes a note
+// to the old repo, and Lee (the admin) runs set-url to the new repo
+// without syncing first; Ann then pushes another note to the old repo
+// before Lee's next sync (devco D-699 follow-up). Before, Lee's clone never
+// fetched the old address: Ann's commits never reached the new repo, and
+// the move sent to the old address was refused as "a teammate pushed there
+// after it" (Ann pushed before following). Now set-url takes in Ann's first
+// note, Lee's sync takes in the second and sends both to the new repo, the
+// move reaches the old repo as a fast-forward, and Ann follows in one sync,
+// run from home (SyncSetup) in one run and from her code repo (SyncStores)
+// in the other (her repo holds a .lore folder, so `lore sync` there is the
+// repo sync): the repo sync refreshed her org entry only at open, before
+// its fetch brought the move, so she followed only at a later command.
+func TestJourneyTeamLeadStoreMovedTeammatePushedToOldRepo(t *testing.T) {
+	t.Parallel()
+	for _, follow := range []string{"home-sync", "repo-sync"} {
+		t.Run(follow, func(t *testing.T) {
+			t.Parallel()
+			storeMovedTeammatePushedToOldRepo(t, follow)
+		})
+	}
+}
+
+// storeMovedTeammatePushedToOldRepo is the journey above; follow names the
+// sync Ann follows with: "home-sync" or "repo-sync".
+func storeMovedTeammatePushedToOldRepo(t *testing.T, follow string) {
+	tt := newTLTeam(t)
+	w := tt.w
+	lee := tt.person(tlLee)
+	var ann *Machine
+	var annCode string
+	moved := w.Remote("github.com/acme-co/team-notes-moved")
+
+	w.Step("day1/team-with-a-member", func() {
+		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
+		tt.lore(tlLee, "sync").OK(t)
+		_, line := tlInvite(t, lee, tt.repo[tlLee.Email].Dir, tlAnn.Email)
+		ann = tt.person(tlAnn)
+		tlJoin(t, ann, tt.repo[tlAnn.Email].Dir, tlTeamSetup, line, tlAnn, []string{tlFolders})
+		annCode = filepath.Join(ann.Home, "code")
+		if follow == "repo-sync" {
+			// a repo with its own .lore folder: its `lore sync` is the
+			// repo sync (SyncStores), not the setup sync of a repo linked
+			// by its remote only; Ann's notes below are written from her
+			// code folder (a member's write in a lore project of its own
+			// is refused for the company folder)
+			tt.lore(tlAnn, "init", "--non-interactive", "--name=app").OK(t)
+		}
+		ann.Lore(annCode, "sync").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
+	})
+
+	w.Step("day2/the-teammate-pushes-then-the-admin-moves-without-a-sync", func() {
+		w.AdvanceDays(1)
+		w.Git(tt.store.Dir, "push", "-q", "--mirror", moved.Dir) // the new repo: a copy from before Ann's note
+		ann.Lore(annCode, "memory", "add", "--body", "pushed to the old repo before the move", "--to", tlOrg+"/org", "--yes").OK(t)
+		ann.Lore(annCode, "sync").OK(t)
+		r := lee.Lore(lee.Home, "store", "set-url", "--name", tlOrg, "--url", moved.SSHURL(), "--yes").OK(t)
+		r.Says(t, "commit(s) a teammate pushed to the old address "+tt.store.SSHURL())
+		ann.Lore(annCode, "memory", "add", "--body", "pushed to the old repo after the move", "--to", tlOrg+"/org", "--yes").OK(t)
+		ann.Lore(annCode, "sync").OK(t)
+	})
+
+	w.Step("day2/the-admin-syncs-every-commit-reaches-the-new-repo", func() {
+		s := lee.Lore(filepath.Join(lee.Home, "code"), "sync").OK(t)
+		s.Says(t, "a teammate pushed to "+tt.store.SSHURL()+" before following the move and sent them to "+moved.SSHURL(), "at its old address "+tt.store.SSHURL()+" too").
+			Never(t, "refused the move", "did not reach its old address")
+		oldHead := w.Git(tt.store.Dir, "rev-parse", "refs/heads/main")
+		if newHead := w.Git(moved.Dir, "rev-parse", "refs/heads/main"); oldHead != newHead {
+			t.Fatalf("[devco:D-699] old repo main %s, new repo main %s: the move did not reach the old address", oldHead, newHead)
+		}
+		bodies := w.Git(moved.Dir, "grep", "-l", "-e", "pushed to the old repo", "refs/heads/main")
+		if strings.Count(bodies, "\n")+1 < 2 {
+			t.Fatalf("[devco:D-699] the new repo lacks Ann's notes pushed to the old repo; files holding them:\n%s", bodies)
+		}
+	})
+
+	w.Step("day2/the-teammate-follows-from-a-"+follow, func() {
+		if cfg, err := os.ReadFile(ann.LorePath("config.yaml")); err != nil || strings.Contains(string(cfg), moved.SSHURL()) {
+			t.Fatalf("[devco:D-699] Ann's config names %s before her sync after the move reached the old repo (%v):\n%s", moved.SSHURL(), err, cfg)
+		}
+		if follow == "repo-sync" {
+			tt.lore(tlAnn, "sync").OK(t)
+		} else {
+			ann.Lore(annCode, "sync").OK(t)
+		}
+		cfg, err := os.ReadFile(ann.LorePath("config.yaml"))
+		if err != nil || !strings.Contains(string(cfg), moved.SSHURL()) {
+			t.Fatalf("[devco:D-699] Ann's config does not follow the move to %s after one %s (%v):\n%s", moved.SSHURL(), follow, err, cfg)
+		}
+	})
+}

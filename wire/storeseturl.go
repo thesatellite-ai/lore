@@ -154,6 +154,10 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		}
 		out.Changed = true
 	}
+	// D-699: what a teammate pushed to an old address that this machine
+	// never fetched is taken in before the move commit, so the new
+	// address gets it and the move sent to the old address fast-forwards
+	took := a.mergeOldAddresses(ctx, in.Name, raw, src.Branch, old)
 	left := leftClonesLine(leftClones(ctx, a.opts.Home, out.ID, raw), old)
 	var committed bool
 	out.OrgFiles, committed = a.moveOrgFiles(ctx, moved.orgs, in.Name, old, raw)
@@ -169,6 +173,9 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		// the org file commit above lands in the carried clone: its line
 		// counts what waits after it (D-562)
 		out.Clone = joinLines(out.Clone, carryLine(carry, at, raw, tail, pendingIn(ctx, at)))
+	}
+	for _, l := range took {
+		out.Clone = joinLines(out.Clone, l)
 	}
 	out.Clone = joinLines(out.Clone, left)
 	return out, nil

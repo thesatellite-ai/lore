@@ -1482,8 +1482,28 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 			out.Notes = append(out.Notes, a.sweepLayers(ctx)...) // BRANCH_LAYERS 9, 10 (branchlayer_sweep.go)
 		}
 	}
+	// D-699: the open copied lore-org.yaml into the org entries as the
+	// clones stood before this sync fetched; a move the fetch just brought
+	// (an admin's set-url) is copied now, for the stores this sync touched
+	// only (D-278), so the teammate follows in this sync
+	refreshSyncedOrgSources(ctx, a.opts.Home, a.syncedStoreURLs(ctx, out.Stores))
 	a.forgetStoreChecks(ctx, out.Stores)
 	return out, err
+}
+
+// syncedStoreURLs maps each store a sync reported to its url (a store
+// whose url is unknown here is left out).
+func (a *App) syncedStoreURLs(ctx context.Context, reports []opsstores.Report) map[store.Source]string {
+	urls := map[store.Source]string{}
+	for _, r := range reports {
+		if r.Store == "" {
+			continue
+		}
+		if u := a.storeURLOf(ctx, r.Store); u != "" {
+			urls[store.Source(r.Store)] = u
+		}
+	}
+	return urls
 }
 
 // builtinRegistry is the schema every App validates against: the built-in

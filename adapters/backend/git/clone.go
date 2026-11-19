@@ -431,14 +431,21 @@ func (b *Backend) ensureRemote(ctx context.Context, remote string) error {
 		}
 		return nil
 	}
-	if cur := trimmed(out); sameStore(cur, remote) && (b.cfg.own || b.cfg.keepSpelling) {
+	if sameStore(trimmed(out), remote) && (b.cfg.own || b.cfg.keepSpelling) {
 		return nil // the same store spelled another way: the clone's own spelling stays
 	} else if b.cfg.own {
 		return errs.New(errs.InvalidInput, "git: your clone "+b.work+" now points origin at another repository than the store").
 			WithHint("point it back (`git -C " + b.work + " remote set-url origin <store url>`), or go back to lore's own clone: lore store use --default <store>")
 	}
+	cur := trimmed(out)
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"remote", "set-url", "--", RemoteName, remote}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: update the store remote", err)
+	}
+	if !sameStore(cur, remote) {
+		// D-699: another repository, as set-url's carry (RepointOrigin):
+		// what the clone knew of the old one must not be read as this one
+		// reset, so an empty new repository is filled by the next sync
+		return markRepointed(b.work, remote)
 	}
 	return nil
 }

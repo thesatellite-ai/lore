@@ -45,9 +45,11 @@ func TestStoreForwardRecordD699(t *testing.T) {
 }
 
 // TestStoreForwardFailureD699 (devco:D-699): a push of the move to an old
-// address that did not answer is tried again; one refused (a teammate
-// pushed there after the move) or with no repository is said once, with
-// the rename caveat and the step each teammate runs, named flags only.
+// address that did not answer is tried again, and so is one rejected as
+// not a fast-forward (what the old address held was merged just before,
+// so a teammate pushed there during the sync: never "pushed there after
+// it"); one with no repository is said once, with the rename caveat and
+// the step each teammate runs, named flags only.
 func TestStoreForwardFailureD699(t *testing.T) {
 	t.Parallel()
 	const old, raw = "git@example.test:acme-co/notes.git", "git@example.test:acme-co/notes-new.git"
@@ -55,8 +57,11 @@ func TestStoreForwardFailureD699(t *testing.T) {
 	if res != forwardRetry || !strings.Contains(line, "the next lore sync tries again") {
 		t.Fatalf("[devco:D-699] no answer: %v %q, want a retry", res, line)
 	}
+	res, line = forwardFailure(" ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs", "acme", old, raw)
+	if res != forwardRetry || !strings.Contains(line, "(a teammate pushed there just now); the next lore sync takes them in and sends the move again") || strings.Contains(line, "after it") {
+		t.Fatalf("[devco:D-699] rejected: %v %q, want a retry naming the push during the sync", res, line)
+	}
 	for _, stderr := range []string{
-		" ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs",
 		"ERROR: Repository not found.\nfatal: Could not read from remote repository.",
 	} {
 		res, line = forwardFailure(stderr, "acme", old, raw)

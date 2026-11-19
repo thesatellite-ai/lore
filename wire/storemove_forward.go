@@ -23,12 +23,15 @@ import (
 	"io"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storeaddr"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // recordStoreForward adds the old addresses a set-url moved store id away
@@ -85,19 +88,22 @@ func (a *App) forwardStoreMoves(ctx context.Context, w io.Writer) {
 	changed := false
 	for _, id := range ids {
 		e := r.Stores[id]
-		sha, ref, ok := pushedTip(ctx, a.opts.Home, e.URL, e.Branch)
-		if !ok {
+		if _, _, ok := pushedTip(ctx, a.opts.Home, e.URL, e.Branch); !ok {
 			continue // the move has not reached the new address yet
 		}
 		name := OrgStoreName(a.opts.Home, e.URL)
+		gb, closeStore := a.openMovedStore(ctx, name, e.URL, e.Branch)
 		var keep []string
 		for _, old := range e.Forward {
-			res, line := forwardOne(ctx, sha, ref, name, e.URL, old, pushedDir(a.opts.Home, e.URL, e.Branch))
-			_, _ = fmt.Fprintln(w, line)
+			res, line := a.forwardTo(ctx, gb, name, e, old)
+			if line != "" {
+				_, _ = fmt.Fprintln(w, line)
+			}
 			if res == forwardRetry {
 				keep = append(keep, old)
 			}
 		}
+		closeStore()
 		if len(keep) != len(e.Forward) {
 			e.Forward = keep
 			r.Stores[id] = e
@@ -107,6 +113,122 @@ func (a *App) forwardStoreMoves(ctx context.Context, w io.Writer) {
 	if changed {
 		_ = writeStoreAddrRecord(a.opts.Home, r) // best effort: a forward kept by mistake is pushed again, which git answers "up to date"
 	}
+}
+
+// openMovedStore opens the store at url on branch (the clone a set-url
+// moved it to) as a git backend, for MergeFrom; nil when it is no git
+// store or does not open (the forward then pushes without taking in what
+// the old address holds, and a refusal says so). closeStore always runs.
+func (a *App) openMovedStore(ctx context.Context, name, url, branch string) (gb *gitbackend.Backend, closeStore func()) {
+	closeStore = func() {}
+	canon, err := canonical(attach.Store{Name: store.Source(name), URL: url, Branch: branch})
+	if err != nil {
+		return nil, closeStore
+	}
+	b, err := a.openStore(ctx, canon, url)
+	if err != nil {
+		return nil, closeStore
+	}
+	gb, ok := concrete(b).(*gitbackend.Backend)
+	if !ok {
+		_ = b.Close()
+		return nil, closeStore
+	}
+	return gb, func() { _ = b.Close() }
+}
+
+// forwardTo sends the move owed to the old address old: first it takes in
+// what old holds that the clone lacks (a teammate who pushed there before
+// following the move, gb.MergeFrom) and sends that to the new address,
+// so the push to old is a fast-forward and the new address loses nothing;
+// then it pushes the clone's tip to old (forwardOne). line is "" when the
+// forward waits silently (commits still on their way to the new address).
+func (a *App) forwardTo(ctx context.Context, gb *gitbackend.Backend, name string, e storeAddrRecordEntry, old string) (forwardResult, string) {
+	shown, shownNew := repourl.Mask(old), repourl.Mask(e.URL)
+	var took string
+	if gb != nil {
+		mr, err := gb.MergeFrom(ctx, old)
+		switch {
+		case err != nil:
+			return forwardRetry, "lore: store " + name + ": the move to " + shownNew + " was not sent to its old address " + shown + ": what " + shown + " holds could not be taken in first (" + err.Error() + "); the next lore sync tries again"
+		case mr.Offline:
+			return forwardFailure(mr.Detail, name, shown, shownNew)
+		case len(mr.Refused) > 0:
+			return forwardRefused, "lore: store " + name + ": the move to " + shownNew + " did not reach its old address: " + shown + " holds commits a teammate pushed there that clash with this clone's on rows lore cannot merge (" + refusalList(mr.Refused) + "), so they were not taken in and " + shownNew + " lacks them. A teammate whose lore still uses " + shown + " follows only if it redirects to " + shownNew + " (a renamed repo); otherwise each teammate runs: lore store set-url --name " + name + " --url " + shownNew
+		case mr.Commits > 0:
+			rep, serr := gb.Sync(ctx)
+			gb.TakePushes() // said by the line below, never as a second push line
+			took = "took " + strconv.Itoa(mr.Commits) + " commit(s) a teammate pushed to " + shown + " before following the move"
+			if serr != nil || rep.Offline || len(rep.Refused) > 0 || !rep.Pushed {
+				return forwardRetry, "lore: store " + name + ": " + took + "; they wait in the clone until " + shownNew + " takes them, and the next lore sync sends them and then the move to " + shown
+			}
+			took += " and sent them to " + shownNew + "; "
+		}
+	}
+	sha, ref, ok := pushedTip(ctx, a.opts.Home, e.URL, e.Branch)
+	if !ok {
+		return forwardRetry, ""
+	}
+	res, line := forwardOne(ctx, sha, ref, name, e.URL, old, pushedDir(a.opts.Home, e.URL, e.Branch))
+	if took != "" {
+		line = strings.Replace(line, "lore: ", "lore: "+took, 1)
+	}
+	return res, line
+}
+
+// refusalList names the rows of refused (at most three, then a count).
+func refusalList(refused []store.Refusal) string {
+	const most = 3
+	var names []string
+	for i, r := range refused {
+		if i == most {
+			names = append(names, "and "+strconv.Itoa(len(refused)-most)+" more")
+			break
+		}
+		n := r.ID.String()
+		if r.ID.IsZero() {
+			n = r.Reason
+		}
+		names = append(names, n)
+	}
+	return strings.Join(names, ", ")
+}
+
+// mergeOldAddresses is set-url's take-in (D-699 follow-up): before the
+// move is committed, the clone of the store at raw takes in what each old
+// address still holds that it lacks (a teammate pushed there and this
+// machine never synced), so the new address gets every commit and the
+// move sent to the old address later is a fast-forward. An old address
+// that does not answer is left to the forward, which takes it in first;
+// it returns the lines set-url prints.
+func (a *App) mergeOldAddresses(ctx context.Context, name, raw, branch string, old []string) []string {
+	var froms []string
+	for _, o := range old {
+		if o != "" && !storeaddr.Same(o, raw) {
+			froms = append(froms, o)
+		}
+	}
+	if len(froms) == 0 {
+		return nil
+	}
+	gb, closeStore := a.openMovedStore(ctx, name, raw, branch)
+	defer closeStore()
+	if gb == nil {
+		return nil
+	}
+	var lines []string
+	for _, o := range froms {
+		mr, err := gb.MergeFrom(ctx, o)
+		switch {
+		case err != nil:
+			lines = append(lines, "what the old address "+repourl.Mask(o)+" holds was not taken in ("+err.Error()+"); the next lore sync takes it in before it sends the move there")
+		case len(mr.Refused) > 0:
+			lines = append(lines, "the old address "+repourl.Mask(o)+" holds commits a teammate pushed there that clash with this clone's on rows lore cannot merge ("+refusalList(mr.Refused)+"); they were not taken in, so "+repourl.Mask(raw)+" lacks them")
+		case mr.Commits > 0:
+			lines = append(lines, "took "+strconv.Itoa(mr.Commits)+" commit(s) a teammate pushed to the old address "+repourl.Mask(o)+" into the clone of "+repourl.Mask(raw)+", so they go there with the move")
+		}
+	}
+	return lines
 }
 
 // pushedDir is the clone folder of the store at url on branch.
@@ -156,17 +278,20 @@ func forwardOne(ctx context.Context, sha, ref, name, raw, old, dir string) (forw
 
 // forwardFailure is the result and line of a push to an old address that
 // failed with git's stderr. No answer keeps the forward (the next sync
-// tries again); a refused push (a teammate pushed there after the move)
-// or an address with no repository is said once, with what teammates do.
+// tries again), and so does a push refused as not a fast-forward: what
+// the old address held was taken in just before (forwardTo), so a
+// teammate pushed there while this sync ran, and the next sync takes that
+// in too. An address with no repository, or one that refuses for good
+// (permission, protection), is said once, with what teammates do.
 func forwardFailure(stderr, name, shown, shownNew string) (forwardResult, string) {
 	low := strings.ToLower(stderr)
 	rejected := strings.Contains(low, "[rejected]") || strings.Contains(low, "non-fast-forward") || strings.Contains(low, "fetch first")
-	if !rejected && gitfault.Classify(stderr) == gitfault.Unreachable {
+	if rejected {
+		return forwardRetry, "lore: store " + name + ": the move to " + shownNew + " was not sent to its old address " + shown + ": it got commits this sync has not taken in yet (a teammate pushed there just now); the next lore sync takes them in and sends the move again"
+	}
+	if gitfault.Classify(stderr) == gitfault.Unreachable {
 		return forwardRetry, "lore: store " + name + ": the move to " + shownNew + " was not sent to its old address " + shown + " (" + gitfault.Reason(stderr) + "); the next lore sync tries again"
 	}
 	why := gitfault.Describe(stderr, shown, nil)
-	if rejected {
-		why = shown + " refused the move (a teammate pushed there after it)"
-	}
 	return forwardRefused, "lore: store " + name + ": the move to " + shownNew + " did not reach its old address: " + why + ". A teammate whose lore still uses " + shown + " follows only if it redirects to " + shownNew + " (a renamed repo); otherwise each teammate runs: lore store set-url --name " + name + " --url " + shownNew
 }
