@@ -663,6 +663,11 @@ func allowedRows(it Item, idx *Index) map[string]bool {
 // project rows after two inits were merged).
 const DetailOtherProject = "row of another project"
 
+// DetailRosterEmail starts the detail of a finding that names a roster
+// person's email ("… of <label>"); the host tells such a hit in lore's own
+// _meta.json apart by it (devco:D-705).
+const DetailRosterEmail = "names the email of a person on the roster of "
+
 // checkRowFile applies the id rule to one row file.
 func checkRowFile(it Item, table, id string, idx *Index, o Options) []Finding {
 	var out []Finding
@@ -839,7 +844,7 @@ func emailHits(it Item, content string, idx *Index) []Finding {
 		}
 		seen[e] = true
 		out = append(out, Finding{Rule: RuleID, Where: it.Where, Line: lineOf(content, loc[0]), Label: label,
-			Detail: "names the email of a person on the roster of " + label})
+			Detail: DetailRosterEmail + label})
 	}
 	return out
 }

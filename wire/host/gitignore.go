@@ -121,12 +121,12 @@ func GitignoreHook(workDir string) Hook {
 }
 
 // NeedsGitignore reports whether run may add the .gitignore lines: never
-// under --read-only (v0.1.17 wrote nothing then), never for a store-only
+// under --read-only (v0.1.17 wrote nothing then) or a dry run, never for a store-only
 // command (leavesWorkRepo), and never for a live ref
 // operation (ops/live), which writes no row file; v0.1.17's `lore live …`
 // left the checkout as it was (P3-LIVE-1).
 func NeedsGitignore(run *Run) bool {
-	if run.ReadOnly || run.OldRows {
+	if run.WritesNothing() || run.OldRows {
 		return false
 	}
 	if run.Entry == nil {

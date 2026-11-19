@@ -634,7 +634,9 @@ type PinRefresh struct {
 // release. See the file comment for every case it deliberately leaves alone.
 // repo is passed in because its caller, the git wiring, has already opened it
 // (one git process less on every uncached command).
-func refreshSyncActionPin(ctx context.Context, top, root, own string) (PinRefresh, error) {
+// write false is the dry-run form (PreviewPin): the same answer, From and
+// To included, with nothing written or removed (devco:D-708).
+func refreshSyncActionPin(ctx context.Context, top, root, own string, write bool) (PinRefresh, error) {
 	target := ""
 	if releaseVersionPattern.MatchString(own) {
 		target = "v" + strings.TrimPrefix(own, "v")
@@ -691,6 +693,9 @@ func refreshSyncActionPin(ctx context.Context, top, root, own string) (PinRefres
 		return PinRefresh{}, err
 	}
 	dest := filepath.Join(top, filepath.FromSlash(syncActionFileRel(prefix)))
+	if !write {
+		return PinRefresh{Path: dest, From: s.version, To: target}, nil // a dry run: what a real run writes
+	}
 	if err := writeSyncActionFile(dest, next); err != nil {
 		return PinRefresh{}, err
 	}
@@ -822,7 +827,19 @@ func RefreshPin(ctx context.Context, root, own string) (PinRefresh, error) {
 	if err != nil {
 		return PinRefresh{}, nil // not a git checkout: no workflow to refresh
 	}
-	return refreshSyncActionPin(ctx, top, root, own)
+	return refreshSyncActionPin(ctx, top, root, own, true)
+}
+
+// PreviewPin is RefreshPin for a dry run: it reports the move a real run
+// would make (Path, From, To) or why it would leave the file alone (Note),
+// and writes nothing. A dry run of any command says it here instead of
+// rewriting a tracked file it promised not to touch (devco:D-708).
+func PreviewPin(ctx context.Context, root, own string) (PinRefresh, error) {
+	top, err := toplevel(ctx, root)
+	if err != nil {
+		return PinRefresh{}, nil // not a git checkout: no workflow to refresh
+	}
+	return refreshSyncActionPin(ctx, top, root, own, false)
 }
 
 // ActionLines renders an install-action result for a terminal (a dry run

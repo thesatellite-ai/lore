@@ -165,3 +165,50 @@ func TestPinRefreshQuiet(t *testing.T) {
 		t.Fatalf("quiet: moved = %v, output %q", pinnedTo(t, file, pinNew), out)
 	}
 }
+
+// devco:D-708: a dry run of a writing command (lore migrate run --dry-run
+// printed "Nothing written") leaves the workflow byte for byte as it was
+// and says, in its plan, what the real run would write; every writing hook
+// asks the same Run.WritesNothing. The flag is read from the command line
+// and from a REST body (dryRunFlag), and a plain task next is no dry run.
+func TestPinRefreshDryRunWritesNothing(t *testing.T) {
+	t.Parallel()
+	top, file := pinProject(t, false)
+	before, err := os.ReadFile(filepath.Clean(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := func(context.Context, struct{}) (struct{}, error) { return struct{}{}, nil }
+	cmd := &cobra.Command{Use: "demo"}
+	cmd.Flags().Bool(fixDryRunFlag, false, "")
+	if err := cmd.Flags().Set(fixDryRunFlag, "true"); err != nil {
+		t.Fatal(err)
+	}
+	run := &Run{Entry: op.Define(pinWriteSpec, fn), Cmd: cmd}
+	run.DryRun = dryRunFlag(run)
+	if !run.DryRun || !run.WritesNothing() || NeedsGitignore(run) {
+		t.Fatalf("--dry-run: DryRun %v, WritesNothing %v, NeedsGitignore %v", run.DryRun, run.WritesNothing(), NeedsGitignore(run))
+	}
+	var out bytes.Buffer
+	if _, err := PinRefreshHook(top, pinNew, &out).Around(context.Background(), run, func(context.Context) (op.Result, error) { return op.Result{}, nil }); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(filepath.Clean(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("a dry run rewrote the lore-sync-merge workflow")
+	}
+	want := "lore sync: would update .github/workflows/lore-sync-merge.yml to lore v" + pinNew + " (was v" + pinOld + "); not written (dry run), the same command without --dry-run writes it\n"
+	if out.String() != want {
+		t.Fatalf("output %q, want %q", out.String(), want)
+	}
+	rest := &Run{Entry: op.Define(pinWriteSpec, fn), Decoder: op.JSONDecoder{Body: []byte(`{"dry_run": true}`)}}
+	if !dryRunFlag(rest) {
+		t.Fatal("a REST body's dry_run is a dry run")
+	}
+	if plain := (&Run{Entry: op.Define(pinWriteSpec, fn), Cmd: &cobra.Command{Use: "demo"}}); dryRunFlag(plain) || plain.WritesNothing() {
+		t.Fatal("a command without --dry-run is no dry run")
+	}
+}

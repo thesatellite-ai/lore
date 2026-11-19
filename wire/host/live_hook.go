@@ -724,7 +724,19 @@ func dryRun(run *Run) bool {
 	if run.Entry == nil {
 		return false
 	}
-	if fixDryRun(run) || nextReads(run) {
+	return nextReads(run) || dryRunFlag(run)
+}
+
+// dryRunFlag reports whether run carries --dry-run itself (CLI flag or REST
+// dry_run; lore fix's through fixDryRun): the Run.DryRun every writing hook
+// honours (Run.WritesNothing). Unlike dryRun it leaves out a plain
+// `lore task next`, which is a read, not a dry run, and still runs the
+// merged check and pin refresh it always ran (devco:D-708).
+func dryRunFlag(run *Run) bool {
+	if run.Entry == nil {
+		return false
+	}
+	if fixDryRun(run) {
 		return true
 	}
 	if run.Cmd != nil {

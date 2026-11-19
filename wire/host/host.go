@@ -95,7 +95,19 @@ type Run struct {
 	// OldRows marks a sync in a repo with unmigrated lore 0.1.17 rows: the
 	// hooks treat it as a read (no .gitignore, no git wiring, no render).
 	OldRows bool
+	// DryRun is the command's --dry-run (CLI flag or REST dry_run): the
+	// operation only reports, so no hook may write after it either
+	// (WritesNothing; devco:D-708).
+	DryRun bool
 }
+
+// WritesNothing reports whether run must leave every file, git setting,
+// hook and lore state as it was: --read-only, or a dry run. It is the one
+// question every hook that writes after an operation asks (.gitignore,
+// workflow pin, renders after sync, the merged check): a dry run that
+// printed "Nothing written" while a hook rewrote a tracked workflow was
+// devco:D-708.
+func (r *Run) WritesNothing() bool { return r.ReadOnly || r.DryRun }
 
 // Options returns base with every hook's Options applied in order.
 func Options(base wire.Options, hooks []Hook) wire.Options {
@@ -194,7 +206,7 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		// write must not fail the check (docs/operations/ci.md).
 		ctx = gitbackend.WithNoFetch(gitbackend.WithNoClone(ctx))
 	}
-	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: readOnly, Cmd: r.State.Cmd, Args: r.State.Args}
+	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: readOnly, Cmd: r.State.Cmd, Args: r.State.Args, DryRun: dryRunFlag(run0)}
 	// D7 (B2-20): `lore sync` in a repo lore 0.1.17 wrote and nobody
 	// migrated yet runs as a read: it changes no tracked file, so the
 	// admin's lore fix commit pulls cleanly here (wire/oldrowsread.go)

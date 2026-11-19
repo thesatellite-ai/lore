@@ -29,7 +29,7 @@ var mergedCheckOps = map[string]bool{
 // check never fails the command (it prints its own warnings).
 func mergedCheckHook(check func(context.Context)) hosthooks.Hook {
 	return hosthooks.Hook{Name: hookMergedCheck, Around: func(ctx context.Context, run *hosthooks.Run, next hosthooks.Next) (op.Result, error) {
-		if run.Cmd != nil && !run.ReadOnly && mergedCheckOps[run.Entry.Spec().Name] {
+		if run.Cmd != nil && !run.WritesNothing() && mergedCheckOps[run.Entry.Spec().Name] {
 			check(ctx)
 		}
 		return next(ctx)
