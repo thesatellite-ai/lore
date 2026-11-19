@@ -154,6 +154,11 @@ func (e *Engine) detect(ctx context.Context, cl call, target store.Source, rowID
 			if f.RuleID == scan.RuleSessionID && loreRec[field] {
 				continue
 			}
+			// devco:D-717: a stored value put back over its read mask is
+			// not new input (maskedit.go)
+			if item < 0 && keptFinding(ctx, field, f) {
+				continue
+			}
 			if !rules.IsOff(f.RuleID, own) {
 				kept = append(kept, f)
 			}
@@ -178,6 +183,9 @@ func (e *Engine) detect(ctx context.Context, cl call, target store.Source, rowID
 		return screened{}, crossErr(cross)
 	}
 	for _, f := range scan.Filter(rowID, inField, allows) {
+		if keptFinding(ctx, f.Field, f) {
+			continue // devco:D-717: the stored value under a read mask
+		}
 		dup := false
 		for _, h := range out.hits {
 			for _, g := range h.findings {

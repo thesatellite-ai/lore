@@ -393,7 +393,7 @@ func (e *Engine) TrashMany(ctx context.Context, refs []Ref) (Written, error) {
 // a Lore-Purge commit. A reason that holds a secret gets a warning: the
 // files lose it, git history does not (4.6).
 func (e *Engine) purgeDeleted(ctx context.Context, cur row.Row, reason string, w Written, pr *PurgeRequest) (Written, error) {
-	res, err := e.TrashTarget(ctx, cur.ID.String())
+	res, err := e.TrashTarget(WithRawRead(ctx), cur.ID.String()) // stored text (D-717)
 	if err != nil {
 		return w, err
 	}
@@ -602,7 +602,22 @@ func (e *Engine) Trashed(ctx context.Context) ([]Trashed, error) {
 		}
 	}
 	e.markDependents(out)
-	return out, nil
+	return e.maskTrashed(ctx, out), nil
+}
+
+// maskTrashed masks each trashed row as every read masks a live one
+// (devco:R-14, D-717): a delete keeps the stored text in the trashed row
+// (a restore brings it back whole), so `lore trash list` and `trash show`
+// printed a key no allow entry accepts. The write paths (restore, purge)
+// read with WithRawRead and get the stored text.
+func (e *Engine) maskTrashed(ctx context.Context, rows []Trashed) []Trashed {
+	if rawRead(ctx) {
+		return rows
+	}
+	for i := range rows {
+		rows[i].Row = e.maskRead(ctx, rows[i].Store, rows[i].Row)
+	}
+	return rows
 }
 
 // markDependents sets Dependent on every row whose cascade parent is in the
@@ -756,7 +771,7 @@ func (e *Engine) dependsOnSet(r row.Row, set map[ids.AnyID]bool) bool {
 // purged with E_PARENT_PURGED (4.2); nothing changes then. One write per
 // store.
 func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error) {
-	res, err := e.TrashTarget(ctx, target)
+	res, err := e.TrashTarget(WithRawRead(ctx), target) // writes the stored text back (D-717)
 	if err != nil {
 		return TrashResult{}, err
 	}
@@ -853,6 +868,7 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 			out.Rows = append(out.Rows, Trashed{Store: name, Row: n})
 		}
 	}
+	out.Rows = e.maskTrashed(ctx, out.Rows) // the result is printed: read-masked
 	return out, nil
 }
 
@@ -1019,11 +1035,13 @@ func (e *Engine) parentPurgedListed(ctx context.Context, r row.Row, pid ids.AnyI
 // row of the set is replaced by a tombstone and its id listed in
 // _purged.json (DQ4). The caller has already asked for --confirm (DQ2).
 func (e *Engine) PurgeTrash(ctx context.Context, target string) (TrashResult, error) {
-	res, err := e.TrashTarget(ctx, target)
+	res, err := e.TrashTarget(WithRawRead(ctx), target) // the write works from the stored text (D-717)
 	if err != nil {
 		return TrashResult{}, err
 	}
-	return e.purgeRows(ctx, res)
+	out, err := e.purgeRows(ctx, res)
+	out.Rows = e.maskTrashed(ctx, out.Rows)
+	return out, err
 }
 
 // purgeRows purges every row of res one by one: a row's own remove plan
@@ -1068,7 +1086,11 @@ func (e *Engine) purgeRows(ctx context.Context, res TrashResult) (TrashResult, e
 // ignored; a store with no retention keeps its trash (DQ3: never in the
 // background, only through this named command).
 func (e *Engine) PurgeOlder(ctx context.Context, cutoff time.Time, expired bool, dryRun bool) (TrashResult, error) {
-	all, err := e.Trashed(ctx)
+	rctx := ctx
+	if !dryRun {
+		rctx = WithRawRead(ctx) // the purge works from the stored text (D-717); a dry run only lists
+	}
+	all, err := e.Trashed(rctx)
 	if err != nil {
 		return TrashResult{}, err
 	}
@@ -1091,7 +1113,9 @@ func (e *Engine) PurgeOlder(ctx context.Context, cutoff time.Time, expired bool,
 		res.Taken, err = e.purgedWithAll(ctx, res.Rows)
 		return res, err
 	}
-	return e.purgeRows(ctx, res)
+	out, err := e.purgeRows(ctx, res)
+	out.Rows = e.maskTrashed(ctx, out.Rows)
+	return out, err
 }
 
 // requireReason reports policy delete.require_reason for src (DELETION 475).
