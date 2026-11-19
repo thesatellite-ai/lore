@@ -239,4 +239,26 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 		// in it and refused Mo ("company folder acme")
 		mo.Lore(mc.Dir, "rule", "add", "--to", wOrg, "--severity", "must", "--body", "web forms escape every field", "--yes").OK(t)
 	})
+
+	s.Step("D-694/team-changes-are-admin-only", func() {
+		// the rule gap: anyone on the roster could change the teams, so Mo
+		// put himself on @api and then added rules in api. In an org store
+		// every team change is an admin's; Mo still reads the teams.
+		line := "lore team member add --handle @" + wrcOther + " --members @mo"
+		refused("team member add (self)", "team", "member", "add", "--handle", "@"+wrcOther, "--members", "@mo")
+		mo.Lore(mc.Dir, "team", "member", "add", "--handle", "@"+wrcOther, "--members", "@mo").Refused(t, "E_REFUSED", "change the team @"+wrcOther, "to run: "+line)
+		refused("team add", "team", "add", "--handle", "@side", "--members", "@mo")
+		refused("team member remove", "team", "member", "remove", "--handle", "@"+wubFolder, "--members", "@mo")
+		refused("team rename", "team", "rename", "--handle", "@"+wubFolder, "--to", "@frontend")
+		refused("team remove", "team", "remove", "--handle", "@"+wrcOther)
+		mo.Lore(mc.Dir, "team", "show", "--handle", "@"+wrcOther).OK(t).Never(t, "@mo")
+		mo.Lore(mc.Dir, "team", "list").OK(t).Says(t, "@"+wubFolder, "@"+wrcOther)
+		// so the add right stays the admin's to give
+		refused("rule add (other team, after team add)", "rule", "add", "--to", inOther, "--body", "api pages are cached", "--yes")
+		// the admin runs the printed line exactly; after a sync Mo adds there
+		admin(strings.Fields(line)[1:]...)
+		admin("sync")
+		mo.Lore(mc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "rule", "add", "--to", inOther, "--body", "api pages are cached", "--yes").OK(t)
+	})
 }

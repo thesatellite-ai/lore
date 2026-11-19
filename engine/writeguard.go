@@ -42,9 +42,11 @@ type WriteGuard interface {
 
 // guardedTables are the tables whose rows the role rule covers: the
 // knowledge every repo reading a folder is told (rules, hotfixes,
-// memories, decisions) and the folder's policies. Other rows (actors,
-// projects, tasks, signals, the roster's own) have their own checks.
-var guardedTables = []row.Table{schema.TableRules, schema.TableHotfixes, schema.TableMemories, schema.TableDecisions, schema.TablePolicies}
+// memories, decisions), the folder's policies, and the org's teams (a
+// member on @web adds rules in acme/web, so who is on a team is an
+// admin's change, devco D-694 rule gap). Other rows (actors, projects,
+// tasks, signals, the rest of the roster) have their own checks.
+var guardedTables = []row.Table{schema.TableRules, schema.TableHotfixes, schema.TableMemories, schema.TableDecisions, schema.TablePolicies, schema.TableTeams}
 
 // GuardedTables is a copy of the tables a WriteGuard is asked about.
 func GuardedTables() []row.Table { return slices.Clone(guardedTables) }

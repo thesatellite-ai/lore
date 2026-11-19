@@ -11,7 +11,17 @@ package profilestore
 //	  (any field, delete, move, archive, pin)      refused  ok
 //	a new rule/hotfix/memory/decision, or one
 //	  raised to must, in a company folder          only in a folder of a team they are on
+//	a team (create, edit, rename, remove, who
+//	  is on it)                                    refused  ok
 //	any other row, the repo, the personal store    ok       ok
+//
+// Teams are an admin's change because they are the member's add right:
+// a member who could put themselves on @web could then add rules in
+// acme/web, and the rule above would be only as strong as the team
+// commands (devco D-694 rule gap). The one member change of a team the
+// guard lets through is a person taking up their own invite: they add
+// only themselves to a team the invite names (WithInviteJoin), as the
+// store's authority lets it through at sync.
 //
 // The command's own check may name the refusal first (what only an admin
 // does, the line the admin runs: WithAsk); the guard answers every write
@@ -24,6 +34,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -58,13 +69,75 @@ const (
 	// ChangeAdd adds a row (or raises one to pinned): a member does it in
 	// a folder of a team they are on.
 	ChangeAdd = "add"
+	// ChangeTeam writes a team row (any field, a new team, a removal).
+	ChangeTeam = "team"
 )
+
+// joinKey carries the invite a person is taking up (WithInviteJoin).
+type joinKey struct{}
+
+// inviteJoin is the joining actor and the team handles their invite names.
+type inviteJoin struct {
+	actor string
+	teams []string
+}
+
+// WithInviteJoin is ctx of an invite being taken up: actor (the joiner's
+// act_ id) may add themselves, and nobody else, to the teams the invite
+// names (handles without "@"). Only the join writer sets it; an admin
+// made the invite, so the join is the admin's change carried out.
+func WithInviteJoin(ctx context.Context, actor string, teams []string) context.Context {
+	return context.WithValue(ctx, joinKey{}, inviteJoin{actor: actor, teams: teams})
+}
+
+// joinsOwnInvite reports whether w only adds the joiner of ctx's invite
+// to a team that invite names, every other field unchanged.
+func joinsOwnInvite(ctx context.Context, w engine.GuardedWrite) bool {
+	j, ok := ctx.Value(joinKey{}).(inviteJoin)
+	if !ok || j.actor == "" || w.Before == nil || w.After.Deleted {
+		return false
+	}
+	if !slices.Contains(j.teams, strings.TrimPrefix(fieldText(*w.Before, "handle"), "@")) {
+		return false
+	}
+	for _, f := range []map[string]value.Value{w.After.Fields, w.Before.Fields} {
+		for k := range f {
+			if k != schema.FieldTeamMembers && fieldText(w.After, k) != fieldText(*w.Before, k) {
+				return false
+			}
+		}
+	}
+	before := memberIDs(*w.Before)
+	after := memberIDs(w.After)
+	for _, m := range before {
+		if !slices.Contains(after, m) {
+			return false
+		}
+	}
+	for _, m := range after {
+		if m != j.actor && !slices.Contains(before, m) {
+			return false
+		}
+	}
+	return true
+}
+
+// memberIDs are the act_ ids of a team row's members.
+func memberIDs(t row.Row) []string {
+	v, ok := t.Fields[schema.FieldTeamMembers]
+	if !ok || v == nil {
+		return nil
+	}
+	return value.ItemStrings(v)
+}
 
 // Classify is the kind of one change, before the place is judged.
 func Classify(w engine.GuardedWrite) string {
 	switch {
 	case w.After.Table == schema.TablePolicies:
 		return ChangePolicy
+	case w.After.Table == schema.TableTeams:
+		return ChangeTeam
 	case w.Before != nil && CompanyPinned(*w.Before):
 		return ChangePinned
 	case w.After.Deleted:
@@ -88,7 +161,7 @@ func (g WriteGuard) GuardWrite(ctx context.Context, target store.Source, writes 
 	var hit engine.GuardedWrite
 	for _, w := range writes {
 		k := Classify(w)
-		if k == ChangeFree {
+		if k == ChangeFree || (k == ChangeTeam && joinsOwnInvite(ctx, w)) {
 			continue
 		}
 		if len(kinds) == 0 {
@@ -149,8 +222,18 @@ func guardDoes(src store.Source, kind string, w engine.GuardedWrite) string {
 		return policyDoes + " " + string(src)
 	case ChangePinned:
 		return "change " + id + " (a must rule or a critical/high hotfix of the company folder " + string(src) + ", which every repo reading it is told)"
+	case ChangeTeam:
+		return TeamDoes(fieldText(w.After, "handle"))
 	}
 	return "add " + id + " to the company folder " + string(src)
+}
+
+// TeamDoes is what only an admin does to a team (the guard's wording and
+// the team commands' WithAsk): who is on a team decides where they add
+// rules and notes.
+func TeamDoes(handle string) string {
+	h := "@" + strings.TrimPrefix(handle, "@")
+	return "change the team " + h + " (who is on a team decides in which company folder they add rules and notes)"
 }
 
 // policyDoes is the guard's policy wording (ops/settings policyAdminDoes).
