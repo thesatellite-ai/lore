@@ -376,7 +376,7 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 	if internal {
 		vis = "internal"
 	}
-	human := fmt.Sprintf("added %s %s (%s) to %s (%s)\n", short(w.Row.ID), in.Name, strings.Join(extra, ", "), place(target), vis)
+	human := fmt.Sprintf("added %s %s (%s) to %s (%s)\n", short(w.Row.ID), in.Name, strings.Join(extra, ", "), o.place(target), vis)
 	if meta.TagLike(in.Name) {
 		human += tagLikeNote(in.Name)
 	}

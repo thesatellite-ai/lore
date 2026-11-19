@@ -124,7 +124,7 @@ This folder is a lore store: notes, rules, decisions, tasks and the other record
 $ git log --format='%an <%ae>  %s'
 alice <alice@agency.example>  lore: memory add mem_54fe…28f2
 alice <alice@agency.example>  lore: machine register mch_c0f3…b5b8
-alice <alice@agency.example>  lore: task add tsk_2ad3…f891: Renew the TLS certificate (2 rows + actor act_05e9…4603)
+alice <alice@agency.example>  lore: task add tsk_2ad3…f891 (2 rows + actor act_05e9…4603)
 alice <alice@agency.example>  lore: store init
 ```
 <!-- /example -->

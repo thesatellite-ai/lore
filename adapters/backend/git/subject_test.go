@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/logic/actorsource"
 	"strings"
 	"testing"
 
@@ -14,8 +15,8 @@ import (
 
 // TestSubjectNamesWhatThePersonDid pins B2-4: a `task add` commit that
 // also carries the person's actor copy and the task list is titled after
-// the task ("lore: task add tsk_…: <title>", D-569: the id always, the
-// title after it), never after the actor row.
+// the task ("lore: task add tsk_…", D-569: the id always; D-685: never
+// the title), never after the actor row.
 func TestSubjectNamesWhatThePersonDid(t *testing.T) {
 	t.Parallel()
 	g := newGen(t)
@@ -39,7 +40,7 @@ func TestSubjectNamesWhatThePersonDid(t *testing.T) {
 	actor := mk("actors", ids.PrefixActor, "name", "Mira")
 	list := mk("task_lists", ids.PrefixKind, "name", "Inbox")
 	task := mk("tasks", ids.PrefixTask, "title", "Ship the beta\nwith notes")
-	if got, want := subject("task.add", []store.Change{actor, list, task}), "lore: task add "+task.Row.ID.String()+": Ship the beta (2 rows + actor "+actor.Row.ID.String()+")"; got != want {
+	if got, want := subject("task.add", []store.Change{actor, list, task}), "lore: task add "+task.Row.ID.String()+" (2 rows + actor "+actor.Row.ID.String()+")"; got != want {
 		t.Fatalf("task add subject = %q, want %q", got, want)
 	}
 	if got := subject(DefaultOp, []store.Change{actor, task}); got != "lore: task save "+task.Row.ID.String()+" (2 rows)" {
@@ -134,12 +135,12 @@ func TestSubjectActorOnlyBatch(t *testing.T) {
 	}
 	agent := mk("actors", ids.PrefixActor, "display_name", "Lee Park via claude_code")
 	id := agent.Row.ID.String()
-	if got, want := subject("memory.add", []store.Change{agent}), "lore: actor register "+id+": Lee Park via claude_code"; got != want {
+	if got, want := subject("memory.add", []store.Change{agent}), "lore: actor register "+id; got != want {
 		t.Fatalf("actor-only memory add subject = %q, want %q", got, want)
 	}
 	refresh := agent
 	refresh.Expect = g.clock.Now(hlc.HLC{})
-	if got, want := subject("memory.add", []store.Change{refresh}), "lore: actor copy "+id+": Lee Park via claude_code"; got != want {
+	if got, want := subject("memory.add", []store.Change{refresh}), "lore: actor copy "+id; got != want {
 		t.Fatalf("actor refresh subject = %q, want %q", got, want)
 	}
 	mem := mk("memories", ids.PrefixMemory, "body", "a note")
@@ -187,11 +188,11 @@ func TestSubjectSideRows(t *testing.T) {
 		want     string
 	}{
 		{"memory with its writer's actor", "memory.add", []store.Change{mem, agent}, "lore: memory add " + mem.Row.ID.String() + " (+ actor " + a + ")"},
-		{"tasks with actor and project", "task.add", []store.Change{tsk, tsk2, agent, prj}, "lore: task add " + tsk.Row.ID.String() + ": Ship the beta (2 rows + actor " + a + ", project " + p + ")"},
+		{"tasks with actor and project", "task.add", []store.Change{tsk, tsk2, agent, prj}, "lore: task add " + tsk.Row.ID.String() + " (2 rows + actor " + a + ", project " + p + ")"},
 		{"three side rows", "memory.add", []store.Change{mem, agent, other, prj}, "lore: memory add " + mem.Row.ID.String() + " (+ actor " + a + ", actor " + other.Row.ID.String() + ", 1 more)"},
-		{"folder project row", "project.add", []store.Change{prj}, "lore: project add " + p + ": web"},
+		{"folder project row", "project.add", []store.Change{prj}, "lore: project add " + p},
 		{"actor merge keeps its actors", "actor.merge", []store.Change{agent, other}, "lore: actor merge " + a + " (2 rows)"},
-		{"new actor outside a command", DefaultOp, []store.Change{agent}, "lore: actor register " + a + ": Lee Park via claude_code"},
+		{"new actor outside a command", DefaultOp, []store.Change{agent}, "lore: actor register " + a},
 	}
 	for _, c := range cases {
 		if got := subject(c.op, c.changes); got != c.want {
@@ -206,5 +207,53 @@ func TestSubjectSideRows(t *testing.T) {
 	ctx := store.WithCommitTitle(context.Background(), "setup join: lee@example.test")
 	if got, want := subjectOf(ctx, "setup.join", []store.Change{mem, tsk, agent}), "lore: setup join: lee@example.test (2 rows + actor "+a+")"; got != want {
 		t.Errorf("titled join: subject = %q, want %q", got, want)
+	}
+}
+
+// TestSubjectIDOnlyForEveryKind pins devco D-685 (owner use pass 4 weak 1):
+// one subject rule for every kind. Rule and memory subjects were id-only
+// (owner decision 3, 2026-11-18) while a task claim still read "lore: task
+// claim tsk_…: Question: …"; a title, a list or project name and an
+// actor's name are row text that can be private, and a subject outlives a
+// delete. Every subject is the command words, the id and counts only.
+func TestSubjectIDOnlyForEveryKind(t *testing.T) {
+	t.Parallel()
+	g := newGen(t)
+	mk := func(table row.Table, p ids.Prefix, field, text string) store.Change {
+		t.Helper()
+		id, err := ids.Natural(p, text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := value.TextOf(text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stamp := g.clock.Now(hlc.HLC{})
+		r, err := store.FromRow(row.Row{Table: table, ID: id, HLC: stamp, UpdatedAt: stamp.Wall, UpdatedBy: stamp.Actor, Fields: map[string]value.Value{field: v}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return store.Change{Row: r}
+	}
+	const private = "Question: acme-co pricing for the renewal"
+	for _, c := range []struct {
+		op     string
+		change store.Change
+	}{
+		{"task.claim", mk("tasks", ids.PrefixTask, "title", private)},
+		{"task.add", mk("tasks", ids.PrefixTask, "title", private)},
+		{"plan.add", mk("plans", ids.PrefixPlan, "title", private)},
+		{"project.add", mk(projectsTable, ids.PrefixProject, "name", private)},
+		{"memory.add", mk("actors", ids.PrefixActor, actorsource.FieldDisplayName, private)},
+		{DefaultOp, mk("actors", ids.PrefixActor, actorsource.FieldDisplayName, private)},
+	} {
+		got := subject(c.op, []store.Change{c.change})
+		if strings.Contains(got, "acme-co") || strings.Contains(got, ": ") && !strings.HasPrefix(got, "lore: ") || strings.Count(got, ":") != 1 {
+			t.Errorf("%s subject = %q, want the command words and the id only", c.op, got)
+		}
+		if !strings.HasSuffix(got, c.change.Row.ID.String()) {
+			t.Errorf("%s subject = %q, want it to end with the id %s", c.op, got, c.change.Row.ID)
+		}
 	}
 }

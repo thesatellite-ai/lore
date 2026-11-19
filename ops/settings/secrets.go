@@ -509,11 +509,11 @@ func (o ops) putRule(ctx context.Context, target store.Source, id string, fields
 	}
 	// FA-AGENT-4: secret.rule_changed beside the row's own audit entry.
 	if err = o.auditSecretEvent(ctx, auditRuleChanged, "secrets rule "+verb, w.Row.ID, "rule="+id, "row="+w.Row.ID.String(),
-		"place="+place(target), "state="+text(w.Row, sState), "changed="+changedNames(fields)); err != nil {
+		"place="+o.place(target), "state="+text(w.Row, sState), "changed="+changedNames(fields)); err != nil {
 		return RowOut{}, err
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("✓ %s %s in %s (%s)\n", id, verb, place(target), short(w.Row.ID))}, nil
+		Human: fmt.Sprintf("✓ %s %s in %s (%s)\n", id, verb, o.place(target), short(w.Row.ID))}, nil
 }
 
 func state(s string) (value.Value, error) { return txt(s) }
@@ -530,7 +530,7 @@ func (o ops) ruleAdd(ctx context.Context, in RuleAddIn) (RowOut, error) {
 	if have, herr := o.ruleAt(ctx, target, in.RuleID); herr != nil {
 		return RowOut{}, herr
 	} else if have != nil {
-		return RowOut{}, errs.New(errs.InvalidInput, "rule "+in.RuleID+" already has a row in "+place(target)).WithHint("lore secrets rule edit --id " + in.RuleID)
+		return RowOut{}, errs.New(errs.InvalidInput, "rule "+in.RuleID+" already has a row in "+o.place(target)).WithHint("lore secrets rule edit --id " + in.RuleID)
 	}
 	if fields[sState], err = state(schema.SecretRuleOn); err != nil {
 		return RowOut{}, err
@@ -584,7 +584,7 @@ func (o ops) ruleOn(ctx context.Context, in RuleOnIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	if have == nil || text(have.Row, sState) != schema.SecretRuleOff {
-		return RowOut{}, errs.New(errs.NotFound, in.RuleID+" is not off in "+place(target)).WithHint("lore secrets rules lists the rules that are off")
+		return RowOut{}, errs.New(errs.NotFound, in.RuleID+" is not off in "+o.place(target)).WithHint("lore secrets rules lists the rules that are off")
 	}
 	// A rule this level added keeps its row (state on); a default that was
 	// only switched off here loses its row, so the default applies again.
@@ -593,21 +593,21 @@ func (o ops) ruleOn(ctx context.Context, in RuleOnIn) (RowOut, error) {
 		if serr != nil {
 			return RowOut{}, serr
 		}
-		out, perr := o.patchRow(ctx, *have, map[string]value.Value{sState: v, sReason: value.Null{}}, in.RuleID+" on in "+place(target))
+		out, perr := o.patchRow(ctx, *have, map[string]value.Value{sState: v, sReason: value.Null{}}, in.RuleID+" on in "+o.place(target))
 		if perr != nil {
 			return out, perr
 		}
 		return out, o.auditSecretEvent(ctx, auditRuleChanged, "secrets rule on", have.Row.ID, "rule="+in.RuleID, "row="+have.Row.ID.String(),
-			"place="+place(target), "state="+schema.SecretRuleOn, "changed=state")
+			"place="+o.place(target), "state="+schema.SecretRuleOn, "changed=state")
 	}
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: target, Table: schema.TableSecretRules, ID: have.Row.ID}); err != nil {
 		return RowOut{}, err
 	}
 	if err := o.auditSecretEvent(ctx, auditRuleChanged, "secrets rule on", have.Row.ID, "rule="+in.RuleID, "row="+have.Row.ID.String(),
-		"place="+place(target), "state=default", "changed=removed"); err != nil {
+		"place="+o.place(target), "state=default", "changed=removed"); err != nil {
 		return RowOut{}, err
 	}
-	return RowOut{ID: have.Row.ID.String(), Store: string(target), Human: fmt.Sprintf("✓ %s on in %s (%s removed)\n", in.RuleID, place(target), short(have.Row.ID))}, nil
+	return RowOut{ID: have.Row.ID.String(), Store: string(target), Human: fmt.Sprintf("✓ %s on in %s (%s removed)\n", in.RuleID, o.place(target), short(have.Row.ID))}, nil
 }
 
 // allowCheck refuses a secrets allow input that is wrong on its face (a

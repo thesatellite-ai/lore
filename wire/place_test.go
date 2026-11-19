@@ -87,3 +87,36 @@ func TestPlaceOfNoMarker(t *testing.T) {
 		t.Fatalf("no-marker place = %q", got)
 	}
 }
+
+// TestKeyNamespaceNamesTheLinkedFolder pins devco D-689 (owner use pass 4
+// weak 6): a linked repo attaches its org store under the bare org name
+// at the linked folder, and that folder was left out of the natural-id
+// namespace, so `policy set` of one key in two linked folders gave both
+// rows one pol_ id (and `<org>/<folder>` from the home folder another).
+// The namespace is the same for the folder however it is attached, and
+// differs between two folders of one store.
+func TestKeyNamespaceNamesTheLinkedFolder(t *testing.T) {
+	t.Parallel()
+	dir := fileuri.LocalPath(folderStoreAt(t, folderStore, rowfs.VisibilityInternal))
+	open := func(name string) store.Backend {
+		b, err := folder.Open(dir, name, store.OpenOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = b.Close() })
+		return b
+	}
+	sync, widgetco := open("sync"), open("widgetco")
+	linkedSync := keyNamespace(engine.Attached{Name: "agency", Backend: sync}, "sync")
+	linkedRisify := keyNamespace(engine.Attached{Name: "agency", Backend: widgetco}, "/widgetco/")
+	named := keyNamespace(engine.Attached{Name: "agency/sync", Backend: sync}, "sync")
+	if linkedSync == linkedRisify {
+		t.Fatalf("two linked folders share the namespace %q", linkedSync)
+	}
+	if linkedSync != named || named != folderStore+"/sync" {
+		t.Fatalf("linked %q, named %q: want both %s/sync", linkedSync, named, folderStore)
+	}
+	if root := keyNamespace(engine.Attached{Name: "agency", Backend: open(rowfs.FolderRoot)}, rowfs.FolderRoot); root != folderStore {
+		t.Fatalf("store root namespace = %q, want %q", root, folderStore)
+	}
+}

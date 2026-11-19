@@ -22,11 +22,13 @@ func placeCounts(t *testing.T, l *Lens) map[string]string {
 	return out
 }
 
-// TestLensPlaceColumn pins devco D-568: every <table>_all view carries
-// `place`, the label search prints for the source ("acme/web" for the
-// org entry "acme" attached at folder web), beside the unchanged `source`
-// queries filter on; a source with no label (the repo) is its name, and
-// a combined file labels each row by its own _source.
+// TestLensPlaceColumn pins devco D-568 and D-685: every <table>_all view
+// carries `place`, the label search prints for the source ("acme/web" for
+// the org entry "acme" attached at folder web), and `source` is that same
+// label (D-685, owner use pass 4 weak 1: a linked repo grouped the folder's
+// rows under "acme" while the store clone and the home folder said
+// "acme/web"); a source with no label (the repo) is its name, and a
+// combined file labels each row by its own _source.
 func TestLensPlaceColumn(t *testing.T) {
 	t.Parallel()
 	_, srcs, _, _ := threeCaches(t)
@@ -34,7 +36,7 @@ func TestLensPlaceColumn(t *testing.T) {
 	l := must(OpenLensWith(t.Context(), srcs, LensOptions{Places: places}))
 	t.Cleanup(func() { _ = l.Close() })
 	got := placeCounts(t, l)
-	want := map[string]string{"repo|repo": "2", "agency|agency/web": "2", "golang|golang/api": "2"}
+	want := map[string]string{"repo|repo": "2", "agency/web|agency/web": "2", "golang/api|golang/api": "2"}
 	if len(got) != len(want) {
 		t.Fatalf("source|place counts = %v, want %v", got, want)
 	}
@@ -43,10 +45,10 @@ func TestLensPlaceColumn(t *testing.T) {
 			t.Fatalf("source|place counts = %v, want %v", got, want)
 		}
 	}
-	// queries keep filtering on source
-	res := must(l.Query(t.Context(), `SELECT COUNT(*) FROM memories_all WHERE source = 'agency'`))
+	// queries filter on the folder-qualified source
+	res := must(l.Query(t.Context(), `SELECT COUNT(*) FROM memories_all WHERE source = 'agency/web'`))
 	if res.Rows[0][0].String() != "2" {
-		t.Fatalf("WHERE source = 'agency': %v", res.Rows)
+		t.Fatalf("WHERE source = 'agency/web': %v", res.Rows)
 	}
 
 	f := newFixture(t)
@@ -62,7 +64,7 @@ func TestLensPlaceColumn(t *testing.T) {
 	cl := must(OpenLensWith(f.ctx, []LensSource{{Name: "combined", Path: path, Combined: true}}, LensOptions{Places: places}))
 	t.Cleanup(func() { _ = cl.Close() })
 	got = placeCounts(t, cl)
-	want = map[string]string{"agency|agency/web": "1", "golang|golang/api": "1", "plain|plain": "1"}
+	want = map[string]string{"agency/web|agency/web": "1", "golang/api|golang/api": "1", "plain|plain": "1"}
 	if len(got) != len(want) {
 		t.Fatalf("combined source|place counts = %v, want %v", got, want)
 	}

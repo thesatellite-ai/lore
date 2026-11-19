@@ -3,8 +3,8 @@
 // spec 15 step 5: `lore sql "SELECT name, ip FROM res_server"`).
 //
 // What the query sees is the lens wire builds: a `<table>_all` view per
-// table with a leading `source` column (the store's name) and `place` (the
-// <org>/<folder> label search prints, D-568), plus each table
+// table with a leading `source` column and `place`, both the
+// <org>/<folder> label search prints (D-568, D-685), plus each table
 // by its plain name (the nearest store's copy). In a client repo the lens
 // holds only the repo's own cache, never a store's data (MQ6, CFG6).
 //

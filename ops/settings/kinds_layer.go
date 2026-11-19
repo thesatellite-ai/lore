@@ -96,7 +96,7 @@ func (o ops) lookupKind(ctx context.Context, key string) (located, error) {
 			continue
 		}
 		return located{}, errs.New(errs.KindConflict, fmt.Sprintf("kind %s is defined twice in this view: %s in %s and %s in %s",
-			key, first.Row.ID, place(first.Src), h.Row.ID, place(h.Src))).
+			key, first.Row.ID, o.place(first.Src), h.Row.ID, o.place(h.Src))).
 			WithHint("run lore resource rehome to settle it, or name the kind by its id")
 	}
 	return first, nil
@@ -122,7 +122,7 @@ func (o ops) kindNameClash(ctx context.Context, name string, target store.Source
 	for _, l := range rows {
 		if l.Src != target && text(l.Row, kName) == name {
 			return errs.New(errs.KindConflict, fmt.Sprintf("kind %s (%s) is already defined in %s; %s may extend it, not define it again",
-				name, l.Row.ID, place(l.Src), place(target))).
+				name, l.Row.ID, o.place(l.Src), o.place(target))).
 				WithHint("add fields with `lore resource field add --kind " + name + " --field <field> --to " + string(target) + "`")
 		}
 	}
@@ -208,8 +208,8 @@ func (o ops) checkOuterEdit(ctx context.Context, k, f located, patch map[string]
 	}
 	for _, e := range exts {
 		if cerr := schema.CheckExtension(next, e.Row); cerr != nil {
-			return errs.New(errs.KindConflict, "this change conflicts with the extension "+e.Row.ID.String()+" in "+place(e.Src)+": "+cerr.Error()).
-				WithHint("change the extension in " + place(e.Src) + " first")
+			return errs.New(errs.KindConflict, "this change conflicts with the extension "+e.Row.ID.String()+" in "+o.place(e.Src)+": "+cerr.Error()).
+				WithHint("change the extension in " + o.place(e.Src) + " first")
 		}
 	}
 	return nil
@@ -221,7 +221,7 @@ func (o ops) checkFieldPlace(k located, target store.Source) error {
 		return nil
 	}
 	return errs.New(errs.KindConflict, fmt.Sprintf("kind %s is defined in %s; a field of it may live there or at a nearer level, not in %s",
-		text(k.Row, kName), place(k.Src), place(target)))
+		text(k.Row, kName), o.place(k.Src), o.place(target)))
 }
 
 // extendField writes (or updates) the extension row of field f at target
@@ -230,7 +230,7 @@ func (o ops) checkFieldPlace(k located, target store.Source) error {
 func (o ops) extendField(ctx context.Context, k, f located, target store.Source, in FieldEditIn) (RowOut, error) {
 	if !nearer(o.env, target, f.Src) {
 		return RowOut{}, errs.New(errs.KindConflict, fmt.Sprintf("%s.%s is defined in %s; --to must name a nearer place, not %s",
-			text(k.Row, kName), text(f.Row, kName), place(f.Src), place(target)))
+			text(k.Row, kName), text(f.Row, kName), o.place(f.Src), o.place(target)))
 	}
 	var bad []string
 	for _, x := range []struct {
@@ -246,7 +246,7 @@ func (o ops) extendField(ctx context.Context, k, f located, target store.Source,
 	}
 	if len(bad) > 0 {
 		return RowOut{}, errs.New(errs.KindConflict, fmt.Sprintf("%s.%s (%s) is defined in %s; %s may not %s",
-			text(k.Row, kName), text(f.Row, kName), f.Row.ID, place(f.Src), place(target), strings.Join(bad, ", "))).
+			text(k.Row, kName), text(f.Row, kName), f.Row.ID, o.place(f.Src), o.place(target), strings.Join(bad, ", "))).
 			WithHint("a lower level may add values, make a field required, add pattern/min/max, or mark it sensitive, internal or strict")
 	}
 	raw, err := o.rawFieldsOf(ctx, k)
@@ -325,7 +325,7 @@ func (o ops) extendField(ctx context.Context, k, f located, target store.Source,
 	if err = schema.CheckExtension(base, probe); err != nil {
 		return RowOut{}, err
 	}
-	what := fmt.Sprintf("%s.%s (%s): tightened for %s rows", text(k.Row, kName), text(f.Row, kName), short(f.Row.ID), place(target))
+	what := fmt.Sprintf("%s.%s (%s): tightened for %s rows", text(k.Row, kName), text(f.Row, kName), short(f.Row.ID), o.place(target))
 	if existing != nil {
 		return o.patchRow(ctx, *existing, patch, what)
 	}

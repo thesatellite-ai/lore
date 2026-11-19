@@ -192,9 +192,9 @@ func (o ops) metaAdopt(ctx context.Context, in MetaAdoptIn) (MetaMoveOut, error)
 	}
 	if in.DryRun {
 		return MetaMoveOut{Keys: names, Values: nvals, Store: string(to), DryRun: true,
-			Human: fmt.Sprintf("would adopt %d metadata keys (%s) and %d allowed values from %s into %s; ids unchanged\ndry run: nothing written\n", len(keys), strings.Join(names, ", "), nvals, from, place(to))}, nil
+			Human: fmt.Sprintf("would adopt %d metadata keys (%s) and %d allowed values from %s into %s; ids unchanged\ndry run: nothing written\n", len(keys), strings.Join(names, ", "), nvals, from, o.place(to))}, nil
 	}
-	if err = bulk.Ask(ctx, fmt.Sprintf("move %d metadata keys (%s) and %d allowed values from %s into %s? ids stay, values unchanged", len(keys), strings.Join(names, ", "), nvals, from, place(to))); err != nil {
+	if err = bulk.Ask(ctx, fmt.Sprintf("move %d metadata keys (%s) and %d allowed values from %s into %s? ids stay, values unchanged", len(keys), strings.Join(names, ", "), nvals, from, o.place(to))); err != nil {
 		return MetaMoveOut{}, err
 	}
 	for _, k := range keys {
@@ -203,7 +203,7 @@ func (o ops) metaAdopt(ctx context.Context, in MetaAdoptIn) (MetaMoveOut, error)
 		}
 	}
 	return MetaMoveOut{Keys: names, Values: nvals, Store: string(to),
-		Human: fmt.Sprintf("✓ adopted %d metadata keys (%s) and %d allowed values from %s into %s; ids unchanged\n", len(keys), strings.Join(names, ", "), nvals, from, place(to))}, nil
+		Human: fmt.Sprintf("✓ adopted %d metadata keys (%s) and %d allowed values from %s into %s; ids unchanged\n", len(keys), strings.Join(names, ", "), nvals, from, o.place(to))}, nil
 }
 
 // refuseReturn refuses an adopt of key rows that left to before: the
@@ -223,7 +223,7 @@ func (o ops) refuseReturn(ctx context.Context, keys []located, from, to store.So
 	if len(back) == 0 {
 		return nil
 	}
-	return errs.New(errs.Unsupported, "meta adopt: "+strings.Join(back, ", ")+" left "+place(to)+" before, and a key row never returns to a place it left").
+	return errs.New(errs.Unsupported, "meta adopt: "+strings.Join(back, ", ")+" left "+o.place(to)+" before, and a key row never returns to a place it left").
 		WithHint("keep it in " + string(from) + "; nothing written")
 }
 
@@ -258,7 +258,7 @@ func (o ops) metaMoveKey(ctx context.Context, in MetaMoveIn) (MetaMoveOut, error
 	name := text(k.Row, mName)
 	switch to {
 	case k.Src:
-		return MetaMoveOut{}, errs.New(errs.InvalidInput, name+" is already in "+place(to))
+		return MetaMoveOut{}, errs.New(errs.InvalidInput, name+" is already in "+o.place(to))
 	case store.SourceRepo:
 		return MetaMoveOut{}, errs.New(errs.InvalidInput, "meta move moves a key outward; "+name+" is in "+string(k.Src)+" and the repo would hide it from every other place").
 			WithHint("keep it where it is, or add a repo key under another name")
@@ -273,21 +273,21 @@ func (o ops) metaMoveKey(ctx context.Context, in MetaMoveIn) (MetaMoveOut, error
 		return MetaMoveOut{}, err
 	}
 	if c := clashIn(have, k); c != "" {
-		return MetaMoveOut{}, errs.New(errs.MetaTaken, fmt.Sprintf("%s already defines %s (%s)", place(to), name, c)).
+		return MetaMoveOut{}, errs.New(errs.MetaTaken, fmt.Sprintf("%s already defines %s (%s)", o.place(to), name, c)).
 			WithHint("settle it with lore meta rename or lore meta edit --id " + name + " --merge-into <key> first; nothing written")
 	}
 	// OV58-2 / FB-META-5 (after the name clash, which is settled first): a move goes strictly outward in the level order
 	// (repo → folder → org → store root → personal, policy.Levels); a
 	// sideways or inward move would hide the key from places that use it.
 	if fromL, toL := storeLevel(o.env, k.Src), storeLevel(o.env, to); levelRank(toL) <= levelRank(fromL) {
-		return MetaMoveOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("meta move moves a key outward; %s is at level %s in %s and %s is at level %s", name, fromL, place(k.Src), place(to), toL)).
+		return MetaMoveOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("meta move moves a key outward; %s is at level %s in %s and %s is at level %s", name, fromL, o.place(k.Src), o.place(to), toL)).
 			WithHint("pick a place farther out (a project folder, the org folder, the store root), or use lore meta adopt --from <place> --to <place> to move keys between places")
 	}
 	vs, err := o.metaValues(ctx, k)
 	if err != nil {
 		return MetaMoveOut{}, err
 	}
-	if err = bulk.Ask(ctx, fmt.Sprintf("move %s (%s) from %s to %s? id kept, values unchanged", name, short(k.Row.ID), place(k.Src), place(to))); err != nil {
+	if err = bulk.Ask(ctx, fmt.Sprintf("move %s (%s) from %s to %s? id kept, values unchanged", name, short(k.Row.ID), o.place(k.Src), o.place(to))); err != nil {
 		return MetaMoveOut{}, err
 	}
 	internal, err := o.moveKey(ctx, k, to)
@@ -295,7 +295,7 @@ func (o ops) metaMoveKey(ctx context.Context, in MetaMoveIn) (MetaMoveOut, error
 		return MetaMoveOut{}, err
 	}
 	human := fmt.Sprintf("moved %s (%s) %s → %s; id kept, values unchanged\n  %s: key row added (%d allowed values)\n  %s: tombstone left\n",
-		name, short(k.Row.ID), text(k.Row, mScope), scopeOf(to), place(to), len(vs), place(k.Src))
+		name, short(k.Row.ID), text(k.Row, mScope), scopeOf(to), o.place(to), len(vs), o.place(k.Src))
 	if internal {
 		human += "  new to the store, so it starts internal (lore meta edit --id " + name + " --no-internal clears it)\n"
 	}
@@ -366,7 +366,7 @@ func (o ops) metaRehome(ctx context.Context, in MetaRehomeIn) (MetaRehomeOut, er
 		}
 		where := make([]string, 0, len(ks))
 		for _, k := range ks {
-			where = append(where, short(k.Row.ID)+" in "+place(k.Src))
+			where = append(where, short(k.Row.ID)+" in "+o.place(k.Src))
 		}
 		slices.Sort(where)
 		out.Clashes = append(out.Clashes, name+": "+strings.Join(where, ", "))
@@ -387,7 +387,7 @@ func (o ops) metaRehome(ctx context.Context, in MetaRehomeIn) (MetaRehomeOut, er
 			en := r.entries[kid]
 			item := MetaRehomeItem{Row: r.Row.ID.String(), Key: kid.String(), Name: en.Name, Scope: en.Scope}
 			if ks := byName[en.Name]; len(ks) > 0 {
-				item.Reuse = short(ks[0].Row.ID) + " in " + place(ks[0].Src)
+				item.Reuse = short(ks[0].Row.ID) + " in " + o.place(ks[0].Src)
 			}
 			out.Missing = append(out.Missing, item)
 		}
@@ -452,16 +452,16 @@ func (o ops) rehomeRefile(ctx context.Context, in MetaRehomeIn, src store.Source
 	for _, old := range order {
 		rf := plan[old]
 		if rf.reuse != nil {
-			out.Plan = append(out.Plan, fmt.Sprintf("%s %s → %s in %s (reused)", rf.name, old, rf.reuse.Row.ID, place(rf.reuse.Src)))
+			out.Plan = append(out.Plan, fmt.Sprintf("%s %s → %s in %s (reused)", rf.name, old, rf.reuse.Row.ID, o.place(rf.reuse.Src)))
 			continue
 		}
-		out.Plan = append(out.Plan, fmt.Sprintf("%s %s → a new %s key in %s", rf.name, old, rf.typ, place(to)))
+		out.Plan = append(out.Plan, fmt.Sprintf("%s %s → a new %s key in %s", rf.name, old, rf.typ, o.place(to)))
 	}
 	if in.DryRun {
 		out.DryRun = true
 		return out, nil
 	}
-	if err := bulk.Ask(ctx, fmt.Sprintf("re-file %d keys and rewrite %d values of %s?", len(order), len(out.Missing), place(src))); err != nil {
+	if err := bulk.Ask(ctx, fmt.Sprintf("re-file %d keys and rewrite %d values of %s?", len(order), len(out.Missing), o.place(src))); err != nil {
 		return MetaRehomeOut{}, err
 	}
 	for i, old := range order {
