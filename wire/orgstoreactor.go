@@ -45,11 +45,20 @@ type storeWriter struct {
 // an unreadable config, an org entry with no key or a url that does not
 // parse adds nothing (the write then keeps the open's identity, as before).
 func (st *state) resolveStoreWriters(ctx context.Context, opts Options, attached []attach.Opened) {
-	if st.who.StableKey == "" || len(attached) == 0 || opts.OrgStoreURLs == nil {
+	if len(attached) == 0 || opts.OrgStoreURLs == nil {
 		return
 	}
 	urls, err := opts.OrgStoreURLs(ctx)
-	if err != nil || len(urls) == 0 {
+	if err != nil {
+		return
+	}
+	st.storeOrgs = map[store.Source]string{}
+	for _, o := range attached {
+		if o.Name != store.SourceRepo && o.Location != "" {
+			st.storeOrgs[o.Name], _ = orgOfStore(urls, o.Location)
+		}
+	}
+	if st.who.StableKey == "" || len(urls) == 0 {
 		return
 	}
 	mc, err := readMachineConfig(opts.Home)
@@ -136,4 +145,42 @@ func (st *state) storeWriterAs(name store.Source) func(ids.ID[ids.Actor]) ids.ID
 		}
 		return a
 	}
+}
+
+// writerOfOrg is the store writer of the org whose store holds src (the
+// roster's "<org>/<org folder>"): src's own entry, else the entry of a
+// sibling folder of the same store (one writer per org, resolveStoreWriters).
+// The role check judges the caller as this identity, the one the write is
+// stamped with (devco D-694: from a repo no org matches, the open's
+// identity is the OS user, while a write into the org store is the
+// person's org identity, an admin's included, so the admin was refused
+// their own add).
+func (st *state) writerOfOrg(src store.Source) (storeWriter, bool) {
+	if w, ok := st.storeWho[src]; ok {
+		return w, true
+	}
+	org, _, cut := strings.Cut(string(src), "/")
+	if !cut || org == "" {
+		return storeWriter{}, false
+	}
+	for name, w := range st.storeWho {
+		if strings.HasPrefix(string(name), org+"/") {
+			return w, true
+		}
+	}
+	return storeWriter{}, false
+}
+
+// StoreOrg implements profilestore.StoreOrger: the configured org whose
+// stores list the attached store name ("" when no org does); known is
+// false when the open could not tell (the org store urls unreadable, a
+// store with no location, a name not attached).
+func (a *App) StoreOrg(name store.Source) (org string, known bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.st == nil || a.st.storeOrgs == nil {
+		return "", false
+	}
+	org, known = a.st.storeOrgs[name]
+	return org, known
 }

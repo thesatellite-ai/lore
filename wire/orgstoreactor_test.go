@@ -12,8 +12,10 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
+	"github.com/thesatellite-ai/lore/model/ids"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // TestOrgStoreWriteCarriesOrgIdentity (plainfiles:4, C19): from a repo no
@@ -83,6 +85,14 @@ func TestOrgStoreWriteCarriesOrgIdentity(t *testing.T) {
 		t.Errorf("the open's own actor row was written into the org store (%v)", err)
 	}
 
+	// the role check places each store by the org listing it (D-694)
+	if got, known := a.StoreOrg("acme"); got != "acme" || !known {
+		t.Errorf("StoreOrg(acme) = %q, %v; want acme, true", got, known)
+	}
+	if got, known := a.StoreOrg("side"); got != "" || !known {
+		t.Errorf("StoreOrg(side) = %q, %v; want \"\", true (no org lists it)", got, known)
+	}
+
 	sideOut, err := run(t, a, opsmemory.OpAdd, `{"body":"a note elsewhere","to":"side"}`, false)
 	if err != nil {
 		t.Fatal(err)
@@ -90,5 +100,34 @@ func TestOrgStoreWriteCarriesOrgIdentity(t *testing.T) {
 	sf := rowFile(t, filepath.Join(fileuri.LocalPath(otherURL), "notes", schema.TableMemories, idOf(t, sideOut)+".json"))
 	if got := fieldString(t, sf, "created_by"); got != mine.String() {
 		t.Errorf("a store no org lists: created_by = %s, want the open identity %s", got, mine)
+	}
+}
+
+// TestRosterCallerIsTheOrgWriter (devco D-694): the role check judges the
+// caller as the identity a write into the org's store is stamped with
+// (storeWho), not the open's own identity: from a repo no org matches,
+// the open is the OS user while the admin's write into their org store
+// carries their org identity, and the admin was refused their own add.
+// A roster of an org with no writer of its own keeps the open's actor.
+func TestRosterCallerIsTheOrgWriter(t *testing.T) {
+	t.Parallel()
+	open, err := identity.ActorID("human:solo@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	org, err := identity.ActorID("human:mira@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &state{actor: open, who: identity.Resolved{StableKey: "human:solo@example.test", Kind: schema.ActorKindHuman},
+		storeWho: map[store.Source]storeWriter{"acme/clients": {id: org}}}
+	a := &App{}
+	for _, c := range []struct {
+		src  store.Source
+		want ids.ID[ids.Actor]
+	}{{"acme/org", org}, {"acme/clients", org}, {"other/org", open}, {store.SourceRepo, open}} {
+		if got := a.rosterPerson(context.Background(), st, rosterAt{src: c.src}); got != c.want {
+			t.Errorf("roster caller on %s = %s, want %s", c.src, got, c.want)
+		}
 	}
 }

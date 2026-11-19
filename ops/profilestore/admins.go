@@ -248,10 +248,35 @@ func placeOf(ctx context.Context, env PlaceEnv, src store.Source) (store.Source,
 	}
 	if l, ok := upgrade.As[Leveler](env); ok {
 		if lv, known := l.StoreLevel(src); known {
+			if lv == policy.LevelStoreRoot && ownStore(env, src) {
+				return src, policy.LevelPersonal
+			}
 			return src, lv
 		}
 	}
 	return src, ""
+}
+
+// StoreOrger is the Env upgrade that names the configured org whose
+// stores list an attached store (wire.App StoreOrg; known false when it
+// cannot tell).
+type StoreOrger interface {
+	StoreOrg(name store.Source) (org string, known bool)
+}
+
+// ownStore reports whether src is a store no configured org lists (one a
+// person made for their own notes at any url, `lore store init`): the
+// role check judges it like the personal store, never as company ground
+// of the folder's org (devco D-694: a member's own store was judged by
+// the company roster and their note in it refused). A store the Env
+// cannot place stays company ground (fail closed).
+func ownStore(env PlaceEnv, src store.Source) bool {
+	so, ok := upgrade.As[StoreOrger](env)
+	if !ok {
+		return false
+	}
+	org, known := so.StoreOrg(src)
+	return known && org == ""
 }
 
 // mayBeGround is false for the places that are never company ground

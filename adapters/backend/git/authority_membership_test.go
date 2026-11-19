@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -123,4 +124,70 @@ func TestStampCarryNeedsSameContent(t *testing.T) {
 	if writer, _ := readField(t, c, again, "updated_by"); writer != o.boss.actor.String() {
 		t.Errorf("the settled conflict names %q as its writer, want the admin who wrote it", writer)
 	}
+}
+
+// TestTeamChangeIsAdminOnlyAtSync (devco D-694): who is on a team is an
+// admin's change at sync as it is on the writer's machine (the local
+// write guard): a lead of the team's project who commits a team change
+// by hand (adding themselves, adding someone else, a rename, a new team
+// of their project) is held back and named, while the admin's team
+// change on the same project is read.
+func TestTeamChangeIsAdminOnlyAtSync(t *testing.T) {
+	t.Parallel()
+	o := newOrgTeam(t)
+	leadPM, team, adminTeam := mustID[ids.ProjectMember](t), teamID(t), teamID(t)
+	teamRow := func(id ids.AnyID, handle string, members ...ids.AnyID) string {
+		var ms []string
+		for _, m := range members {
+			ms = append(ms, `"`+m.String()+`"`)
+		}
+		return rowJSON("teams", id, map[string]string{"project_id": `"` + o.project.String() + `"`, "handle": `"` + handle + `"`,
+			"member_actor_ids": "[" + strings.Join(ms, ",") + "]"})
+	}
+	// the admin makes max the lead of the project and gives it team api
+	o.h.commit(o.boss.email, map[string]string{
+		orgPath("project_members", leadPM): memberRow(leadPM, o.max.actor, o.project, `["lead"]`),
+		orgPath("teams", team):             teamRow(team, "api", o.boss.actor),
+	})
+	// the lead puts himself and the contractor on api, by hand
+	o.h.commit(o.max.email, map[string]string{orgPath("teams", team): teamRow(team, "api", o.boss.actor, o.max.actor, o.cy.actor)})
+	// and makes a new team of his project with himself on it
+	maxTeam := teamID(t)
+	o.h.commit(o.max.email, map[string]string{orgPath("teams", maxTeam): teamRow(maxTeam, "ops", o.max.actor)})
+	// the admin makes a team of the same project
+	o.h.commit(o.boss.email, map[string]string{orgPath("teams", adminTeam): teamRow(adminTeam, "web", o.max.actor)})
+
+	b := orgFolderClone(t, o.h.remote)
+	if doc := rowDoc(t, b, team); doc == "" || strings.Contains(doc, o.max.actor.String()) {
+		t.Errorf("team api as read = %s; want the admin's version (the lead not on it)", doc)
+	}
+	for _, held := range []struct {
+		name string
+		id   ids.AnyID
+	}{{"the lead's change of team api", team}, {"the lead's new team ops", maxTeam}} {
+		if why := heldReason(t, b, held.id); !strings.Contains(why, "who is on a team") || !strings.Contains(why, "only an admin changes the teams") || !strings.Contains(why, o.max.email) {
+			t.Errorf("hold of %s = %q; want the admin-only team rule and %s named", held.name, why, o.max.email)
+		}
+	}
+	if _, read := readField(t, b, maxTeam, "id"); read {
+		t.Errorf("the lead's new team ops was read")
+	}
+	if _, read := readField(t, b, adminTeam, "id"); !read {
+		t.Errorf("the admin's team web was not read (held: %q)", heldReason(t, b, adminTeam))
+	}
+}
+
+// rowDoc is the row file of id as a full read has it ("" when left out).
+func rowDoc(t *testing.T, b *Backend, id ids.AnyID) string {
+	t.Helper()
+	rows, _, err := b.Read(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ID == id {
+			return string(r.Doc)
+		}
+	}
+	return ""
 }

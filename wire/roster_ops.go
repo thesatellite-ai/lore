@@ -556,11 +556,16 @@ func (a *App) personBehind(ctx context.Context, r rosterAt, who identity.Resolve
 }
 
 // rosterPerson is the actor id of the person st's caller is or acts for on
-// r (profilestore.Roster.Caller): the caller's own actor for a person, the
-// person behind a coding agent (personBehind). An agent with no person
-// behind it keeps its own id; its writes are refused by rosterCaller.
+// r (profilestore.Roster.Caller): the caller's own actor for a person (or
+// their identity in r's org when a write there is stamped with it,
+// storeWho), the person behind a coding agent (personBehind). An agent
+// with no person behind it keeps its own id; its writes are refused by
+// rosterCaller.
 func (a *App) rosterPerson(ctx context.Context, st *state, r rosterAt) ids.ID[ids.Actor] {
 	if st.who.Kind != schema.ActorKindAgent {
+		if w, ok := st.writerOfOrg(r.src); ok {
+			return w.id
+		}
 		return st.actor
 	}
 	p, err := a.personBehind(ctx, r, st.who, "act on the roster")

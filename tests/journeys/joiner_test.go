@@ -218,7 +218,10 @@ func TestJourneyJoiner(t *testing.T) {
 		t.Logf("%s", bm.LoreIn(bapp, "org", "link", jJoinerOrg, "--project", "app", "--yes"))
 		bapp.CommitAll("lore init")
 		bapp.AdminPush("origin", "main")
-		r := bm.LoreIn(bapp, "team", "invite", jJoinerWorkEmail, "--yes", "--json").OK(t)
+		// D-694: a member adds notes in a company folder of a team they are
+		// on; the admin gives the app folder's team in the invite
+		bm.LoreIn(bapp, "team", "add", "--handle", "@app", "--members", jJoinerBossEmail, "--yes").OK(t)
+		r := bm.LoreIn(bapp, "team", "invite", jJoinerWorkEmail, "--team", "@app", "--yes", "--json").OK(t)
 		var o struct {
 			Text string `json:"text"`
 		}

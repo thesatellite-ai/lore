@@ -496,6 +496,10 @@ type state struct {
 	// org when it differs from who (orgstoreactor.go, C19): rows written
 	// there are stamped with it and its actor row is written there.
 	storeWho map[store.Source]storeWriter
+	// storeOrgs is, per attached store with a location, the configured org
+	// whose stores list it ("" when none does); nil when the org store urls
+	// could not be read (resolveStoreWriters, StoreOrg).
+	storeOrgs map[store.Source]string
 	// unreachable holds the org stores (Options.OrgStores) left out at open
 	// because they have no local copy and cannot be reached, with that
 	// error; nil when every store opened (openAttached, unreachableGuard).
