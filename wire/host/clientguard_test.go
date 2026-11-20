@@ -105,3 +105,41 @@ func TestDoctorClientGuardMissingPrePush(t *testing.T) {
 		t.Fatalf("doctor --fix did not install the pre-push block (err %v, lines %q)", err, warns)
 	}
 }
+
+// TestDoctorClientGuardNeverLinkedIsANote (devco:D-775): a teammate's
+// clone of a client repo the store links by its remote, where the link
+// never ran, holds no guard block and no lore.clientrepo mark; doctor
+// says so in a note naming `lore doctor --fix`, never a warning (a member
+// who only joined is not a degraded machine), and --fix installs it.
+// Once the guard was on, a removed block is a warning again.
+func TestDoctorClientGuardNeverLinkedIsANote(t *testing.T) {
+	h, _, dir := clientGuardRepo(t)
+	var warns, notes []string
+	warn := func(s string) { warns = append(warns, s) }
+	note := func(s string) { notes = append(notes, s) }
+	h.doctorClientGuard(context.Background(), false, warn, note)
+	if len(warns) != 0 {
+		t.Fatalf("doctor warns in a clone the link never ran in: %q", warns)
+	}
+	if len(notes) != 1 || !strings.Contains(notes[0], "leak guard off in this clone") || !strings.Contains(notes[0], "`lore doctor --fix`") {
+		t.Fatalf("doctor notes %q, want one saying the guard is off and naming `lore doctor --fix`", notes)
+	}
+	warns, notes = nil, nil
+	h.doctorClientGuard(context.Background(), true, warn, note)
+	for _, n := range clientGuardHookNames {
+		marker, _ := clientGuardBlock(n)
+		if b, err := os.ReadFile(filepath.Join(dir, ".git", "hooks", n)); err != nil || !strings.Contains(string(b), marker) {
+			t.Fatalf("doctor --fix did not install the %s block (err %v, lines %q)", n, err, warns)
+		}
+	}
+	for _, n := range clientGuardHookNames {
+		if err := os.Remove(filepath.Join(dir, ".git", "hooks", n)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	warns, notes = nil, nil
+	h.doctorClientGuard(context.Background(), false, warn, note)
+	if len(warns) != 1 || !strings.Contains(warns[0], "leak guard missing in "+hookCommitMsg+", "+hookPrePush) {
+		t.Fatalf("doctor does not warn when both blocks left a clone the guard was on in: warnings %q, notes %q", warns, notes)
+	}
+}
