@@ -54,10 +54,11 @@ type ManyMover interface {
 	List(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error)
 	AttachedStore(ctx context.Context, name store.Source) (store.Source, error)
 	MoveMany(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) (engine.MovedMany, error)
-	// PlanMoveSecrets is engine.PlanMoveSecrets for a dry run: the secret
-	// refusal the real move would give, before it says "would move"
-	// (devco D-717). Nothing is written.
-	PlanMoveSecrets(ctx context.Context, refs []engine.Ref, to store.Source, rerun string) error
+	// PlanMove is the dry run of MoveMany: every refusal the real move
+	// would give (the secret scan of devco D-717, the reference check and
+	// role guard of D-761), before it says "would move". Nothing is
+	// written.
+	PlanMove(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) error
 }
 
 // NearDuplicateFinder is the optional Env upgrade (wire.App) that lists
@@ -254,16 +255,18 @@ func (o ops) moveMany(ctx context.Context, in MoveIn) (MoveOut, error) {
 		return MoveOut{}, err
 	}
 	out.setup = setupFlag(ctx)
+	does := "move " + strconv.Itoa(len(refs)) + " row(s) from " + profilestore.PlaceTo(ctx, o.env, p.from) + " to " + profilestore.PlaceTo(ctx, o.env, p.to)
 	if in.DryRun {
-		// the real run's secret refusal comes first (D-717): a preview
-		// never prints a next step that would be refused
-		if err = mm.PlanMoveSecrets(ctx, refs, p.to, o.bulkLine(ctx, in, p)); err != nil {
+		// the real run's refusals come first (D-717 secrets, D-761 every
+		// other check): a preview never prints a next step that would be
+		// refused
+		plan := engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt, SecretRerun: o.bulkLine(ctx, in, p)}
+		if err = mm.PlanMove(moveAsk(ctx, does, o.bulkLine(ctx, in, p)), refs, p.to, plan); err != nil {
 			return MoveOut{}, err
 		}
 		out.next = o.bulkLine(ctx, in, p)
 		return out, nil
 	}
-	does := "move " + strconv.Itoa(len(refs)) + " row(s) from " + profilestore.PlaceTo(ctx, o.env, p.from) + " to " + profilestore.PlaceTo(ctx, o.env, p.to)
 	mv, err := mm.MoveMany(moveAsk(ctx, does, o.bulkLine(ctx, in, p)), refs, p.to, engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt, SecretRerun: o.bulkLine(ctx, in, p)})
 	if err != nil {
 		return MoveOut{}, err

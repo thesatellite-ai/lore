@@ -91,6 +91,11 @@ type MoveOptions struct {
 	// and names every row holding a finding with the reruns that answer
 	// it. "" prints the flags alone. One-row moves ignore it.
 	SecretRerun string
+	// Plan makes MoveMany a preview (devco D-761, `lore move --from …
+	// --dry-run`): every row goes through the one-row move and the role
+	// guard judges every batch, so the preview refuses whatever the real
+	// run refuses, then nothing is written. One-row moves ignore it.
+	Plan bool
 }
 
 // WarnMetaDropped names a metadata value --drop-internal removed (MQ11).
@@ -223,6 +228,14 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 				}
 			}
 		} else {
+			// devco D-761: a row moving into a store folder belongs to that
+			// folder's own project, as a row written there does (D-718).
+			// Before, a move between two folders of one store kept the old
+			// folder's project_id, which the next move out of the new folder
+			// could not resolve (E_NOT_FOUND on project_id).
+			if typed, err = e.placeFolderProject(ctx, to, def, typed); err != nil {
+				return Written{}, err
+			}
 			// F-MOVE-1: the row belongs to the place it moved to when that
 			// place has one project; otherwise its project stays as it was.
 			if typed, err = e.rehomeProject(ctx, to, def, typed, false); err != nil {

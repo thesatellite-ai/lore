@@ -87,8 +87,15 @@ func (e *Engine) leaveContainers(ctx context.Context, src, to store.Source, def 
 	return out, ws, nil
 }
 
-// liveIn reports whether store name holds the row table/id live.
+// liveIn reports whether store name holds the row table/id live, a row
+// staged earlier in the same batch included: a bulk move stages the
+// container (a task list) before the rows in it (parentsFirst), and a
+// committed-only read left every task's list behind although the list
+// moved in the same batch (devco D-761).
 func (e *Engine) liveIn(ctx context.Context, name store.Source, table row.Table, id ids.AnyID) (bool, error) {
+	if _, ok := stagedLive(ctx, name, table, id); ok {
+		return true, nil
+	}
 	got, gone, err := e.getRow(ctx, name, table, id)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
