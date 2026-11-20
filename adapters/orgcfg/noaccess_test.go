@@ -29,11 +29,8 @@ func TestLinksSkipStoreWithoutAccess(t *testing.T) {
 	}
 	home := t.TempDir()
 	writeFile(t, ConfigPath(home), yml)
-	var asked []string
-	route := func(_ context.Context, u string) ([]string, []string) {
-		asked = append(asked, u)
-		return nil, nil
-	}
+	var routes routeLog // prefetch asks the router from several goroutines (D-774)
+	route := routes.router(nil)
 	gitRepo(t, "git@github.com:acme/app.git", "prj_app")
 	sync := &GitLinks{Home: home, Config: cfg, Always: true, Route: route}
 	res, err := sync.Links(ctx, "prj_app", []string{"github.com/acme/app"})
@@ -50,20 +47,20 @@ func TestLinksSkipStoreWithoutAccess(t *testing.T) {
 	if n := NoAccessNote(got[0]); !strings.HasPrefix(n, "secret: no access, skipped") || !strings.Contains(n, "admin of acme") {
 		t.Errorf("note %q", n)
 	}
-	asked = nil
+	routes.reset()
 	read := &GitLinks{Home: home, Config: cfg, Route: route}
 	if res, err = read.Links(ctx, "prj_app", []string{"github.com/acme/app"}); err != nil || res.Status != orgresolve.LinkStatusKnown {
 		t.Fatalf("plain read: %v %s %s", err, res.Status, res.Detail)
 	}
-	if strings.Contains(strings.Join(asked, " "), "secret") {
-		t.Errorf("a plain read asked the refused store again: %q", asked)
+	if strings.Contains(strings.Join(routes.asked(), " "), "secret") {
+		t.Errorf("a plain read asked the refused store again: %q", routes.asked())
 	}
-	asked = nil
+	routes.reset()
 	if _, err = sync.Links(ctx, "prj_app", []string{"github.com/acme/app"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.Join(asked, " "), "secret") {
-		t.Errorf("the next sync did not try the refused store again: %q", asked)
+	if !strings.Contains(strings.Join(routes.asked(), " "), "secret") {
+		t.Errorf("the next sync did not try the refused store again: %q", routes.asked())
 	}
 }
 

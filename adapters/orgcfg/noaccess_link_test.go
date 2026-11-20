@@ -30,11 +30,8 @@ func TestPickLinkStoreSkipsStoreWithoutAccess(t *testing.T) {
 	}
 	home := t.TempDir()
 	writeFile(t, ConfigPath(home), yml)
-	var asked []string
-	route := func(_ context.Context, u string) ([]string, []string) {
-		asked = append(asked, u)
-		return nil, nil
-	}
+	var routes routeLog // prefetch asks the router from several goroutines (D-774)
+	route := routes.router(nil)
 	acmeNorm, _ := repourl.NormalizeStore(acmeURL)
 	secretNorm, _ := repourl.NormalizeStore(secretURL)
 	g := &GitLinks{Home: home, Config: cfg, Route: route}
@@ -48,12 +45,12 @@ func TestPickLinkStoreSkipsStoreWithoutAccess(t *testing.T) {
 		t.Fatal("the refused store was not recorded")
 	}
 	// next link: no fetch of the refused store at all
-	asked = nil
+	routes.reset()
 	if got, err = g.pickLinkStore(ctx, orgresolve.LinkPlan{Entry: "acme", StoreURL: acmeNorm, Folder: "app"}); err != nil || got != acmeNorm {
 		t.Fatalf("second pickLinkStore = %q, %v", got, err)
 	}
-	if strings.Contains(strings.Join(asked, " "), "secret") {
-		t.Errorf("a recorded refusal was fetched again: %q", asked)
+	if strings.Contains(strings.Join(routes.asked(), " "), "secret") {
+		t.Errorf("a recorded refusal was fetched again: %q", routes.asked())
 	}
 	// --store names the refused store: the true cause
 	_, err = g.pickLinkStore(ctx, orgresolve.LinkPlan{Entry: "acme", StoreURL: secretNorm, Folder: "app", StoreExplicit: true})
