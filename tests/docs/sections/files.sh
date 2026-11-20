@@ -43,7 +43,7 @@ note "lore edit"
 # person would in vi.
 quiet alice . "mkdir -p bin && printf '%s\n' '#!/bin/sh' 'sed -i -e \"s/^priority: .*/priority: high/\" -e \"\\\$a Ask the hosting provider for the new chain first.\" \"\$1\"' > bin/edit-task && chmod +x bin/edit-task"
 on alice work/website "lore row markdown --id $t_cert"
-on alice work/website "EDITOR=\$HOME/bin/edit-task lore edit $t_cert"
+on alice work/website "EDITOR=\$HOME/bin/edit-task lore edit --id $t_cert"
 on alice work/website "lore task show --id $t_cert"
 
 note "edit a row file by hand"

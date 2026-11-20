@@ -94,6 +94,15 @@ func TestGitWiringStepNamesWrites(t *testing.T) {
 	if !strings.Contains(st.Next, "git add .gitignore .gitattributes") {
 		t.Errorf("Next does not say how to commit them: %q", st.Next)
 	}
+	if !strings.Contains(st.Result, "(lore's local files git must ignore and the merge rules)") {
+		t.Errorf("Result does not say what each file's lines are for: %q", st.Result)
+	}
+	// devco:D-772: a run that wrote only .gitattributes says it wrote the
+	// merge rules, never the ignore lines it did not write.
+	only, _ := gitWiringStep("/r", []string{".gitattributes"})
+	if want := "wrote lore's lines to .gitattributes (the merge rules)"; only.Result != want {
+		t.Errorf("Result = %q, want %q", only.Result, want)
+	}
 	var hw *HostWiring
 	hw.Note(".gitignore") // nil-safe: a run without the host's hooks
 	if hw.Wrote() != nil {

@@ -84,9 +84,9 @@ lore initialized
 alice (work/shop)$ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)
 alice (work/shop)$ lore sync
-lore sync: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/shop/.git/config; lore's merge rules in ~/work/shop/.gitattributes; hook blocks in ~/work/shop/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore sync: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/shop/.git/config; lore's merge rules in ~/work/shop/.git/info/attributes; hook blocks in ~/work/shop/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 · in sync; 5 file(s) in .lore/data wait for your commit (.lore/data/_meta.json, .lore/data/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json, .lore/data/policies/pol_28f8d32584b2db54ffb146bede5b03df.json, .lore/data/projects/prj_76bd560aff0771fab8457dbfa9823f10.json, .lore/data/repos/rep_d4314eba822f1bf5908b2b8ded5f313a.json): git add .lore/data && git commit
-alice (work/shop)$ ls .git/hooks | grep -v sample; cat .gitattributes
+alice (work/shop)$ ls .git/hooks | grep -v sample; cat .git/info/attributes; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 commit-msg
 post-checkout
 post-commit
@@ -94,6 +94,33 @@ post-merge
 post-rewrite
 pre-commit
 pre-push
+# >>> lore-sync >>>
+.lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
+.lore/data/*.json text eol=lf merge=lore linguist-generated=true
+.lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.lore/LORE.full.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.claude/rules/lore/lore-*.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.cursor/rules/lore-*.mdc text eol=lf merge=lore-keep-ours linguist-generated=true
+# <<< lore-sync <<<
+(no .gitattributes)
+alice (work/shop)$ lore fix
+lore fix: set up git for lore's row files in this clone: lore's merge rules in ~/work/shop/.gitattributes; lore's merge rules taken out of ~/work/shop/.git/info/attributes (.gitattributes holds them now) (`lore where` lists everything lore keeps here)
+lore fix: ~/work/shop
+  --     migrate (~/work/shop/.lore/data): current
+  --     folder scopes (~/work/shop): current
+  --     render (~/work/shop/.lore/LORE.md): current
+  --     agent hooks (~/work/shop): current
+  --     old clones (~/.lore/clones): current
+  --     0.1.17 files (~/work/shop/.lore): current
+  ok     git wiring (~/work/shop): wrote lore's lines to .gitattributes (the merge rules)
+  --     doctor fixes: current
+lore's lines in .gitattributes wait for your commit: git add .gitattributes && git commit -m "lore: git wiring"
+Status: HEALTHY
+alice (work/shop)$ git status --short; cat .gitattributes
+?? .gitattributes
+?? .gitignore
+?? .lore/
+?? AGENTS.md
 # >>> lore-sync >>>
 .lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
 .lore/data/*.json text eol=lf merge=lore linguist-generated=true

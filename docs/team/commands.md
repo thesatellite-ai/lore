@@ -687,16 +687,20 @@ Examples:
   lore move --from notes/old --to notes/new --dry-run
 
 Flags:
-      --drop-internal       into a client repo: remove the row's internal metadata values instead of refusing
-      --dry-run             with --from: list what would move, write nothing
-      --from string         bulk move: every row of this store or folder (<store>[/<folder>], repo or me), in one commit at --to and one at --from
-      --id string           any row id (or --from for every row of a store or folder)
-      --json                print the result (or the error) as JSON
-      --to string           the target store: repo | me | <store>[/<folder>] (required)
-      --where stringArray   with --from: only rows matching this filter (field=value, field~=text, created_at<2026-06-01, table=memories; repeatable, all must match)
-      --with-children       a task: move its whole subtree too; every sub-task keeps its id and parent
-      --with-time string    totals | none: per-worker time totals for a task moved into a client repo (default: the time.client_share policy, none)
-      --yes                 answer yes to the confirmation without a terminal
+      --drop-internal            into a client repo: remove the row's internal metadata values instead of refusing
+      --dry-run                  with --from: list what would move, write nothing
+      --from string              bulk move: every row of this store or folder (<store>[/<folder>], repo or me), in one commit at --to and one at --from
+      --id string                any row id (or --from for every row of a store or folder)
+      --json                     print the result (or the error) as JSON
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --to string                the target store: repo | me | <store>[/<folder>] (required)
+      --where stringArray        with --from: only rows matching this filter (field=value, field~=text, created_at<2026-06-01, table=memories; repeatable, all must match)
+      --with-children            a task: move its whole subtree too; every sub-task keeps its id and parent
+      --with-time string         totals | none: per-worker time totals for a task moved into a client repo (default: the time.client_share policy, none)
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 

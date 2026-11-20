@@ -38,6 +38,12 @@ func changedWiring(paths []string, before map[string][sha256.Size]byte, hooksDir
 			continue
 		}
 		switch {
+		case filepath.Base(p) == filepath.Base(localAttributesPath) && !holdsFileBlock(p, gitBlockMarker):
+			// devco:D-772: lore fix / doctor --fix wrote the tracked
+			// .gitattributes and took the clone's own copy out; naming
+			// this file as where the rules are would send the reader to
+			// an empty file.
+			out = append(out, "lore's merge rules taken out of "+p+" ("+gitAttributesFile+" holds them now)")
 		case filepath.Base(p) == gitAttributesFile || filepath.Base(p) == filepath.Base(localAttributesPath):
 			// the tracked file or the clone's own .git/info/attributes
 			// (A-1, devco:D-754): never "merge drivers in .git/info/attributes"
@@ -53,4 +59,15 @@ func changedWiring(paths []string, before map[string][sha256.Size]byte, hooksDir
 		out = append(out, "hook blocks in "+hooksDir+" ("+strings.Join(hooks, ", ")+")")
 	}
 	return out
+}
+
+// holdsFileBlock reports whether path holds lore's block under marker; a
+// missing or unreadable file holds none. It lets the set-up note tell a
+// file lore wrote its rules into from one it took them out of.
+func holdsFileBlock(path, marker string) bool {
+	b, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(b), "# >>> "+marker+" >>>")
 }

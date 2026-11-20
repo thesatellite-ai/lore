@@ -212,7 +212,7 @@ $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsAp
 ```
 <!-- /example -->
 
-`LORE_SYNC_GIT=0` writes the files but leaves git alone: no hooks and no `.gitattributes` until a pass runs without it:
+`LORE_SYNC_GIT=0` writes the files but leaves git alone: no hooks and no merge rules until a pass runs without it. That pass (`lore sync` here) adds the hooks and keeps lore's merge rules in the clone's own `.git/info/attributes`, because a plain lore command changes no tracked file outside `.lore/`; `lore fix` (or `lore doctor --fix`) writes them to the tracked `.gitattributes`, takes the clone's copy out, and names the file to commit:
 
 <!-- example: environment#sync-git-off -->
 ```console
@@ -231,7 +231,7 @@ $ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .g
 (no .gitattributes)
 $ lore sync
 · in sync; 5 file(s) in .lore/data wait for your commit (.lore/data/_meta.json, .lore/data/actors/act_b4f4…a5b0.json, .lore/data/policies/pol_28f8…03df.json, .lore/data/projects/prj_76bd…3f10.json, .lore/data/repos/rep_d431…313a.json): git add .lore/data && git commit
-$ ls .git/hooks | grep -v sample; cat .gitattributes
+$ ls .git/hooks | grep -v sample; cat .git/info/attributes; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 commit-msg
 post-checkout
 post-commit
@@ -239,6 +239,33 @@ post-merge
 post-rewrite
 pre-commit
 pre-push
+# >>> lore-sync >>>
+.lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
+.lore/data/*.json text eol=lf merge=lore linguist-generated=true
+.lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.lore/LORE.full.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.claude/rules/lore/lore-*.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.cursor/rules/lore-*.mdc text eol=lf merge=lore-keep-ours linguist-generated=true
+# <<< lore-sync <<<
+(no .gitattributes)
+$ lore fix
+lore fix: set up git for lore's row files in this clone: lore's merge rules in ~/work/shop/.gitattributes; lore's merge rules taken out of ~/work/shop/.git/info/attributes (.gitattributes holds them now) (`lore where` lists everything lore keeps here)
+lore fix: ~/work/shop
+  --     migrate (~/work/shop/.lore/data): current
+  --     folder scopes (~/work/shop): current
+  --     render (~/work/shop/.lore/LORE.md): current
+  --     agent hooks (~/work/shop): current
+  --     old clones (~/.lore/clones): current
+  --     0.1.17 files (~/work/shop/.lore): current
+  ok     git wiring (~/work/shop): wrote lore's lines to .gitattributes (the merge rules)
+  --     doctor fixes: current
+lore's lines in .gitattributes wait for your commit: git add .gitattributes && git commit -m "lore: git wiring"
+Status: HEALTHY
+$ git status --short; cat .gitattributes
+?? .gitattributes
+?? .gitignore
+?? .lore/
+?? AGENTS.md
 # >>> lore-sync >>>
 .lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
 .lore/data/*.json text eol=lf merge=lore linguist-generated=true
