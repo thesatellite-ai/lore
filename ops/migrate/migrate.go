@@ -407,6 +407,7 @@ func Ops(rw Rewriter) []op.Entry {
 // (--team-lock: T itself is a push to the remote, so it needs --push).
 func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}, Verbose: in.Verbose}
+	ctx, takeWarnings := WithWarnings(ctx)
 	choice, err := pushChoice(in.Push, in.NoPush, in.Offline)
 	if err != nil {
 		return RunOut{}, err
@@ -534,6 +535,11 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	}
 	out.Count += len(out.Rows)
 	sortRows(out.Rows, tables)
+	// what the conversion changed beyond the format (devco D-766: a ref
+	// that held a name, mapped to its row or cleared)
+	for _, w := range takeWarnings() {
+		out.Steps = append(out.Steps, "warning: "+w)
+	}
 	if ar, ok := rw.(ActorRecorder); ok && !in.DryRun {
 		if err := ar.RecordRunActor(ctx); err != nil {
 			return RunOut{}, err

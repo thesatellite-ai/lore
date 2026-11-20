@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 )
 
 // v017BackupsDir is lore 0.1.17's backups folder of lore.db.
@@ -151,7 +152,8 @@ func (a *App) v017RowsUnaccounted(ctx context.Context, top string) (int, error) 
 	if err != nil {
 		return 0, err
 	}
-	changes, err := modeBChanges(got)
+	quiet, _ := opsmigrate.WithWarnings(ctx) // a count: the run that converts them says the warnings
+	changes, err := modeBChanges(quiet, got)
 	if err != nil {
 		return 0, err
 	}

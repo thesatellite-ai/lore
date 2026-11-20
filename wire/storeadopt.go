@@ -50,6 +50,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -93,6 +94,8 @@ type adoptSourceRows struct {
 
 // Adopt implements opsstores.Adopter.
 func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName string) (opsstores.AdoptOut, error) {
+	// the refs a converted row held as a name (D-766) are said in out.Refs
+	ctx, takeRefs := opsmigrate.WithWarnings(ctx)
 	given := name                                              // the store as the person named it, for the printed reruns
 	at, err := a.folderStore(ctx, adoptVerb, name, folderName) // the org's store that holds the folder (foldertarget.go)
 	if err != nil {
@@ -170,10 +173,11 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 	if err != nil {
 		return opsstores.AdoptOut{}, err
 	}
-	changes, adopted, err := adoptChanges(rows, have, pid, &out)
+	changes, adopted, err := adoptChanges(ctx, rows, have, pid, &out)
 	if err != nil {
 		return opsstores.AdoptOut{}, err
 	}
+	out.Refs = takeRefs()
 	// D-717: every row the batch writes gets the secret scan of a normal
 	// write before anything is written (refused: nothing in the store).
 	scan, err := a.adoptSecretPlan(ctx, in, at, src, given, folderName, changes)
@@ -393,7 +397,7 @@ func (a *App) readAdoptSource(ctx context.Context, top string) ([]adoptRow, map[
 			if xerr != nil {
 				return nil, nil, nil, xerr
 			}
-			changes, cerr := modeBChanges(got)
+			changes, cerr := modeBChanges(ctx, got)
 			if cerr != nil {
 				return nil, nil, nil, errs.Prefix(adoptVerb+": "+v017LoreDB, cerr)
 			}
@@ -498,7 +502,7 @@ var adoptSkipped = map[row.Table]string{
 // adoptChanges turns the source rows into the folder's changes (see the
 // file comment), filling out's counts; adopted lists the branch rows now
 // in the folder (written, unchanged or kept), for --remove-source.
-func adoptChanges(rows []adoptRow, have []store.Row, pid ids.ID[ids.Project], out *opsstores.AdoptOut) ([]store.Change, []store.Key, error) {
+func adoptChanges(ctx context.Context, rows []adoptRow, have []store.Row, pid ids.ID[ids.Project], out *opsstores.AdoptOut) ([]store.Change, []store.Key, error) {
 	reg, err := builtinRegistry()
 	if err != nil {
 		return nil, nil, err
@@ -517,6 +521,11 @@ func adoptChanges(rows []adoptRow, have []store.Row, pid ids.ID[ids.Project], ou
 	if err != nil {
 		return nil, nil, err
 	}
+	all := make([]row.Row, 0, len(rows))
+	for _, x := range rows {
+		all = append(all, x.r)
+	}
+	names := engine.NewNameRefIndex(all) // a ref holding a name (D-766) resolves among the adopted rows
 	leftCount := map[string]int{}
 	perTable := map[string]int{}
 	var changes []store.Change
@@ -542,7 +551,8 @@ func adoptChanges(rows []adoptRow, have []store.Row, pid ids.ID[ids.Project], ou
 			}
 		}
 		r, _ = engine.NullEmptyRefs(reg, r) // v0.1.17's "" for "no ref" is written as null (engine/emptyref.go)
-		r, _ = auditfill.Defaults(r)        // audit_fields (step 9), as migrate writes them
+		r = resolveNameRefs(ctx, reg, names, r)
+		r, _ = auditfill.Defaults(r) // audit_fields (step 9), as migrate writes them
 		if f, has := def.Field(adoptProjectField); has && f.RefTable == schema.TableProjects && r.Fields != nil {
 			if cur, set := r.Fields[adoptProjectField]; set && sourceProjects[cur.String()] {
 				r.Fields = maps.Clone(r.Fields)

@@ -878,6 +878,7 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) (opsmigrate.Settings
 		return out, nil
 	}
 	var v1Changes []store.Change
+	var names *engine.NameRefIndex // built on the first v1 row
 	for _, key := range keys {
 		sr := repoRows[key.id]
 		list, err := tagIDList(kept[key])
@@ -889,6 +890,11 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) (opsmigrate.Settings
 			return opsmigrate.Settings{}, errs.Prefix("migrate: tags of "+key.id.String(), err)
 		}
 		if r.SourceVersion != row.FormatVersion {
+			if names == nil {
+				x := nameRefIndexOf(reg, rows, FormatTables())
+				names = &x
+			}
+			r = resolveNameRefs(ctx, reg, *names, r) // a ref holding a name (D-766), as rewriteStoreTables
 			ch, err := tagV1Row(reg, sr, r, list)
 			if err != nil {
 				return opsmigrate.Settings{}, errs.Prefix("migrate: tags of "+key.id.String(), err)
@@ -1149,6 +1155,7 @@ func rewriteStoreTables(ctx context.Context, b store.Backend, tables []row.Table
 	}
 	found := map[row.Table][]ids.AnyID{}
 	byTable := map[row.Table][]store.Change{}
+	var names *engine.NameRefIndex // built on the first v1 row (most runs have none)
 	for _, sr := range rows {
 		if !slices.Contains(tables, sr.Table) {
 			continue
@@ -1161,6 +1168,11 @@ func rewriteStoreTables(ctx context.Context, b store.Backend, tables []row.Table
 			continue
 		}
 		found[sr.Table] = append(found[sr.Table], r.ID)
+		if names == nil {
+			x := nameRefIndexOf(reg, rows, tables)
+			names = &x
+		}
+		r = resolveNameRefs(ctx, reg, *names, r) // a ref holding a name (D-766)
 		up, err := store.FromRow(upcastV1(reg, r))
 		if err != nil {
 			return nil, err
@@ -1388,9 +1400,23 @@ func clientRoutesPolicy(items []string, folderScope string) (map[string]value.Va
 //   - tags: tag_ids comes from the entity_tags links (a v1 file never
 //     carries tag_ids), so hand's tag_ids is the migration's;
 //   - actor_projection: an actor copy trimmed to {id, display name, kind}
-//     (leakcheck.ActorCopyExtraKeys), when hand is that trimmed copy.
+//     (leakcheck.ActorCopyExtraKeys), when hand is that trimmed copy;
+//   - a ref that held a name (D-766): the migration mapped it to its
+//     row's id or cleared it, from rows this one file does not show, so
+//     hand's value of that field (or its absence) is the migration's.
 func migratedBase(reg *schema.Registry, base, hand row.Row) row.Row {
 	up := upcastV1(reg, base)
+	if _, fixes := engine.ResolveNameRefs(reg, engine.NameRefIndex{}, up); len(fixes) > 0 {
+		fields := maps.Clone(up.Fields)
+		for _, f := range fixes {
+			if v, ok := hand.Fields[f.Field]; ok {
+				fields[f.Field] = v
+			} else {
+				delete(fields, f.Field)
+			}
+		}
+		up.Fields = fields
+	}
 	if tags, ok := hand.Fields[schema.FieldTagIDs]; ok {
 		if _, had := base.Fields[schema.FieldTagIDs]; !had {
 			fields := maps.Clone(up.Fields)
