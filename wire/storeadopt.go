@@ -260,7 +260,7 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 		}
 		// D-710: the hook commits these deletions (the rows live in the
 		// store now) instead of refusing them as removed by hand
-		if merr := RecordMovedOut(ctx, top, place, removed); merr != nil && rerr == nil {
+		if merr := RecordMovedOut(ctx, top, place, MovedByAdopt, removed); merr != nil && rerr == nil {
 			rerr = merr
 		}
 		if rerr == nil {

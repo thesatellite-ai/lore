@@ -48,7 +48,7 @@ func TestDoctorMovedOutLineStagesTidiedLoreMD(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := wire.RecordMovedOut(ctx, top, "acme/client_a", []string{rule}); err != nil {
+	if err := wire.RecordMovedOut(ctx, top, "acme/client_a", wire.MovedByAdopt, []string{rule}); err != nil {
 		t.Fatal(err)
 	}
 	line := movedOutNote(t, f)
@@ -80,7 +80,7 @@ func TestDoctorMovedOutLineStagesTidiedLoreMD(t *testing.T) {
 	if err := os.Remove(filepath.Join(top, filepath.FromSlash(rule))); err != nil {
 		t.Fatal(err)
 	}
-	if err := wire.RecordMovedOut(ctx, top, "acme/client_a", []string{rule}); err != nil {
+	if err := wire.RecordMovedOut(ctx, top, "acme/client_a", wire.MovedByAdopt, []string{rule}); err != nil {
 		t.Fatal(err)
 	}
 	line = movedOutNote(t, f)

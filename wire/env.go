@@ -379,6 +379,9 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 		if st, serr := a.state(ctx); serr == nil && st.linkedByRemote != "" {
 			return a.linkedFolderProject(ctx, st)
 		}
+		if pid, ok, lerr := a.linkedRepoProject(ctx, eng); ok {
+			return pid, lerr // D-736: a linked repo's project is its folder's (linkidentity.go)
+		}
 		if pid, ok := a.projectInAStore(ctx, eng); ok {
 			return pid, nil // owner item 36: a converted Mode B repo's project is in its "shared" store
 		}

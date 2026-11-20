@@ -170,12 +170,12 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 	// S-8: row files removed by hand, not deleted with lore (handdelete.go)
 	if root := liveProjectRoot(d.h.cfg.WorkDir); root != "" {
 		if changed, _, cerr := changedUnder(ctx, s.repo, root, loreDataPathspec); cerr == nil {
-			hand, moved, places := withoutMovedOut(ctx, root, handDeletedRows(ctx, s.repo, root, changed))
+			hand, moved, places, by := withoutMovedOut(ctx, root, handDeletedRows(ctx, s.repo, root, changed))
 			if w := handDeletedWarning(hand); w != "" {
 				warn(w)
 			}
 			if len(moved) > 0 {
-				note(movedOutDoctorLine(root, moved, places, movedOutTidied(ctx, s.repo, root)))
+				note(movedOutDoctorLine(root, moved, places, by, movedOutTidied(ctx, s.repo, root)))
 			}
 		}
 	}

@@ -120,9 +120,9 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	}
 	// S-8: a row file removed by hand is refused before anything is
 	// staged (handdelete.go): lore itself never deletes one
-	// D-710: rows `lore store adopt --remove-source` moved to a store are
+	// D-710: rows lore moved to a store (adopt, move, doctor --fix: D-736) are
 	// not; the marker keeps only what is still waiting to be committed
-	hand, moved, places := withoutMovedOut(ctx, root, handDeletedRows(ctx, repo, root, changed))
+	hand, moved, places, by := withoutMovedOut(ctx, root, handDeletedRows(ctx, repo, root, changed))
 	// D-719: `lore store adopt --move` of a 0.1.17-format repo removes its
 	// _meta.json too (no notes left, nothing to migrate) and records it;
 	// that deletion commits, one by hand is still refused (H-3)
@@ -136,7 +136,7 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 		wire.HookIndexRestore(ctx, root)
 		return herr
 	}
-	if l := movedOutLine(moved, places); l != "" {
+	if l := movedOutLine(moved, places, by); l != "" {
 		h.line(l)
 	}
 	reg, err := schema.NewRegistry(schema.Builtin()...)

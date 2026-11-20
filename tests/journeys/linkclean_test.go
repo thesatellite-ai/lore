@@ -16,6 +16,7 @@ package journeys
 // Reads, writes with no --to, policy show and branch mode still work.
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -61,25 +62,29 @@ func TestJourneyLinkedRepoDoctorCleansRows(t *testing.T) {
 
 	w.Step("day2/doctor-warns-fix-cleans-commit-passes", func() {
 		w.AdvanceDays(1)
+		// owner item 29: the identity lives in the link, so the project and
+		// repos rows go too (4 = policy, actor, project, repos)
 		lee.LoreIn(repo, "doctor").Says(t,
-			"still holds 2 rows the folder already holds", "lore doctor --fix",
+			"still holds 4 rows the folder already holds", "lore doctor --fix",
 			"memories/"+gone+" stays: a deletion record "+place+" has no copy of")
-		fix := lee.LoreIn(repo, "doctor", "--fix", "--yes").Says(t, "moved 1 policy row to "+place, "removed 1 row "+place+" holds")
+		fix := lee.LoreIn(repo, "doctor", "--fix", "--yes").Says(t, "moved 1 policy row to "+place, "removed 3 rows "+place+" holds")
 		fix.Never(t, "could not clean")
 		repo.Git("add", "-A", ".lore/data")
 		c := repo.TryGit("commit", "-m", "lore: clean the linked repo")
 		if c.Code != 0 || strings.Contains(c.Out(), "by removing the file") {
 			t.Fatalf("the commit after doctor --fix failed: exit %d\n%s", c.Code, c.Out())
 		}
+		// the hook names the command that removed the rows (D-736)
+		if !strings.Contains(c.Out(), "`lore doctor --fix` moved to "+place) || strings.Contains(c.Out(), "adopt --remove-source") {
+			t.Errorf("the pre-commit does not name lore doctor --fix:\n%s", c.Out())
+		}
 		files := repo.Git("ls-files", ".lore/data")
 		for _, f := range strings.Split(strings.TrimSpace(files), "\n") {
-			ok := f == ".lore/data/_meta.json" || f == ".lore/data/_purged.json" || strings.HasPrefix(f, ".lore/data/projects/") ||
-				strings.HasPrefix(f, ".lore/data/repos/") || strings.HasSuffix(f, "/memories/"+gone+".json")
+			ok := f == ".lore/data/_meta.json" || f == ".lore/data/_purged.json" || strings.HasSuffix(f, "/memories/"+gone+".json")
 			if !ok {
 				t.Errorf("doctor --fix left %s in the linked repo:\n%s", f, files)
 			}
 		}
-		jMlOneProject(t, "the cleaned repo", files)
 		// a second doctor has nothing to fix; the kept record is still named
 		lee.LoreIn(repo, "doctor").Never(t, "lore doctor --fix").Says(t, "memories/"+gone+" stays")
 	})
@@ -95,10 +100,30 @@ func TestJourneyLinkedRepoDoctorCleansRows(t *testing.T) {
 			t.Errorf("a write with no --to touched the repo after the clean:\n%s", st)
 		}
 		lee.LoreIn(repo, "memory", "list", "--store", place, "--json").OK(t).Says(t, note)
+		lee.LoreIn(repo, "memory", "list").OK(t).Says(t, note)
+		// a render target added here is saved in the folder (D-736)
+		lee.LoreIn(repo, "render", "--add-target", "cursor", "--yes").OK(t)
+		lee.LoreIn(repo, "policy", "show").OK(t).Says(t, "cursor")
 		repo.Git("push", "-q", "origin", "HEAD:main")
 		lee.Lore(parent, "sync").OK(t)
+		lee.LoreIn(repo, "sync").OK(t)
 		if !jMlStoreHas(tt.store, "refs/heads/main", note) {
 			t.Errorf("the folder has no row %s after sync", note)
 		}
+		// sync writes no repos row back: the identity is _meta.json + the link
+		st := repo.Status()
+		for _, l := range strings.Split(st, "\n") {
+			if strings.Contains(l, ".lore/data/") && !strings.HasSuffix(l, "/_meta.json") {
+				t.Errorf("render --add-target or sync wrote rows into the cleaned linked repo:\n%s", st)
+				break
+			}
+		}
+		if out, err := os.ReadDir(filepath.Join(repo.Dir, ".lore", "data", "repos")); err == nil && len(out) > 0 {
+			t.Errorf("sync wrote %d repos rows back into the linked repo", len(out))
+		}
+		if out, err := os.ReadDir(filepath.Join(repo.Dir, ".lore", "data", "projects")); err == nil && len(out) > 0 {
+			t.Errorf("a command wrote %d project rows back into the linked repo", len(out))
+		}
+		lee.LoreIn(repo, "whoami").OK(t).Says(t, place)
 	})
 }

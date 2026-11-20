@@ -40,10 +40,22 @@ import (
 const movedOutFile = "lore-moved-out.json"
 
 // movedOutDoc is the marker: removed row file (slash path from the repo
-// top) ─▶ the store/folder that holds its row now.
+// top) ─▶ the store/folder that holds its row now, and ─▶ the command
+// that removed it (By; an entry without one is adopt's, which wrote the
+// marker before By existed).
 type movedOutDoc struct {
 	Rows map[string]string `json:"rows"`
+	By   map[string]string `json:"by,omitempty"`
 }
+
+// The commands that remove row files from a repo and record them as moved
+// out (RecordMovedOut's by): the pre-commit and doctor name the one that
+// did it (D-736: they always said adopt, also after a move or a doctor fix).
+const (
+	MovedByAdopt  = "lore store adopt --remove-source"
+	MovedByMove   = "lore move"
+	MovedByDoctor = "lore doctor --fix"
+)
 
 // movedOutPath is the marker of the repo holding dir ("" when not a git
 // checkout).
@@ -61,7 +73,10 @@ func readMovedOut(p string) movedOutDoc {
 	doc := movedOutDoc{Rows: map[string]string{}}
 	b, err := os.ReadFile(filepath.Clean(p))
 	if err != nil || json.Unmarshal(b, &doc) != nil || doc.Rows == nil {
-		return movedOutDoc{Rows: map[string]string{}}
+		return movedOutDoc{Rows: map[string]string{}, By: map[string]string{}}
+	}
+	if doc.By == nil {
+		doc.By = map[string]string{}
 	}
 	return doc
 }
@@ -91,8 +106,10 @@ func writeMovedOut(p string, doc movedOutDoc) error {
 // RecordMovedOut notes that lore removed the row files paths (slash paths
 // from the git top of the repo at top) because their rows now live in
 // place (store/folder as --store names it), so the repo's pre-commit
-// commits the removal instead of refusing it as a hand delete.
-func RecordMovedOut(ctx context.Context, top, place string, paths []string) error {
+// commits the removal instead of refusing it as a hand delete. by is the
+// command that removed them (MovedByAdopt, MovedByMove, MovedByDoctor),
+// which the pre-commit names.
+func RecordMovedOut(ctx context.Context, top, place, by string, paths []string) error {
 	if len(paths) == 0 {
 		return nil
 	}
@@ -103,8 +120,33 @@ func RecordMovedOut(ctx context.Context, top, place string, paths []string) erro
 	doc := readMovedOut(p)
 	for _, rel := range paths {
 		doc.Rows[filepath.ToSlash(rel)] = place
+		doc.By[filepath.ToSlash(rel)] = by
 	}
 	return writeMovedOut(p, doc)
+}
+
+// MovedOutBy is MovedOut's other half: removed row file (relative to root)
+// ─▶ the command that removed it (MovedByAdopt for an entry an older lore
+// recorded without one).
+func MovedOutBy(ctx context.Context, root string) map[string]string {
+	out := map[string]string{}
+	p := movedOutPath(ctx, root)
+	if p == "" {
+		return out
+	}
+	doc := readMovedOut(p)
+	prefix := movedOutPrefix(ctx, root)
+	for rel := range doc.Rows {
+		r, ok := strings.CutPrefix(rel, prefix)
+		if !ok {
+			continue
+		}
+		out[r] = MovedByAdopt
+		if by := doc.By[rel]; by != "" {
+			out[r] = by
+		}
+	}
+	return out
 }
 
 // MovedOut is the marker of the repo at root keyed by path relative to
@@ -169,6 +211,7 @@ func PruneMovedOut(ctx context.Context, root string, pending []string) {
 	for rel := range doc.Rows {
 		if strings.HasPrefix(rel, own) && !keep[rel] {
 			delete(doc.Rows, rel)
+			delete(doc.By, rel)
 			changed = true
 		}
 	}
@@ -177,7 +220,8 @@ func PruneMovedOut(ctx context.Context, root string, pending []string) {
 	}
 }
 
-// MovedOutPlaces are the distinct store/folders of rows, sorted.
+// MovedOutPlaces are the distinct store/folders of rows, sorted (with
+// MovedOutBy's map: the distinct commands).
 func MovedOutPlaces(rows map[string]string) []string {
 	seen := map[string]bool{}
 	var out []string

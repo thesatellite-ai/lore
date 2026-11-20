@@ -165,31 +165,43 @@ func handDeletedWarning(rows []handDeletedRow) string {
 
 // withoutMovedOut splits rows into the ones removed by hand and the ones
 // lore removed because they now live in a store (wire.MovedOut, D-710);
-// places are the store/folders of the moved ones.
-func withoutMovedOut(ctx context.Context, root string, rows []handDeletedRow) (hand, moved []handDeletedRow, places []string) {
+// places are the store/folders of the moved ones, by the commands that
+// removed them (wire.MovedOutBy, D-736).
+func withoutMovedOut(ctx context.Context, root string, rows []handDeletedRow) (hand, moved []handDeletedRow, places, by []string) {
 	if len(rows) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
-	marked := wire.MovedOut(ctx, root)
-	at := map[string]string{}
+	marked, cmds := wire.MovedOut(ctx, root), wire.MovedOutBy(ctx, root)
+	at, how := map[string]string{}, map[string]string{}
 	for _, r := range rows {
 		if place, ok := marked[r.path]; ok {
 			moved = append(moved, r)
-			at[r.path] = place
+			at[r.path], how[r.path] = place, cmds[r.path]
 			continue
 		}
 		hand = append(hand, r)
 	}
-	return hand, moved, wire.MovedOutPlaces(at)
+	return hand, moved, wire.MovedOutPlaces(at), wire.MovedOutPlaces(how)
+}
+
+// movedByWords names the commands of by in backticks ("`lore move`, `lore
+// doctor --fix`").
+func movedByWords(by []string) string {
+	q := make([]string, 0, len(by))
+	for _, b := range by {
+		q = append(q, "`"+b+"`")
+	}
+	return strings.Join(q, ", ")
 }
 
 // movedOutLine is the hook's line for row files lore removed because
-// their rows live in places now ("" when there are none).
-func movedOutLine(moved []handDeletedRow, places []string) string {
+// their rows live in places now ("" when there are none); by names the
+// commands that removed them.
+func movedOutLine(moved []handDeletedRow, places, by []string) string {
 	if len(moved) == 0 {
 		return ""
 	}
-	return "lore: this commit removes " + countRows(len(moved)) + " from .lore/data that `lore store adopt --remove-source` moved to " + strings.Join(places, ", ") + " (the rows live there now)"
+	return "lore: this commit removes " + countRows(len(moved)) + " from .lore/data that " + movedByWords(by) + " moved to " + strings.Join(places, ", ") + " (the rows live there now)"
 }
 
 // movedOutDoctorLine is doctor's note for the same rows, with the command
@@ -198,13 +210,13 @@ func movedOutLine(moved []handDeletedRow, places []string) string {
 // .lore/data adopt --move removed and nobody staged yet, movedOutTidied)
 // are staged with the rows; `add -A .lore/data` alone left a removed
 // .lore/LORE.md out of the commit, still tracked (devco D-719).
-func movedOutDoctorLine(root string, moved []handDeletedRow, places, tidied []string) string {
+func movedOutDoctorLine(root string, moved []handDeletedRow, places, by, tidied []string) string {
 	where := strings.Join(places, ", ")
 	with := ""
 	if len(tidied) > 0 {
 		with = " (" + strings.Join(tidied, ", ") + " went with them)"
 	}
-	return countRows(len(moved)) + " removed from .lore/data by `lore store adopt --remove-source` live in " + where + " now" + with + "; commit the removal: " + opsstores.AdoptCommitCommand(root, where, tidied...)
+	return countRows(len(moved)) + " removed from .lore/data by " + movedByWords(by) + " live in " + where + " now" + with + "; commit the removal: " + opsstores.AdoptCommitCommand(root, where, tidied...)
 }
 
 // movedOutTidied are the files outside .lore/data that `lore store adopt

@@ -183,7 +183,7 @@ func (a *App) dropMovedRepoCopies(ctx context.Context, to store.Source, moved []
 		}
 	}
 	pruneEmptyDirs(filepath.Join(top, filepath.FromSlash(dataDirRel)))
-	return out, RecordMovedOut(ctx, top, string(to), out.Removed)
+	return out, RecordMovedOut(ctx, top, string(to), MovedByMove, out.Removed)
 }
 
 // dataDirRel is the repo's row folder, slash path from the git top.

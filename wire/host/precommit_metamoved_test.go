@@ -50,7 +50,7 @@ func TestPreCommitTakesMetaMovedOut(t *testing.T) {
 			if recorded {
 				moved = append(moved, metaFilePath)
 			}
-			if err := wire.RecordMovedOut(f.ctx, top, "acme/ledger", moved); err != nil {
+			if err := wire.RecordMovedOut(f.ctx, top, "acme/ledger", wire.MovedByAdopt, moved); err != nil {
 				t.Fatal(err)
 			}
 			gitT(t, top, "add", "-A", ".lore/data")
