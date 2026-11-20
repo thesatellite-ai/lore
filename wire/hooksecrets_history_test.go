@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
@@ -208,11 +209,34 @@ func TestCommitCheckHistoryIsWhatWasPushed(t *testing.T) {
 // pre-push hook's wire.NoteTagPush makes the next check list the remote's
 // tags again). After a squash merge, a value the remote's branch already
 // holds at the same path is not new either. A new value still blocks.
+// Each pass names the file, line and the ref that holds the value
+// (devco:D-788), never the row wording.
 // Break-verified: without the tag commits in historyBases the "tag
-// pushed" case blocks; without remoteBranchTips the squash case blocks.
+// pushed" case blocks; without remoteBranchTips the squash case blocks;
+// with remoteRefHolding returning "" the notices name no ref.
 func TestCommitCheckCountsTagsAndBranchesTheRemoteHas(t *testing.T) {
 	t.Parallel()
-	h := opstest.New(t)
+	var mu sync.Mutex
+	var notes []string
+	h := opstest.New(t, func(o *wire.Options) {
+		o.Notice = func(m string) { mu.Lock(); notes = append(notes, m); mu.Unlock() }
+	})
+	said := func(want ...string) {
+		t.Helper()
+		mu.Lock()
+		all := strings.Join(notes, "\n")
+		notes = nil
+		mu.Unlock()
+		for _, w := range append(want, "!same row(s)") {
+			if neg, ok := strings.CutPrefix(w, "!"); ok {
+				if strings.Contains(all, neg) {
+					t.Errorf("notice says %q:\n%s", neg, all)
+				}
+			} else if !strings.Contains(all, w) {
+				t.Errorf("notice lacks %q:\n%s", w, all)
+			}
+		}
+	}
 	ctx := context.Background()
 	key := "AKIA" + strings.Repeat("T", 16)
 	histCommit(t, h.Repo, "clean start")
@@ -237,6 +261,7 @@ func TestCommitCheckCountsTagsAndBranchesTheRemoteHas(t *testing.T) {
 	if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, same); err != nil {
 		t.Fatalf("tag pushed: err = %v, want pass (the remote holds the value behind v1)", err)
 	}
+	said("notes.md:1 holds a secret-looking value that is already on the remote in the same file (tag v1)", "does not block this commit")
 	fresh := map[string][]byte{"other.md": []byte("a new " + "AKIA" + strings.Repeat("U", 16) + "\n")}
 	if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, fresh); !errs.Has(err, errs.LeakBlocked) {
 		t.Fatalf("new value: err = %v, want E_LEAK_BLOCKED", err)
@@ -260,4 +285,5 @@ func TestCommitCheckCountsTagsAndBranchesTheRemoteHas(t *testing.T) {
 	if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, again); err != nil {
 		t.Fatalf("squash merged: err = %v, want pass (origin/main holds the value at cfg.md)", err)
 	}
+	said("cfg.md:1", "(origin/main)", "nothing new is sent")
 }

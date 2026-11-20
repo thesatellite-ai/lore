@@ -171,9 +171,9 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 		return opscheck.LeaksOut{}, serr
 	}
 	var lines []string
-	if old > 0 { // values the same rows already held at HEAD: let through, named once
-		lines = append(lines, historyLine(old, checkWhereCommit))
-	}
+	// values already in history (the same row at HEAD, the same file on
+	// the remote): let through, named once
+	lines = append(lines, historyLines(old, checkWhereCommit)...)
 	if compiled != "" {
 		lines = append(lines, "lore: "+compiled)
 	}
