@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/store"
@@ -28,7 +29,7 @@ func (a *App) MoveWith(ctx context.Context, ref engine.Ref, to store.Source, opt
 		return engine.Written{}, ferr
 	}
 	// batch leftover-3: staged with the copy, as App.Move
-	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+	w, err := a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
 		if aerr := a.ensureActor(ctx, st, to); aerr != nil {
 			return engine.Written{}, aerr
 		}
@@ -36,6 +37,25 @@ func (a *App) MoveWith(ctx context.Context, ref engine.Ref, to store.Source, opt
 		a.wroteTo(to, err)
 		return w, err
 	})
+	if err != nil {
+		return w, err
+	}
+	// devco D-731: a linked repo keeps nothing of a row that left it
+	moved := append([]row.Row{w.Row}, alsoRows(w.Also)...)
+	d, derr := a.dropMovedRepoCopies(ctx, to, moved)
+	w.Warnings = append(w.Warnings, d.warnings()...)
+	return w, derr
+}
+
+// alsoRows are the rows of also (a move's sub-tasks).
+func alsoRows(also []engine.Changed) []row.Row {
+	out := make([]row.Row, 0, len(also))
+	for _, c := range also {
+		if !c.Row.Deleted {
+			out = append(out, c.Row)
+		}
+	}
+	return out
 }
 
 // MoveMany implements opsrow.ManyMover (devco D-712, `lore move --from`):
@@ -64,7 +84,17 @@ func (a *App) MoveMany(ctx context.Context, refs []engine.Ref, to store.Source, 
 		a.wroteTo(to, merr)
 		return engine.Written{}, merr
 	})
-	return out, err
+	if err != nil || len(out.Rows) == 0 {
+		return out, err
+	}
+	// devco D-731: a linked repo keeps nothing of the rows that left it
+	moved := make([]row.Row, 0, len(out.Rows))
+	for _, w := range out.Rows {
+		moved = append(moved, w.Row)
+	}
+	d, derr := a.dropMovedRepoCopies(ctx, to, moved)
+	out.Rows[0].Warnings = append(out.Rows[0].Warnings, d.warnings()...)
+	return out, derr
 }
 
 // PlanMoveSecrets implements opsrow.ManyMover: the bulk move's secret
