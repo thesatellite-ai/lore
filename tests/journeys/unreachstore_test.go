@@ -46,8 +46,13 @@ func TestJourneyUnreachableOrgStore(t *testing.T) {
 		tt.lore(tlLee, "org", "store", "add", "--org", tlOrg, "--url", sec.SSHURL(), "--push", "--yes").OK(t)
 		lee.Lore(parent, "store", "folder", "add", sec.SSHURL(), "vendors").OK(t)
 		lee.Lore(parent, "memory", "add", "--body", urSecretBody, "--to", "lore-secret/vendors", "--yes").OK(t)
+		// D-694: a member adds notes only in a folder of a team they are
+		// on, so Ann's invite puts her on @core, the team of the folder
+		// her repo is linked to (devco D-776: without it her memory add
+		// below is refused, as the role rule says it must be)
+		tt.lore(tlLee, "team", "add", "--handle", "@core", "--members", "@lee", "--yes").OK(t)
 		tt.lore(tlLee, "sync").OK(t)
-		_, line = tlInvite(t, lee, c.Dir, tlAnn.Email)
+		_, line = tlInvite(t, lee, c.Dir, tlAnn.Email, "--team", "@core")
 	})
 
 	ann := tt.person(tlAnn)
