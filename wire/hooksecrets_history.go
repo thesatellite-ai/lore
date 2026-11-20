@@ -45,16 +45,60 @@ import (
 // rowFileSuffix ends every row file name (<id>.json).
 const rowFileSuffix = ".json"
 
-// historyNotice is the one line a commit check prints when it let findings
-// through because the same row already held them at HEAD; pushHistoryNotice
-// is the push check's, for values the remote already held.
+// historyNotice is the one line a commit check prints when it let row
+// findings through because the same row already held them at HEAD;
+// pushHistoryNotice is the push check's, for values the remote already
+// held. A plain file's findings get fileHistoryLine instead (H-45).
 const (
 	historyNotice     = " secret-looking value(s) in this commit were already in the same row(s) at HEAD, not new, so they do not block it; list every stored one with `lore check leaks --rows`"
 	pushHistoryNotice = " secret-looking value(s) in this push were already in the same row(s) on the remote, not new, so they do not block it; list every stored one with `lore check leaks --rows`"
 )
 
-// historyLine is the notice of n findings of the action where let through
-// as already in history.
+// maxHistoryPlaces caps the file:line places one history line names.
+const maxHistoryPlaces = 5
+
+// historyHit is one finding a check let through as already in history
+// (devco:D-788): a row file's findings are counted under the row wording;
+// a plain file's are named by path and line with the ref that already
+// holds the value, because "in the same row(s) at HEAD" told someone
+// committing a code file (a Taskfile after a squash merge) neither which
+// file nor that the reason was the remote.
+type historyHit struct {
+	Path string // the file (doc key) the finding is in
+	Line int    // its line in the checked text
+	Row  bool   // a row file: counted, not named
+	Ref  string // the ref that already holds it: "origin/main", "tag v1.2"; "" for a commit with no remote ref (HEAD)
+}
+
+// historyLines are the notices of the findings of the action where let
+// through as already in history: one count line for row findings (as
+// before), one line per ref for plain files naming each file:line.
+func historyLines(hs []historyHit, where string) []string {
+	rows := 0
+	var refs []string
+	byRef := map[string][]string{}
+	for _, h := range hs {
+		if h.Row {
+			rows++
+			continue
+		}
+		if _, ok := byRef[h.Ref]; !ok {
+			refs = append(refs, h.Ref)
+		}
+		byRef[h.Ref] = append(byRef[h.Ref], h.Path+":"+strconv.Itoa(h.Line))
+	}
+	var lines []string
+	if rows > 0 {
+		lines = append(lines, historyLine(rows, where))
+	}
+	for _, ref := range refs {
+		lines = append(lines, fileHistoryLine(byRef[ref], ref, where))
+	}
+	return lines
+}
+
+// historyLine is the notice of n row findings of the action where let
+// through as already in history.
 func historyLine(n int, where string) string {
 	if where == LeakWherePush {
 		return "lore: " + strconv.Itoa(n) + pushHistoryNotice
@@ -62,13 +106,45 @@ func historyLine(n int, where string) string {
 	return "lore: " + strconv.Itoa(n) + historyNotice
 }
 
+// fileHistoryLine is the notice of plain-file findings (places are
+// "path:line") let through because ref already holds the same value at
+// the same path: the remote's ref when there is one, else HEAD (a commit
+// in a repo whose history no remote holds).
+func fileHistoryLine(places []string, ref, where string) string {
+	named := places
+	more := ""
+	if len(named) > maxHistoryPlaces {
+		named = named[:maxHistoryPlaces]
+		more = " and " + strconv.Itoa(len(places)-maxHistoryPlaces) + " more"
+	}
+	// singular / plural wording: one place, or several
+	subject, verb, value, was, file, neg := named[0], "holds", "a secret-looking value that", "is", "file", "it does not"
+	if len(places) > 1 {
+		subject, verb, value, was, file, neg = strings.Join(named, ", ")+more, "hold", "secret-looking values that", "are", "files", "they do not"
+	}
+	action := "this commit"
+	if where == LeakWherePush {
+		action = "this push"
+	}
+	if ref == "" && where != LeakWherePush {
+		was = map[string]string{"is": "was", "are": "were"}[was]
+		return "lore: " + subject + " " + verb + " " + value + " " + was + " already in the same " + file + " at HEAD, not new, so " + neg + " block " + action
+	}
+	on := ""
+	if ref != "" {
+		on = " (" + ref + ")"
+	}
+	return "lore: " + subject + " " + verb + " " + value + " " + was + " already on the remote in the same " + file + on + ", so nothing new is sent and " + neg + " block " + action
+}
+
 // dropHistoryHits removes from hits (hits[i] are the findings of paths[i])
 // every finding whose fingerprint the same row (a row file) or the same
 // path (any other file) already held at HEAD, and returns the rest with
-// the number removed. See the file comment.
+// the ones removed (a plain file's named with the ref that held it). See
+// the file comment.
 // bases are the commits to compare with: nil means historyBases (a
 // commit check), a push check passes the commits the remote has.
-func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore bool, paths []string, docs map[string][]byte, hits [][]leakcheck.SecretHit, bases []string) ([][]leakcheck.SecretHit, int) {
+func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore bool, paths []string, docs map[string][]byte, hits [][]leakcheck.SecretHit, bases []string) ([][]leakcheck.SecretHit, []historyHit) {
 	want := map[ids.AnyID]bool{}
 	rowOf := make([]ids.AnyID, len(paths))
 	dirs := map[string]bool{} // the .lore/data folders the rows sit in (a code repo)
@@ -93,11 +169,11 @@ func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore 
 		}
 	}
 	if len(want) == 0 && len(plain) == 0 {
-		return hits, 0
+		return hits, nil
 	}
 	top := gitTop(ctx, root)
 	if top == "" {
-		return hits, 0
+		return hits, nil
 	}
 	var specs []string // none (a store clone): its whole tree
 	if !inStore {
@@ -106,7 +182,7 @@ func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore 
 		}
 	}
 	oldRows := map[ids.AnyID]map[string]bool{}
-	oldFiles := map[string]map[string]bool{}
+	oldFiles := map[string]map[string]string{} // path → fingerprint → the first base that held it
 	if bases == nil {
 		// A commit check also compares with the remote's branch tips: after
 		// a squash merge the branch's own commits are on no remote by
@@ -123,27 +199,94 @@ func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore 
 		if len(plain) > 0 {
 			if blobs, err := revBlobs(ctx, top, nil, base, plain); err == nil {
 				for p, b := range blobs {
-					oldFiles[p] = union(oldFiles[p], previewsOf(scanDoc(sc, hookAllows{}, p, b, inStore)))
+					if oldFiles[p] == nil {
+						oldFiles[p] = map[string]string{}
+					}
+					for fp := range previewsOf(scanDoc(sc, hookAllows{}, p, b, inStore)) {
+						if oldFiles[p][fp] == "" {
+							oldFiles[p][fp] = base
+						}
+					}
 				}
 			}
 		}
 	}
-	dropped := 0
+	var dropped []historyHit
+	refOf := map[string]string{} // base commit → the ref naming it (looked up once, only for a dropped file finding)
 	out := make([][]leakcheck.SecretHit, len(hits))
 	for i, hs := range hits {
-		had := oldFiles[paths[i]]
-		if !rowOf[i].IsZero() {
-			had = oldRows[rowOf[i]]
-		}
 		for _, h := range hs {
-			if had[h.Preview] {
-				dropped++
+			if !rowOf[i].IsZero() {
+				if oldRows[rowOf[i]][h.Preview] {
+					dropped = append(dropped, historyHit{Path: paths[i], Line: h.Line, Row: true})
+					continue
+				}
+			} else if base := oldFiles[paths[i]][h.Preview]; base != "" {
+				ref, ok := refOf[base]
+				if !ok {
+					ref = remoteRefHolding(ctx, top, base)
+					refOf[base] = ref
+				}
+				dropped = append(dropped, historyHit{Path: paths[i], Line: h.Line, Ref: ref})
 				continue
 			}
 			out[i] = append(out[i], h)
 		}
 	}
 	return out, dropped
+}
+
+// remoteRefHolding names the ref the remote holds commit under, for a
+// history notice: a remote-tracking branch that contains it (its main or
+// master first), else a tag the remote holds at the same object that
+// contains it ("tag v1.2", the oldest), else "" (no remote has it: a repo
+// without a remote, where HEAD is the history). One git process, run only
+// when a plain file's finding was let through.
+func remoteRefHolding(ctx context.Context, top, commit string) string {
+	out, err := gitRun{dir: top, args: []string{"for-each-ref", "--sort=creatordate", "--contains", commit,
+		"--format=%(refname)%00%(objectname)%00%(*objectname)", remotesRefPrefix, tagsRefPrefix}}.output(ctx)
+	if err != nil {
+		return ""
+	}
+	var branches, tags []string
+	var pushedTags map[string]bool
+	for _, l := range strings.Split(string(out), "\n") {
+		f := strings.Split(strings.TrimSpace(l), "\x00")
+		if len(f) != 3 {
+			continue
+		}
+		if b, ok := strings.CutPrefix(f[0], remotesRefPrefix); ok {
+			if !strings.HasSuffix(b, "/HEAD") {
+				branches = append(branches, b)
+			}
+			continue
+		}
+		name, ok := strings.CutPrefix(f[0], tagsRefPrefix)
+		if !ok {
+			continue
+		}
+		if pushedTags == nil { // only a local tag the remote holds names where the value is
+			pushedTags = map[string]bool{}
+			for _, c := range RemoteTagCommits(ctx, top, remoteNames(ctx, top)) {
+				pushedTags[c] = true
+			}
+		}
+		if c := f[2]; pushedTags[c] || (c == "" && pushedTags[f[1]]) {
+			tags = append(tags, name)
+		}
+	}
+	for _, b := range branches {
+		if _, rest, _ := strings.Cut(b, "/"); rest == "main" || rest == "master" {
+			return b
+		}
+	}
+	if len(branches) > 0 {
+		return branches[0]
+	}
+	if len(tags) > 0 {
+		return "tag " + tags[0]
+	}
+	return ""
 }
 
 // union adds every key of b to a (a new map when a is nil) and returns it.

@@ -58,11 +58,12 @@ const (
 // HookSecrets scans docs for credentials before a commit or push from the
 // repository at root; where names the action ("commit", "push").
 // Findings already in history (hooksecrets_history.go: at HEAD for a
-// commit, on the remote for a push) go to the notice sink as one line.
+// commit, on the remote for a push) go to the notice sink: one line for
+// rows, and one per remote ref naming each plain file's path and line.
 func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[string][]byte) error {
 	old, err := a.hookSecrets(ctx, root, where, docs)
-	if old > 0 {
-		a.notice(historyLine(old, where))
+	for _, l := range historyLines(old, where) {
+		a.notice(l)
 	}
 	return err
 }
@@ -102,21 +103,21 @@ func pushBasesOf(ctx context.Context) []string {
 	return b
 }
 
-// hookSecrets is HookSecrets returning, instead of printing, how many
-// findings were let through as already in history: `lore check leaks`
+// hookSecrets is HookSecrets returning, instead of printing, the
+// findings let through as already in history: `lore check leaks`
 // runs on its own App, whose notice sink the command hooks never set, so
 // it prints that line as its result.
-func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[string][]byte) (inHistory int, err error) {
+func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[string][]byte) (inHistory []historyHit, err error) {
 	if len(docs) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 	sc, err := a.HookScanner(ctx)
 	if err != nil {
-		return 0, errs.Wrap(errs.LeakBlocked, "cannot check for secrets: the scanner could not be built: "+err.Error(), err)
+		return nil, errs.Wrap(errs.LeakBlocked, "cannot check for secrets: the scanner could not be built: "+err.Error(), err)
 	}
 	allows, err := committedAllows(ctx, root)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	allows.entries = append(allows.entries, a.linkedAllows(ctx)...)
 	_, isGit, inStore := rowfs.StoreTop(root)
