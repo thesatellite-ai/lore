@@ -30629,6 +30629,26 @@
             }
           },
           {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "only memories about this day or later: valid_at (memory add --at), else when added (YYYY-MM-DD or a date phrase)",
+            "schema": {
+              "type": "string",
+              "description": "only memories about this day or later: valid_at (memory add --at), else when added (YYYY-MM-DD or a date phrase)"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "only memories about this day or earlier: valid_at, else when added (YYYY-MM-DD or a date phrase)",
+            "schema": {
+              "type": "string",
+              "description": "only memories about this day or earlier: valid_at, else when added (YYYY-MM-DD or a date phrase)"
+            }
+          },
+          {
             "name": "meta_where",
             "in": "query",
             "required": false,
@@ -30993,6 +31013,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "at": {
+                    "type": "string",
+                    "description": "the date this memory is about, stored as valid_at (YYYY-MM-DD, RFC3339 or a phrase: yesterday, mon, in 3d; default none: list/search --since/--until then use when it was added)"
+                  },
                   "body": {
                     "type": "string",
                     "description": "the memory text"
@@ -31488,9 +31512,17 @@
                     "type": "string",
                     "description": "include this repo's memories (mount name or rep_ id)"
                   },
+                  "since": {
+                    "type": "string",
+                    "description": "only memories about this day or later: valid_at (memory add --at), else when added (YYYY-MM-DD or a date phrase)"
+                  },
                   "store": {
                     "type": "string",
                     "description": "only memories of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
+                  },
+                  "until": {
+                    "type": "string",
+                    "description": "only memories about this day or earlier: valid_at, else when added (YYYY-MM-DD or a date phrase)"
                   }
                 },
                 "required": [
@@ -32287,6 +32319,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "at": {
+                    "type": "string",
+                    "description": "new date this memory is about, stored as valid_at (YYYY-MM-DD, RFC3339 or a date phrase)"
+                  },
                   "body": {
                     "type": "string",
                     "description": "new body"
@@ -72399,6 +72435,10 @@
                     "type": "string",
                     "description": "scope to a specific repo (mount_name or rep_id)"
                   },
+                  "since": {
+                    "type": "string",
+                    "description": "only rows about this day or later: a memory's valid_at (memory add --at), else when the row was added (YYYY-MM-DD or a date phrase)"
+                  },
                   "store": {
                     "type": "string",
                     "description": "only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store)"
@@ -72409,6 +72449,10 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "until": {
+                    "type": "string",
+                    "description": "only rows about this day or earlier: valid_at, else when added (YYYY-MM-DD or a date phrase)"
                   }
                 },
                 "required": [

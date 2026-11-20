@@ -76,3 +76,33 @@ func Parse(c dates.Clock, flag, raw string) (dates.Result, string, error) {
 	}
 	return r, note, nil
 }
+
+// Window reads --since / --until (P-9) with the phrase table: either may
+// be empty (open). A since after the until is E_INVALID_INPUT, so an empty
+// result always means no row matched, never a window that holds nothing.
+func Window(c dates.Clock, since, until string) (dates.Window, error) {
+	var bounds [2]*dates.Result
+	for i, f := range [2]struct{ flag, raw string }{{"since", since}, {"until", until}} {
+		if strings.TrimSpace(f.raw) == "" {
+			continue
+		}
+		r, _, err := Parse(c, f.flag, f.raw)
+		if err != nil {
+			return dates.Window{}, err
+		}
+		bounds[i] = &r
+	}
+	w := dates.WindowOf(bounds[0], bounds[1])
+	if !w.Since.IsZero() && !w.End.IsZero() && !w.Since.Before(w.End) {
+		return dates.Window{}, errs.New(errs.InvalidInput, "--since "+strings.TrimSpace(since)+" is after --until "+strings.TrimSpace(until)).
+			WithHint("give the earlier date to --since, e.g. --since 2026-03-01 --until 2026-03-31")
+	}
+	return w, nil
+}
+
+// LocalClock is the phrase clock in the machine's zone with the default
+// week end, for read filters that have no target store to read
+// tasks.week_end from (search, list).
+func LocalClock[E any](env E) dates.Clock {
+	return dates.Clock{Now: opclock.Now(env), Loc: time.Local, WeekEnd: DefaultWeekEnd}
+}
