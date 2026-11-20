@@ -208,10 +208,13 @@ func answerRead(r *repo, inv invocation, stdin []byte) (Reply, bool) {
 		}
 		return diffTrees(r, inv)
 	case "rev-list":
-		if len(inv.args) > 0 && inv.args[0] == "-1" {
+		switch {
+		case len(inv.args) > 0 && inv.args[0] == "-1":
 			return revListUnpushed(r, inv.args)
+		case len(inv.args) > 0 && inv.args[0] == "--count":
+			return revList(r, inv.args)
 		}
-		return revList(r, inv.args)
+		return revListRange(r, inv.args)
 	case "log":
 		return logOne(r, inv.args)
 	case "merge-base":

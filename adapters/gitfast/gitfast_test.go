@@ -200,6 +200,16 @@ func TestAnswersMatchGit(t *testing.T) {
 		{work, []string{"log", "-n", "1", "--format=%H %T %P%n%ae %ce %at", "side"}, ""},
 		{work, []string{"rev-list", "-1", "HEAD", "--not", "--remotes"}, ""},
 		{work, []string{"rev-list", "-1", "HEAD~2", "--not", "--remotes"}, ""},
+		// the commit and push hooks' leak checks (devco:D-780)
+		{work, []string{"rev-list", "--boundary", "HEAD", "--not", "--remotes"}, ""},
+		{work, []string{"rev-list", "--boundary", head, "--not", "--remotes=origin"}, ""},
+		{work, []string{"rev-list", "--parents", head, "--not", "--remotes=origin"}, ""},
+		{work, []string{"rev-list", "--no-merges", head, "--not", "--remotes"}, ""},
+		{work, []string{"rev-list", "--boundary", "--parents", head, "^" + side}, ""},
+		{work, []string{"rev-list", "--boundary", "HEAD~2", "--not", "--remotes"}, ""},
+		{work, []string{"rev-list", "--boundary", head, "--not", "--remotes=nowhere"}, ""},
+		{work, []string{"rev-list", "--parents", head}, ""},
+		{work, []string{"rev-list", "--boundary", first}, ""},
 		{work, []string{"diff", "--cached", "--quiet", "HEAD", "--"}, ""},
 		{work, []string{"diff", "--cached", "--quiet", "HEAD", "--", "top.txt"}, ""},
 		{work, []string{"diff", "--cached", "--quiet", "HEAD", "--", "org"}, ""},
@@ -235,7 +245,10 @@ func TestFallsBack(t *testing.T) {
 	for _, args := range [][]string{
 		{"rev-parse", "--verify", "HEAD^2"},
 		{"log", "-2", "--format=%H", "HEAD"},
-		{"rev-list", "--boundary", "HEAD", "--not", "--remotes"},
+		{"rev-list", "--boundary", "HEAD", "side", "--not", "--remotes"}, // two tips: git orders them by date
+		{"rev-list", "--boundary", "HEAD", "--not", "--remotes=or*"},     // a glob: git's matching
+		{"rev-list", "--remotes", "--not", "HEAD"},                       // several tips
+		{"rev-list", "--objects", "HEAD", "--not", "--remotes"},
 		{"rev-parse", "--git-path", "hooks"},   // relative form
 		{"rev-parse", "--verify", "refs/none"}, // git prints the reason
 		{"status", "--porcelain"},
@@ -500,5 +513,50 @@ func TestTemporaryIndexMatchesGit(t *testing.T) {
 	rep, ok := s.Answer(context.Background(), work, []string{"ls-files", "-z", "--full-name", "--", "org/tasks/"}, nil, nil)
 	if !ok || bytes.Contains(rep.Out, []byte("only-temp.json")) {
 		t.Errorf("the usual index answered %v %q, want no only-temp.json", ok, rep.Out)
+	}
+}
+
+// TestRevListRangeMergeFallsBack: a listing with a merge among the new
+// commits is left to git (it orders the two sides by commit date), and the
+// line below the merge is still answered as git does (devco:D-780).
+func TestRevListRangeMergeFallsBack(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	work := filepath.Join(t.TempDir(), "work")
+	gitT(t, filepath.Dir(work), "init", "-q", "-b", "main", work)
+	commit := func(msg string) {
+		if err := os.WriteFile(filepath.Join(work, msg+".txt"), []byte(msg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitT(t, work, "add", "-A")
+		gitT(t, work, "commit", "-q", "-m", msg)
+	}
+	commit("base")
+	gitT(t, work, "update-ref", "refs/remotes/origin/main", "HEAD")
+	gitT(t, work, "checkout", "-q", "-b", "topic")
+	commit("topic")
+	gitT(t, work, "checkout", "-q", "main")
+	commit("main")
+	gitT(t, work, "merge", "-q", "--no-ff", "-m", "merge", "topic")
+	commit("after")
+	s := New()
+	defer s.Close()
+	for _, args := range [][]string{
+		{"rev-list", "--boundary", "HEAD", "--not", "--remotes"},
+		{"rev-list", "--parents", "HEAD", "--not", "--remotes=origin"},
+		{"rev-list", "--no-merges", "HEAD", "--not", "--remotes"},
+	} {
+		if _, ok := s.Answer(context.Background(), work, args, nil, nil); ok {
+			t.Errorf("git %v over a merge was answered in-process; it must run git", args)
+		}
+	}
+	args := []string{"rev-list", "--boundary", "--parents", "HEAD", "^HEAD~1"}
+	rep, ok := s.Answer(context.Background(), work, args, nil, nil)
+	if !ok {
+		t.Fatalf("git %v (one commit above a merge) was not answered", args)
+	}
+	if out, code := realGit(t, work, args, nil); !bytes.Equal(rep.Out, out) || rep.Code != code {
+		t.Errorf("git %v\n gitfast: exit %d %q\n git:     exit %d %q", args, rep.Code, rep.Out, code, out)
 	}
 }
