@@ -98,7 +98,11 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		// folder, whatever this repo attaches.
 		// A read whose --store is op.StoreFlag (D-499: its operation
 		// does not filter by it) reads the store it names alone too.
-		orgRead := !write && (a.namesOrgRead(ctx, e, d) || routedStoreRead(e, d))
+		// A read naming the personal store (`--store me[/<folder>]`) reads
+		// it alone too (devco D-756): the repo's open attaches the personal
+		// store's root only, so `lore search --store me` and `lore sql run
+		// --store me` found none of the notes kept in its folders.
+		orgRead := !write && (a.namesOrgRead(ctx, e, d) || routedStoreRead(e, d) || a.personalRead(e, d))
 		// A read by id in a repo lore is not set up in reads the org
 		// folder holding the row, as an edit by id there writes it
 		// (devco D-551: memory edit --id worked, memory show --id refused).
@@ -955,6 +959,21 @@ func namesPersonalStore(e op.Entry, d op.Decoder) bool {
 		}
 	}
 	return false
+}
+
+// personalRead reports whether d is a row read naming the personal store
+// with --store (or its alias --to): `--store me` or `--store me/<folder>`.
+// Such a read runs on the personal store alone from any folder, a repo
+// included, so it sees every folder of that store (personalFolders).
+// v0.1.17's local personal store (`personal.store: local`) is the
+// exception: only a repo's open attaches it (as me and me/everywhere,
+// localPersonalStores), so its reads keep the repo's path.
+func (a *App) personalRead(e op.Entry, d op.Decoder) bool {
+	if !orgReadOp(e.Spec()) || !namesPersonalStore(e, d) {
+		return false
+	}
+	mc, err := readMachineConfig(a.opts.Home)
+	return err == nil && mc.localPersonalV017(a.opts.Home) == ""
 }
 
 // previewRun reports whether d asks e for a preview only (--dry-run,

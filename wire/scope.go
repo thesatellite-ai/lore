@@ -280,11 +280,15 @@ func cloneCompanyFolder(org *orgconf.Org, t attach.Store) []attach.Store {
 
 // orgWideFolders is every folder of every store of the org named base, as
 // a read naming `--store <org>` outside a repo reads them: the store root
-// the name attaches gets the other folders beside it. nil when base names
-// no org (a store's short name, me), which keeps the one-folder read.
+// the name attaches gets the other folders beside it. For base me it is
+// every folder of the personal store (personalFolders). nil when base names
+// no org (a store's short name), which keeps the one-folder read.
 func (a *App) orgWideFolders(ctx context.Context, base string, root attach.Store) []attach.Store {
-	if strings.Contains(base, targetSep) || base == attach.ReservedMe {
+	if strings.Contains(base, targetSep) {
 		return nil
+	}
+	if base == attach.ReservedMe {
+		return a.personalFolders(ctx, root)
 	}
 	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
 	if err != nil || cfg == nil {
@@ -306,6 +310,30 @@ func (a *App) orgWideFolders(ctx context.Context, base string, root attach.Store
 			continue
 		}
 		out = append(out, attach.Store{Name: store.Source(base + targetSep + f.Folder), URL: f.URL, Folder: f.Folder, Branch: f.Branch, ReadOnly: true})
+	}
+	return out
+}
+
+// personalFolders is every folder of the personal store whose root is
+// root, each a read-only source me/<folder>: `--store me` (no folder) reads
+// the whole personal store, as `--store <org>` reads the whole org.
+//
+// Why (devco D-756): notes written with `--to me/<folder>` live in folders
+// of the personal store, and the root read alone found none of them, so
+// `lore search --store me` and `lore sql run --store me` answered nothing
+// while `--store me/<folder>` found the rows.
+func (a *App) personalFolders(ctx context.Context, root attach.Store) []attach.Store {
+	if root.URL == "" {
+		return nil
+	}
+	rootKey := placeKey(root.URL, root.Branch)
+	entries := []opsstores.Entry{{Name: attach.ReservedMe, URL: root.URL, Branch: root.Branch}}
+	var out []attach.Store
+	for _, f := range a.foldersOf(ctx, entries).Folders {
+		if f.Folder == root.Folder && placeKey(f.URL, f.Branch) == rootKey {
+			continue
+		}
+		out = append(out, attach.Store{Name: store.Source(attach.ReservedMe + targetSep + f.Folder), URL: f.URL, Folder: f.Folder, Branch: f.Branch, ReadOnly: true})
 	}
 	return out
 }
