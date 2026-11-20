@@ -132,6 +132,7 @@ func (h *standaloneOrg) Use(ctx context.Context, in opsorgcmd.UseIn) (opsorgcmd.
 		if cerr != nil {
 			return opsorgcmd.Report{}, cerr
 		}
+		h.res.Forget() // D-733: the rest of the run reads the choice as it is now
 		if !removed {
 			return opsorgcmd.Report{Lines: []string{"(no choice was recorded for this project)"}}, nil
 		}
@@ -155,6 +156,7 @@ func (h *standaloneOrg) Use(ctx context.Context, in opsorgcmd.UseIn) (opsorgcmd.
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
+	h.res.Forget() // D-733: the rest of the run resolves through the new choice
 	return opsorgcmd.Report{Lines: []string{
 		fmt.Sprintf("✓ %s uses org %s on this machine", s.ProjectID, in.Entry),
 		fmt.Sprintf("  recorded in %s (machine-only, nothing committed)", configPath(h.home)),
@@ -195,6 +197,7 @@ func (h *standaloneOrg) Set(ctx context.Context, in opsorgcmd.SetIn) (opsorgcmd.
 	if err := writeFileAtomic(path, b, orgYAMLMode); err != nil {
 		return opsorgcmd.Report{}, err
 	}
+	h.res.Forget() // D-733: the rest of the run resolves through the committed file
 	return opsorgcmd.Report{Lines: []string{fmt.Sprintf("✓ wrote %s (org %s)", path, in.Org), "  commit it with git so teammates resolve the same org"}}, nil
 }
 
@@ -250,6 +253,7 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if err != nil {
 		return opsorgcmd.Report{Lines: lines}, linkError(err)
 	}
+	h.res.Forget() // D-733: the rest of the run (the client guard) reads the repo as linked now
 	state := "pushed"
 	switch {
 	case res.Offline:
@@ -385,6 +389,7 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 	if err != nil {
 		return opsorgcmd.Report{Lines: lines}, linkError(err)
 	}
+	h.res.Forget() // D-733: the rest of the run reads the repo as unlinked now
 	state := "pushed"
 	switch {
 	case res.Removed == 0:
