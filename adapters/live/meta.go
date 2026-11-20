@@ -83,6 +83,31 @@ func raiseMetaFile(cur []byte, need []string) (out []byte, changed bool, err err
 	return encodeMetaObject(obj, next)
 }
 
+// RaiseMetaFloor is cur (a _live/meta.json) with min_lore_version raised
+// to floor, never lowered; features and every other key kept. changed is
+// false when cur already declares floor or higher, or floor is not a
+// version every lore can compare (an unparseable floor is ignored by
+// every gate, so writing one would only look like protection).
+func RaiseMetaFloor(cur []byte, floor string) (out []byte, changed bool, err error) {
+	if !formatgate.ValidVersion(floor) {
+		return cur, false, nil
+	}
+	obj, err := canonjson.Decode(cur, canonjson.DefaultMaxDepth)
+	if err != nil {
+		return nil, false, fmt.Errorf("live: %s: %w", MetaPath, err)
+	}
+	m, _, err := (Tree{MetaPath: cur}).Meta()
+	if err != nil {
+		return nil, false, err
+	}
+	if !formatgate.VersionBelow(m.MinLoreVersion, floor) {
+		return cur, false, nil
+	}
+	d := m.declared()
+	d.MinLoreVersion = formatgate.MaxVersion(d.MinLoreVersion, floor)
+	return encodeMetaObject(obj, d)
+}
+
 // mergeMetaFiles is the live merge of two _live/meta.json files (rule 2
 // "Merging the flags"): features as a set, min_lore_version the higher
 // version (version-aware), every other key from theirs over ours.

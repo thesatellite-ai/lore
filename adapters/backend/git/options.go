@@ -101,6 +101,20 @@ type config struct {
 	// identitySay is told when a write or sync gave an existing clone its
 	// identity (WithCloneIdentitySay); nil = nobody.
 	identitySay func(ctx context.Context, dir string, id CloneIdentity)
+	// folderFloor is the lore version the store's org declares its stores
+	// need (WithFolderFloor); nil = none.
+	folderFloor func(ctx context.Context, remote string) string
+}
+
+// WithFolderFloor gives the backend the lore version the org of a store
+// declares its stores need ("" none; wire passes the org entry's
+// min_lore_version, copied from lore-org.yaml). A folder the store clone
+// creates (its first write) declares it as its min_lore_version, so an
+// older lore is read-only in a folder made after the declaration too
+// (devco:D-735). It is asked only when a folder is created, with the
+// remote url the clone fetches from.
+func WithFolderFloor(f func(ctx context.Context, remote string) string) Option {
+	return func(c *config) { c.folderFloor = f }
 }
 
 // withOwnClone marks the clone NewOpener opens as a person's own clone.

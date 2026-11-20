@@ -11,9 +11,12 @@ import (
 	"cmp"
 	"context"
 
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	pluralword "github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storeaddr"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -89,6 +92,9 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	if named != "" {
 		lines = append(lines, named)
 	}
+	if otherStore && formatgate.ValidVersion(o.MinLoreVersion) {
+		lines = append(lines, "  its folders get min_lore_version "+o.MinLoreVersion+", the lore version "+in.Org+"'s stores need (older lore reads it, writes refused)")
+	}
 	if !yes {
 		return opsorgcmd.Report{Lines: lines, Ask: "Add it?"}, nil
 	}
@@ -127,6 +133,12 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	if otherStore {
 		lines = append(lines, markStoreOrg(ctx, g, orgcfg.OrgStoreMark{URL: in.URL, Branch: in.Branch, Org: cmp.Or(sg.Doc.Name, in.Org),
 			MainStore: sc.URL, Signature: storeSignature(o)}, want))
+		// devco:D-735: a store added after the org declared its floor gets
+		// it in its folders now (a store with no folder yet gets it in each
+		// folder a current lore creates there, from the org entry)
+		if floor := sg.Doc.MinLoreVersion; formatgate.ValidVersion(floor) {
+			lines = append(lines, addedStoreFloorLine(ctx, g, in, floor, storeSignature(o), want))
+		}
 	}
 	lines = append(lines, "  next: lore org link --org "+in.Org+" --project <folder> --store "+in.URL)
 	return opsorgcmd.Report{Lines: lines}, nil
@@ -172,3 +184,20 @@ func storesFileName(top, want string) string {
 
 // compile-time check: the org host offers org.store.add.
 var _ opsorgcmd.StoreAdder = (*standaloneOrg)(nil)
+
+// addedStoreFloorLine raises the folders of a store just added to org
+// in.Org to the org's floor (devco:D-735) and says what happened; a
+// failure is a line, not an error: the store is listed either way, and
+// lore org config set --key min_lore_version raises it again.
+func addedStoreFloorLine(ctx context.Context, g *orgcfg.GitLinks, in opsorgcmd.StoreAddIn, floor string, sig gitref.Signature, want string) string {
+	res, err := g.RaiseStoreFloor(ctx, orgcfg.StoreFloorEdit{URL: in.URL, Branch: in.Branch, Org: in.Org, Floor: floor, Push: in.Push, Signature: sig})
+	switch {
+	case err != nil:
+		return "✗ " + want + ": could not give its folders min_lore_version " + floor + " (" + err.Error() + "); run: " + opsorgcmd.MinLoreCommand(in.Org, floor)
+	case res.Empty:
+		return "· " + want + ": no folder yet; each folder created there needs lore " + floor + " or later"
+	case res.Folders == 0:
+		return "· " + want + ": every folder already needs lore " + floor + " or later"
+	}
+	return "✓ " + want + ": " + pluralword.Of(res.Folders, "folder", "folders") + " now need lore " + floor + storeFloorPushNote(res)
+}

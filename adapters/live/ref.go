@@ -59,6 +59,13 @@ type Ref struct {
 	PushRetries int
 	// Backoff returns the pause before retry n (1-based); nil = no pause.
 	Backoff func(n int) time.Duration
+	// Floor is the lore version the repo's org declares its stores need
+	// (lore org config set --key min_lore_version; "" none). Every commit
+	// this ref makes carries _live/meta.json's min_lore_version at least
+	// Floor, so a live ref made after the declaration (or one an older
+	// lore wrote meanwhile) refuses an older lore's live writes too:
+	// v0.1.17+ checks that floor before every live write (devco:D-735).
+	Floor string
 
 	// fetchedFrom is the url this run's last fetch or push reached (""
 	// = none yet). A fetch keeps it here and writes no file: a read

@@ -158,7 +158,7 @@ func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, 
 
 // Shared is the suggestion's shared fields as an org entry holds them.
 func (s Suggestion) Shared() orgconf.Shared {
-	sh := orgconf.Shared{Own: s.Doc.Own, Repos: s.Doc.Repos, Defaults: orgconf.OrgDefaults{ClientRepos: s.Doc.Defaults.ClientRepos}}
+	sh := orgconf.Shared{Own: s.Doc.Own, Repos: s.Doc.Repos, Defaults: orgconf.OrgDefaults{ClientRepos: s.Doc.Defaults.ClientRepos}, MinLoreVersion: s.Doc.MinLoreVersion}
 	for _, st := range s.Doc.Stores {
 		sh.Stores = append(sh.Stores, orgconf.Store{URL: st.URL, Name: st.Name, Branch: st.Branch, OrgFolder: st.OrgFolder, Audience: orgconf.Audience(st.Audience)})
 	}

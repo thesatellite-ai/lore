@@ -230,6 +230,9 @@ func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top st
 		StateDir: s.stateDir, Clock: s.clk, Signature: sig,
 		IgnoreKeys: []string{updatedAtKey}, PushRetries: cfg.PushRetries, Backoff: liveBackoff,
 	}
+	if h.cfg.OrgFloor != nil {
+		s.ref.Floor = h.cfg.OrgFloor(ctx) // devco:D-735
+	}
 	return s, nil
 }
 

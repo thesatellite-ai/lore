@@ -26,6 +26,7 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -132,7 +133,7 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 		FirstCommit: w.NewMarker != nil,
 		Message:     fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature,
 		Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
-			put, created, changed, cerr := linkChange(ctx, repo, tip, target, w)
+			put, created, changed, cerr := linkChange(ctx, repo, tip, target, w, o.MinLoreVersion)
 			res.CreatedFolder = res.CreatedFolder || created
 			res.Changed = res.Changed || changed
 			return put, cerr
@@ -325,8 +326,12 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 
 // linkChange is the file to put for the link at tip: the folder's
 // _meta.json with the link set-unioned in (created when the folder has
-// none). An empty map means the link is already there.
-func linkChange(ctx context.Context, repo *gitref.Repo, tip, store string, w LinkWrite) (put map[string][]byte, created, changed bool, err error) {
+// none). An empty map means the link is already there. floor is the
+// org's declared min_lore_version ("" none): a folder the link writes
+// declares at least that, so a repo linked after the org declared its
+// floor is read-only for an older lore as every older folder is
+// (devco:D-735).
+func linkChange(ctx context.Context, repo *gitref.Repo, tip, store string, w LinkWrite, floor string) (put map[string][]byte, created, changed bool, err error) {
 	path, err := metaPathAt(ctx, repo, tip, w.Plan.Folder)
 	if err != nil {
 		return nil, false, false, err
@@ -369,6 +374,17 @@ func linkChange(ctx context.Context, repo *gitref.Repo, tip, store string, w Lin
 		return nil, false, false, err
 	}
 	doc[metaLinksKey] = lb
+	if formatgate.ValidVersion(floor) {
+		var cur string
+		bad := false
+		if raw, ok := doc[rowfs.MetaKeyMinLore]; ok {
+			bad = json.Unmarshal(raw, &cur) != nil // kept: every lore fails closed on it already
+		}
+		if !bad && formatgate.VersionBelow(cur, floor) {
+			fj, _ := json.Marshal(formatgate.MaxVersion(cur, floor)) // a string never fails to encode
+			doc[rowfs.MetaKeyMinLore] = fj
+		}
+	}
 	out, err := json.MarshalIndent(doc, "", "  ") // map keys encode sorted: one byte form on every machine
 	if err != nil {
 		return nil, false, false, err

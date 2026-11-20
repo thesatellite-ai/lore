@@ -306,6 +306,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 func suggestedStores(ctx context.Context, entry *orgconf.Org, sg orgcfg.Suggestion, url string) {
 	sh, _ := sg.SharedFor(ctx, entry.Identity.Key)
 	entry.Own, entry.Repos, entry.Stores = sg.Doc.Own, sg.Doc.Repos, append([]orgconf.Store(nil), sh.Stores...)
+	entry.MinLoreVersion = sg.Doc.MinLoreVersion // devco:D-735: folders this machine creates get it
 	if len(entry.Stores) == 0 {
 		entry.Stores = []orgconf.Store{{URL: url, OrgFolder: sg.Folder}}
 	}

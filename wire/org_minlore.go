@@ -19,6 +19,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -63,9 +64,18 @@ func (h *standaloneOrg) setOrgMinLore(ctx context.Context, cfg *orgconf.Config, 
 		return opsorgcmd.Report{Lines: lines, Ask: "Change it?"}, nil
 	}
 	sig := storeSignature(o)
+	sc := o.OrgFolderStore()
 	var failed error
 	for _, st := range o.Stores {
-		res, err := g.RaiseStoreFloor(ctx, orgcfg.StoreFloorEdit{URL: st.URL, Branch: st.Branch, Org: in.Org, Floor: floor, Push: in.Push, Signature: sig})
+		// the org folder's store also records it in lore-org.yaml, in the
+		// same commit: every member's org entry copies it from there, and
+		// the folders, stores and live refs created later get it (D-735)
+		orgFile := sc != nil && sc.URL == st.URL
+		res, err := g.RaiseStoreFloor(ctx, orgcfg.StoreFloorEdit{URL: st.URL, Branch: st.Branch, Org: in.Org, Floor: floor, Push: in.Push, Signature: sig,
+			OrgFile: orgFile, OrgFolder: st.OrgFolder})
+		if res.OrgFile {
+			lines = append(lines, "✓ min_lore_version "+floor+" in "+orgcfg.OrgFilePath(st.OrgFolder)+" of "+st.URL+": folders, stores and live refs created later get it too")
+		}
 		switch {
 		case err != nil:
 			lines = append(lines, "✗ "+st.URL+": "+orgFileError(err, st.URL).Error())
@@ -74,13 +84,63 @@ func (h *standaloneOrg) setOrgMinLore(ctx context.Context, cfg *orgconf.Config, 
 			}
 		case res.Empty:
 			lines = append(lines, "· "+st.URL+": no commit yet, so no folder to raise")
+		case res.Folders == 0 && res.OrgFile:
+			lines = append(lines, "· "+st.URL+": every folder already needs "+floor+" or later"+storeFloorPushNote(res))
 		case res.Folders == 0:
 			lines = append(lines, "· "+st.URL+": every folder already needs "+floor+" or later; nothing committed")
 		default:
 			lines = append(lines, "✓ "+st.URL+": "+pluralword.Of(res.Folders, "folder", "folders")+" now need lore "+floor+storeFloorPushNote(res))
 		}
 	}
+	if failed == nil && sc != nil {
+		// this machine's org entry copies the file now, as org config set
+		// of own/repos does, so a folder it creates next gets the floor
+		sg, err := g.LocalSuggestion(ctx, sc.URL, sc.Branch)
+		if err != nil {
+			return opsorgcmd.Report{Lines: lines}, orgFileError(err, sc.URL)
+		}
+		mine, _ := mineOf(ctx, cfg, o, sg)
+		if err := writeOrgSource(h.home, configLockWait, in.Org, mine, sg.Source()); err != nil {
+			return opsorgcmd.Report{Lines: lines}, err
+		}
+		lines = append(lines, "✓ org entry "+in.Org+" copies it (version "+short(sg.Version)+")")
+	}
 	return opsorgcmd.Report{Lines: lines}, failed
+}
+
+// orgFloorForStore is the lore version the org entries listing the store
+// at url declare their stores need (the highest when two do; "" none):
+// the min_lore_version a folder this lore creates in that store gets
+// (devco:D-735). A config that does not load declares none: the folder's
+// own write path reports that config error where it matters.
+func orgFloorForStore(home, url string) string {
+	cfg, _, err := orgcfg.LoadConfig(home)
+	if err != nil || cfg == nil {
+		return ""
+	}
+	same := sameStoreAs(url)
+	if same == nil {
+		return ""
+	}
+	floor := ""
+	for _, o := range cfg.Orgs {
+		if !formatgate.ValidVersion(o.MinLoreVersion) {
+			continue
+		}
+		for _, st := range o.Stores {
+			if same(st.URL) {
+				floor = formatgate.MaxVersion(floor, o.MinLoreVersion)
+				break
+			}
+		}
+	}
+	return floor
+}
+
+// folderFloorOption is the git backend's WithFolderFloor for the lore
+// home: every store clone's new folder gets its org's floor.
+func folderFloorOption(home string) git.Option {
+	return git.WithFolderFloor(func(_ context.Context, remote string) string { return orgFloorForStore(home, remote) })
 }
 
 // orNoneFloor names a store without a floor.
@@ -107,6 +167,9 @@ func storeFloorPushNote(res orgcfg.StoreFloorResult) string {
 // orgFloor is the lore version org's folder store declares it needs (""
 // none or unreadable now): org config get's min_lore_version line.
 func (h *standaloneOrg) orgFloor(ctx context.Context, g *orgcfg.GitLinks, sc *orgconf.Store) string {
+	if sg, err := g.LocalSuggestion(ctx, sc.URL, sc.Branch); err == nil && formatgate.ValidVersion(sg.Doc.MinLoreVersion) {
+		return sg.Doc.MinLoreVersion // lore-org.yaml's declaration (D-735)
+	}
 	f, err := g.StoreFloor(ctx, sc.URL, sc.Branch)
 	if err != nil {
 		return ""

@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 )
 
 const orgFileEditMessage = "lore: org %s: set %s"
@@ -112,3 +113,38 @@ func setOrgFileList(raw []byte, key string, values []string) (out []byte, change
 	out, err = yaml.Marshal(&doc)
 	return out, true, err
 }
+
+// raiseOrgFileFloor is raw (a lore-org.yaml) with the top-level
+// min_lore_version raised to floor (never lowered; added when absent);
+// changed is false when raw already declares floor or higher. Every other
+// key keeps its place (devco:D-735).
+func raiseOrgFileFloor(raw []byte, floor string) (out []byte, changed bool, err error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil, false, err
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, false, fmt.Errorf("not a mapping")
+	}
+	top := doc.Content[0]
+	val := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: floor}
+	for i := 0; i+1 < len(top.Content); i += 2 {
+		if top.Content[i].Value != orgFileKeyMinLore {
+			continue
+		}
+		cur := top.Content[i+1]
+		if cur.Kind == yaml.ScalarNode && !formatgate.VersionBelow(cur.Value, floor) {
+			return nil, false, nil
+		}
+		top.Content[i+1] = val
+		out, err = yaml.Marshal(&doc)
+		return out, true, err
+	}
+	top.Content = append(top.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: orgFileKeyMinLore}, val)
+	out, err = yaml.Marshal(&doc)
+	return out, true, err
+}
+
+// orgFileKeyMinLore is lore-org.yaml's key for the org's floor
+// (OrgFileDoc.MinLoreVersion).
+const orgFileKeyMinLore = "min_lore_version"

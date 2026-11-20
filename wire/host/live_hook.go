@@ -113,6 +113,11 @@ type LiveConfig struct {
 	// CONFIG_GUIDE "overridden per org entry"). cmd/lore passes the org
 	// resolution's entry; nil reads only the top level.
 	OrgLive func(ctx context.Context) *orgconf.Live
+	// OrgFloor is the min_lore_version of the org entry this repo resolves
+	// to ("" none; copied from lore-org.yaml): every live commit raises
+	// _live/meta.json to at least it, so an older lore cannot write a live
+	// ref made after the org declared its floor (devco:D-735). nil = none.
+	OrgFloor func(ctx context.Context) string
 	// PushHold is asked right before refs/lore/live is pushed: ok true
 	// with commits on the local ref made after `after` keeps the push from
 	// running and prints reason once (F-9: a person the org removed must

@@ -125,10 +125,17 @@ type Org struct {
 	// Own are patterns of the org's own code repos (no client guards).
 	Own []string `yaml:"own,omitempty"`
 	// Repos are patterns of client repos the org works in.
-	Repos        []string     `yaml:"repos,omitempty"`
-	Source       *OrgSource   `yaml:"source,omitempty"` // source.go: the lore-org.yaml stores, own, repos and defaults were copied from
-	Defaults     OrgDefaults  `yaml:"defaults,omitempty"`
-	AgentDetails AgentDetails `yaml:"agent_details,omitempty"`
+	Repos  []string   `yaml:"repos,omitempty"`
+	Source *OrgSource `yaml:"source,omitempty"` // source.go: the lore-org.yaml stores, own, repos and defaults were copied from
+	// MinLoreVersion is the lore version the org's stores need (copied
+	// from lore-org.yaml's min_lore_version, set by `lore org config set
+	// --key min_lore_version`; "" none). Every folder, store and live ref
+	// a current lore creates for the org gets it as its min_lore_version,
+	// so an older lore is read-only there too, not only in the folders
+	// that existed when it was declared (devco:D-735).
+	MinLoreVersion string       `yaml:"min_lore_version,omitempty"`
+	Defaults       OrgDefaults  `yaml:"defaults,omitempty"`
+	AgentDetails   AgentDetails `yaml:"agent_details,omitempty"`
 	// Live overrides the top level's live.fetch_ttl for this entry.
 	Live *Live `yaml:"live,omitempty"`
 	// OrgSettings are the entry's lease/agents/merge_check overrides,
