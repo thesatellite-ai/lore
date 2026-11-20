@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 )
 
 // Result symbols (2.2: the page shows ✓ ⚠ ✗ – ? for the statuses).
@@ -359,6 +360,9 @@ func areaLine(a string, rs []onboard.CheckResult, s SetupReport) string {
 			}
 			parts = append(parts, "· "+repoCount(len(repos))+": "+strings.Join(names, ", "))
 		}
+		if a == targetStore+s.Org && len(s.summary.orgStores) > 1 {
+			parts = append(parts, "· stores "+orgStoresList(s.summary.orgStores))
+		}
 		if a == targetStore+storeMe && s.summary.localPersonal {
 			parts = append(parts, localPersonalNote)
 		}
@@ -372,6 +376,24 @@ func areaLine(a string, rs []onboard.CheckResult, s SetupReport) string {
 		return s.summary.backend
 	}
 	return ""
+}
+
+// orgStoresList names each store of an org entry with who uses it
+// ("lore-team (org folder), lore-secret (team:@secret)"), so a person on a
+// team sees the team's store in doctor beside the main one (devco D-727).
+func orgStoresList(stores []orgconf.Store) string {
+	names := make([]string, 0, len(stores))
+	for _, st := range stores {
+		n := st.ShortName()
+		switch {
+		case st.OrgFolder != "":
+			n += " (org folder)"
+		case st.Restricted():
+			n += " (" + st.Audience.String() + ")"
+		}
+		names = append(names, n)
+	}
+	return strings.Join(names, ", ")
 }
 
 // localPersonalNote follows the store me line of a setup whose personal

@@ -546,6 +546,10 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, actor string, idErr 
 					place += targetSep + red.folder(st.OrgFolder)
 				}
 				sv += "  (org folder " + place + ": roster, teams, company rules)"
+			} else if st.Restricted() {
+				// who else uses it (devco D-727): a team member sees the
+				// team's store named as the team's, not as everyone's
+				sv += "  (audience " + st.Audience.String() + ")"
 			}
 			row(label, sv)
 		}
