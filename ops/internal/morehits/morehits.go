@@ -12,6 +12,16 @@ import "fmt"
 // Max is the largest --limit any search takes.
 const Max = 1000
 
+// Line is the note a search output ends with when more is set (its list
+// was cut at --limit, so listed is that limit), else "". Every
+// `<kind> search` text prints it after its hit lines (devco D-770).
+func Line(more bool, listed int) string {
+	if !more {
+		return ""
+	}
+	return Note(listed, listed)
+}
+
 // Note is the line a cut search ends with: how many it listed and the flag
 // that lists more. limit is the --limit the search ran with.
 func Note(listed, limit int) string {

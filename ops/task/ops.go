@@ -1942,7 +1942,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 
 // search matches the query against every attached store's cache, keeps
 // active tasks (unless --all) in scope, and cuts at --limit after the
-// filters.
+// filters, saying so (More) when one more task matched.
 func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, error) {
 	limit, err := work.Limit(in.Limit)
 	if err != nil {
@@ -1982,13 +1982,14 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 	now := opclock.Now(o.env)
 	out := work.SearchEnvelope{SchemaVersion: work.SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, h := range hits {
-		if len(out.Data) == limit {
-			break
-		}
 		r := h.Row
 		if (!in.All && !active(r, now)) || !work.InScope(scope.of(ctx, h.Source, work.Field(r, work.FieldRepo)), repo, in.NoInherit, in.MasterOnly, in.AllRepos) ||
 			(project != "" && work.Field(r, work.FieldProject) != project) {
 			continue
+		}
+		if len(out.Data) == limit {
+			out.More = true // D-770: one more task in scope, the list is cut
+			break
 		}
 		hit := work.HitOf(work.LabelerOf(o.env), h, true, work.FieldTitle, work.FieldBody, work.FieldStatus, fieldPriority)
 		hit.Row[fieldDue] = work.TimeText(r, fieldDue)

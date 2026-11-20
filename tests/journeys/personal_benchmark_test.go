@@ -15,7 +15,8 @@ package journeys
 // folder each), 5 people (resources of a kind `person`), 50 notes, and
 // every question is ONE lore call whose output alone holds the answer,
 // asked from the home folder and from a repo lore is set up in that
-// attaches no folder of the store.
+// attaches no folder of the store. Day 4 checks every `<kind> search`
+// says when --limit cut it (D-770).
 
 import (
 	"fmt"
@@ -180,5 +181,29 @@ func TestJourneySoloPersonalBenchmark(t *testing.T) {
 		lap.Lore(lap.Home, "task", "done", "--id", taskBirch).OK(t)
 		lap.Lore(code.Dir, "task", "list", "--store", "me", "--status", "done").OK(t).Says(t, "send the contract to nora_lane")
 		lap.Lore(lap.Home, "search", "--store", "me", "--query", "item23").OK(t).Says(t, "budget moved to 2350")
+	})
+
+	// every <kind> search says when --limit cut it (devco D-770, bug hunt
+	// H-29): task and decision search --limit 10 listed ten of twelve with
+	// no word, so "how many invoice tasks" from one call answered ten
+	w.Step("day4/every-kind-search-says-when-cut", func() {
+		for i := 1; i <= 12; i++ {
+			lap.Lore(lap.Home, "task", "add", "--title", fmt.Sprintf("pay invoice %d", i), "--to", "me/delta", "--yes").OK(t)
+			lap.Lore(lap.Home, "decision", "add", "--title", fmt.Sprintf("invoice rule %d", i), "--body", "pay each invoice within 30 days", "--to", "me/delta", "--yes").OK(t)
+		}
+		for _, p := range places {
+			for _, kind := range []string{"task", "decision"} {
+				cut := lap.Lore(p.dir, kind, "search", "--store", "me", "--query", "invoice", "--limit", "10").OK(t)
+				for _, s := range []string{"note: more rows match than the 10 listed", "--limit 50"} {
+					if !strings.Contains(cut.Out(), s) {
+						t.Errorf("[D-770 %s] %s search cut at 10 of 12 does not say so (no %q):\n%s", p.name, kind, s, cut)
+					}
+				}
+				all := lap.Lore(p.dir, kind, "search", "--store", "me", "--query", "invoice", "--limit", "12").OK(t)
+				if n := strings.Count(all.Out(), "invoice"); n < 12 || strings.Contains(all.Out(), "more rows match") {
+					t.Errorf("[D-770 %s] %s search --limit 12 lists every match with no note; got %d lines naming invoice:\n%s", p.name, kind, n, all)
+				}
+			}
+		}
 	})
 }

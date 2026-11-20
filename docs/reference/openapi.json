@@ -5072,6 +5072,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -7459,6 +7463,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",
@@ -11181,6 +11189,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more comments match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -13844,6 +13856,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -15690,6 +15706,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",
@@ -20708,6 +20728,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -22758,6 +22782,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",
@@ -25409,6 +25437,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",
@@ -40049,6 +40081,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -45002,6 +45038,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -48093,6 +48133,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -49852,6 +49896,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",
@@ -54722,6 +54770,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",
@@ -69762,6 +69814,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -83416,6 +83472,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -88976,6 +89036,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "query": {
                       "type": "string"
@@ -100417,6 +100481,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -105397,6 +105465,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",
@@ -111827,6 +111899,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -115685,6 +115761,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",
@@ -120584,6 +120664,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
+                    },
                     "personal_unread": {
                       "type": "string",
                       "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
@@ -122093,6 +122177,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more rows match than are listed; raise --limit to list more"
                     },
                     "personal_unread": {
                       "type": "string",

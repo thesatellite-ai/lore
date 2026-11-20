@@ -550,17 +550,22 @@ func TestSearchCutsAfterFilter(t *testing.T) {
 		}
 	}
 	keep := add(t, env, Create{Texts: map[string]string{FieldBody: "gateway"}})
-	found, err := Search(ctx, env, rules, "gateway", nil, 1, Scope{}, false)
-	if err != nil || len(found) != 1 || found[0].Row.ID.String() != keep {
-		t.Fatalf("%v %v", found, err)
+	// the archived hits are out of scope: the one live hit fills --limit 1
+	// and nothing more matches (D-770: only in-scope rows say "more")
+	found, more, err := Search(ctx, env, rules, "gateway", nil, 1, Scope{}, false)
+	if err != nil || len(found) != 1 || found[0].Row.ID.String() != keep || more {
+		t.Fatalf("%v more=%v %v", found, more, err)
 	}
-	if found, err = Search(ctx, env, rules, "gateway", nil, 0, Scope{}, true); err != nil || len(found) != 4 {
-		t.Fatalf("archived: %d %v", len(found), err)
+	if found, more, err = Search(ctx, env, rules, "gateway", nil, 0, Scope{}, true); err != nil || len(found) != 4 || more {
+		t.Fatalf("archived: %d more=%v %v", len(found), more, err)
 	}
-	if _, err := Search(ctx, env, rules, "gateway", []string{"body"}, 0, Scope{}, false); !errs.Has(err, errs.Unsupported) {
+	if found, more, err = Search(ctx, env, rules, "gateway", nil, 3, Scope{}, true); err != nil || len(found) != 3 || !more {
+		t.Fatalf("archived, cut at 3 of 4: %d more=%v %v", len(found), more, err)
+	}
+	if _, _, err := Search(ctx, env, rules, "gateway", []string{"body"}, 0, Scope{}, false); !errs.Has(err, errs.Unsupported) {
 		t.Fatalf("--column without a column search: %v", err)
 	}
-	if _, err := Search(ctx, env, rules, "gateway", []string{"nosuch"}, 0, Scope{}, false); !errs.Has(err, errs.InvalidInput) {
+	if _, _, err := Search(ctx, env, rules, "gateway", []string{"nosuch"}, 0, Scope{}, false); !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("--column unknown field: %v", err)
 	}
 }

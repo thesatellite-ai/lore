@@ -29,6 +29,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/repohome"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
@@ -568,6 +569,9 @@ type SearchEnvelope struct {
 	Query         string      `json:"query"`
 	Count         int         `json:"count"`
 	Data          []SearchHit `json:"data"`
+	// More says the hits are cut at --limit: more rows in scope match
+	// (devco D-770; ten listed of fifty read as the whole answer).
+	More bool `json:"more,omitempty" desc:"more rows match than are listed; raise --limit to list more"`
 }
 
 // SearchHit is one v0.1.17 search hit: id, BM25 score, snippet and the
@@ -629,6 +633,7 @@ func (o SearchEnvelope) Text() string {
 	for _, h := range o.Data {
 		b.WriteString(h.Human + "\n")
 	}
+	b.WriteString(morehits.Line(o.More, len(o.Data)))
 	return b.String()
 }
 
@@ -717,7 +722,8 @@ func InScope(got, want string, noInherit, masterOnly, allRepos bool) bool {
 
 // SearchTable is the whole search of a noun without extra filters: the
 // query over table, live hits of project ("" = any), cut at limit (0 =
-// DefaultSearchLimit), each hit carrying cols; withStatus picks the human
+// DefaultSearchLimit, More set when a hit past it matched), each hit
+// carrying cols; withStatus picks the human
 // line (see HitOf). columns is `search --column` (nil = every full-text
 // field; see SearchColumns); storeName is `search --store` ("" = every
 // store).
@@ -736,11 +742,12 @@ func SearchTable(ctx context.Context, env Env, table row.Table, kind, query stri
 	}
 	out := SearchEnvelope{SchemaVersion: SchemaVersion, Kind: kind, Query: query}
 	for _, h := range hits {
-		if len(out.Data) == limit {
-			break
-		}
 		if project != "" && Field(h.Row, FieldProject) != project {
 			continue
+		}
+		if len(out.Data) == limit {
+			out.More = true // D-770: one more hit in scope, the list is cut
+			break
 		}
 		out.Data = append(out.Data, WithMeta(ctx, env, HitOf(LabelerOf(env), h, withStatus, cols...), h.Row))
 	}
