@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -22,7 +23,8 @@ import (
 //
 //	cache Apply ─▶ expandField ─▶ refs.Expander ─▶ resolver.Resolve
 //	                                                 │ var: nearest of repo, folder, store (store order)
-//	                                                 │ res: name[/field] (+ ?kind=) in the reader's view
+//	                                                 │ res: <resource>[/field] (+ ?kind=) in the reader's view;
+//	                                                 │      <resource> = name, <kind>/<name>, <place>:<kind>/<name>, res_ id
 //	                                                 │ row: id[/field] through engine.Get
 //	                                                 ▼ reads the row files (the truth), never a cache:
 //	                                                   the cache is mid-transaction when it asks
@@ -151,57 +153,108 @@ func (rv *resolver) resolveVar(ref refs.Ref) (refs.Resolved, error) {
 	return refs.Resolved{Text: v, ID: hit.r.ID}, nil
 }
 
-// resolveRes: name/field[/sub], option kind (9). A sensitive field stays
-// as the reference; a secret_ref field becomes a secret reference.
+// resolveRes: <resource>[/field[/sub]], option kind (9). <resource> is
+// any name a resource lookup takes (RES 3.4, opssettings.ResourceNamed): the
+// bare name, <kind>/<name>, <place>:<kind>/<name> or the res_ id, so a
+// note can say ${res:server/web_prod} as `lore resource show --id
+// server/web_prod` does (devco D-764: that form never resolved, so the
+// note had no row_refs line and resource graph --up never found it). A
+// sensitive field stays as the reference; a secret_ref field becomes a
+// secret reference.
 func (rv *resolver) resolveRes(ref refs.Ref) (refs.Resolved, error) {
 	s, err := rv.snapshot()
 	if err != nil {
 		return refs.Resolved{}, err
 	}
-	name, field, _ := strings.Cut(ref.Target, "/")
 	kindName, byKind := ref.Option(refs.OptKind)
-	var hits []located
-	for _, l := range s.resources {
-		if fieldText(l.r, fieldName) != name || fieldText(l.r, fieldResArchived) != "" {
-			continue
-		}
-		if byKind && kindNameOf(s, fieldText(l.r, fieldResKind)) != kindName {
-			continue
-		}
-		hits = append(hits, l)
-	}
-	if len(hits) == 0 {
+	res, path, ok := s.findRes(ref.Target, kindName, byKind)
+	if !ok {
 		return refs.Resolved{}, refs.ErrUnresolved
 	}
-	// nearest store first; two kinds with the same name in one store is
-	// ambiguous, so it stays a reference (the person adds ?kind=).
-	if len(hits) > 1 && hits[0].src == hits[1].src && !byKind {
+	if path == "" {
+		return refs.Resolved{Text: fieldText(res.r, fieldName), ID: res.r.ID}, nil
+	}
+	v, ok := s.resField(res, path)
+	if !ok {
 		return refs.Resolved{}, refs.ErrUnresolved
 	}
-	res := hits[0]
-	if field == "" {
-		return refs.Resolved{Text: name, ID: res.r.ID}, nil
+	return refs.Resolved{Text: v, ID: res.r.ID}, nil
+}
+
+// findRes reads target as <resource>[/<field path>]. Names may hold `/`
+// (a <kind>/<name> form, or a text name), so every split at a `/` is
+// tried, the shortest resource part first: a bare name followed by a
+// field reads as it always did, and a longer reading is tried only when
+// the shorter one names no resource or no such field. The first
+// resource part that matches decides: nearest store first; two matches
+// in one store without ?kind= are ambiguous and the reference stays as
+// written (lore does not guess, BUGFIX-11).
+func (s *refSnapshot) findRes(target, kindName string, byKind bool) (located, string, bool) {
+	kn := func(id string) string {
+		if n := kindNameOf(s, id); n != "" {
+			return n
+		}
+		return id
 	}
-	head, sub, _ := strings.Cut(field, "/")
-	entries := resEntries(res.r)
-	for fid, e := range entries {
+	for i := 0; i <= len(target); i++ {
+		if i < len(target) && target[i] != '/' {
+			continue
+		}
+		key, path := target[:i], ""
+		if i < len(target) {
+			path = target[i+1:]
+		}
+		if key == "" {
+			continue
+		}
+		var hits []located
+		for _, l := range s.resources {
+			if fieldText(l.r, fieldResArchived) != "" || !opssettings.ResourceNamed(l.src, l.r, key, kn) {
+				continue
+			}
+			if byKind && kindNameOf(s, fieldText(l.r, fieldResKind)) != kindName {
+				continue
+			}
+			hits = append(hits, l)
+		}
+		switch {
+		case len(hits) == 0:
+			continue
+		case len(hits) > 1 && hits[0].src == hits[1].src && !byKind:
+			return located{}, "", false
+		}
+		if path == "" {
+			return hits[0], "", true
+		}
+		if _, ok := s.resField(hits[0], path); ok {
+			return hits[0], path, true
+		}
+	}
+	return located{}, "", false
+}
+
+// resField is the value of field path <field>[/<sub>…] of res, as the
+// reference fills it in; false when the field is missing or sensitive.
+func (s *refSnapshot) resField(res located, path string) (string, bool) {
+	head, sub, _ := strings.Cut(path, "/")
+	for fid, e := range resEntries(res.r) {
 		if e.Name != head {
 			continue
 		}
 		def := kindFieldOf(s, fid)
 		if def != nil && refBool(def.r, fieldSensitive) {
-			return refs.Resolved{}, refs.ErrUnresolved
+			return "", false
 		}
 		v, ok := subValue(e.V, sub)
 		if !ok {
-			return refs.Resolved{}, refs.ErrUnresolved
+			return "", false
 		}
 		if def != nil && fieldText(def.r, fieldVarType) == varTypeSecretRef {
 			v = "${secret:" + v + "}"
 		}
-		return refs.Resolved{Text: v, ID: res.r.ID}, nil
+		return v, true
 	}
-	return refs.Resolved{}, refs.ErrUnresolved
+	return "", false
 }
 
 // resolveRow: id → "title (id)"; id/field → that field (9). A deleted row
@@ -363,6 +416,7 @@ func (c reexpandCache) Apply(ctx context.Context, source store.Source, rows []st
 	}
 	var changed []string
 	var needles []string
+	var named []row.Row // resources applied: their <kind>/<name> needles
 	for _, sr := range rows {
 		switch sr.Table {
 		case schema.TableVars, schema.TableResources, schema.TableKinds, schema.TableKindFields:
@@ -384,7 +438,14 @@ func (c reexpandCache) Apply(ctx context.Context, source store.Source, rows []st
 			}
 		case schema.TableResources:
 			if n := fieldText(r, fieldName); n != "" {
+				// ${res:<name>…} and, after the snapshot is fresh, the
+				// <kind>/<name> forms (resNeedles, devco D-764)
 				needles = append(needles, "${res:"+n)
+				named = append(named, r)
+			}
+		case schema.TableKinds:
+			if n := fieldText(r, fieldName); n != "" {
+				needles = append(needles, kindNeedles(n)...)
 			}
 		}
 	}
@@ -393,10 +454,46 @@ func (c reexpandCache) Apply(ctx context.Context, source store.Source, rows []st
 	}) {
 		c.rv.invalidate()
 	}
+	if len(named) > 0 {
+		s, err := c.rv.snapshot()
+		if err != nil && !errs.Has(err, errs.NotFound) {
+			return err
+		}
+		for _, r := range named {
+			needles = append(needles, resNeedles(s, r)...)
+		}
+	}
 	if len(changed) == 0 {
 		return nil
 	}
 	return c.reexpand(ctx, changed, needles)
+}
+
+// resNeedles are the text a reference to resources row r by its typed
+// name starts with: <kind>/<name> (the kind's name, or its id while the
+// snapshot does not know it), which ${res:<kind>/<name>…} and
+// ${res:<place>:<kind>/<name>…} both hold. A note written before the
+// resource then fills in, and gets its row_refs line, when the resource
+// arrives (devco D-764).
+func resNeedles(s *refSnapshot, r row.Row) []string {
+	n, kid := fieldText(r, fieldName), fieldText(r, fieldResKind)
+	if n == "" || kid == "" {
+		return nil
+	}
+	out := []string{kid + "/" + n}
+	if s != nil {
+		if kn := kindNameOf(s, kid); kn != "" {
+			out = append(out, kn+"/"+n)
+		}
+	}
+	return out
+}
+
+// kindNeedles are the starts of the typed-name references to the
+// resources of a kind named n (added or renamed): ${res:<n>/… and
+// ${res:<place>:<n>/… (devco D-764).
+func kindNeedles(n string) []string {
+	return []string{"${res:" + n + "/", ":" + n + "/"}
 }
 
 // reexpand runs Reexpand for each id and ReexpandMatching for needles in

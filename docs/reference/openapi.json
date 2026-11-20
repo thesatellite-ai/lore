@@ -65202,6 +65202,45 @@
                         ]
                       }
                     },
+                    "mentions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string",
+                            "description": "the text field holding the reference"
+                          },
+                          "node": {
+                            "type": "string",
+                            "description": "the resource it mentions (the root or a node of the walk)"
+                          },
+                          "row": {
+                            "type": "string",
+                            "description": "the id of the row whose text holds the reference"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "where the row is stored"
+                          },
+                          "table": {
+                            "type": "string",
+                            "description": "its table (memories, tasks, decisions, …)"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "the row's title, name or first line of its body"
+                          }
+                        },
+                        "required": [
+                          "row",
+                          "table",
+                          "field",
+                          "node",
+                          "title"
+                        ]
+                      }
+                    },
                     "nodes": {
                       "type": "array",
                       "items": {
@@ -65639,6 +65678,45 @@
                           "table",
                           "relation",
                           "node"
+                        ]
+                      }
+                    },
+                    "mentions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string",
+                            "description": "the text field holding the reference"
+                          },
+                          "node": {
+                            "type": "string",
+                            "description": "the resource it mentions (the root or a node of the walk)"
+                          },
+                          "row": {
+                            "type": "string",
+                            "description": "the id of the row whose text holds the reference"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "where the row is stored"
+                          },
+                          "table": {
+                            "type": "string",
+                            "description": "its table (memories, tasks, decisions, …)"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "the row's title, name or first line of its body"
+                          }
+                        },
+                        "required": [
+                          "row",
+                          "table",
+                          "field",
+                          "node",
+                          "title"
                         ]
                       }
                     },

@@ -214,6 +214,8 @@ host hub_prod
 ```
 <!-- /example -->
 
+A note can name a resource in its text as `${res:<kind>/<name>}`, or by any name a resource lookup takes (the bare name, `<place>:<kind>/<name>`, the `res_` id), with `/<field>` after it for one value: `${res:host/hub_prod/ip}`. A show with `--expand` fills it in, a note written before the resource exists is filled in when the resource is added, and `graph --up` and `impact` list every note, task or other row whose text mentions the resource, or a resource that depends on it, under `mentioned in:` (with the row id, its table and field, the resource it names and its first line; `mentions` in `--json`).
+
 `impact` answers "what breaks if this goes down": every resource that depends on it, by hops, plus the open tasks and incidents linked to any of them. A task links to a resource with `--ref` and the resource's `res_` id; `--ref` on a task, decision or incident also takes the names every resource lookup takes (bare, `<kind>/<name>`, `<place>:<kind>/<name>`), and a bare name held by two resources is refused with `E_RESOURCE_AMBIGUOUS` naming the qualified names. Here Alice looks up the id of `hub_api` and adds a task for it, then asks about the host:
 
 <!-- example: resources#impact only=2,3 -->

@@ -361,3 +361,33 @@ func TestApplySameRowAgainIsANoOp(t *testing.T) {
 		t.Fatal("a new row was not projected (the injected failure never ran)")
 	}
 }
+
+// TestReferrers (devco D-764): Referrers reads row_refs back, the rows
+// whose text references an id, and writes nothing.
+func TestReferrers(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	c := f.open("c.db")
+	prj := newPrj()
+	host := must(ids.New[ids.Var]()).String()
+	other := must(ids.New[ids.Var]()).String()
+	f.exp.set(host, "db1")
+	f.exp.set(other, "x")
+	a, b, plain := newMem(), newMem(), newMem()
+	f.apply(c, store.SourceRepo, "1",
+		f.memory(a, prj, "connect to ${ref:"+host+"}"),
+		f.memory(b, prj, "${ref:"+other+"} then ${ref:"+host+"}"),
+		f.memory(plain, prj, "no references here"))
+	got := must(c.Referrers(f.ctx, []string{host}))
+	if len(got) != 2 {
+		t.Fatalf("Referrers(host) = %+v, want the 2 memories", got)
+	}
+	for _, r := range got {
+		if r.Table != "memories" || r.Field != "body" || r.RefID != host || (r.ID != a.String() && r.ID != b.String()) {
+			t.Fatalf("referrer %+v", r)
+		}
+	}
+	if got := must(c.Referrers(f.ctx, []string{other})); len(got) != 1 || got[0].ID != b.String() {
+		t.Fatalf("Referrers(other) = %+v", got)
+	}
+}
