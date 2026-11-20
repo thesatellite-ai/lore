@@ -108,7 +108,11 @@ func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore 
 	oldRows := map[ids.AnyID]map[string]bool{}
 	oldFiles := map[string]map[string]bool{}
 	if bases == nil {
-		bases = historyBases(ctx, top)
+		// A commit check also compares with the remote's branch tips: after
+		// a squash merge the branch's own commits are on no remote by
+		// ancestry, but a value the remote's branch already holds at the
+		// same path is not new (issue #51). Only read when a finding exists.
+		bases = append(historyBases(ctx, top), remoteBranchTips(ctx, top)...)
 	}
 	for _, base := range bases { // none: fail closed
 		if len(want) > 0 {
@@ -159,7 +163,7 @@ const maxHistoryBases = 8
 
 // historyBases returns the commits a commit check counts as history (see
 // the file comment): the pushed commits under HEAD's unpushed ones
-// (`rev-list --boundary HEAD --not --remotes`), so the commit an amend
+// (`rev-list --boundary HEAD --not --remotes <tags the remote has>`), so the commit an amend
 // replaces is never its own history; HEAD itself when HEAD is pushed, or
 // when none of its history ever was (no remote, or remote refs of another
 // history only: nothing to compare with, and the push check scans every
@@ -177,8 +181,11 @@ func historyBases(ctx context.Context, top string) []string {
 	if err != nil || strings.TrimSpace(string(unpushed)) == "" {
 		return head // pushed (or unknown: as before)
 	}
+	// A commit the remote holds behind a pushed tag is pushed too (issue
+	// #51): the tags' commits are negated next to --remotes.
+	notPushed := append([]string{"rev-list", "--boundary", "HEAD", "--not", "--remotes"}, RemoteTagCommits(ctx, top, remoteNames(ctx, top))...)
 	var bases []string
-	if out, lerr := (gitRun{dir: top, args: []string{"rev-list", "--boundary", "HEAD", "--not", "--remotes"}}).output(ctx); lerr == nil {
+	if out, lerr := (gitRun{dir: top, args: notPushed}).output(ctx); lerr == nil {
 		for _, l := range strings.Split(string(out), "\n") {
 			if c, ok := strings.CutPrefix(strings.TrimSpace(l), "-"); ok && c != "" && len(bases) < maxHistoryBases {
 				bases = append(bases, c)
@@ -189,6 +196,30 @@ func historyBases(ctx context.Context, top string) []string {
 		return bases
 	}
 	return head // nothing under HEAD was ever pushed (the remote refs are another history): as a repo with no remote
+}
+
+// remoteBranchTips are the remote-tracking commits a value counts as
+// already on the remote at: the current branch's upstream and each
+// remote's default branch (refs/remotes/<remote>/HEAD, else its main or
+// master). Missing refs are skipped; none on any error.
+func remoteBranchTips(ctx context.Context, top string) []string {
+	refs := []string{"@{upstream}"}
+	for _, r := range remoteNames(ctx, top) {
+		refs = append(refs, remotesRefPrefix+r+"/HEAD", remotesRefPrefix+r+"/main", remotesRefPrefix+r+"/master")
+	}
+	seen := map[string]bool{}
+	var tips []string
+	for _, ref := range refs {
+		if len(tips) >= maxHistoryBases {
+			break
+		}
+		out, err := gitRun{dir: top, args: []string{"rev-parse", "-q", "--verify", ref + "^{commit}"}}.output(ctx)
+		if c := strings.TrimSpace(string(out)); err == nil && c != "" && !seen[c] {
+			seen[c] = true
+			tips = append(tips, c)
+		}
+	}
+	return tips
 }
 
 // previewsOf is the set of fingerprints of hs.

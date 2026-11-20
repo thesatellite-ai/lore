@@ -200,3 +200,64 @@ func TestCommitCheckHistoryIsWhatWasPushed(t *testing.T) {
 		}
 	}
 }
+
+// TestCommitCheckCountsTagsAndBranchesTheRemoteHas (issue #51,
+// devco:D-787): a value committed without the hook and not under any
+// remote-tracking ref still blocks while only a local tag holds it; once
+// the remote holds that commit through a pushed tag it is history (the
+// pre-push hook's wire.NoteTagPush makes the next check list the remote's
+// tags again). After a squash merge, a value the remote's branch already
+// holds at the same path is not new either. A new value still blocks.
+// Break-verified: without the tag commits in historyBases the "tag
+// pushed" case blocks; without remoteBranchTips the squash case blocks.
+func TestCommitCheckCountsTagsAndBranchesTheRemoteHas(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	ctx := context.Background()
+	key := "AKIA" + strings.Repeat("T", 16)
+	histCommit(t, h.Repo, "clean start")
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	allowGit(t, h.Repo, "init", "-q", "--bare", remote)
+	allowGit(t, h.Repo, "remote", "add", "origin", remote)
+	allowGit(t, h.Repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+	allowGit(t, h.Repo, "fetch", "-q", "origin")
+
+	if err := os.WriteFile(filepath.Join(h.Repo, "notes.md"), []byte("old line "+key+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	histCommit(t, h.Repo, "a key, hook skipped")
+	allowGit(t, h.Repo, "tag", "v1")
+	same := map[string][]byte{"notes.md": []byte("old line " + key + "\nnew line\n")}
+
+	if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, same); !errs.Has(err, errs.LeakBlocked) {
+		t.Fatalf("local tag only: err = %v, want E_LEAK_BLOCKED (the remote never got it)", err)
+	}
+	allowGit(t, h.Repo, "push", "-q", "origin", "refs/tags/v1")
+	wire.NoteTagPush(ctx, h.Repo, "origin", []string{"refs/tags/v1"})
+	if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, same); err != nil {
+		t.Fatalf("tag pushed: err = %v, want pass (the remote holds the value behind v1)", err)
+	}
+	fresh := map[string][]byte{"other.md": []byte("a new " + "AKIA" + strings.Repeat("U", 16) + "\n")}
+	if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, fresh); !errs.Has(err, errs.LeakBlocked) {
+		t.Fatalf("new value: err = %v, want E_LEAK_BLOCKED", err)
+	}
+
+	// Squash merge: branch rel adds a key, main gets it as one squash commit
+	// that is pushed; rel itself never is.
+	allowGit(t, h.Repo, "checkout", "-q", "-b", "rel", "origin/main")
+	key2 := "AKIA" + strings.Repeat("S", 16)
+	if err := os.WriteFile(filepath.Join(h.Repo, "cfg.md"), []byte("cfg "+key2+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	histCommit(t, h.Repo, "rel: a key")
+	allowGit(t, h.Repo, "checkout", "-q", "-B", "squashed", "origin/main")
+	allowGit(t, h.Repo, "merge", "-q", "--squash", "rel")
+	histCommit(t, h.Repo, "rel (squashed)")
+	allowGit(t, h.Repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+	allowGit(t, h.Repo, "fetch", "-q", "origin")
+	allowGit(t, h.Repo, "checkout", "-q", "rel")
+	again := map[string][]byte{"cfg.md": []byte("cfg " + key2 + "\n")}
+	if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, again); err != nil {
+		t.Fatalf("squash merged: err = %v, want pass (origin/main holds the value at cfg.md)", err)
+	}
+}

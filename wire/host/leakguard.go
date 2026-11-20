@@ -325,11 +325,7 @@ func (s *liveSession) unguardedLeaks(ctx context.Context) string {
 	if s.ref != nil {
 		remote = s.ref.RemoteName
 	}
-	notRemote := "--remotes"
-	if remote != "" {
-		notRemote += "=" + remote
-	}
-	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-list", "--count", head, "--not", notRemote}})
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: append([]string{"rev-list", "--count", head}, notOnRemote(ctx, s.repo, remote)...)})
 	if err != nil {
 		return ""
 	}
