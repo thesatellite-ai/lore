@@ -61,7 +61,7 @@ func (a *App) DoctorActorRoster(ctx context.Context, fix bool) ([]DoctorFinding,
 	linked := a.repoLinkedTop(ctx) != ""
 	var out []DoctorFinding
 	for _, rc := range st.caches.rosterCaches() {
-		tvs, terr := rc.cache.TeamVersions(ctx)
+		tvs, terr := cacheTeamVersions(ctx, rc.cache) // doctor_teamversions_memo.go (D-739)
 		if terr != nil {
 			return nil, terr
 		}

@@ -29,7 +29,7 @@ func (a *App) TeamVersions(ctx context.Context) ([]sqlite.TeamVersion, error) {
 	type key struct{ actor, machine string }
 	newest := map[key]sqlite.TeamVersion{}
 	for _, c := range cacheFiles(st.caches) {
-		tvs, terr := c.TeamVersions(ctx)
+		tvs, terr := cacheTeamVersions(ctx, c) // doctor_teamversions_memo.go (D-739)
 		if terr != nil {
 			return nil, terr
 		}
