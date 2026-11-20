@@ -34,7 +34,7 @@ func claudeRepo(t *testing.T, settings string) string {
 // installPlans plans and writes --agent-hooks in root for the mode.
 func installPlans(t *testing.T, root string, shared bool) []hookPlan {
 	t.Helper()
-	plans, err := planAgentHooks(root, false, false, shared)
+	plans, err := planAgentHooks(context.Background(), root, false, false, shared)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -90,7 +91,7 @@ func (s *SetupHost) PlanAgentHooks(ctx context.Context, remove, promptSearch boo
 			}
 		}
 	}
-	plans, err := planAgentHooks(root, remove, promptSearch, s.sharedHooks(ctx))
+	plans, err := planAgentHooks(ctx, root, remove, promptSearch, s.sharedHooks(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +133,12 @@ func writeHookPlans(ctx context.Context, root string, plans []opssetup.HookPlan,
 			if err := writeHookFile(root, path, p.Hook, remove); err != nil {
 				return err
 			}
+			// D-743: taking lore's last entry out leaves no bare {} behind
+			if remove {
+				if err := removeIfEmpty(path); err != nil {
+					return err
+				}
+			}
 		}
 		if !remove && p.Hook.ConfigFile == toolprofile.ClaudeLocalSettings {
 			if err := excludePersonal(ctx, root, p.Hook.ConfigFile); err != nil {
@@ -141,7 +148,7 @@ func writeHookPlans(ctx context.Context, root string, plans []opssetup.HookPlan,
 		// D-732: the same entry in the tool's other file (an older lore's
 		// .claude/settings.json, or the mode switched) moves: it leaves
 		// that file, the person's own entries there stay as they were.
-		if err := dropFromOther(ctx, root, p.Hook, shared); err != nil {
+		if err := dropFromOther(ctx, root, p.Hook, remove, shared); err != nil {
 			return err
 		}
 	}
@@ -160,10 +167,13 @@ func (s *SetupHost) sharedHooks(ctx context.Context) bool {
 }
 
 // dropFromOther removes lore's entry for h from the settings file h is not
-// placed in for the mode, when it is there. A file left holding nothing
-// ({}) that git does not track is removed: lore made it, and it would
-// only show as untracked in `git status` (D-732). A tracked one stays.
-func dropFromOther(ctx context.Context, root string, h toolprofile.SessionHook, shared bool) error {
+// placed in for the mode, when it is there (D-732). A file left holding
+// nothing ({}) is removed, tracked or not: it held only lore's hooks, so
+// lore made it (D-743: a bare {} was left in a committed settings.json).
+// On a move (not remove) a file git tracks that holds more than lore's
+// hooks is the team's and is left untouched (otherKept); --remove asks
+// for lore's entries out of every file, so it takes them out there too.
+func dropFromOther(ctx context.Context, root string, h toolprofile.SessionHook, remove, shared bool) error {
 	other := h.OtherFile(shared)
 	if other == "" {
 		return nil
@@ -173,12 +183,91 @@ func dropFromOther(ctx context.Context, root string, h toolprofile.SessionHook, 
 	if err != nil || !has {
 		return err
 	}
+	if !remove {
+		if kept, kerr := otherKept(ctx, root, path); kerr != nil || kept {
+			return kerr
+		}
+	}
 	moved := h
 	moved.ConfigFile = other
 	if err := writeHookFile(root, path, moved, true); err != nil {
 		return err
 	}
-	return removeIfEmptyUntracked(ctx, root, path)
+	return removeIfEmpty(path)
+}
+
+// otherKept reports whether the other settings file at path stays as it
+// is when lore's hooks move out of it (D-743): git tracks it and it holds
+// more than lore's hooks (the team's permissions, their own hooks), so
+// rewriting it would change, and reformat, a committed file of theirs.
+// A tracked file holding only lore's hooks is lore's and is not kept.
+func otherKept(ctx context.Context, root, path string) (bool, error) {
+	doc, err := readSettings(path)
+	if err != nil {
+		return false, err
+	}
+	if onlyLoreHooks(doc) {
+		return false, nil
+	}
+	return gitTracks(ctx, root, path)
+}
+
+// keptOtherNote is the plan's note on a hook whose older entry stays in a
+// kept other file (otherKept).
+const keptOtherNote = "lore's entry in %s stays: git tracks that file and it holds other settings"
+
+// onlyLoreHooks reports whether doc holds nothing but lore's hook entries
+// (every command one of the hook table's, for any tool and with the prompt
+// hook on): the shape of a settings file lore created.
+func onlyLoreHooks(doc settingsDoc) bool {
+	for k := range doc {
+		if k != "hooks" {
+			return false
+		}
+	}
+	raw, ok := doc["hooks"]
+	if !ok {
+		return true
+	}
+	var hooks map[string]json.RawMessage
+	if json.Unmarshal(raw, &hooks) != nil {
+		return false
+	}
+	lore := loreHookCommands()
+	for _, evRaw := range hooks {
+		var groups []hookGroup
+		if json.Unmarshal(evRaw, &groups) != nil {
+			return false
+		}
+		for _, g := range groups {
+			for k := range g {
+				if k != "hooks" && k != "matcher" {
+					return false
+				}
+			}
+			var es []hookEntry
+			if gr, has := g["hooks"]; has && json.Unmarshal(gr, &es) != nil {
+				return false
+			}
+			for _, e := range es {
+				var cmd string
+				if cr, has := e["command"]; !has || json.Unmarshal(cr, &cmd) != nil || !lore[strings.TrimSpace(cmd)] {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// loreHookCommands is every command line lore's hook table writes.
+func loreHookCommands() map[string]bool {
+	out := map[string]bool{}
+	all := append(append(toolprofile.SessionHooks(), toolprofile.SessionEndHooks()...), toolprofile.ContextHooks(true)...)
+	for _, h := range all {
+		out[h.Command()] = true
+	}
+	return out
 }
 
 // excludePersonal keeps the personal settings file rel (Claude Code's
@@ -197,15 +286,18 @@ func excludePersonal(ctx context.Context, root, rel string) error {
 	return excludeInGitAs(ctx, root, rel, "# lore: personal agent hooks (Claude Code's local settings, never committed)")
 }
 
-// removeIfEmptyUntracked removes the settings file at path when it holds
-// an empty JSON object and git does not track it.
-func removeIfEmptyUntracked(ctx context.Context, root, path string) error {
+// removeIfEmpty removes the settings file at path when lore just took its
+// last entry out and it holds an empty JSON object (D-743): lore made it,
+// and a bare {} is neither a setting nor anything a person wrote. A
+// tracked one goes too; its deletion is the change to commit. A settings
+// file that is a link is left (the link is the person's).
+func removeIfEmpty(path string) error {
 	doc, err := readSettings(path)
 	if err != nil || len(doc) > 0 {
 		return err
 	}
-	if tracked, terr := gitTracks(ctx, root, path); terr != nil || tracked {
-		return terr // tracked: the team's file, left for them to commit
+	if fi, lerr := os.Lstat(path); lerr != nil || fi.Mode()&os.ModeSymlink != 0 {
+		return nil // gone already, or a link: nothing of lore's to remove
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return wire.WriteError("remove", path, err, renderWriteHint)
@@ -254,7 +346,7 @@ func agentHooksRoot(ctx context.Context) (string, error) {
 }
 
 // planAgentHooks lists what --agent-hooks would do per built-in profile.
-func planAgentHooks(root string, remove, promptSearch, shared bool) ([]hookPlan, error) {
+func planAgentHooks(ctx context.Context, root string, remove, promptSearch, shared bool) ([]hookPlan, error) {
 	var out []hookPlan
 	for _, prof := range toolprofile.Builtins() {
 		h, ok := toolprofile.SessionHookFor(prof.Name)
@@ -272,7 +364,7 @@ func planAgentHooks(root string, remove, promptSearch, shared bool) ([]hookPlan,
 			hooks = append(hooks, end)
 		}
 		for _, hk := range append(hooks, toolprofile.ContextHooksFor(prof.Name, promptSearch)...) {
-			p, err := planOneHook(root, prof.Name, hk.In(shared), remove, shared)
+			p, err := planOneHook(ctx, root, prof.Name, hk.In(shared), remove, shared)
 			if err != nil {
 				return nil, err
 			}
@@ -283,7 +375,7 @@ func planAgentHooks(root string, remove, promptSearch, shared bool) ([]hookPlan,
 }
 
 // planOneHook plans one hook of one tool.
-func planOneHook(root, tool string, h toolprofile.SessionHook, remove, shared bool) (hookPlan, error) {
+func planOneHook(ctx context.Context, root, tool string, h toolprofile.SessionHook, remove, shared bool) (hookPlan, error) {
 	path := filepath.Join(root, filepath.FromSlash(h.ConfigFile))
 	if _, err := os.Stat(filepath.Dir(path)); err != nil {
 		return hookPlan{tool: tool, file: h.ConfigFile, note: "not set up here (" + filepath.ToSlash(filepath.Dir(h.ConfigFile)) + "/ missing)"}, nil
@@ -292,10 +384,22 @@ func planOneHook(root, tool string, h toolprofile.SessionHook, remove, shared bo
 	if err != nil {
 		return hookPlan{}, err
 	}
-	inOther := false
+	inOther, keptNote := false, ""
 	if other := h.OtherFile(shared); other != "" {
-		if inOther, err = hookInstalled(filepath.Join(root, filepath.FromSlash(other)), h); err != nil {
+		otherPath := filepath.Join(root, filepath.FromSlash(other))
+		if inOther, err = hookInstalled(otherPath, h); err != nil {
 			return hookPlan{}, err
+		}
+		// D-743: a move leaves a kept other file as it is, so its entry is
+		// no change to plan (every later run would plan it again)
+		if inOther && !remove {
+			kept, kerr := otherKept(ctx, root, otherPath)
+			if kerr != nil {
+				return hookPlan{}, kerr
+			}
+			if kept {
+				inOther, keptNote = false, " ("+fmt.Sprintf(keptOtherNote, other)+")"
+			}
 		}
 	}
 	p := hookPlan{tool: tool, file: h.ConfigFile, hook: h}
@@ -314,6 +418,7 @@ func planOneHook(root, tool string, h toolprofile.SessionHook, remove, shared bo
 	default:
 		p.note, p.change = "add "+h.Event+" hook: "+h.Command(), true
 	}
+	p.note += keptNote
 	return p, nil
 }
 
