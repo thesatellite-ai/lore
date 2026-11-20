@@ -190,6 +190,8 @@ type Request struct {
 	// BornBranch is --born-branch (D-392): only rows created on that code
 	// branch (their `_o.git.branch`); "" = every row.
 	BornBranch string
+	// Full is --full (D-758): every hit carries the row's whole text.
+	Full bool
 }
 
 // Hit is one cross-table match, the v0.1.17 globalSearchHit JSON shape.
@@ -224,6 +226,11 @@ type Hit struct {
 	// when the row has none, so v0.1.17's hit bytes stay for such rows).
 	Meta       map[string]string `json:"meta,omitempty"`
 	MetaMasked []string          `json:"meta_masked,omitempty"`
+	// Text is the row's whole text (its body, else its longest searched
+	// field other than the title), set only with --full (devco D-758,
+	// owner P-8): the snippet stops after a few words, and reading a note
+	// took a second command per hit.
+	Text string `json:"text,omitempty" desc:"the row's whole text (body), only with --full"`
 	// Fallback is the terminal text when neither Snippet nor Body is set;
 	// never in --json, so the v0.1.17 envelope is unchanged.
 	Fallback string `json:"-"`
@@ -273,6 +280,7 @@ type RunIn struct {
 	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope (reserved)"`
 	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store)"`
+	Full            bool     `json:"full,omitempty" flag:"full" desc:"print each hit's whole text (its body) under its line, not only the snippet; --json adds it as text"`
 	// Born is the --born-branch flag every list shares (D-392).
 	metalist.Born
 }
@@ -388,7 +396,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 		Query: in.Query, Targets: targets, Limit: in.Limit, PerTable: in.PerTable,
 		IncludeArchived: in.IncludeArchived, IncludeDeleted: in.IncludeDeleted,
 		AllRepos: in.AllRepos, MasterOnly: in.MasterOnly, Repo: in.Repo, Store: in.Store,
-		BornBranch: in.BornBranch,
+		BornBranch: in.BornBranch, Full: in.Full,
 	})
 	if err != nil {
 		return RunOut{}, err
@@ -396,6 +404,11 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	hits := res.Hits
 	if hits == nil {
 		hits = []Hit{}
+	}
+	if !in.Full {
+		for i := range hits {
+			hits[i].Text = "" // D-758: the whole text only on --full
+		}
 	}
 	if me, ok := env.(metashow.Env); ok {
 		for i := range hits {
@@ -459,8 +472,39 @@ func (o RunOut) Text() string {
 			body += "  (in the trash)"
 		}
 		fmt.Fprintf(&b, "%s  %s  %s  (score=%.3f)\n", padRight(h.Entity, typeW), padRight(pretty, idW), body, h.Score)
+		if h.Text != "" {
+			b.WriteString(fullText(h.Text))
+		}
 	}
 	return b.String()
+}
+
+// fullIndent indents a --full hit's text under its line.
+const fullIndent = "    "
+
+// fullText is a --full hit's whole text, each line indented, then a blank
+// line so the next hit reads apart.
+func fullText(text string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		b.WriteString(strings.TrimRight(fullIndent+line, " ") + "\n")
+	}
+	return b.String() + "\n"
+}
+
+// FullText is the whole text a --full hit carries for row fields: its
+// body, else the longest of the searched fields that is not the title.
+func FullText(fields func(name string) string, searched []string, title string) string {
+	if body := fields("body"); body != "" {
+		return body
+	}
+	best := ""
+	for _, f := range searched {
+		if v := fields(f); f != title && len(v) > len(best) {
+			best = v
+		}
+	}
+	return best
 }
 
 // hitText is a hit's text on its line: the title (a resource's name and
