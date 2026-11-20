@@ -364,8 +364,10 @@ const attrBlockMarker = "lore-sync"
 // doctorAttrOverride warns when a line after lore's block in the repo's
 // .gitattributes takes text, eol or merge back for lore's files: git
 // applies the later line, so row files check out with the team's line
-// ends and lore's merge driver may not run (devco:Q-11). The next write
-// (or lore fix) moves lore's block to the end.
+// ends and lore's merge driver may not run (devco:Q-11). lore fix (or
+// lore doctor --fix) moves lore's block to the end; a plain write keeps
+// lore's rules in the clone's own .git/info/attributes, which git reads
+// first, and changes no tracked file (devco:D-753).
 func (a *App) doctorAttrOverride(ctx context.Context, warn func(string)) {
 	top, err := a.repoTop(ctx)
 	if err != nil || top == "" || !HoldsLoreData(top) {
@@ -376,7 +378,7 @@ func (a *App) doctorAttrOverride(ctx context.Context, warn func(string)) {
 		return
 	}
 	if line, over := AttrBlockOverride(string(b), attrBlockMarker); over {
-		warn("gitattributes: `" + line + "` comes after lore's block in .gitattributes and overrides it for lore's files (row files get its line ends, lore's merge driver may not run); `lore fix` (or the next lore write here) moves lore's block to the end, then commit .gitattributes")
+		warn("gitattributes: `" + line + "` comes after lore's block in .gitattributes and overrides it for lore's files (row files get its line ends, lore's merge driver may not run); `lore fix` moves lore's block to the end, then commit .gitattributes (until then a lore write keeps lore's rules in this clone's .git/info/attributes)")
 	}
 }
 

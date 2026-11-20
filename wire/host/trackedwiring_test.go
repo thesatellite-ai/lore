@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/op"
+	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -22,35 +23,69 @@ func migratedProject(t *testing.T) string {
 	if err := os.MkdirAll(data, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	meta := `{"format": 2, "migrated_by": "Ada Ray <ada@example.com>", "migrated_at": "2026-01-02T03:04:05Z"}` + "\n"
+	meta := `{"format": 2, "migrated_by": "Ada Ray", "migrated_at": "2026-01-02T03:04:05Z"}` + "\n"
 	if err := os.WriteFile(filepath.Join(data, "_meta.json"), []byte(meta), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return root
 }
 
-// TestTeammateWriteKeepsWiringLocal (stories A-1): in a migrated project a
-// teammate's write (a clone that did not run lore migrate run) adds no line
-// to the tracked .gitignore and no tracked .gitattributes: the rules go to
-// the clone's own .git/info files, so the git pull of the migrator's commit
-// carrying the same lines never aborts. The migrator's clone (marked by the
-// run) and an install step still write the tracked files.
-func TestTeammateWriteKeepsWiringLocal(t *testing.T) {
-	ctx := context.Background()
-	write := &Run{Entry: specEntry{spec: op.Spec{Name: "memory.add", Access: op.AccessWrite}}}
+// plainWrite is an ordinary write's run (lore memory add).
+func plainWrite() *Run {
+	return &Run{Entry: specEntry{spec: op.Spec{Name: "memory.add", Access: op.AccessWrite}}}
+}
 
-	teammate := migratedProject(t)
-	if wire.TrackedWiringHere(ctx, teammate) {
-		t.Fatal("a clone that did not run the migration owns the tracked wiring")
-	}
-	if err := GitignoreHook(teammate).Before(ctx, write); err != nil {
+// doctorFix is `lore doctor --fix` as the REST body gives it: an install
+// step (runWireMode wireInstall).
+func doctorFix() *Run {
+	return &Run{Entry: specEntry{spec: op.Spec{Name: opsdoctor.OpRun, Access: op.AccessWrite}}, Decoder: op.JSONDecoder{Body: []byte(`{"fix": true}`)}}
+}
+
+// TestPlainWriteKeepsWiringLocal (devco:D-753, stories A-1): no plain write
+// adds a line to the tracked .gitignore, in the clone that ran lore migrate
+// run (H-12: its next `lore mission add` edited .gitignore right after the
+// migration said only `lore doctor --fix` does), a teammate's clone, or a
+// project no migration recorded; the rules go to the clone's own
+// .git/info/exclude. An install step (lore doctor --fix) writes the
+// tracked file in any clone.
+func TestPlainWriteKeepsWiringLocal(t *testing.T) {
+	ctx := context.Background()
+	migrator := migratedProject(t)
+	gitT(t, migrator, "config", "--local", wire.MigratedHereGitKey, "true")
+	fresh := t.TempDir()
+	gitInit(t, fresh)
+	if err := os.MkdirAll(filepath.Join(fresh, ".lore", "data"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if b, err := os.ReadFile(filepath.Join(teammate, gitignoreName)); err == nil {
-		t.Fatalf("a teammate's write edited the tracked .gitignore:\n%s", b)
+	for name, root := range map[string]string{"migrator": migrator, "teammate": migratedProject(t), "no migration": fresh} {
+		if mode := runWireMode(plainWrite()); mode == wireInstall {
+			t.Fatalf("%s: a plain write wires as an install step", name)
+		}
+		if err := GitignoreHook(root).Before(ctx, plainWrite()); err != nil {
+			t.Fatal(err)
+		}
+		if b, err := os.ReadFile(filepath.Join(root, gitignoreName)); err == nil {
+			t.Errorf("%s: a plain write edited the tracked .gitignore:\n%s", name, b)
+		}
+		if b, err := os.ReadFile(filepath.Join(root, ".git", "info", "exclude")); err != nil || !strings.Contains(string(b), ".lore/lock") {
+			t.Errorf("%s: a plain write left lore's lock in git status (no .git/info/exclude line): %q %v", name, b, err)
+		}
+		if why, local := excludeReason(ctx, root, false, false, nil); !local || why != excludeWrite {
+			t.Errorf("%s: excludeReason for a plain write = %v %v, want excludeWrite", name, why, local)
+		}
+		if _, local := excludeReason(ctx, root, false, true, nil); local {
+			t.Errorf("%s: lore doctor --fix keeps the .gitignore lines local", name)
+		}
 	}
-	if b, err := os.ReadFile(filepath.Join(teammate, ".git", "info", "exclude")); err != nil || !strings.Contains(string(b), ".lore/lock") {
-		t.Fatalf("a teammate's write left lore's lock in git status (no .git/info/exclude line): %q %v", b, err)
+	if mode := runWireMode(doctorFix()); mode != wireInstall {
+		t.Fatalf("lore doctor --fix wires as mode %d, want wireInstall", mode)
+	}
+	teammate := migratedProject(t)
+	if err := GitignoreHook(teammate).Before(ctx, doctorFix()); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(teammate, gitignoreName)); err != nil || !strings.Contains(string(b), ".lore/lock") {
+		t.Fatalf("lore doctor --fix did not add the .gitignore lines: %q %v", b, err)
 	}
 
 	// The .gitattributes rules: in the clone's own attributes file while
@@ -62,12 +97,12 @@ func TestTeammateWriteKeepsWiringLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(attrs); err == nil {
-		t.Fatal("a teammate's wiring wrote the tracked .gitattributes")
+		t.Fatal("the local wiring wrote the tracked .gitattributes")
 	}
 	if !attributesHeldLocally(local) {
-		t.Fatal("a teammate's wiring left lore's merge rules out of .git/info/attributes")
+		t.Fatal("the local wiring left lore's merge rules out of .git/info/attributes")
 	}
-	if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil { // the migrator's commit arrives
+	if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil { // an install step's commit arrives
 		t.Fatal(err)
 	}
 	if err := ensureLocalAttributes(attrs, local); err != nil {
@@ -76,31 +111,17 @@ func TestTeammateWriteKeepsWiringLocal(t *testing.T) {
 	if b, _ := os.ReadFile(local); strings.Contains(string(b), gitBlockMarker) {
 		t.Fatalf("lore's block stayed in .git/info/attributes after the tracked .gitattributes got it:\n%s", b)
 	}
+}
 
-	// The clone that ran lore migrate run writes the tracked lines.
-	migrator := migratedProject(t)
-	gitT(t, migrator, "config", "--local", wire.MigratedHereGitKey, "true")
-	if !wire.TrackedWiringHere(ctx, migrator) {
-		t.Fatal("the migrator's clone does not own the tracked wiring")
-	}
-	if err := GitignoreHook(migrator).Before(ctx, write); err != nil {
-		t.Fatal(err)
-	}
-	if b, err := os.ReadFile(filepath.Join(migrator, gitignoreName)); err != nil || !strings.Contains(string(b), ".lore/lock") {
-		t.Fatalf("the migrator's write did not add the .gitignore lines: %q %v", b, err)
-	}
-
-	// An install step writes them in a teammate's clone too.
-	if _, local := excludeReason(ctx, teammate, false, true, nil); local {
-		t.Error("lore doctor --fix in a teammate's clone keeps the .gitignore lines local")
-	}
-	// A project no migration recorded (made by this lore) keeps the old rule.
-	fresh := t.TempDir()
-	gitInit(t, fresh)
-	if err := os.MkdirAll(filepath.Join(fresh, ".lore", "data"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if !wire.TrackedWiringHere(ctx, fresh) {
-		t.Error("a project with no recorded migration no longer lets a write add the tracked wiring")
+// TestIgnoredDataByWriteNamesTheStep (devco:D-753): a plain write in a repo
+// whose .gitignore hides row files leaves the file alone and names the
+// install step that re-includes them.
+func TestIgnoredDataByWriteNamesTheStep(t *testing.T) {
+	t.Parallel()
+	got := ignoredDataByWrite([]string{".lore/data/memories/a.json"})
+	for _, want := range []string{"changes no tracked file outside .lore/", "`lore doctor --fix` re-includes", ".lore/data/memories/a.json"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the warning %q lacks %q", got, want)
+		}
 	}
 }

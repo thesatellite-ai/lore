@@ -416,7 +416,7 @@ func whereGitConfig(ctx context.Context, dir, cfg, area string) []opswhere.Entry
 		case key == ClientRepoGitKey:
 			what = "marks this clone as a client repo, so its commit hook refuses when no lore can check a commit for internal notes"
 		case key == InitedHereGitKey || key == MigratedHereGitKey:
-			what = "this clone ran lore init or the migration, so its commit brings the repo's first render and wiring files (teammates' clones keep theirs out of git status until then)"
+			what = "this clone ran lore init or the migration, so its commit brings the repo's first render (teammates' clones keep theirs out of git status until then)"
 		case strings.HasPrefix(key, "lore."):
 			what = "a lore setting for this clone"
 		case key == gitbackend.ConfigUserName || key == gitbackend.ConfigUserEmail:
@@ -510,10 +510,10 @@ func whereRepo(ctx context.Context, top string) []opswhere.Entry {
 		}
 	}
 	if f := filepath.Join(top, ".gitignore"); fileHas(f, whereIgnoreHeader) {
-		add(f, opswhere.KindBlock, "lore's lines keeping its cache, lock and state out of git, and the rows in", "removed lines come back with the next lore write here")
+		add(f, opswhere.KindBlock, "lore's lines keeping its cache, lock and state out of git, and the rows in", "removed lines come back with `lore doctor --fix` (a plain lore write keeps them in this clone's .git/info/exclude instead)")
 	}
 	if f := filepath.Join(top, ".gitattributes"); fileHas(f, whereGitBlock) {
-		add(f, opswhere.KindBlock, "lore's block: row files merge with lore's merge driver and show collapsed in diffs", "lore adds it again with the next write here")
+		add(f, opswhere.KindBlock, "lore's block: row files merge with lore's merge driver and show collapsed in diffs", "`lore doctor --fix` adds it again (a plain lore write keeps lore's rules in this clone's .git/info/attributes instead)")
 	}
 	gitDir := whereGitDir(ctx, top)
 	if gitDir == "" {

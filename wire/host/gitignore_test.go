@@ -66,7 +66,8 @@ func TestEnsureGitignoreAppendsOnlyMissingLines(t *testing.T) {
 }
 
 // TestGitignoreHook: read-only and folders outside a lore project write
-// nothing; a project subfolder writes at the project root, once.
+// nothing; an install step in a project subfolder writes at the project
+// root, once.
 func TestGitignoreHook(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
@@ -119,7 +120,7 @@ func TestGitignoreHook(t *testing.T) {
 	if _, err := os.Stat(gi); err == nil {
 		t.Fatal(".gitignore written in read-only mode")
 	}
-	if err := h.Before(ctx, &Run{}); err != nil {
+	if err := h.Before(ctx, doctorFix()); err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(filepath.Clean(gi)); err != nil || !strings.Contains(string(b), ".lore/lock") {
@@ -128,7 +129,7 @@ func TestGitignoreHook(t *testing.T) {
 	if err := os.Remove(gi); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.Before(ctx, &Run{}); err != nil {
+	if err := h.Before(ctx, doctorFix()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(gi); err == nil {
@@ -172,20 +173,21 @@ func TestNeedsGitignore(t *testing.T) {
 	}
 }
 
-// TestAnnounceExcludeTeammateNoFalseClaim pins devco:M-3: a teammate's
-// first write after a migration said the migration commit "brings these
-// lines to .gitignore", which it never does (a migration commits only
-// .lore/data). The note now says what the migration commit holds and which
-// step writes the tracked lines.
-func TestAnnounceExcludeTeammateNoFalseClaim(t *testing.T) {
+// TestAnnounceExcludeWriteNamesTheStep pins devco:M-3 and D-753: the note
+// a plain write gives when it keeps lore's lines in .git/info/exclude never
+// says a later write or the migration commit brings them to .gitignore; it
+// names the step that does.
+func TestAnnounceExcludeWriteNamesTheStep(t *testing.T) {
 	t.Parallel()
 	var b strings.Builder
-	announceExclude(&b, filepath.Join("work", "shopkit"), []string{".lore/lock"}, excludeTeammate)
+	announceExclude(&b, filepath.Join("work", "shopkit"), []string{".lore/lock"}, excludeWrite)
 	got := b.String()
-	if strings.Contains(got, "whose commit brings") {
-		t.Fatalf("the note claims the migration commit brings the lines: %s", got)
+	for _, bad := range []string{"whose commit brings", "next lore write adds"} {
+		if strings.Contains(got, bad) {
+			t.Fatalf("the note claims %q: %s", bad, got)
+		}
 	}
-	for _, want := range []string{"migration commit holds only .lore/data", "next lore write adds these lines to " + filepath.Join("work", "shopkit", ".gitignore"), "`lore doctor --fix` adds them to .gitignore here instead; commit it"} {
+	for _, want := range []string{"changes no tracked file outside .lore/", "`lore doctor --fix` adds them to " + filepath.Join("work", "shopkit", ".gitignore") + " for you to commit"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("the note %q lacks %q", got, want)
 		}

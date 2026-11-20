@@ -10,7 +10,11 @@ package host
 //	  ─► project root: nearest folder holding .lore/ from the working
 //	     folder up to the git top (none: not a lore project, nothing done)
 //	  ─► each line of GitignoreLines that is neither in .gitignore nor
-//	     already ignored by git (git check-ignore) is appended under "# lore"
+//	     already ignored by git (git check-ignore):
+//	       an install step (lore init, lore doctor --fix, lore fix)
+//	          ─► appended to the tracked .gitignore under "# lore"
+//	       any other write ─► the clone's own .git/info/exclude (devco:D-753:
+//	          a plain write changes no tracked file outside .lore/)
 //
 // The git wiring v0.1.17 did at the same point (merge driver,
 // .gitattributes, the commit/push hooks) is not here: its hooks call the
@@ -90,12 +94,13 @@ func GitignoreHookFor(workDir string, client ClientRepoFunc) Hook {
 			}
 			// fmt1: a project on the 0.1.17 format gets no tracked file
 			// edited before lore migrate run either (doctor --fix and
-			// lore fix agree): its .gitignore lines wait for the first
-			// command after the migration.
-			// A-1: in a migrated project only the migrator's clone (or an
-			// install step) adds the tracked lines; a teammate's write
-			// keeps them local so their git pull of the migrator's
-			// commit never meets the same lines uncommitted.
+			// lore fix agree).
+			// devco:D-753 (A-1 widened): only an install step adds the
+			// tracked lines. A plain write keeps them local in every
+			// clone: the migrator's next write once edited .gitignore
+			// although the migration had just said only doctor --fix
+			// does, and two teammates' writes adding the same lines
+			// uncommitted made the git pull of either commit abort.
 			install := run.Entry != nil && runWireMode(run) == wireInstall
 			if why, local := excludeReason(ctx, root, onlyData, install, client); local {
 				// A repo that holds no lore data (a client repo linked to
@@ -285,16 +290,16 @@ const (
 	// excludeClient: a client repo of an org that still holds row files
 	// (devco:D-754): lore changes none of its tracked files.
 	excludeClient
-	// excludeTeammate: a migrated project whose tracked lines come from
-	// the migrator's clone (A-1, wire.TrackedWiringHere).
-	excludeTeammate
+	// excludeWrite: a plain write, which changes no tracked file outside
+	// .lore/ (devco:D-753); an install step writes the tracked lines.
+	excludeWrite
 )
 
 // excludeReason reports whether a write in root keeps the .gitignore lines
 // local, and why. onlyData is a migration's run; install is an install
-// step (doctor --fix, lore fix), which a teammate's clone also lets write
-// the tracked file. client is asked last (it may resolve the org): a client
-// repo keeps the lines local even for an install step (devco:D-754).
+// step (doctor --fix, lore fix), the only kind of run that writes the
+// tracked file. client may resolve the org: a client repo keeps the lines
+// local even for an install step (devco:D-754).
 func excludeReason(ctx context.Context, root string, onlyData, install bool, client ClientRepoFunc) (excludeWhy, bool) {
 	switch {
 	case !wire.HoldsLoreData(root):
@@ -303,17 +308,17 @@ func excludeReason(ctx context.Context, root string, onlyData, install bool, cli
 		return excludeMigration, true
 	case wire.ProjectFormatOld(root):
 		return excludeFormatOld, true
-	case !install && !wire.TrackedWiringHere(ctx, root):
-		return excludeTeammate, true
 	case clientRepoHere(ctx, client):
 		return excludeClient, true
+	case !install:
+		return excludeWrite, true
 	}
 	return 0, false
 }
 
-// announceExclude says which lines a read, a migration or a teammate's
-// write added to the clone's own exclude file (never committed; the
-// tracked .gitignore is a write's).
+// announceExclude says which lines a read, a migration or a plain write
+// added to the clone's own exclude file (never committed; the tracked
+// .gitignore is an install step's).
 func announceExclude(w io.Writer, root string, added []string, why excludeWhy) {
 	reason := "`lore doctor --fix` adds them to " + filepath.Join(root, gitignoreName)
 	switch why {
@@ -326,11 +331,10 @@ func announceExclude(w io.Writer, root string, added []string, why excludeWhy) {
 		reason = "a migration changes no tracked file but .lore/data: " + reason
 	case excludeClient:
 		reason = clientExcludeReason
-	case excludeTeammate:
-		// devco:M-3: the migration commit carries only .lore/data, so the
-		// note never says it brings these lines; the migrating clone's next
-		// write adds them to .gitignore, for its owner to commit
-		reason = "this project was migrated in another clone; its migration commit holds only .lore/data, and that clone's next lore write adds these lines to " + filepath.Join(root, gitignoreName) + " for its owner to commit; until that commit reaches you they stay here, so your git pull of it is never blocked (`lore doctor --fix` adds them to " + gitignoreName + " here instead; commit it)"
+	case excludeWrite:
+		// devco:D-753: an ordinary write never edits the tracked file; the
+		// note names the step that does, so nobody waits for a later write
+		reason = "a lore write changes no tracked file outside .lore/: " + reason + " for you to commit"
 	}
 	_, _ = fmt.Fprintf(w, "lore: added %s to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; %s (`lore where` lists everything lore keeps here)\n",
 		strings.Join(added, ", "), reason)

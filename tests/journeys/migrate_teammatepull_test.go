@@ -7,9 +7,11 @@ package journeys
 // lore 0.1.17. Olga migrates and pushes the migration commit (it changes
 // only .lore/data, M-6). Nina clones it and runs her first `lore sync` and
 // a note: her clone shows nothing for git, because lore keeps its rules in
-// her clone's .git/info files. Olga's next note adds lore's lines to the
-// tracked .gitignore and .gitattributes (her clone ran the migration); she
-// commits and pushes them, and Nina's plain `git pull` takes the commit.
+// her clone's .git/info files. Olga's next note leaves the tracked
+// .gitignore and .gitattributes alone too (devco:D-753, H-12: it once
+// rewrote them although the migration said only lore doctor --fix does);
+// she runs lore doctor --fix, commits and pushes the lines, and Nina's
+// plain `git pull` takes the commit.
 
 import (
 	"strings"
@@ -53,10 +55,15 @@ func TestJourneyTeammatePullAfterMigration(t *testing.T) {
 	})
 
 	w.Step("day3/olga-commits-the-wiring-nina-pulls", func() {
+		olga.LoreIn(oc, "mission", "add", "--title", "first mission").OK(t)
 		olga.LoreIn(oc, "memory", "add", "--body", "deploys freeze on fridays").OK(t)
+		if st := oc.Git("status", "--porcelain", "--", ".gitignore", ".gitattributes"); st != "" {
+			t.Fatalf("Olga's plain writes after her migration edited tracked files outside .lore/:\n%s", st)
+		}
+		olga.LoreIn(oc, "doctor", "--fix")
 		for _, f := range []string{".gitignore", ".gitattributes"} {
 			if st := oc.Git("status", "--porcelain", "--", f); st == "" {
-				t.Errorf("Olga's write after her migration did not add lore's lines to %s", f)
+				t.Errorf("lore doctor --fix after the migration did not add lore's lines to %s", f)
 			}
 		}
 		fpCommitPush(t, oc, "lore: notes and wiring")

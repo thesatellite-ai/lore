@@ -66,8 +66,8 @@ func TestDoctorHooksFreshCloneIsANote(t *testing.T) {
 // TestMigrateEditsNoTrackedFile (owner item M-6): a migration op in a repo
 // holding .lore/data keeps lore's local files out of git status through
 // .git/info/exclude, never the tracked .gitignore, and wires git like a
-// read (no .gitattributes, no hook block); another write still adds the
-// .gitignore lines.
+// read (no .gitattributes, no hook block); lore doctor --fix adds the
+// .gitignore lines (a plain write keeps them local too, devco:D-753).
 func TestMigrateEditsNoTrackedFile(t *testing.T) {
 	ctx := context.Background()
 	for _, name := range []string{opsmigrate.OpRun, opsmigrate.OpEnable, opsmigrate.OpRollback} {
@@ -97,12 +97,11 @@ func TestMigrateEditsNoTrackedFile(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, ".lore", "data"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	write := &Run{Entry: specEntry{spec: op.Spec{Name: "memory.add", Access: op.AccessWrite}}}
-	if err := GitignoreHook(root).Before(ctx, write); err != nil {
+	if err := GitignoreHook(root).Before(ctx, doctorFix()); err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(filepath.Join(root, gitignoreName)); err != nil || !strings.Contains(string(b), ".lore/lock") {
-		t.Fatalf("an ordinary write no longer adds the .gitignore lines: %q %v", b, err)
+		t.Fatalf("lore doctor --fix no longer adds the .gitignore lines: %q %v", b, err)
 	}
 }
 
