@@ -10,15 +10,17 @@ package wire
 //
 //	linked own repo, no live note left (else the D-729 warning applies)
 //	  ─▶ each row file of .lore/data:
-//	     _meta.json                 kept: the repo's identity and format;
-//	                                the store's link names the repo by its
-//	                                project_id, and its repo_id is the
-//	                                repo's address history key
-//	     projects/<_meta project>,  kept: the repo's identity. Project()
-//	     repos/<_meta repo_id>      answers "run lore init" without the
-//	                                project row, and sync (EnsureIdentity)
-//	                                writes the repos row back from
-//	                                _meta.json when its file is gone
+//	     _meta.json                 kept (not a row): the store's link
+//	                                names the repo by its project_id, its
+//	                                repo_id stamps the repo's writes, and
+//	                                it holds the confirmed addresses
+//	     projects/<_meta project>,  removed (D-736, owner item 29): the
+//	     repos/<_meta repo_id>      identity lives in the link
+//	                                (linkidentity.go): Project() answers
+//	                                the folder's project and sync writes
+//	                                no repos row back; the repos row's
+//	                                confirmed addresses go to _meta.json
+//	                                first
 //	     policies/<id>              the folder has no live policy of its
 //	                                key and scope: moved there (same id);
 //	                                the folder's has the same value: the
@@ -39,6 +41,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -46,6 +49,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -55,7 +59,7 @@ import (
 
 // doctorLinkedRowsWarning is the plain doctor line; %[1]s counts the rows,
 // %[2]s is the linked folder.
-const doctorLinkedRowsWarning = "this repo is linked to %[2]s and holds no notes of its own, but its .lore/data still holds %[1]s the folder already holds or that belong there (actors, comments, deletion records, policies); they reach the repo's pull requests. Remove them (the policies the folder lacks move there) with: lore doctor --fix"
+const doctorLinkedRowsWarning = "this repo is linked to %[2]s and holds no notes of its own, but its .lore/data still holds %[1]s the folder already holds or that belong there (its project and repos rows, actors, comments, deletion records, policies); they reach the repo's pull requests. Remove them (the policies the folder lacks move there) with: lore doctor --fix"
 
 // policy row fields compared with the folder's.
 const (
@@ -111,9 +115,8 @@ func planLinkedRows(files []linkedRowFile, metaProject, metaRepo, target string,
 		k := rf.Key
 		id := k.ID.String()
 		switch {
-		case k.Table == schema.TableProjects && id == metaProject,
-			k.Table == schema.TableRepos && id == metaRepo:
-			continue // the repo's identity (file comment)
+		case !rf.Deleted && (k.Table == schema.TableProjects && id == metaProject || k.Table == schema.TableRepos && id == metaRepo):
+			p.Remove = append(p.Remove, k) // the repo's identity lives in the link (file comment)
 		case k.Table == schema.TablePolicies && !rf.Deleted:
 			if f.Holds(k, false) {
 				p.Remove = append(p.Remove, k)
@@ -221,14 +224,7 @@ func (a *App) linkedFolderSource(ctx context.Context, eng *engine.Engine, target
 // held: the D-729 warning, or the linked folder not open here). name is
 // the folder's --to (what doctor prints), to the engine's name for it.
 func (a *App) linkedRowsHere(ctx context.Context, eng *engine.Engine) (top, name string, to store.Source, plan linkedRowPlan, ok bool, err error) {
-	dir := a.opts.RepoDir
-	if dir == "" || inStore(dir) {
-		return "", "", "", plan, false, nil
-	}
-	if a.opts.RepoLinkedByRemote != nil && a.opts.RepoLinkedByRemote(ctx) != "" {
-		return "", "", "", plan, false, nil // no lore files in the repo
-	}
-	top = a.repoLinkedTop(ctx)
+	top = a.ownLinkedTop(ctx)
 	if top == "" || orgcfg.HoldsNotes(top, isRoutedTable) {
 		return "", "", "", plan, false, nil
 	}
@@ -349,6 +345,9 @@ func (a *App) fixLinkedRows(ctx context.Context, top, name string, to store.Sour
 		remove = append(remove, plan.MovePolicies...)
 		said = append(said, "moved "+plural(len(plan.MovePolicies), "policy row")+" to "+name+" (it had none of their keys)")
 	}
+	if err := a.keepLinkedAddresses(ctx, remove); err != nil {
+		return "", err
+	}
 	if _, _, err := a.adoptLiveRemove(ctx, top, remove); err != nil {
 		return "", err
 	}
@@ -357,11 +356,54 @@ func (a *App) fixLinkedRows(ctx context.Context, top, name string, to store.Sour
 		return "", err
 	}
 	pruneEmptyDirs(filepath.Join(top, filepath.FromSlash(dataDirRel)))
-	if err := RecordMovedOut(ctx, top, name, removed); err != nil {
+	if err := RecordMovedOut(ctx, top, name, MovedByDoctor, removed); err != nil {
 		return "", err
 	}
 	if n := len(removed) - len(plan.MovePolicies); n > 0 {
 		said = append(said, "removed "+plural(n, "row")+" "+name+" holds")
 	}
 	return "this linked repo's .lore/data: " + strings.Join(said, "; ") + "; commit the change (git add -A .lore/data)", nil
+}
+
+// keepLinkedAddresses writes the confirmed addresses of the repo's own
+// repos row into _meta.json before the fix removes that row (D-736): the
+// linked repo's identity is _meta.json plus the link from then on, and a
+// confirmed address only the row knew (one `lore repo set-url` added
+// before this lore kept them in step) must not go with it.
+func (a *App) keepLinkedAddresses(ctx context.Context, remove []store.Key) error {
+	meta, found, err := a.ReadRepoMeta(ctx)
+	if err != nil || !found || meta.RepoID == "" {
+		return err
+	}
+	for _, k := range remove {
+		if k.Table != schema.TableRepos || k.ID.String() != meta.RepoID {
+			continue
+		}
+		eng, err := a.Engine(ctx)
+		if err != nil {
+			return err
+		}
+		_, r, err := eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: k.Table, ID: k.ID})
+		if err != nil {
+			return errs.Prefix("read repos/"+meta.RepoID, err)
+		}
+		v, ok := r.Fields[repoFieldURLs]
+		if !ok || v == nil || v.Kind() == value.KindNull {
+			return nil
+		}
+		raw, err := v.MarshalJSON()
+		if err != nil {
+			return errs.Wrap(errs.Internal, "read the addresses of repos/"+meta.RepoID, err)
+		}
+		h, err := repourl.ParseHistory(raw)
+		if err != nil {
+			return errs.Wrap(errs.InvalidInput, "read the addresses of repos/"+meta.RepoID, err)
+		}
+		if c := h.Confirmed(); len(c) > 0 && !slices.Equal(c, meta.URLs) {
+			meta.URLs = c
+			return a.WriteRepoMeta(ctx, meta)
+		}
+		return nil
+	}
+	return nil
 }

@@ -173,22 +173,42 @@ func initTargetReason(fromFlag bool, r toolprofile.Reason) string {
 }
 
 // writeContextTargets sets the repo's context.targets policy row to names
-// (updating the live row when there is one).
+// (updating the live row when there is one). In a repo linked to a store
+// folder the row goes to that folder (D-736: a linked repo's .lore/data
+// holds no rows); a copy the repo still holds from before is set to the
+// same value, so it never outvotes the folder's and `lore doctor --fix`
+// removes it as one the folder already holds.
 func (h *Host) writeContextTargets(ctx context.Context, names []string) error {
 	fields, err := settings.ContextTargetsFields(names)
 	if err != nil {
 		return err
 	}
-	rows, err := h.app.List(ctx, store.SourceRepo, schema.TablePolicies)
+	to, linked := h.app.LinkedFolderStore(ctx)
+	if !linked {
+		return h.setContextTargets(ctx, store.SourceRepo, fields, true)
+	}
+	if err := h.setContextTargets(ctx, to, fields, true); err != nil {
+		return err
+	}
+	return h.setContextTargets(ctx, store.SourceRepo, fields, false)
+}
+
+// setContextTargets updates the live context.targets row of in to fields'
+// value; with none there it creates one when create, else does nothing.
+func (h *Host) setContextTargets(ctx context.Context, in store.Source, fields map[string]value.Value, create bool) error {
+	rows, err := h.app.List(ctx, in, schema.TablePolicies)
 	if err != nil {
 		return err
 	}
 	for _, r := range rows {
 		if k, ok := r.Fields[policyFieldKey].(value.Text); ok && !r.Deleted && k.String() == string(policy.KeyContextTargets) {
-			_, err = h.app.Update(ctx, engine.Ref{Store: store.SourceRepo, Table: schema.TablePolicies, ID: r.ID}, map[string]value.Value{policyFieldValue: fields[policyFieldValue]})
+			_, err = h.app.Update(ctx, engine.Ref{Store: in, Table: schema.TablePolicies, ID: r.ID}, map[string]value.Value{policyFieldValue: fields[policyFieldValue]})
 			return err
 		}
 	}
-	_, err = h.app.Create(ctx, store.SourceRepo, schema.TablePolicies, fields)
+	if !create {
+		return nil
+	}
+	_, err = h.app.Create(ctx, in, schema.TablePolicies, fields)
 	return err
 }

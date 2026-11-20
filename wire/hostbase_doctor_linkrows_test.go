@@ -14,8 +14,8 @@ import (
 // TestPlanLinkedRows (devco:D-736): in a linked repo whose notes all
 // moved, doctor --fix removes every row the linked folder holds (an
 // actor, a tombstone, a comment, a policy of the same value), moves a
-// policy the folder lacks, keeps the repo's identity rows (_meta.json's
-// project and repo) without a word, and keeps, naming why and the command
+// policy the folder lacks, removes the repo's identity rows (_meta.json's
+// project and repo: the identity lives in the link, owner item 29), and keeps, naming why and the command
 // that moves it, a row the folder does not hold and a policy the folder
 // sets to another value.
 func TestPlanLinkedRows(t *testing.T) {
@@ -78,7 +78,7 @@ func TestPlanLinkedRows(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got, want := idsOf(p.Remove), strings.Join([]string{otherPrj, actHeld, cmtHeld, memTomb, polSame}, " "); got != want {
+	if got, want := idsOf(p.Remove), strings.Join([]string{prj, rep, otherPrj, actHeld, cmtHeld, memTomb, polSame}, " "); got != want {
 		t.Errorf("Remove = %s\nwant      %s", got, want)
 	}
 	if got := idsOf(p.MovePolicies); got != polMove {
@@ -94,12 +94,17 @@ func TestPlanLinkedRows(t *testing.T) {
 		}
 	}
 	for _, never := range []string{prj, rep} {
-		if strings.Contains(kept+idsOf(p.Remove)+idsOf(p.MovePolicies), never) {
-			t.Errorf("the repo's identity row %s is planned or named (it must stay silently):\n%s", never, kept)
+		if strings.Contains(kept, never) {
+			t.Errorf("the repo's identity row %s is named as kept (it goes: the link holds the identity):\n%s", never, kept)
 		}
 	}
-	if p.count() != 6 {
-		t.Errorf("count = %d, want 6", p.count())
+	if p.count() != 8 {
+		t.Errorf("count = %d, want 8", p.count())
+	}
+	// a deletion record of the identity ids is no identity: the folder decides
+	tomb := planLinkedRows([]linkedRowFile{{Key: key(schema.TableRepos, rep), Deleted: true}}, prj, rep, target, facts)
+	if len(tomb.Remove) != 0 || len(tomb.Kept) != 1 {
+		t.Errorf("a repos tombstone the folder lacks: Remove %v, Kept %q (want kept and named)", tomb.Remove, tomb.Kept)
 	}
 
 	// a live row the folder lacks is kept with the command that moves it

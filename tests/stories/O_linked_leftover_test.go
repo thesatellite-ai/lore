@@ -131,6 +131,47 @@ func TestStoryOLinkedRepoWithLeftoverNotes(t *testing.T) {
 		}
 	})
 
+	s.Step("D-736/doctor-fix-as-printed-leaves-no-rows", func() {
+		// owner item 29: a linked repo's .lore/data holds no rows; its
+		// identity lives in the store link (_meta.json stays, not a row)
+		out := ada.Lore(sc.Dir, "doctor").Out()
+		if !strings.Contains(out, "rows the folder already holds") || !strings.Contains(out, "lore doctor --fix") {
+			t.Fatalf("doctor does not offer to clean the linked repo's rows:\n%s", out)
+		}
+		// doctor exits 1 while other findings stay (a skill not installed
+		// here); the clean is its own line
+		ada.Lore(sc.Dir, "doctor", "--fix", "--yes").Says(t, "this linked repo's .lore/data: removed ").Never(t, "could not clean")
+		sc.CommitAll("lore: clean the linked repo")
+		for _, f := range strings.Fields(sc.Git("ls-files", ".lore/data")) {
+			if f != ".lore/data/_meta.json" && f != ".lore/data/_purged.json" {
+				t.Errorf("doctor --fix left %s in the linked repo", f)
+			}
+		}
+		if out := ada.Lore(sc.Dir, "doctor").Out(); strings.Contains(out, "rows the folder already holds") {
+			t.Errorf("doctor still offers to clean after doctor --fix ran:\n%s", out)
+		}
+	})
+
+	s.Step("D-736/cleaned-linked-repo-reads-writes-hooks-render-sync", func() {
+		ada.Lore(sc.Dir, "memory", "list").OK(t).Says(t, "the old cache note")
+		ada.Lore(sc.Dir, "task", "add", "--title", "after the clean").OK(t).Says(t, place)
+		ada.Lore(sc.Dir, "branch", "mode").OK(t)
+		ada.Lore(sc.Dir, "render", "--add-target", "cursor", "--yes").OK(t)
+		ada.Lore(sc.Dir, "sync").OK(t)
+		ada.Lore(sc.Dir, "whoami").OK(t).Says(t, place)
+		if st := clean(sc); st != "" {
+			for _, l := range strings.Split(st, "\n") {
+				if strings.Contains(l, ".lore/data/") && !strings.HasSuffix(l, "/_meta.json") { // LORE.md is render's output, not a row
+					t.Errorf("a read, write, render or sync wrote rows into the cleaned linked repo:\n%s", st)
+					break
+				}
+			}
+		}
+		if !dirHolds(t, filepath.Join(clone, folder), "after the clean") {
+			t.Errorf("the task written after the clean is not in %s", place)
+		}
+	})
+
 	s.Step("D-729/unlinked-repo-writes-the-repo", func() {
 		ada.Lore(uc.Dir, "init", "--non-interactive", "--name=solo-app").OK(t)
 		uc.CommitAll("lore init")

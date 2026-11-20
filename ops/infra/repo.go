@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -537,8 +538,12 @@ func EnsureIdentity(ctx context.Context, env Env, files RepoFiles) (id Identity,
 		}
 		// The id is committed but its row is not here (a hand edit, or a
 		// checkout whose row file was lost): the row is rebuilt from the
-		// confirmed list, which is all a clone knows.
+		// confirmed list, which is all a clone knows. A linked repo keeps
+		// no repos row (D-736): its identity is _meta.json and the link.
 		h := migrateHistory(meta.URLs, today(env), files.RepoActor(ctx))
+		if identityInLink(ctx, files) {
+			return Identity{Meta: meta, History: h}, false, nil
+		}
 		r, cerr := createRepoRow(ctx, files, pid, meta.RepoID, rows, h, meta)
 		return Identity{Meta: meta, Row: r, History: h}, false, cerr
 	}
@@ -584,14 +589,54 @@ func EnsureIdentity(ctx context.Context, env Env, files RepoFiles) (id Identity,
 		return Identity{Meta: meta, Row: w.Row, History: h}, true, nil
 	}
 	meta.RepoID = nid.String()
-	r, err := createRepoRow(ctx, files, pid, meta.RepoID, rows, h, meta)
-	if err != nil {
-		return Identity{}, false, err
+	var r row.Row
+	if !identityInLink(ctx, files) {
+		if r, err = createRepoRow(ctx, files, pid, meta.RepoID, rows, h, meta); err != nil {
+			return Identity{}, false, err
+		}
 	}
 	if werr := files.WriteRepoMeta(ctx, meta); werr != nil {
 		return Identity{}, false, werr
 	}
 	return Identity{Meta: meta, Row: r, History: h}, true, nil
+}
+
+// RepoLinkIdentity is the optional RepoFiles upgrade that says the
+// checkout is linked to a store folder (`lore org link`), D-736. Why: a
+// linked repo's .lore/data holds no rows (its notes, actors and project
+// live in the folder), so its identity is _meta.json (repo id, confirmed
+// addresses) plus the store's link record, which names the repo by its
+// project id. EnsureIdentity then writes no repos row back into it, and an
+// address change is kept in _meta.json alone (saveHistory).
+type RepoLinkIdentity interface {
+	// RepoIdentityInLink reports whether the checkout is linked to a store
+	// folder.
+	RepoIdentityInLink(ctx context.Context) bool
+}
+
+// identityInLink reports whether files is a linked checkout (RepoLinkIdentity).
+func identityInLink(ctx context.Context, files RepoFiles) bool {
+	l, ok := files.(RepoLinkIdentity)
+	return ok && l.RepoIdentityInLink(ctx)
+}
+
+// saveHistory records the repo's new URL history h: on its repos row when
+// it has one (patch adds other fields of that row), else, in a linked
+// repo with no repos row (D-736), in _meta.json's confirmed list only. An
+// unconfirmed address is then not kept between passes, and CheckAddresses
+// names it again on every sync until `lore repo set-url` confirms it.
+func saveHistory(ctx context.Context, env Env, files RepoFiles, id Identity, h repourl.History, patch map[string]value.Value) error {
+	if id.Row.ID.IsZero() {
+		return files.WriteRepoMeta(ctx, metaFor(id.Meta, h))
+	}
+	hv, err := historyValue(h)
+	if err != nil {
+		return err
+	}
+	fields := map[string]value.Value{fieldURLs: hv}
+	maps.Copy(fields, patch)
+	_, err = env.Update(ctx, engine.Ref{Store: repoStore, Table: schema.TableRepos, ID: id.Row.ID}, fields)
+	return err
 }
 
 // RepoRootReader is the optional RepoFiles upgrade MintRepoID uses for a
@@ -812,13 +857,11 @@ func CheckAddresses(ctx context.Context, env Env, files RepoFiles) (AddressRepor
 		}
 		h = next
 	}
-	if len(fresh) > 0 {
-		hv, herr := historyValue(h)
-		if herr != nil {
-			return AddressReport{}, herr
-		}
-		if _, uerr := env.Update(ctx, engine.Ref{Store: repoStore, Table: schema.TableRepos, ID: id.Row.ID}, map[string]value.Value{fieldURLs: hv}); uerr != nil {
-			return AddressReport{}, uerr
+	if len(fresh) > 0 && !id.Row.ID.IsZero() {
+		// a linked repo with no repos row keeps only confirmed addresses
+		// (_meta.json): the notice below repeats on every pass instead
+		if serr := saveHistory(ctx, env, files, id, h, nil); serr != nil {
+			return AddressReport{}, serr
 		}
 	}
 	rep.Notices = notices(h, clean, fresh)
@@ -875,11 +918,7 @@ func firstAddress(ctx context.Context, env Env, files RepoFiles, id Identity, cl
 			h[i].How = repourl.HowInit
 		}
 	}
-	hv, err := historyValue(h)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := env.Update(ctx, engine.Ref{Store: repoStore, Table: schema.TableRepos, ID: id.Row.ID}, map[string]value.Value{fieldURLs: hv}); err != nil {
+	if err := saveHistory(ctx, env, files, id, h, nil); err != nil {
 		return nil, err
 	}
 	if err := files.WriteRepoMeta(ctx, metaFor(id.Meta, h)); err != nil {
@@ -1107,15 +1146,12 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 	}
 	if changed {
 		patch := map[string]value.Value{}
-		if patch[fieldURLs], err = historyValue(h); err != nil {
-			return RepoSetURLOut{}, err
-		}
 		if p, ok := h.Primary(); ok && mode == repourl.SetPrimary {
 			if patch[fieldOrigin], err = value.TextOf(p.URL); err != nil {
 				return RepoSetURLOut{}, err
 			}
 		}
-		if _, err = env.Update(ctx, engine.Ref{Store: repoStore, Table: schema.TableRepos, ID: id.Row.ID}, patch); err != nil {
+		if err = saveHistory(ctx, env, files, id, h, patch); err != nil {
 			return RepoSetURLOut{}, err
 		}
 		if own {
