@@ -54,6 +54,10 @@ var clientGuardOps = map[string]bool{opsorg.OpLink: true, opslink.OpAdd: true}
 // (a --no-verify commit skipped the first).
 var clientGuardHookNames = []string{hookCommitMsg, hookPrePush}
 
+// clientRepoMarkOn is lore.clientrepo's value in a marked clone (the
+// value wire/clientmark.go writes and the commit-msg block reads).
+const clientRepoMarkOn = "true"
+
 // clientGuardHandLines are the lines a person adds by hand to a hook
 // lore may not write (a shared or a tracked hooks folder), per hook. Each
 // runs as printed inside that hook (git passes commit-msg the message
@@ -198,7 +202,7 @@ func (h *liveHost) wireClientGuard(ctx context.Context, p clientGuardPlace) []st
 		}
 		wrote = append(wrote, filepath.Join(p.hooks, n))
 	}
-	if _, err := h.git().Run(ctx, gitref.Invocation{Dir: p.top, Args: []string{"config", "--local", wire.ClientRepoGitKey, "true"}}); err != nil {
+	if _, err := h.git().Run(ctx, gitref.Invocation{Dir: p.top, Args: []string{"config", "--local", wire.ClientRepoGitKey, clientRepoMarkOn}}); err != nil {
 		out = append(out, "could not mark this clone as a client repo: "+err.Error())
 	}
 	if len(wrote) > 0 {
@@ -208,9 +212,12 @@ func (h *liveHost) wireClientGuard(ctx context.Context, p clientGuardPlace) []st
 }
 
 // doctorClientGuard is doctor's check of the guard in a client repo with
-// no .lore/ (D-730): a missing block is a warning naming the step that
-// installs it (`lore doctor --fix`), or, in a hooks folder lore may not
-// write, the lines to add by hand; --fix installs what it may.
+// no .lore/ (D-730): a block missing from a clone the guard was on in is
+// a warning naming the step that installs it (`lore doctor --fix`), or,
+// in a hooks folder lore may not write, the lines to add by hand; --fix
+// installs what it may. A teammate's clone the link never ran in is a
+// note, not a warning (devco D-775): joining a team is not a degraded
+// machine, and `lore whoami` there already says the guards are off.
 func (h *liveHost) doctorClientGuard(ctx context.Context, fix bool, warn, note func(string)) {
 	p, ok, err := h.clientGuardPlaceOf(ctx)
 	if !ok || err != nil {
@@ -226,10 +233,28 @@ func (h *liveHost) doctorClientGuard(ctx context.Context, fix bool, warn, note f
 		return
 	}
 	if !fix {
+		if !h.clientGuardWasOn(ctx, p, missing) {
+			note("client repo leak guard off in this clone (no lore block in " + strings.Join(missing, ", ") + " in " + p.hooks + "): commits and pushes here are not checked for internal notes until the link runs here or `lore doctor --fix` installs it (in .git/hooks only: the repo's files stay unchanged)")
+			return
+		}
 		warn("client repo leak guard missing in " + strings.Join(missing, ", ") + " (" + p.hooks + "): commits or pushes here are not checked for internal notes; run `lore doctor --fix` to install it (in .git/hooks only: the repo's files stay unchanged)")
 		return
 	}
 	for _, msg := range h.wireClientGuard(ctx, p) {
 		warn(msg)
 	}
+}
+
+// clientGuardWasOn reports whether the guard was ever installed in p's
+// clone: the clone holds one of lore's guard blocks, or the clone-local
+// lore.clientrepo mark only wireClientGuard sets in a clone with no
+// .lore/ (wire/clientmark.go skips such a clone). A partial guard (a clone
+// linked before the pre-push block existed, or a block someone removed)
+// is a doctor warning; a clone the link never ran in is not (D-775).
+func (h *liveHost) clientGuardWasOn(ctx context.Context, p clientGuardPlace, missing []string) bool {
+	if len(missing) < len(clientGuardHookNames) {
+		return true
+	}
+	out, err := h.git().Run(ctx, gitref.Invocation{Dir: p.top, Args: []string{"config", "--local", "--get", wire.ClientRepoGitKey}})
+	return err == nil && strings.TrimSpace(string(out)) == clientRepoMarkOn
 }
