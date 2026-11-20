@@ -298,6 +298,17 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, errs.New(errs.InvalidInput, "task add: the title is empty").WithHint(`lore task add --title "<title>"`)
 	}
 	project := in.placeProject
+	if project.IsZero() && in.Project == "" && in.Parent != "" {
+		// devco:D-777: a sub-task's project is its parent's (6.5), read
+		// from the parent row wherever it lives. Resolving "this repo's
+		// project" (or the parent's prj_ id among the repo store's
+		// projects) refused every sub-task of a task in a store folder:
+		// task split, task add --parent and checklist promote answered
+		// E_NOT_FOUND "no project" or E_PARENT_PROJECT.
+		if project, err = o.parentProject(ctx, in.Parent); err != nil {
+			return AddOut{}, err
+		}
+	}
 	if project.IsZero() {
 		if project, err = work.Project(ctx, o.env, Noun, in.Project); err != nil {
 			return AddOut{}, err
