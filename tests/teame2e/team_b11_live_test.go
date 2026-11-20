@@ -15,10 +15,13 @@ import (
 var b11MemIDRe = idPrefixed("mem")
 
 // A memory that is on origin/main but whose file this checkout deleted (git
-// rm, not committed) is not read through (E_NOT_FOUND, not E_STALE); once
-// that delete is committed, a row still on origin/main and not in the
-// checkout is read through, and an edit of it writes the file (materialised
-// from origin) instead of E_STALE.
+// rm, not committed) is not read through (E_NOT_FOUND, not E_STALE). Once
+// that delete is committed it still reads as removed (devco D-713: the
+// merge base holds the file, so this checkout took it out on purpose;
+// reading origin's copy through brought it back and doubled moved rows),
+// and the not-found names the commit and the git step that restores it
+// (devco D-777: this test still held the rule before D-713). That printed
+// step works as printed: after it and a commit, an edit writes the row.
 func TestB11_ReadThroughRowEditAndLocalDelete(t *testing.T) {
 	rt := newRepoTeam(t)
 	c := rt.c1
@@ -41,10 +44,36 @@ func TestB11_ReadThroughRowEditAndLocalDelete(t *testing.T) {
 		t.Fatalf("a hand drop must be refused naming the escape: %+v", r)
 	}
 	c.With("LORE_ALLOW_ROW_DROP=1").Git("commit", "-q", "-m", "rm")
+	r := c.Lore("memory", "archive", id)
+	if r.Code != 27 || !strings.Contains(r.Stderr, "E_NOT_FOUND") || strings.Contains(r.Stderr, "E_STALE") {
+		t.Fatalf("a delete committed here reads as removed (D-713), never E_STALE: %+v", r)
+	}
+	if _, ok := c.ReadFile(rel); ok {
+		t.Fatalf("a refused edit materialises nothing: %s", rel)
+	}
+	restore := b11GitStep(t, r.Stderr)
+	c.Git(restore...)
+	c.Git("commit", "-q", "-m", "restore")
 	if r := c.Lore("memory", "archive", id); r.Code != 0 {
-		t.Fatalf("an edit of a read-through row must write, not E_STALE: %+v", r)
+		t.Fatalf("after the printed restore step an edit writes: %+v", r)
 	}
 	if b, ok := c.ReadFile(rel); !ok || !strings.Contains(b, "keep me around") {
 		t.Fatalf("the edit materialises the row: %v %s", ok, b)
 	}
+}
+
+// b11GitStep is the `git …` command a not-found hint prints in backticks,
+// as git's arguments (without "git"); the test fails when there is none.
+func b11GitStep(t *testing.T, stderr string) []string {
+	t.Helper()
+	i := strings.Index(stderr, "`git ")
+	if i < 0 {
+		t.Fatalf("the not-found names the git step that restores the row: %s", stderr)
+	}
+	rest := stderr[i+len("`git "):]
+	j := strings.Index(rest, "`")
+	if j < 0 {
+		t.Fatalf("unterminated git step in: %s", stderr)
+	}
+	return strings.Fields(rest[:j])
 }

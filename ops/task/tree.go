@@ -1073,3 +1073,32 @@ func checkReason(v string, set []string) error {
 	return errs.New(errs.InvalidInput, Noun+": bad --reason "+v+" (want: "+strings.Join(set, " | ")+")").
 		WithHint("use one of: " + strings.Join(set, ", ") + "; the reason for --not-a-secret goes in --not-a-secret-why")
 }
+
+// parentProject is the project of the task parent (a tsk_ id): the
+// project_id its row holds, in whichever attached store holds it. Zero
+// when the row names none (a row from before projects), so the caller
+// falls back to this repo's project. Why (devco:D-777): a sub-task joins
+// its parent's project, and a parent in a store folder is in the folder's
+// project, which no lookup of the repo store's projects finds.
+func (o ops) parentProject(ctx context.Context, parent string) (ids.ID[ids.Project], error) {
+	pid, err := taskID(parent)
+	if err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	_, pr, err := work.Get(ctx, o.env, Noun, table, pid)
+	if err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	return rowProject(pr)
+}
+
+// rowProject is the project_id a task row holds as an id (zero when it
+// holds none). A malformed value is E_INVALID_ID naming the field, never
+// a silent fall back to another project.
+func rowProject(r row.Row) (ids.ID[ids.Project], error) {
+	v := work.Field(r, work.FieldProject)
+	if v == "" {
+		return ids.ID[ids.Project]{}, nil
+	}
+	return ids.Parse[ids.Project](v)
+}

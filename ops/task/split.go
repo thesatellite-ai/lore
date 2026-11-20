@@ -58,6 +58,13 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 		return SplitOut{}, err
 	}
 	project := work.Field(pr, work.FieldProject)
+	// devco:D-777: the pieces join the parent's project as an id, never
+	// as a --project value (that resolves among the repo store's projects
+	// only, and a parent in a store folder is in the folder's project)
+	parentPID, err := rowProject(pr)
+	if err != nil {
+		return SplitOut{}, err
+	}
 	probe := AddIn{Parent: id.String(), Priority: in.Priority, Commitment: in.Commitment} // shared flags are not inherited
 	par, err := o.addParent(ctx, &probe, project)
 	if err != nil {
@@ -109,7 +116,7 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 		a, aerr := o.add(sctx, AddIn{
 			Title: p.Title, Body: p.Body, Priority: p.Priority, Commitment: p.Commitment,
 			Assign: p.Assign, Due: p.Due, Tasklist: tasklist,
-			Parent: id.String(), Key: key, Project: project, rank: out.Added[i].Rank,
+			Parent: id.String(), Key: key, placeProject: parentPID, rank: out.Added[i].Rank,
 		})
 		if aerr != nil {
 			return SplitOut{}, aerr
