@@ -403,10 +403,13 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 // and no tracked file of the repo at dir changed. A client repo's link
 // installs lore's leak guard hook in the clone before the link runs, so
 // "nothing was written to this repo" right after the line saying so read
-// as a contradiction (devco D-597): the line names the hook when the clone
-// has it.
+// as a contradiction (devco D-597): the line names the hooks the clone
+// has (commit-msg, and pre-push since D-730).
 func repoUntouchedLine(ctx context.Context, dir string) string {
 	if dir != "" && commitGuardInstalled(ctx, dir) {
+		if hookHolds(ctx, dir, "pre-push", pushCheckHookLine) {
+			return "  no tracked file of this repo was written; the leak guard hooks (commit-msg, pre-push) are in this clone's git hooks"
+		}
 		return "  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks"
 	}
 	return "  no tracked file of this repo was written"
