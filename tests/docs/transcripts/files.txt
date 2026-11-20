@@ -206,7 +206,7 @@ this repo: ~/work/website
   .git/config [remote.origin.fetch]
       fetches lore's live refs with every git fetch
   .git/config [lore.initedhere]
-      this clone ran lore init or the migration, so its commit brings the repo's first render and wiring files (teammates' clones keep theirs out of git status until then)
+      this clone ran lore init or the migration, so its commit brings the repo's first render (teammates' clones keep theirs out of git status until then)
   .git/config [merge.lore.name]
       the merge driver git runs for lore's row files (lore merges them field by field)
   .git/config [merge.lore.driver]
@@ -321,7 +321,7 @@ assignees:
 history:
 tag_ids:
 ---
-alice (work/website)$ EDITOR=$HOME/bin/edit-task lore edit tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ EDITOR=$HOME/bin/edit-task lore edit --id tsk_2ad3618e878ebbf527d34d446ef4f891
 lore: committed locally to store notes; lore sync sends it
 lore: wrote ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json (store notes)
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 updated in store notes: body, priority

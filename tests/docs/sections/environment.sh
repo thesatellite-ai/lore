@@ -36,7 +36,9 @@ solo_repo alice client/shop
 on alice work/shop "LORE_SYNC_GIT=0 lore init --name=shop"
 on alice work/shop "ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'"
 on alice work/shop "lore sync"
-on alice work/shop "ls .git/hooks | grep -v sample; cat .gitattributes"
+on alice work/shop "ls .git/hooks | grep -v sample; cat .git/info/attributes; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'"
+on alice work/shop "lore fix"
+on alice work/shop "git status --short; cat .gitattributes"
 
 note "not a secret"
 on alice work/website "lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'"

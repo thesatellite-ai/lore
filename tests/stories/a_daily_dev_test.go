@@ -104,6 +104,10 @@ func (at *aTeam) in(p journeys.Person, r *teamharness.Remote) *teamharness.Clone
 }
 
 // lore runs lore as p in p's clone of r.
+// aRulesNamedInLocalAttrs matches a set-up line naming the clone's own
+// .git/info/attributes as where lore's merge rules are (devco:D-772).
+var aRulesNamedInLocalAttrs = regexp.MustCompile(`lore's merge rules in \S*\.git/info/attributes\b`)
+
 func (at *aTeam) lore(p journeys.Person, r *teamharness.Remote, args ...string) teamharness.Result {
 	at.s.T.Helper()
 	return at.m[p.Email].LoreIn(at.in(p, r), args...)
@@ -408,9 +412,15 @@ func TestStoryABranches(t *testing.T) {
 		if st := svc.Git("status", "--porcelain", "--", ".gitignore", ".gitattributes"); st != "" {
 			t.Errorf("the cto's plain writes after the migration edited tracked files outside .lore/:\n%s", st)
 		}
-		at.lore(aCTO, at.svc, "doctor", "--fix")
+		fix := at.lore(aCTO, at.svc, "doctor", "--fix")
 		if st := svc.Git("status", "--porcelain", "--", ".gitattributes"); st == "" {
 			t.Error("lore doctor --fix after the migration left lore's merge rules out of .gitattributes")
+		}
+		// devco:D-772: doctor --fix takes lore's block out of the clone's
+		// own .git/info/attributes; its set-up line never names that
+		// emptied file as where the merge rules are.
+		if aRulesNamedInLocalAttrs.MatchString(fix.Stderr) {
+			t.Errorf("lore doctor --fix names the emptied .git/info/attributes as holding lore's merge rules:\n%s", fix.Stderr)
 		}
 		aPush(svc, "lore: notes")
 	})

@@ -162,9 +162,28 @@ func gitWiringStep(top string, wrote []string) (opsdoctor.FixStep, bool) {
 	}
 	return opsdoctor.FixStep{
 		Step: opsdoctor.StepGitWiring, Where: top, Changed: true,
-		Result: "wrote lore's lines to " + strings.Join(wrote, " and ") + " (the merge rules and lore's local files git must ignore)",
+		Result: "wrote lore's lines to " + strings.Join(wrote, " and ") + wiringLinesWhat(wrote),
 		Next:   fmt.Sprintf(gitWiringCommitF, strings.Join(wrote, " and "), strings.Join(wrote, " ")),
 	}, true
+}
+
+// wiringLinesWhat says what lore's lines in each written file are for, in
+// the order written: a run that wrote only .gitattributes no longer claims
+// it wrote the ignore lines too (devco:D-772).
+func wiringLinesWhat(wrote []string) string {
+	what := make([]string, 0, len(wrote))
+	for _, f := range wrote {
+		switch filepath.Base(f) {
+		case ".gitattributes":
+			what = append(what, "the merge rules")
+		case ".gitignore":
+			what = append(what, "lore's local files git must ignore")
+		}
+	}
+	if len(what) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(what, " and ") + ")"
 }
 
 // skippedNoLoreProject is the render and agent hooks steps' result in a
