@@ -62,4 +62,38 @@ func TestStoryOPersonalWholeStore(t *testing.T) {
 			}
 		}
 	})
+
+	// devco D-771 (hunt H-30): a read naming no store points at --store me,
+	// so the next call answers. Before it the home folder's refusal named
+	// only --store <org>, and a lore repo's empty search said "(no
+	// matches)" with no word that the personal store's folders were unread.
+	s.Step("plain-read-names-store-me", func() {
+		wc := ana.Clone(web, "web-plain")
+		ana.LoreIn(wc, "init").OK(t)
+		for _, args := range [][]string{
+			{"search", "--query", "kestrel"},
+			{"sql", "run", "--query", "SELECT body FROM memories_all"},
+			{"memory", "list"},
+		} {
+			r := ana.Lore(home, args...)
+			if r.Code == 0 || !strings.Contains(r.Out(), "hint: add --store me to read your personal store") {
+				t.Errorf("[O D-771] `lore %s` in the home folder does not name --store me:\n%s", strings.Join(args, " "), r)
+			}
+			// the printed step, exactly as printed, answers there
+			r = ana.Lore(home, append(args, "--store", "me")...)
+			if r.Code != 0 || !strings.Contains(r.Out(), "alpha note") {
+				t.Errorf("[O D-771] `lore %s --store me` in the home folder misses the notes:\n%s", strings.Join(args, " "), r)
+			}
+		}
+		for _, args := range [][]string{{"search", "--query", "kestrel"}, {"memory", "search", "--query", "kestrel"}} {
+			r := ana.LoreIn(wc, args...)
+			if r.Code != 0 || !strings.Contains(r.Out(), "(no matches)") || !strings.Contains(r.Out(), "note: your personal store's folders (me/") || !strings.Contains(r.Out(), "add --store me to the same command") {
+				t.Errorf("[O D-771] an empty `lore %s` in a lore repo does not say the personal store's folders were not read:\n%s", strings.Join(args, " "), r)
+			}
+			r = ana.LoreIn(wc, append(args, "--store", "me")...)
+			if r.Code != 0 || !strings.Contains(r.Out(), "alpha note") || strings.Contains(r.Out(), "were not read") {
+				t.Errorf("[O D-771] `lore %s --store me` in a lore repo misses the notes:\n%s", strings.Join(args, " "), r)
+			}
+		}
+	})
 }

@@ -4602,6 +4602,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -5067,6 +5071,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -6990,6 +6998,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -7447,6 +7459,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -10741,6 +10757,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -11160,6 +11180,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -13350,6 +13374,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -13815,6 +13843,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -14965,6 +14997,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -15654,6 +15690,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -20201,6 +20241,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -20663,6 +20707,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -22020,6 +22068,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -22706,6 +22758,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -24881,6 +24937,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -25349,6 +25409,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -30911,6 +30975,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -31630,6 +31698,10 @@
                     "more": {
                       "type": "boolean",
                       "description": "more memories match than are listed; raise --limit to list more"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -38983,6 +39055,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -39972,6 +40048,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -44248,6 +44328,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -44917,6 +45001,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -47405,6 +47493,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -48000,6 +48092,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -49095,6 +49191,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -49752,6 +49852,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -53965,6 +54069,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -54614,6 +54722,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -56039,6 +56151,10 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "routed": {
                       "type": "string",
@@ -68938,6 +69054,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -69641,6 +69761,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -72679,6 +72803,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "routed": {
                       "type": "string",
@@ -82634,6 +82762,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -83283,6 +83415,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -84351,6 +84487,10 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "routed": {
                       "type": "string",
@@ -92052,6 +92192,10 @@
                     "kind": {
                       "type": "string"
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -99676,6 +99820,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -100268,6 +100416,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -101902,6 +102054,10 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "routed": {
                       "type": "string",
@@ -105241,6 +105397,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -111212,6 +111372,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -111662,6 +111826,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -115052,6 +115220,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -115513,6 +115685,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -119946,6 +120122,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -120403,6 +120583,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
@@ -121448,6 +121632,10 @@
                         "type": "string"
                       }
                     },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -121905,6 +122093,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
                     },
                     "query": {
                       "type": "string"
