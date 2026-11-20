@@ -97,6 +97,7 @@ func (a *App) LeakCheckDocs(ctx context.Context, res *OrgResolution, where strin
 // each finding's rule, its full detail and the internal row's source
 // (`lore check leaks|pr-body --explain`, v0.1.17 leakBlockedError).
 func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, where string, docs map[string][]byte, explain bool) error {
+	docs = AddedLinesOnly(ctx, docs) // devco:D-728: a push reads only the lines its commits add
 	if len(docs) == 0 || res == nil {
 		return nil
 	}

@@ -63,18 +63,94 @@ func (h *liveHost) prePushLeakCheck(ctx context.Context, repo *gitref.Repo, remo
 		return errs.Wrap(errs.LeakBlocked, "cannot check: could not list what this push sends", err).
 			WithHint("bypassing the check is your deliberate `git push --no-verify`")
 	}
-	return checkPushDocs(wire.WithPushBases(ctx, pushBases(ctx, repo, remote, updates)), h.cfg.LeakCheck, sets)
+	return checkPushDocs(wire.WithPushBases(ctx, pushBases(ctx, repo, remote, updates)), h.cfg.LeakCheck, sets, pushAddedLines(ctx, repo, remote, updates))
+}
+
+// pushSet is one doc set of a push (pushDocs): path → content, and the
+// blob id each file version was read from (commit messages have none).
+type pushSet struct {
+	docs  map[string][]byte
+	blobs map[string]string
 }
 
 // checkPushDocs runs check over every doc set of a push (pushDocs), the
-// newest file versions first, and returns the first refusal.
-func checkPushDocs(ctx context.Context, check func(context.Context, string, map[string][]byte) error, sets []map[string][]byte) error {
-	for _, docs := range sets {
-		if err := check(ctx, wire.LeakWherePush, docs); err != nil {
+// newest file versions first, and returns the first refusal. added (blob
+// id → the lines the pushed commits add, pushAddedLines) narrows F16 to
+// those lines (devco:D-728, wire.WithAddedLines); a file version it does
+// not describe, and every file when added is nil, is checked whole.
+func checkPushDocs(ctx context.Context, check func(context.Context, string, map[string][]byte) error, sets []pushSet, added map[string]map[int]bool) error {
+	for _, set := range sets {
+		setCtx := ctx
+		if added != nil {
+			lines := map[string]map[int]bool{}
+			for p, blob := range set.blobs {
+				if l, ok := added[blob]; ok {
+					lines[p] = l
+				}
+			}
+			setCtx = wire.WithAddedLines(ctx, lines)
+		}
+		if err := check(setCtx, wire.LeakWherePush, set.docs); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// pushRange is the rev-list arguments naming what a push sends: each
+// updated ref's new tip, minus its current remote tip and everything the
+// remote's tracking refs have. ok is false when the push sends nothing
+// (only deletes).
+func pushRange(ctx context.Context, repo *gitref.Repo, remote string, updates []pushUpdate) (args []string, ok bool) {
+	for _, u := range updates {
+		if isZeroOID(u.localSHA) {
+			continue // a delete sends nothing
+		}
+		args = append(args, u.localSHA)
+		ok = true
+		if !isZeroOID(u.remoteSHA) {
+			if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"cat-file", "-e", u.remoteSHA + "^{commit}"}}); err == nil {
+				args = append(args, "^"+u.remoteSHA)
+			}
+		}
+	}
+	notRemote := "--remotes"
+	if remote != "" {
+		notRemote += "=" + remote
+	}
+	return append(args, "--not", notRemote), ok
+}
+
+// pushAddedLines is, per blob id, the line numbers the commits this push
+// sends add to it (wire.PushAddedLines over one `git diff-tree --stdin`
+// of every pushed commit against each parent). Nil on any git error:
+// then every pushed file version is checked whole (fails closed).
+func pushAddedLines(ctx context.Context, repo *gitref.Repo, remote string, updates []pushUpdate) map[string]map[int]bool {
+	rng, ok := pushRange(ctx, repo, remote, updates)
+	if !ok {
+		return nil
+	}
+	revs, err := repo.Run(ctx, gitref.Invocation{Args: append([]string{"rev-list", "--parents"}, rng...)})
+	if err != nil {
+		return nil
+	}
+	parents := map[string]int{}
+	for _, l := range strings.Split(string(revs), "\n") {
+		if f := strings.Fields(l); len(f) > 0 {
+			parents[f[0]] = len(f) - 1
+		}
+	}
+	if len(parents) == 0 {
+		return map[string]map[int]bool{}
+	}
+	patch, err := repo.Run(ctx, gitref.Invocation{
+		Args:  []string{"-c", "core.quotePath=false", "diff-tree", "--stdin", "-p", "-U0", "--full-index", "-m", "--root", "-r", "--no-renames", "--diff-filter=ACMR", "--no-color", "--no-ext-diff", "--no-textconv"},
+		Stdin: revs,
+	})
+	if err != nil {
+		return nil
+	}
+	return wire.PushAddedLines(string(patch), parents)
 }
 
 // maxPushBases caps the remote commits a push check compares with (as the
@@ -138,29 +214,12 @@ func pushBases(ctx context.Context, repo *gitref.Repo, remote string, updates []
 // set (devco:S-9: the older, clean version of a row file overwrote the
 // newer one a --no-verify commit had put a key into, and the push went
 // out). The first set holds the newest version of every path.
-func pushDocs(ctx context.Context, repo *gitref.Repo, remote string, updates []pushUpdate) ([]map[string][]byte, error) {
-	args := []string{"rev-list", "--objects"}
-	tips := 0
-	for _, u := range updates {
-		if isZeroOID(u.localSHA) {
-			continue // a delete sends nothing
-		}
-		args = append(args, u.localSHA)
-		tips++
-		if !isZeroOID(u.remoteSHA) {
-			if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"cat-file", "-e", u.remoteSHA + "^{commit}"}}); err == nil {
-				args = append(args, "^"+u.remoteSHA)
-			}
-		}
-	}
-	if tips == 0 {
+func pushDocs(ctx context.Context, repo *gitref.Repo, remote string, updates []pushUpdate) ([]pushSet, error) {
+	rng, ok := pushRange(ctx, repo, remote, updates)
+	if !ok {
 		return nil, nil
 	}
-	notRemote := "--remotes"
-	if remote != "" {
-		notRemote += "=" + remote
-	}
-	out, err := repo.Run(ctx, gitref.Invocation{Args: append(args, "--not", notRemote)})
+	out, err := repo.Run(ctx, gitref.Invocation{Args: append([]string{"rev-list", "--objects"}, rng...)})
 	if err != nil {
 		return nil, fmt.Errorf("rev-list: %w", err)
 	}
@@ -184,16 +243,23 @@ func pushDocs(ctx context.Context, repo *gitref.Repo, remote string, updates []p
 // path, commits by their message (trees and tags carry nothing more). A
 // path met again (an older version: rev-list lists newer commits first)
 // goes into the first set that does not hold it yet (pushDocs).
-func readPushObjects(ctx context.Context, repo *gitref.Repo, oids []string, paths map[string]string) ([]map[string][]byte, error) {
-	var sets []map[string][]byte
-	put := func(p string, b []byte) {
+func readPushObjects(ctx context.Context, repo *gitref.Repo, oids []string, paths map[string]string) ([]pushSet, error) {
+	var sets []pushSet
+	put := func(p, blob string, b []byte) {
 		for _, set := range sets {
-			if _, taken := set[p]; !taken {
-				set[p] = b
+			if _, taken := set.docs[p]; !taken {
+				set.docs[p] = b
+				if blob != "" {
+					set.blobs[p] = blob
+				}
 				return
 			}
 		}
-		sets = append(sets, map[string][]byte{p: b})
+		set := pushSet{docs: map[string][]byte{p: b}, blobs: map[string]string{}}
+		if blob != "" {
+			set.blobs[p] = blob
+		}
+		sets = append(sets, set)
 	}
 	if len(oids) == 0 {
 		return sets, nil
@@ -227,10 +293,10 @@ func readPushObjects(ctx context.Context, repo *gitref.Repo, oids []string, path
 			if p == "" {
 				p = f[0]
 			}
-			put(p, body)
+			put(p, f[0], body)
 		case objectCommit:
 			_, msg, _ := bytes.Cut(body, []byte("\n\n"))
-			put(commitMsgWhere+f[0][:shortOIDLen], msg)
+			put(commitMsgWhere+f[0][:shortOIDLen], "", msg)
 		}
 	}
 	return sets, nil

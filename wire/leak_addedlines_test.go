@@ -111,3 +111,70 @@ func TestParseAddedLines(t *testing.T) {
 		t.Fatalf("a binary file got lines: %v", got["b.bin"])
 	}
 }
+
+// TestPushAddedLines (devco:D-728): the pre-push check reads, per pushed
+// blob, only the lines the pushed commits add. A plain commit adds its
+// hunks; a root commit adds the whole file; a merge adds only the lines
+// new against every parent (lines either side already had are not new);
+// a blob a merge carries over unchanged from a parent is known but adds
+// nothing.
+func TestPushAddedLines(t *testing.T) {
+	const (
+		root, side, top, merge = "c0", "c1", "c2", "c3"
+		blobRoot, blobSide     = "b0", "b1"
+		blobTop, blobMerge     = "b2", "b3"
+	)
+	patch := strings.Join([]string{
+		merge,
+		"diff --git a/f b/f",
+		"index " + blobTop + ".." + blobMerge + " 100644",
+		"--- a/f", "+++ b/f",
+		"@@ -4,0 +5,2 @@ c", "+side", "+new",
+		"diff --git a/g b/g",
+		"index " + blobRoot + ".." + blobSide + " 100644",
+		"--- a/g", "+++ b/g",
+		"@@ -1,0 +2 @@", "+carried",
+		merge,
+		"diff --git a/f b/f",
+		"index " + blobSide + ".." + blobMerge + " 100644",
+		"--- a/f", "+++ b/f",
+		"@@ -0,0 +1 @@", "+top",
+		"@@ -4,0 +6 @@ side", "+new",
+		top,
+		"diff --git a/f b/f",
+		"index " + blobRoot + ".." + blobTop + " 100644",
+		"--- a/f", "+++ b/f",
+		"@@ -0,0 +1 @@", "+top",
+		root,
+		"diff --git a/f b/f",
+		"new file mode 100644",
+		"index 0000.." + blobRoot,
+		"--- /dev/null", "+++ b/f",
+		"@@ -0,0 +1,3 @@", "+a", "+b", "+c",
+	}, "\n")
+	got := PushAddedLines(patch, map[string]int{root: 0, side: 1, top: 1, merge: 2})
+	want := map[string][]int{blobRoot: {1, 2, 3}, blobTop: {1}, blobMerge: {6}, blobSide: {}}
+	for blob, lines := range want {
+		g, ok := got[blob]
+		if !ok {
+			t.Fatalf("blob %s missing (would be read whole): %v", blob, got)
+		}
+		if len(g) != len(lines) {
+			t.Fatalf("blob %s lines = %v, want %v", blob, g, lines)
+		}
+		for _, n := range lines {
+			if !g[n] {
+				t.Fatalf("blob %s lines = %v, want %v", blob, g, lines)
+			}
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("blobs = %v, want only %v", got, want)
+	}
+	// F16 reads the narrowed docs: an old line is blanked, numbering kept
+	ctx := WithAddedLines(context.Background(), map[string]map[int]bool{"f": got[blobMerge]})
+	docs := AddedLinesOnly(ctx, map[string][]byte{"f": []byte("top\na\nb\nc\nside\nnew\n"), PushCommitMsgPrefix + "c3": []byte("merge")})
+	if string(docs["f"]) != "\n\n\n\n\nnew\n" || string(docs[PushCommitMsgPrefix+"c3"]) != "merge" {
+		t.Fatalf("narrowed docs = %q", docs)
+	}
+}
