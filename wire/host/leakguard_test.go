@@ -246,3 +246,41 @@ func TestWriteCreatesNoHookFileInATrackedHooksFolder(t *testing.T) {
 		t.Fatalf("an ignored hooks folder was not written: missing %v\n%s", got, stderrOf(g))
 	}
 }
+
+// TestWriteKeepsTheModeOfTrackedHooks (devco D-732): a tracked hooks
+// folder holding lore's post-checkout, post-merge and post-rewrite blocks
+// exactly as this lore writes them, committed without the exec bit
+// (100644). A write found the bytes current and chmodded the files, so
+// git showed all three modified (mode 100644 -> 100755) in a teammate's
+// clone after a plain lore sync. Now a write leaves them as committed;
+// only the explicit `lore fix --tracked-hooks` may change them.
+func TestWriteKeepsTheModeOfTrackedHooks(t *testing.T) {
+	f := newLiveFixture(t)
+	markWired(t, f)
+	gitT(t, f.s.top, "config", "core.hooksPath", ".githooks")
+	f.s.ensureGitWiring(withTrackedHooksYes(f.ctx), f.s.top, wireInstall)
+	posts := []string{hookPostCheckout, hookPostMerge, hookPostRewrite}
+	dir := filepath.Join(f.s.top, ".githooks")
+	gitT(t, f.s.top, "add", ".githooks")
+	for _, h := range posts {
+		gitT(t, f.s.top, "update-index", "--chmod=-x", ".githooks/"+h)
+		if err := os.Chmod(filepath.Join(dir, h), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitT(t, f.s.top, "commit", "-q", "--no-verify", "-m", "the team's hooks")
+	// a teammate's fresh clone: lore has not wired it yet
+	if err := os.Remove(filepath.Join(f.s.stateDir, gitWiringStamp)); err != nil {
+		t.Fatal(err)
+	}
+
+	f.s.ensureGitWiring(f.ctx, f.s.top, wireAuto)
+	if status := gitOut(t, f, "status", "--porcelain", "--", ".githooks"); status != "" {
+		t.Fatalf("a write changed the tracked .githooks:\n%s", status)
+	}
+	for _, h := range posts {
+		if info, err := os.Stat(filepath.Join(dir, h)); err != nil || info.Mode().Perm() != 0o644 {
+			t.Fatalf("a write changed the mode of the tracked %s: %v %v", h, info.Mode(), err)
+		}
+	}
+}
