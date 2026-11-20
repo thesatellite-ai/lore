@@ -61,7 +61,7 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 	// that attachment's name; an org folder not attached is attached for
 	// this run), never created
 	if src := bulkMoveSource(e, d); src != "" {
-		sfrom, sroot, _, serr := a.attachFolderPlace(ctx, src, false)
+		sfrom, sroot, _, serr := a.attachFolderPlace(ctx, src, false, a.personalReadCommand(e, src))
 		if serr != nil {
 			return ctx, d, serr
 		}
@@ -111,14 +111,29 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 		// mission apply names its target in the plan file (BUG-T8)
 		to, _ = in.NamedTarget()
 	}
-	return a.attachFolderPlace(ctx, to, c.Yes || createAsked(in))
+	return a.attachFolderPlace(ctx, to, c.Yes || createAsked(in), a.personalReadCommand(e, to))
+}
+
+// personalReadCommand is the read the note of a `--to me/<folder>` write
+// names (unattachedNote, devco D-769): the list of the kind the op writes
+// when there is one (`lore task list --store me/notes` after a task add),
+// else a search of the folder. Both take --store from any folder.
+func (a *App) personalReadCommand(e op.Entry, to string) string {
+	noun, _, _ := strings.Cut(e.Spec().Name, ".")
+	if list := noun + ".list"; noun != "" {
+		if _, ok := a.Registry().Lookup(list); ok {
+			return OpCommandName(list) + " --store " + to
+		}
+	}
+	return OpCommandName("search") + " --store " + to + ` --query "<query>"`
 }
 
 // attachFolderPlace is attachFolderTarget for one place value to (a `--to`
 // target, or the `--from` source of a bulk move, D-712): mayCreate allows
 // a folder the store does not have yet (a yes or --create for a target;
-// never for a source, which must hold the rows it moves).
-func (a *App) attachFolderPlace(ctx context.Context, to string, mayCreate bool) (from, root string, created newFolder, err error) {
+// never for a source, which must hold the rows it moves). readCmd is the
+// read a `me/<folder>` note names (personalReadCommand).
+func (a *App) attachFolderPlace(ctx context.Context, to string, mayCreate bool, readCmd string) (from, root string, created newFolder, err error) {
 	base, folderName, ok := strings.Cut(to, targetSep)
 	if !ok || base == "" || folderName == "" {
 		return "", "", newFolder{}, nil
@@ -212,7 +227,7 @@ func (a *App) attachFolderPlace(ctx context.Context, to string, mayCreate bool) 
 		}
 	}
 	if !persist {
-		unattachedNote(os.Stderr, to, folderName, fromOrg)
+		unattachedNote(os.Stderr, base, to, folderName, readCmd)
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -385,16 +400,24 @@ func (a *App) targetsTop(ctx context.Context) (string, bool, error) {
 // repos that attach it). INTEG-KNOWLEDGE-7: before it, the row seemed to
 // vanish. It goes to stderr so --json output stays one JSON document.
 //
-// For an org store's folder (fromOrg) the command carries --yes and says
+// It is printed only for a write that is not recorded (attachFolderPlace's
+// persist is false): a folder of the personal store or of an org store.
+// For an org store's folder the command carries --yes and says
 // why: store add asks before writing an org store's url into the committed
 // stores.yaml (INTEG-CFG7-1), so the note names the confirmed form rather
 // than a command that answers E_NEEDS_CONFIRM.
-func unattachedNote(w io.Writer, to, folderName string, fromOrg bool) {
-	if fromOrg {
-		fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; to see them: lore store add --name <name> --url <store-url> --folder %s --yes (this commits the org store's url to .lore/stores.yaml, visible to everyone who can read this repo)\n", to, folderName)
+//
+// For a folder of the personal store (base me) no attach step is named:
+// its url is this machine's own, and `lore store add` would commit it into
+// the shared stores.yaml for everyone (devco D-769). A `--store me/<folder>`
+// read finds the rows from any folder instead, so the note names that read
+// (readCmd, a full command such as `lore task list --store me/notes`).
+func unattachedNote(w io.Writer, base, to, folderName, readCmd string) {
+	if base == attach.ReservedMe {
+		fmt.Fprintf(w, "lore: %s is a folder of your personal store, which no repo attaches (its url is this machine's own and .lore/stores.yaml is shared), so lists here will not show its rows; read them from any folder with --store %s: %s\n", to, to, readCmd)
 		return
 	}
-	fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; to see them: lore store add --name <name> --url <store-url> --folder %s\n", to, folderName)
+	fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; to see them: lore store add --name <name> --url <store-url> --folder %s --yes (this commits the org store's url to .lore/stores.yaml, visible to everyone who can read this repo)\n", to, folderName)
 }
 
 // newFolder is the store folder a `--to <store>/<folder>` write goes to
