@@ -131,7 +131,15 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 	// (item 41). The engine's own writes drop what they change; a check
 	// that fixed something (or failed part way) may have changed files
 	// around the engine, so the next check starts a new snapshot.
+	//
+	// A plain doctor run shares the snapshot its base checks already filled
+	// (ops/doctor runRepo makes one per pass, D-739): before, the base and
+	// the checks each read and decoded the whole store, twice per run on a
+	// 2,400-task project. A fixing run starts its own, as its writes need.
 	shared := engine.WithReadSnapshot(ctx)
+	if !fix {
+		shared = withTeamVersionsMemo(engine.EnsureReadSnapshot(ctx))
+	}
 	type ran struct {
 		found []DoctorFinding
 		err   error

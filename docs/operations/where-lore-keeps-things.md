@@ -204,7 +204,7 @@ A repo that holds no lore data of its own (a client repo whose notes live in a s
 
 A repo whose `.gitignore` ignores `.lore/` keeps the project private to this machine: lore writes into no file the repo tracks (no `.gitattributes` block, no pointer block in `CLAUDE.md` or `AGENTS.md`, no hook block in a committed hooks folder) and says so once, in one line that starts `git ignores lore data` and names the `.gitignore` rule. A client repo is not such a project: its `.lore/` is committed, so its pointer stays in its tools' files. `.lore/LORE.md` is still rendered, and Claude Code reads it through the pointer in `CLAUDE.local.md`, which lore excludes in `.git/info/exclude`; a tool with no such local file gets the notes from `lore context` or the agent hooks.
 
-`lore fix` (and `lore doctor --fix`, which runs the same steps) checks again after fixing: the status it prints is the state after the fixes, and a `Fixed` list under it names what changed (`fixed` in `--json`).
+`lore fix` (and `lore doctor --fix`, which runs the same steps) checks again after fixing: the status it prints is the state after the fixes, and a `Fixed` list under it names what changed (`fixed` in `--json`). When the fixing pass repaired nothing and found nothing a repair names, that pass is already the state now and the second check is skipped, so `lore fix` on a project with nothing to fix takes about as long as `lore doctor`.
 
 ## Reads change nothing; writes say where
 

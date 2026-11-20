@@ -396,6 +396,14 @@ func (r Report) homeLine() string {
 // The caller finalizes it.
 func runRepo(ctx context.Context, env Env, fix bool) (Report, error) {
 	in := RunIn{Fix: fix}
+	if !fix {
+		// One read of each store for the whole pass (D-739): the base
+		// checks and the core checks share this snapshot, so a large
+		// project's rows are read and decoded once per lore doctor, not
+		// once by the base and again by the checks. A fixing pass writes,
+		// so each of its parts starts its own snapshot as before.
+		ctx = engine.EnsureReadSnapshot(ctx)
+	}
 	base := Base{Status: StatusHealthy, DBOK: true, Notes: []string{noLoreDBNote}}
 	h, local := env.DoctorHost(ctx)
 	if local {

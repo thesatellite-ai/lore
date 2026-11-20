@@ -97,7 +97,14 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	// project lookup made a store folder's missing project row, a store
 	// commit no repair asked for. Only the repair below writes.
 	fixCtx := ctx
-	ctx = engine.WithAccess(engine.WithReadSnapshot(ctx), op.AccessRead)
+	// A plain doctor run's checks reuse this snapshot (D-739:
+	// EnsureReadSnapshot keeps the one ops/doctor runRepo made for the
+	// pass); a fixing run reads afresh, as before.
+	snap := engine.WithReadSnapshot(ctx)
+	if !fix {
+		snap = engine.EnsureReadSnapshot(ctx)
+	}
+	ctx = engine.WithAccess(snap, op.AccessRead)
 	b.Sync = a.doctorSync(ctx, warn, note)             // hostbase_doctor_sync.go (E-GAPS-1 G4)
 	waits := a.doctorStoreConflicts(ctx, b.Sync, warn) // doctor_store_conflicts.go (I-1)
 	a.doctorPushModes(ctx, warn, note, waits)          // storepushops.go: each store's push mode

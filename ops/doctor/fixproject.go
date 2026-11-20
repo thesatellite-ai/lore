@@ -349,14 +349,21 @@ func noteKey(n string) string {
 // report shows the state now, and what the fixes changed. afterFix (nil:
 // none) sees the re-check; when it changed something (render again), the
 // check runs once more and that is the state now.
+//
+// D-739: a fixing run that repaired nothing and found nothing a repair
+// names (fixRunChangedNothing) is itself the state now, so lore fix runs
+// the doctor pass once instead of twice on a project with nothing to fix
+// (a 2,400-task project paid for two full passes).
 func repairRepo(ctx context.Context, env Env, afterFix func(Report) bool) (Report, error) {
 	r, err := runRepo(ctx, env, true)
 	if err != nil {
 		return Report{}, err
 	}
-	after, err := runRepo(ctx, env, false)
-	if err != nil {
-		return Report{}, err
+	after := r
+	if !fixRunChangedNothing(r) {
+		if after, err = runRepo(ctx, env, false); err != nil {
+			return Report{}, err
+		}
 	}
 	if afterFix != nil && afterFix(after) {
 		if after, err = runRepo(ctx, env, false); err != nil {
@@ -367,6 +374,21 @@ func repairRepo(ctx context.Context, env Env, afterFix func(Report) bool) (Repor
 	after.fixNotes = fixOnlyNotes(r.Notes, after)
 	after.Notes = withFixNotes(after.Notes, r.Notes)
 	return after, nil
+}
+
+// fixRunChangedNothing reports whether a fixing run can be the state
+// after it: no check or base repair marked a finding fixed, no warning or
+// error names a fix a repair could have applied silently, and no note
+// sits beside a warning or error of its own check (it may say why a repair
+// could not fix, which only the re-check tells apart: fixOnlyNotes). A
+// check that repairs reports Fixed (or its after-state, as the live
+// refspec and leak guard do), so such a run left nothing a re-check would
+// read differently.
+func fixRunChangedNothing(r Report) bool {
+	if len(r.fixedNow) > 0 || len(fixableLines(r)) > 0 {
+		return false
+	}
+	return len(fixOnlyNotes(r.Notes, Report{Warnings: r.Warnings, Errors: r.Errors})) == 0
 }
 
 // fixableLines are the warnings and errors whose source named a fix.
