@@ -204,8 +204,13 @@ func (s *liveSession) teamHookWrites(ctx context.Context, dir string, writes []h
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			continue // unreadable: ensureHookBlock reports it
 		}
-		if exists && hookBlockNext(string(cur), w.marker, w.lines) == string(cur) {
-			continue // lore's block is there as it would write it
+		if exists && hookBlockNext(string(cur), w.marker, w.lines) == string(cur) && hookFileRuns(p) {
+			// lore's block is there as it would write it. A file git holds
+			// without the exec bit counts as changed (D-732): ensureHookBlock
+			// would chmod it, and git tracks that bit, so a teammate's clone
+			// showed the committed post-checkout, post-merge and post-rewrite
+			// modified after a plain lore sync.
+			continue
 		}
 		if _, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"check-ignore", "-q", "--no-index", "--", p}}); err == nil {
 			continue // ignored: never part of the tree
@@ -373,4 +378,13 @@ func (s *liveSession) headOID(ctx context.Context) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// hookFileRuns reports whether the hook file at p has an exec bit, the
+// one thing besides its bytes that ensureHookBlock changes and git tracks
+// (100644 vs 100755): teamHookWrites lists a file without it as changed.
+// An unreadable file reads as running: ensureHookBlock reports it.
+func hookFileRuns(p string) bool {
+	info, err := os.Stat(filepath.Clean(p))
+	return err != nil || info.Mode().Perm()&rideExecBits != 0
 }
