@@ -688,8 +688,10 @@ func Registry(a *App) (*op.Registry, error) {
 		return nil, err
 	}
 	// devco D-623: a resource-routed read's --json names the folder it
-	// read (resourcefolder.go); the OpenAPI document promises the field.
-	return reg.WithTopFields(routedTopFields), nil
+	// read (resourcefolder.go); the OpenAPI document promises the field,
+	// and the personal store's unread folders of an empty read (D-771,
+	// personalunread.go).
+	return reg.WithTopFields(topFieldsOf(entries)), nil
 }
 
 // Registry returns the operations every surface mounts.
@@ -1016,7 +1018,11 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		return op.Result{}, err
 	}
 	res, err := a.run(ctx, e, d, c)
-	err = fitHomeHint(ctx, e, err)        // hintflags.go (devco:D-539)
+	err = fitHomeHint(ctx, e, err)            // hintflags.go (devco:D-539)
+	err = a.personalStoreHint(ctx, e, d, err) // personalunread.go (devco:D-771)
+	if err == nil {
+		res = a.noteUnreadPersonal(ctx, e, d, res) // personalunread.go (devco:D-771)
+	}
 	err = a.goneRowAnswer(ctx, e, d, err) // rowgone.go (devco:D-590)
 	err = purgedAsDeclared(e, err)        // rowgone.go: E_PURGED only where declared
 	if err != nil && top != "" {
