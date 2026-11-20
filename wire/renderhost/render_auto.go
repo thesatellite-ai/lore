@@ -75,6 +75,15 @@ func (h *Host) RenderHeld(ctx context.Context, root string) bool {
 // that are tracked or new, for the hook to stage; nil when the project
 // renders no tracked LORE.md or the render failed (a commit is never
 // refused over its render: the failure is one stderr line).
+//
+// "New" is the companion LORE.full.md this render just wrote beside a
+// tracked LORE.md: a project made by lore 0.1.17 commits LORE.md but never
+// had a full file, so `lore migrate run` and the commit it prints left
+// `?? .lore/LORE.full.md` in git status right after lore's own step (devco
+// D-759). The project commits its render, so the companion goes into the
+// same commit, unless git ignores it (a repo that keeps it out, or a
+// teammate's clone where keepRenderLocal excluded it) or it is a file of
+// that name lore did not write (never committed on the person's behalf).
 func (h *Host) CommitRender(ctx context.Context, root string) []string {
 	if !tracked(ctx, root, LoreMDRel) {
 		return nil
@@ -83,13 +92,32 @@ func (h *Host) CommitRender(ctx context.Context, root string) []string {
 		_, _ = os.Stderr.WriteString("lore: pre-commit: re-render " + LoreMDRel + ": " + err.Error() + "\n") // stderr gone: nothing left to report to
 		return nil
 	}
+	return commitRenderStage(ctx, root)
+}
+
+// commitRenderStage is CommitRender's choice of the render files to stage
+// after the refresh: each one git tracks, plus a new one lore wrote that
+// git does not ignore (newLoreRender).
+func commitRenderStage(ctx context.Context, root string) []string {
 	var stage []string
 	for _, rel := range renderFileRels {
-		if tracked(ctx, root, rel) {
-			stage = append(stage, rel) // an ignored LORE.full.md stays out of the commit
+		if tracked(ctx, root, rel) || newLoreRender(ctx, root, rel) {
+			stage = append(stage, rel)
 		}
 	}
 	return stage
+}
+
+// newLoreRender reports whether rel (slash-separated, under root) is a
+// render file lore wrote that git neither tracks nor ignores: the file
+// CommitRender adds to the commit beside the tracked LORE.md. A file of
+// that name without lore's header is the person's and is never staged.
+func newLoreRender(ctx context.Context, root, rel string) bool {
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil || !strings.HasPrefix(string(data), fullFileMarker) {
+		return false // missing, unreadable or not lore's own
+	}
+	return !ignored(ctx, root, rel)
 }
 
 // rowsUncommitted reports whether the row files of the project at root

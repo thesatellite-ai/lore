@@ -22,6 +22,9 @@ package stories
 //     migrated_by "Name <email>": the commit lore's hook refuses names
 //     `lore migrate run`, which keeps the name only, and the commit after
 //     it goes through the same hooks.
+//   - devco:D-759: the own repo committed 0.1.17's LORE.md and never had
+//     a LORE.full.md; the migration commit lore prints carries the full
+//     file the pre-commit refresh writes, so git status is clean after it.
 //   - devco:D-707: the run also moves the org's lore-org.yaml defaults into
 //     a policy row of the org store; it lists the store commits it made
 //     (store, commit, what) and says `lore sync` sends them, and the org
@@ -192,6 +195,16 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 		r := tc.TryGit("commit", "-q", "-m", "lore: migrate rows to format 2")
 		if r.Code != 0 || tc.Head() == before {
 			t.Fatalf("lore's own hooks refused the migration commit in an own repo: %s", r)
+		}
+		// D-759: the repo committed lore 0.1.17's LORE.md and never had a
+		// LORE.full.md; the hook's refresh writes it, and it goes into the
+		// same commit (named in the hook's line), so git status is clean
+		// right after the commit lore printed
+		if st := tc.Status(); st != "" {
+			t.Errorf("git status after the migration commit lore printed is not clean:\n%s\n%s", st, r)
+		}
+		if !strings.Contains(tc.Git("show", "--name-only", "--format=", "HEAD"), ".lore/LORE.full.md") || !strings.Contains(r.Stderr, "(and added .lore/LORE.full.md beside it)") {
+			t.Errorf("the migration commit does not carry the new .lore/LORE.full.md, or the hook does not name it:\n%s", r)
 		}
 	})
 

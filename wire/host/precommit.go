@@ -832,13 +832,39 @@ func (h *liveHost) stageCommitRender(ctx context.Context, render CommitRender) {
 	if len(files) == 0 {
 		return
 	}
+	added := notInIndex(ctx, repo, root, env, files)
 	if _, err := repo.Run(ctx, gitref.Invocation{Dir: root, Env: env, Args: append([]string{"add", "--"}, files...)}); err != nil {
 		h.line("lore: pre-commit: stage " + strings.Join(files, " and ") + ": " + err.Error())
 		return
 	}
 	if stagedDiffers(ctx, repo, root, env, files...) {
-		h.line(commitRenderLine)
+		line := commitRenderLine
+		if len(added) > 0 {
+			// D-759: a file the commit adds for the first time (the
+			// LORE.full.md a 0.1.17 project never had) is named, so a
+			// new file in the commit is never a surprise
+			line += fmt.Sprintf(commitRenderAddedLine, strings.Join(added, " and "))
+		}
+		h.line(line)
 	}
+}
+
+// commitRenderAddedLine ends commitRenderLine when the refresh added a
+// render file the index did not hold yet.
+const commitRenderAddedLine = " (and added %s beside it)"
+
+// notInIndex are the paths (relative to root) the index being committed
+// does not hold yet. A git failure counts the path as held: the line only
+// names what it is sure the commit adds.
+func notInIndex(ctx context.Context, repo *gitref.Repo, root string, env, paths []string) []string {
+	var out []string
+	for _, p := range paths {
+		held, err := repo.Run(ctx, gitref.Invocation{Dir: root, Env: env, Args: []string{"ls-files", "--", p}})
+		if err == nil && len(bytes.TrimSpace(held)) == 0 {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // stagedDiffers reports whether the index being committed differs from
