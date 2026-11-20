@@ -102,6 +102,18 @@ func TestJourneyAdoptRunsTheSecretScan(t *testing.T) {
 				t.Errorf("%s is not redacted:\n%s", p, body)
 			}
 		}
+		// devco:D-762: each redacted row gets its store-then-rotate task in
+		// the folder, as the flag's help says
+		tasks := ""
+		for _, p := range tt.store.FilesMatching("refs/heads/main", "keys_unstored/tasks/") {
+			body, _ := tt.store.Read("refs/heads/main", p)
+			tasks += body
+		}
+		for _, id := range []string{idA, idB} {
+			if !strings.Contains(tasks, "secret-unstored-"+id) {
+				t.Errorf("no store-then-rotate task for %s in the folder:\n%s", id, tasks)
+			}
+		}
 	})
 
 	w.Step("day1/secret-ref-one-per-finding", func() {

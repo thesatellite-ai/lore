@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/checklist"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -101,6 +102,12 @@ type AddIn struct {
 	// or a JSON field.
 	status    string
 	checklist []checklist.Item
+	// placeProject is the project of the store folder a secret auto-task
+	// goes to (AddSecretTask, devco:D-762). Without it add resolved "this
+	// repo's project", which a task written into a store folder from
+	// another place (store adopt's folder engine, a home folder) does not
+	// have. Never a flag or a JSON field; zero resolves --project.
+	placeProject ids.ID[ids.Project]
 }
 
 // Inherited is what a new sub-task copied from its parent (6.5: the output

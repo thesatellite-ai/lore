@@ -351,7 +351,12 @@ func Ops(env Env) []op.Entry {
 				{Title: "where it came from, as JSON", CLI: "lore show --id mem_01a1b49cf238767ca425d36a07b5cc1e --origin --json", Want: `"origin"`},
 			}}, o.show),
 		op.Define(op.Spec{Name: OpMove, Summary: "Move any row to another store, keeping its id (the old copy is tombstoned)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{Always: true},
+			// MayAsk too (devco:D-762): a bulk move's secret scan refuses
+			// naming the reruns with --secret-unstored, --secret-ref and
+			// --not-a-secret, and the surfaces bind those flags on MayAsk
+			// only; with Always alone `lore move` rejected the very
+			// commands its own refusal printed.
+			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{Always: true, MayAsk: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.InTrash, errs.MetaInternal, errs.MetaQuarantined, errs.LeakBlocked,
 				errs.StoreReadOnly, errs.Stale, errs.Unsupported, errs.NotImplemented, errs.Internal}, Examples: []op.Example{{Title: "move a row to your personal store", CLI: "lore row move --id mem_0c3a --to me"},
 				{Title: "move every row of a folder to another store, one commit per store (list first)", CLI: "lore move --from notes/old --to notes/new --dry-run"}}}, o.move).Asks(o.moveQuestion),

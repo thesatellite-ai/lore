@@ -12,14 +12,14 @@ package wire
 //	             ─▶ RedactTasks (store-then-rotate tasks, D21)
 
 import (
-	"strings"
-
 	"context"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/op"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -31,6 +31,7 @@ type adoptScan struct {
 	plan   engine.SecretPlan
 	rows   []row.Row // the decoded rows of the changes, in change order
 	app    *App      // the folder App eng belongs to (close)
+	folder string    // the target folder's name (its project row's name)
 }
 
 // adoptScanSource names the target folder in the scan's own engine.
@@ -76,7 +77,7 @@ func (a *App) adoptSecretPlan(ctx context.Context, in opsstores.AdoptIn, at fold
 		_ = x.Close()
 		return adoptScan{}, err
 	}
-	return adoptScan{eng: eng, app: x, target: target, plan: plan, rows: rows}, nil
+	return adoptScan{eng: eng, app: x, target: target, plan: plan, rows: rows, folder: folderName}, nil
 }
 
 // adoptRerun is the adopt command to repeat with a secret answer.
@@ -151,9 +152,25 @@ func adoptArg(s string) string {
 }
 
 // redactTasks adds the store-then-rotate task of each redacted row (D21).
+//
+// The task and its "secrets" list name the folder's project, so its row
+// is made first when the folder has none (devco:D-762): adopt leaves the
+// repo's project row behind and a fresh folder has no row of its own, so
+// the list's project_id named a row no store held and the task was never
+// added, though --secret-unstored says it is.
 func (s adoptScan) redactTasks(ctx context.Context, ws []engine.RedactedWrite) error {
 	if s.eng == nil || len(ws) == 0 {
 		return nil
+	}
+	// adopt is registered as a read (its rows go in one git commit, not
+	// through the engine); the project row and the task are engine writes
+	ctx = engine.WithAccess(ctx, op.AccessWrite)
+	st, err := s.app.state(ctx)
+	if err != nil {
+		return errs.Prefix("the rows are stored but a store-then-rotate task failed (lore secrets check adds it)", err)
+	}
+	if _, err := s.app.rosterProject(ctx, st, s.target, s.folder); err != nil {
+		return errs.Prefix("the rows are stored but a store-then-rotate task failed (lore secrets check adds it)", err)
 	}
 	return s.eng.RedactTasks(ctx, ws)
 }

@@ -40,7 +40,7 @@ type SecretTask struct {
 // Lore never closes it: only rotation ends the exposure (7).
 func AddSecretTask(ctx context.Context, env work.Env, t SecretTask) (id string, existed bool, err error) {
 	o := ops{env: env}
-	project, err := work.Project(ctx, env, Noun, "")
+	project, err := secretTaskProject(ctx, env, t.Store)
 	if err != nil {
 		return "", false, err
 	}
@@ -63,11 +63,38 @@ func AddSecretTask(ctx context.Context, env work.Env, t SecretTask) (id string, 
 	if err != nil {
 		return "", false, err
 	}
-	out, err := o.add(ctx, AddIn{Title: t.Title, Body: t.Body, Key: t.Key, Tasklist: list, Ref: t.Rows, To: string(t.Store)})
+	out, err := o.add(ctx, AddIn{Title: t.Title, Body: t.Body, Key: t.Key, Tasklist: list, Ref: t.Rows, To: string(t.Store), placeProject: project})
 	if err != nil {
 		return "", false, err
 	}
 	return out.Data.ID, out.existed, nil
+}
+
+// PlaceProjecter is the optional Env method that names the project of
+// one attached place: a store folder's own project (its _meta.json id).
+// ok is false for the repo store and a store root, which keep "this
+// repo's project". Why (devco:D-762): the secret auto-task goes beside
+// the row, so its project is the row's folder's, not the project of the
+// place the command runs in; `lore store adopt --target <store>/<folder>
+// --secret-unstored` scans in an engine of the folder alone, where "this
+// repo's project" does not exist, and the task was never added.
+type PlaceProjecter interface {
+	PlaceProject(ctx context.Context, src store.Source) (pid ids.ID[ids.Project], ok bool, err error)
+}
+
+// secretTaskProject is the project a secret auto-task in src belongs to:
+// the folder's own when src is a store folder, else the repo's.
+func secretTaskProject(ctx context.Context, env work.Env, src store.Source) (ids.ID[ids.Project], error) {
+	if pp, ok := env.(PlaceProjecter); ok && src != "" && src != store.SourceRepo {
+		pid, found, err := pp.PlaceProject(ctx, src)
+		if err != nil {
+			return ids.ID[ids.Project]{}, err
+		}
+		if found {
+			return pid, nil
+		}
+	}
+	return work.Project(ctx, env, Noun, "")
 }
 
 // secretsTasklist finds or creates the "secrets" tasklist of project.
