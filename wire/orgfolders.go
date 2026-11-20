@@ -237,14 +237,17 @@ func (s orgFolderScan) missDetail() string {
 }
 
 // refusedClone reports whether the clone of the store at url (branch ""
-// = its default clone) holds the no-access record of a refused fetch.
+// = its default clone) is skipped as one this login cannot reach: a
+// refused fetch recorded and no copy of the store here
+// (git.NoAccessSkips, devco D-741: a record alone made every read by id
+// skip a store this machine reads and writes).
 func refusedClone(home, url, branch string) bool {
 	norm, err := repourl.NormalizeStore(url)
 	if err != nil {
 		return false
 	}
 	dir, _, err := git.CloneDirFor(home, git.Remote{Norm: norm}, branch)
-	return err == nil && git.NoAccessRecorded(dir)
+	return err == nil && git.NoAccessSkips(dir)
 }
 
 var _ opsinfra.OrgFolderLister = (*App)(nil)

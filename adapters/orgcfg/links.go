@@ -299,8 +299,8 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		if berr := ensureClone(ctx, dir, sc.URL, own); berr != nil {
 			return nil, entryUnknown, "", berr
 		}
-		if _, _, refused := noAccessAt(dir); refused && !g.Always {
-			continue // D-726: refused at the last fetch; skipped until the next lore sync
+		if gitbackend.NoAccessSkips(dir) && !g.Always {
+			continue // D-726: refused, and no copy here; skipped until the next lore sync (D-741)
 		}
 		last := lastFetch(dir)
 		offline := false
@@ -319,7 +319,13 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 			// outage, so it never makes the entry unknown; it is skipped
 			// for this person and named once by whoami and doctor
 			markNoAccess(dir, k, g.now())
-			continue
+			if last.IsZero() {
+				continue
+			}
+			// D-741: a copy fetched here before is read as it is (the
+			// refusal may be this run's credentials, not the person's), as
+			// fresh as its last fetch says, never as an outage
+			offline = false
 		}
 		branch := sc.EffectiveBranch()
 		if branch != g.DefaultBranch(ctx, norm) && !allowStaging {
@@ -399,8 +405,8 @@ func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org, ttl time.Durati
 			continue
 		}
 		seen[dir] = true
-		if _, _, refused := noAccessAt(dir); refused && !g.Always {
-			continue // D-726: skipped until the next lore sync
+		if gitbackend.NoAccessSkips(dir) && !g.Always {
+			continue // D-726: skipped until the next lore sync (D-741: only with no copy here)
 		}
 		last := lastFetch(dir)
 		if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {

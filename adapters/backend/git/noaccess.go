@@ -38,6 +38,25 @@ func NoAccessRecorded(dir string) bool {
 	return err == nil && strings.TrimSpace(string(b)) != ""
 }
 
+// NoAccessSkips reports whether a read skips the clone at dir as one this
+// login cannot reach: its last fetch was refused (NoAccessRecorded) and
+// it holds no copy of the store (no fetch ever worked here: no fetch
+// stamp). Every reader that skips a refused store asks this one rule
+// (devco D-741).
+//
+// Why the local copy decides: a record is written by whichever lore run
+// saw the refusal, and that run may have had other credentials than the
+// person's own (a pre-commit hook run by an editor with no ssh agent, a
+// harness git with another HOME). A store this machine has a copy of is
+// read from that copy, as any offline store is, so one refused fetch
+// never hides a store the person reads and writes every day; the next
+// fetch that works removes the record (stampFetch, the org reader's
+// fetchLocked). A store never fetched here has nothing to read, so it is
+// skipped without a new connection until `lore sync` tries it again.
+func NoAccessSkips(dir string) bool {
+	return NoAccessRecorded(dir) && !FetchedOnce(dir)
+}
+
 // ErrNoAccessRecorded marks a refused first open whose cause is the
 // clone's no-access record (the fetch's own text may say less, e.g. a
 // fetch that was skipped), so AccessRefused answers true for it.

@@ -19,6 +19,9 @@ package orgcfg
 //	no-access record present  ─▶ skipped without a fetch (no retry storm)
 //	                              until the next `lore sync` (GitLinks.Always)
 //	                              tries once more; a fetch that works removes it
+//	                              (here or in the backend: stampFetch)
+//	record, but a copy here   ─▶ read from the copy as usual (D-741:
+//	                              gitbackend.NoAccessSkips is the one rule)
 //
 // whoami and doctor name each skipped store once (NoAccessStores).
 
@@ -119,6 +122,9 @@ func NoAccessStores(home string, cfg *orgconf.Config, only map[string]bool) []No
 			}
 			seen[o.Name+" "+norm] = true
 			dir, _ := cloneDir(home, norm)
+			if !gitbackend.NoAccessSkips(dir) {
+				continue // D-741: a clone with a copy here is read from it, never skipped
+			}
 			if k, at, ok := noAccessAt(dir); ok {
 				out = append(out, NoAccess{Org: o.Name, Store: sc, Kind: k, Since: at})
 			}

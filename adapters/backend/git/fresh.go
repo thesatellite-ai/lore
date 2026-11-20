@@ -27,7 +27,12 @@ const FetchStampFile = "fetch-stamp"
 var _ store.Freshness = (*Backend)(nil)
 
 // stampFetch records a successful fetch run in dir (best effort: a stamp
-// that cannot be written only makes Fresh report "unknown").
+// that cannot be written only makes Fresh report "unknown"). The remote
+// answered this login, so a no-access record of an earlier refused fetch
+// (noaccess.go) goes too (devco D-741): only the org link reader's own
+// fetch removed it, so a record left by one refused fetch outlived every
+// sync, push and open that reached the store, and every read by id kept
+// skipping a store this machine reads and writes.
 func (b *Backend) stampFetch(ctx context.Context, dir string) {
 	root, err := b.stampRoot(ctx, dir)
 	if err != nil {
@@ -36,6 +41,7 @@ func (b *Backend) stampFetch(ctx context.Context, dir string) {
 	defer func() { _ = root.Close() }()
 	_ = root.MkdirAll(StateDirName, cloneDirMode)                                                                               // best effort, see doc
 	_ = root.WriteFile(filepath.Join(StateDirName, FetchStampFile), []byte(b.cfg.now().UTC().Format(time.RFC3339)+"\n"), 0o600) // best effort, see doc
+	_ = root.Remove(filepath.Join(StateDirName, NoAccessFile))                                                                  // best effort: absent is the usual case
 }
 
 // stampRoot opens the git common directory of the clone dir belongs to;

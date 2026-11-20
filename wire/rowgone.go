@@ -200,13 +200,17 @@ func storedRowID(id string) bool {
 }
 
 // noStoreHoldsErr is E_NOT_FOUND for an id no store clone on this
-// machine holds (devco:D-589): the places lore looked in, and the one way
-// a row it has not seen yet arrives. It names no flag of the command.
-func noStoreHoldsErr(id string, looked []string) error {
+// machine holds (devco:D-589): the places lore looked in, each store it
+// could not look in (skipped, devco:D-741), and the one way a row it has
+// not seen yet arrives. It names no flag of the command.
+func noStoreHoldsErr(id string, looked, skipped []string) error {
 	sort.Strings(looked)
 	msg := id + " is in no store of any setup on this machine"
 	if len(looked) > 0 {
 		msg += "; looked in " + strings.Join(looked, ", ")
+	}
+	if len(skipped) > 0 {
+		msg += "; did not look in " + strings.Join(skipped, ", ")
 	}
 	return errs.New(errs.NotFound, msg).
 		WithHint("check the id; a row a teammate wrote arrives once they push it and you run `lore sync --setup <setup>` (`lore setup list` names your setups)")
