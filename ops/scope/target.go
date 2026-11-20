@@ -123,7 +123,11 @@ func ForWrite(ctx context.Context, env Env, raw, to, repo string, edit bool) (Ta
 		t.ClearScope = true
 		return t, nil
 	}
-	if to != "" && to != string(store.SourceRepo) {
+	home, err := Home(ctx, env)
+	if err != nil {
+		return Target{}, err
+	}
+	if to != "" && to != string(store.SourceRepo) && store.Source(to) != home {
 		return Target{}, errs.New(errs.InvalidInput, "--scope "+spec.Label()+": folder scopes are rows of the repo store; it cannot go with --to "+to)
 	}
 	w, err := checkDir(ctx, env, spec.Path)
@@ -237,26 +241,64 @@ func Ensure(ctx context.Context, env Env, rid, dir string) (ids.AnyID, error) {
 	if err != nil {
 		return ids.AnyID{}, errs.Wrap(errs.InvalidInput, "scope: path", err)
 	}
-	w, err := env.Create(ctx, store.SourceRepo, schema.TableScopes, map[string]value.Value{fieldRepo: ref, fieldPath: p})
+	home, err := Home(ctx, env)
+	if err != nil {
+		return ids.AnyID{}, err
+	}
+	w, err := env.Create(ctx, home, schema.TableScopes, map[string]value.Value{fieldRepo: ref, fieldPath: p})
 	if err != nil {
 		return ids.AnyID{}, err
 	}
 	return w.Row.ID, nil
 }
 
-// Rows lists the live scope rows of repo rid in the repo store.
+// Rows lists the live scope rows of repo rid in the repo store and, in a
+// linked repo, in the folder its link names (Home; devco D-736).
 func Rows(ctx context.Context, env Env, rid string) ([]row.Row, error) {
-	all, err := env.List(ctx, store.SourceRepo, schema.TableScopes)
-	if err != nil {
-		return nil, err
-	}
 	var out []row.Row
-	for _, r := range all {
-		if !r.Deleted && text(r, fieldRepo) == rid {
-			out = append(out, r)
+	for _, src := range scopeStores(ctx, env) {
+		all, err := env.List(ctx, src, schema.TableScopes)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range all {
+			if !r.Deleted && text(r, fieldRepo) == rid {
+				out = append(out, r)
+			}
 		}
 	}
 	return out, nil
+}
+
+// RepoHomer is the optional Env upgrade (wire.App) naming the store a
+// repo's own rows go to: the repo store, or in a linked repo the store
+// folder its link names (devco D-736: a linked repo's .lore/data holds no
+// rows). An error is a linked folder not open here.
+type RepoHomer interface {
+	RepoHomeStore(ctx context.Context) (src store.Source, linked bool, err error)
+}
+
+// Home is the store a new folder scope row goes to (RepoHomer; the repo
+// store without it), so `--scope dir:<path>` in a linked repo writes its
+// scopes row beside the rows that use it, never into the repo.
+func Home(ctx context.Context, env Env) (store.Source, error) {
+	h, ok := upgrade.As[RepoHomer](env)
+	if !ok {
+		return store.SourceRepo, nil
+	}
+	src, _, err := h.RepoHomeStore(ctx)
+	return src, err
+}
+
+// scopeStores is where scope rows of this repo are read: the repo store,
+// plus the linked folder when the repo is linked and it is open (rows
+// written before D-736 stay readable in the repo).
+func scopeStores(ctx context.Context, env Env) []store.Source {
+	out := []store.Source{store.SourceRepo}
+	if home, err := Home(ctx, env); err == nil && home != store.SourceRepo {
+		out = append(out, home)
+	}
+	return out
 }
 
 // text is a field's text form ("" when absent or null).
@@ -282,8 +324,11 @@ func PlaceOf(ctx context.Context, env Env, r row.Row) dirscope.Place {
 	if err != nil {
 		return p
 	}
-	if _, s, err := env.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: schema.TableScopes, ID: id}); err == nil && !s.Deleted {
-		p.Path = text(s, fieldPath)
+	for _, src := range scopeStores(ctx, env) {
+		if _, s, err := env.Get(ctx, engine.Ref{Store: src, Table: schema.TableScopes, ID: id}); err == nil && !s.Deleted {
+			p.Path = text(s, fieldPath)
+			break
+		}
 	}
 	return p
 }

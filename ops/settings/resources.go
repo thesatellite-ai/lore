@@ -1023,7 +1023,10 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	if err = checkResourceName(d, in.Name); err != nil {
 		return RowOut{}, err
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	if string(target) == storeMe {
 		return RowOut{}, errs.New(errs.ResourcePlace, "--to me: resources are team facts, not personal ones").WithHint("--to repo or --to <store>[/<folder>]")
 	}

@@ -26,7 +26,6 @@ import (
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	"github.com/thesatellite-ai/lore/schema"
-	"github.com/thesatellite-ai/lore/store"
 )
 
 // renameStatusPrefix starts a rename line of `git show --name-status`.
@@ -69,7 +68,7 @@ func (g GoneScope) Line() string {
 // listing of the scopes rows and a stat per scope; git runs only for a
 // scope that is gone.
 func (a *App) GoneScopes(ctx context.Context, top string) ([]GoneScope, error) {
-	rows, err := a.List(ctx, store.SourceRepo, schema.TableScopes)
+	rows, err := a.RepoScopeRows(ctx) // D-736: a linked repo's scopes live in its folder
 	if err != nil {
 		return nil, err
 	}

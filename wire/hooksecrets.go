@@ -118,6 +118,7 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 	if err != nil {
 		return 0, err
 	}
+	allows.entries = append(allows.entries, a.linkedAllows(ctx)...)
 	_, isGit, inStore := rowfs.StoreTop(root)
 	inStore = inStore && isGit
 	paths := make([]string, 0, len(docs))
@@ -302,11 +303,48 @@ func committedAllows(ctx context.Context, root string) (hookAllows, error) {
 	return allows, nil
 }
 
+// linkedAllows is the secret_allows entries of the store folder a linked
+// repo's link names (devco D-736): there `lore secrets allow --file`
+// writes them, since a linked repo's .lore/data holds no rows, and lore
+// commits them to the store itself. nil in an unlinked repo, and when the
+// folder cannot be read here: the check then takes fewer allows, never
+// more (fail closed).
+func (a *App) linkedAllows(ctx context.Context) []scan.Allow {
+	src, linked, err := a.RepoHomeStore(ctx)
+	if err != nil || !linked {
+		return nil
+	}
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return nil
+	}
+	rows, err := eng.List(ctx, src, schema.TableSecretAllows)
+	if err != nil {
+		return nil
+	}
+	var out []scan.Allow
+	for _, r := range rows {
+		if al, ok := allowOfRow(r); ok {
+			out = append(out, al)
+		}
+	}
+	return out
+}
+
 // allowOfFile reads one secret_allows row file; false for a deleted,
 // malformed or incomplete entry (every part must be there: fail closed).
 func allowOfFile(b []byte) (scan.Allow, bool) {
 	r, err := row.Decode(b)
-	if err != nil || r.Deleted {
+	if err != nil {
+		return scan.Allow{}, false
+	}
+	return allowOfRow(r)
+}
+
+// allowOfRow reads one secret_allows row (a decoded file, or a row of the
+// linked folder); false for a deleted, malformed or incomplete entry.
+func allowOfRow(r row.Row) (scan.Allow, bool) {
+	if r.Deleted {
 		return scan.Allow{}, false
 	}
 	n, ok := r.Fields[allowFieldHash].(value.Number)

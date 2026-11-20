@@ -154,7 +154,11 @@ func (o ops) metaAdopt(ctx context.Context, in MetaAdoptIn) (MetaMoveOut, error)
 	if in.From == "" {
 		return MetaMoveOut{}, errs.New(errs.InvalidInput, "meta adopt needs --from <place>")
 	}
-	from, to := store.Source(in.From), targetOf(in.To)
+	from := store.Source(in.From)
+	to, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return MetaMoveOut{}, herr
+	}
 	if from == to {
 		return MetaMoveOut{}, errs.New(errs.InvalidInput, "--from and --to name the same place").WithHint("--from is the other place (<store> or <store>/<folder>); --to defaults to this repo")
 	}
@@ -254,7 +258,10 @@ func (o ops) metaMoveKey(ctx context.Context, in MetaMoveIn) (MetaMoveOut, error
 	if err != nil {
 		return MetaMoveOut{}, err
 	}
-	to := targetOf(in.To)
+	to, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return MetaMoveOut{}, herr
+	}
 	name := text(k.Row, mName)
 	switch to {
 	case k.Src:

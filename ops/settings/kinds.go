@@ -464,7 +464,10 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 	if err := optTexts(fields, map[string]string{kName: in.Kind, kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render, kSecretMgr: in.SecretManager, kAddedBy: byWhom}); err != nil {
 		return RowOut{}, err
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	if err := personalPlaceRefused("resource kind add", "a kind", "kinds live in the repo (or an org store) so resources can use them: drop --to me", target); err != nil {
 		return RowOut{}, err
 	}

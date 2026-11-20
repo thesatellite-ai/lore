@@ -34,7 +34,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
-	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -247,7 +246,7 @@ func (h *Host) scopePathsOfRepo(ctx context.Context) map[string]string {
 	if !ok {
 		return out
 	}
-	rows, err := h.app.List(ctx, store.SourceRepo, schema.TableScopes)
+	rows, err := h.app.RepoScopeRows(ctx) // D-736: a linked repo's scopes live in its folder
 	if err != nil {
 		return out
 	}

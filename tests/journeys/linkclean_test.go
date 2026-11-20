@@ -13,7 +13,9 @@ package journeys
 // (it has none) and removes the actor row the folder holds, as a diff
 // lore's own pre-commit takes; what is left is the repo's identity
 // (_meta.json, its project and repos rows) and the named deletion record.
-// Reads, writes with no --to, policy show and branch mode still work.
+// Reads, writes with no --to, policy show and branch mode still work, and
+// `lore secrets allow --file` for a finding in a repo file writes its
+// entry to the folder, which the commit check then honours.
 
 import (
 	"os"
@@ -87,6 +89,30 @@ func TestJourneyLinkedRepoDoctorCleansRows(t *testing.T) {
 		}
 		// a second doctor has nothing to fix; the kept record is still named
 		lee.LoreIn(repo, "doctor").Never(t, "lore doctor --fix").Says(t, "memories/"+gone+" stays")
+	})
+
+	w.Step("day2/secrets-allow-file-lands-in-the-folder", func() {
+		// D-736 (secrets allow class): a finding in a repo file of the
+		// cleaned linked repo is allowed with the printed line; the entry
+		// lands in the folder (it refused "this repo has no lore project"
+		// and wrote into the repo), and the commit check reads it there.
+		pw := "Zq7" + strings.Repeat("x9K", 6) // built at run time: no password literal in the repo
+		repo.WriteFile("config.yaml", "db:\n  password: \""+pw+"\"\n")
+		repo.Git("add", "config.yaml")
+		r := repo.TryGit("commit", "-q", "-m", "config").Refused(t, "E_LEAK_BLOCKED", "config.yaml").Never(t, pw)
+		lines := allowLine.FindAllString(r.Out(), -1)
+		if len(lines) == 0 {
+			t.Fatalf("no ready allow line:\n%s", r.Out())
+		}
+		for _, l := range lines {
+			args := append(strings.Fields(strings.TrimPrefix(l, "lore ")), "--reason", "sample password in a fixture", "--yes")
+			lee.LoreIn(repo, args...).OK(t).Says(t, "marked not a secret", "saved in "+place).Never(t, "commit the new .lore/data")
+		}
+		if st := repo.Status(); strings.Contains(st, ".lore/data") {
+			t.Errorf("secrets allow --file wrote into the cleaned linked repo:\n%s", st)
+		}
+		repo.TryGit("commit", "-q", "-m", "config").OK(t)
+		lee.LoreIn(repo, "secrets", "allow", "list").OK(t).Says(t, "config.yaml")
 	})
 
 	w.Step("day2/reads-writes-policy-and-branch-mode-still-work", func() {

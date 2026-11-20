@@ -65,7 +65,10 @@ func (o ops) policySetQuestion(ctx context.Context, in PolicySetIn) (string, err
 	if !ok {
 		return "", nil
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return "", herr
+	}
 	if err := o.checkPolicyWrite(ctx, target, d.Key, policyCommand("set", in.Key, in.Value, o.adminTo(ctx, target, in.To))); err != nil {
 		return "", err
 	}
@@ -83,7 +86,10 @@ func (o ops) policyUnsetQuestion(ctx context.Context, in PolicyUnsetIn) (string,
 	if !ok {
 		return "", nil
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return "", herr
+	}
 	if err := o.checkPolicyWrite(ctx, target, d.Key, policyCommand("unset", in.Key, "", o.adminTo(ctx, target, in.To))); err != nil {
 		return "", err
 	}

@@ -498,7 +498,7 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 		if err != nil {
 			return MoveOut{}, errs.Wrap(errs.InvalidInput, "scope move: path", err)
 		}
-		if _, err := o.env.Update(ctx, engine.Ref{Store: store.SourceRepo, Table: schema.TableScopes, ID: refs[i].ID}, map[string]value.Value{fieldPath: p}); err != nil {
+		if _, err := o.env.Update(ctx, engine.Ref{Table: schema.TableScopes, ID: refs[i].ID}, map[string]value.Value{fieldPath: p}); err != nil { // D-736: the row's own store (repo, or a linked repo's folder)
 			return MoveOut{}, err
 		}
 	}

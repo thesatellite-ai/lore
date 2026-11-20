@@ -26,7 +26,9 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -93,4 +95,61 @@ func (a *App) LinkedFolderStore(ctx context.Context) (store.Source, bool) {
 		return "", false
 	}
 	return a.linkedFolderSource(ctx, eng, a.linkedFolderTarget(ctx, top))
+}
+
+// RepoHomeStore is the store a write that names "this repo" with no --to
+// goes to (devco D-736, the secrets-allow class): the repo store in an
+// unlinked repo, the attached store folder its org link names in a linked
+// own repo whose .lore/data holds no project row (after lore doctor
+// --fix; the condition Project() uses). linked says which. A linked
+// folder this command has not opened is E_STORE_UNREACHABLE naming the
+// link: the write is refused, never put back into the repo. It satisfies
+// the optional repoHomer upgrade of ops/settings and ops/scope
+// structurally.
+func (a *App) RepoHomeStore(ctx context.Context) (src store.Source, linked bool, err error) {
+	top := a.ownLinkedTop(ctx)
+	if top == "" {
+		return store.SourceRepo, false, nil
+	}
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return "", true, err
+	}
+	// As Project() (linkedRepoProject): only a linked repo with no project
+	// row of its own has moved its home to the folder; one that still holds
+	// its rows keeps its repo-level settings where they are.
+	prj, err := eng.List(ctx, store.SourceRepo, schema.TableProjects)
+	if err != nil {
+		return "", false, err
+	}
+	for _, r := range prj {
+		if !r.Deleted {
+			return store.SourceRepo, false, nil
+		}
+	}
+	name := a.linkedFolderTarget(ctx, top)
+	src, open := a.linkedFolderSource(ctx, eng, name)
+	if !open {
+		return "", true, errs.New(errs.StoreUnreachable, "this repo is linked to "+name+", which holds its settings, and that folder is not attached here").
+			WithHint("run `lore sync` to fetch the store; `lore whoami` shows the link")
+	}
+	return src, true, nil
+}
+
+// RepoScopeRows is the scopes rows of this checkout as written: the repo
+// store's, plus the linked folder's in a linked repo (devco D-736:
+// `--scope dir:<path>` writes its scopes row to RepoHomeStore). A linked
+// folder not open here adds nothing. Callers filter by repo_id.
+func (a *App) RepoScopeRows(ctx context.Context) ([]row.Row, error) {
+	rows, err := a.List(ctx, store.SourceRepo, schema.TableScopes)
+	if err != nil {
+		return nil, err
+	}
+	if home, linked, herr := a.RepoHomeStore(ctx); herr == nil && linked {
+		more, lerr := a.List(ctx, home, schema.TableScopes)
+		if lerr == nil {
+			rows = append(rows, more...)
+		}
+	}
+	return rows, nil
 }
