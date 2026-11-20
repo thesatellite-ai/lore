@@ -121,9 +121,11 @@ func TestJourneyGitExecBudgetTeam(t *testing.T) {
 // subprocesses (the commit itself, its auto maintenance, what a push's
 // transport starts) are not counted: lore cannot change them. The owner's
 // target is at most 5 for a plain commit; each budget is the measured
-// count. A push here is 5 (the leak check's two rev-lists, the data folder
-// status, the two store clones' status); with live rows waiting it also
-// pushes refs/lore/live and lists the commits it sends (7).
+// count. A push here is 4 (the leak check's rev-list --objects and
+// diff-tree of the pushed commits, the data folder status, the store
+// clone's status; its other rev-lists of the pushed range are answered
+// in-process, devco:D-780); with live rows waiting it also pushes
+// refs/lore/live and lists the commits it sends.
 var hookBudget = map[string]int{"commit": 5, "commit -a": 5, "push": 5}
 
 // hookExecPath is a git exec path whose git logs every call with its

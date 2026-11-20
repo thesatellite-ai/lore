@@ -1,6 +1,7 @@
 package gitfast
 
-// walk.go — commit-graph questions (rev-list --count, merge-base) over
+// walk.go — commit-graph questions (rev-list --count, a line of new
+// commits with its boundary, merge-base) over
 // full object ids, without a git process. Large histories fall back.
 
 import (
@@ -193,4 +194,128 @@ func mergeBase(r *repo, args []string) (Reply, bool) {
 		return Reply{}, false // criss-cross: git picks by its own order
 	}
 	return Reply{Out: []byte(best[0] + "\n")}, true
+}
+
+// revListRange answers the commit listings the leak checks of the commit
+// and push hooks ask (devco:D-780):
+//
+//	rev-list [--boundary] [--parents] [--no-merges] <tip> [^<rev>…] [--not (<rev>|--remotes[=<remote>])…]
+//
+// Only one tip whose new commits form a line (no merge among them) is
+// answered: for a line git's order is fixed (the tip first, then each
+// parent; the one boundary commit, prefixed "-", last), whatever the
+// commit dates say. Everything else (several tips, a merge, a glob in
+// --remotes=, any other flag) is left to git. Why: each of these ran one
+// git process in every commit and push hook, over the hook budget of 5.
+func revListRange(r *repo, args []string) (Reply, bool) {
+	boundary, withParents, negated := false, false, false
+	var tips, negs []string
+	for _, a := range args {
+		switch {
+		case a == "--boundary":
+			boundary = true
+		case a == "--parents":
+			withParents = true
+		case a == "--no-merges":
+			// a line has no merge to drop
+		case a == "--not":
+			negated = !negated
+		case a == "--remotes" || strings.HasPrefix(a, "--remotes="):
+			if !negated || a == "--remotes=" {
+				return Reply{}, false // a positive --remotes lists several tips
+			}
+			ids, ok := remoteTips(r, strings.TrimPrefix(strings.TrimPrefix(a, "--remotes"), "="))
+			if !ok {
+				return Reply{}, false
+			}
+			negs = append(negs, ids...)
+		case strings.HasPrefix(a, "-") || a == "":
+			return Reply{}, false
+		default:
+			n, caret := strings.CutPrefix(a, "^")
+			if n == "" || strings.HasPrefix(n, "-") {
+				return Reply{}, false
+			}
+			id, ok := commitArg(r, n)
+			if !ok {
+				return Reply{}, false
+			}
+			if caret != negated {
+				negs = append(negs, id)
+			} else {
+				tips = append(tips, id)
+			}
+		}
+	}
+	if len(tips) != 1 {
+		return Reply{}, false
+	}
+	objs, err := r.objects()
+	if err != nil {
+		return Reply{}, false
+	}
+	have, ok := ancestors(objs, negs)
+	if !ok {
+		return Reply{}, false
+	}
+	var b strings.Builder
+	line := func(prefix, id string, ps []string) {
+		b.WriteString(prefix + id)
+		if withParents {
+			for _, p := range ps {
+				b.WriteString(" " + p)
+			}
+		}
+		b.WriteByte('\n')
+	}
+	for cur, n := tips[0], 0; !have[cur]; n++ {
+		if n > maxWalk {
+			return Reply{}, false
+		}
+		ps, ok := parents(objs, cur)
+		if !ok || len(ps) > 1 {
+			return Reply{}, false // a merge: git orders its sides by date
+		}
+		line("", cur, ps)
+		if len(ps) == 0 {
+			break // the root: no boundary
+		}
+		if have[ps[0]] && boundary {
+			bps, ok := parents(objs, ps[0])
+			if !ok {
+				return Reply{}, false
+			}
+			line("-", ps[0], bps)
+		}
+		cur = ps[0]
+	}
+	return Reply{Out: []byte(b.String())}, true
+}
+
+// remoteTips are the commits of the refs `--remotes[=<remote>]` names:
+// every refs/remotes/ ref, or those under refs/remotes/<remote>/. ok is
+// false for a glob (git matches it its own way) or an unreadable ref.
+func remoteTips(r *repo, remote string) ([]string, bool) {
+	if strings.ContainsAny(remote, "*?[\\") {
+		return nil, false
+	}
+	prefix := "refs/remotes/"
+	if remote != "" {
+		prefix += strings.TrimSuffix(remote, "/") + "/"
+	}
+	refs, ok := r.listRefs()
+	if !ok {
+		return nil, false
+	}
+	var ids []string
+	for name, id := range refs {
+		if strings.HasPrefix(name, prefix) {
+			cid, ok := commitArg(r, id)
+			if !ok {
+				return nil, false
+			}
+			ids = append(ids, cid)
+		}
+	}
+	return ids, true
 }
