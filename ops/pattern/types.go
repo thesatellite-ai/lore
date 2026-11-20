@@ -50,7 +50,7 @@ type AddIn struct {
 	Scope      string `json:"scope,omitempty" flag:"scope" desc:"where it attaches: global | project | repo | dir:<path> (folder scopes rank it in lore context)"`
 	Project    string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 	Supersedes string `json:"supersedes,omitempty" flag:"supersedes" desc:"pattern_id this entry replaces"`
-	To         string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To         string `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 }
 
 // ListIn is the input of pattern.list (v0.1.17 repo scope flags).

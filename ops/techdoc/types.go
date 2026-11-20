@@ -31,7 +31,7 @@ type AddIn struct {
 	BaseURL     string `json:"base_url,omitempty" flag:"base-url" desc:"base URL"`
 	Description string `json:"description,omitempty" flag:"description" desc:"description"`
 	Project     string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To          string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To          string `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 }
 
 // ListIn is the input of techdoc.list.

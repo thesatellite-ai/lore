@@ -172,7 +172,7 @@ type AddIn struct {
 	OnTable    string `json:"on_table,omitempty" flag:"on-table" desc:"optional target entity table (default: the table of the --on-id prefix)"`
 	OnID       string `json:"on_id,omitempty" flag:"on-id" desc:"optional target entity id"`
 	Repo       string `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts; reminders have no repo scope"`
-	To         string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To         string `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 }
 
 // ListIn is the input of reminder.list.

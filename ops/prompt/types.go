@@ -38,7 +38,7 @@ type AddIn struct {
 	Body        string `json:"body,omitempty" flag:"body" desc:"body" ui:"widget=markdown"`
 	Text        string `json:"text,omitempty" arg:"0" argof:"body" desc:"the body, instead of --body"`
 	Project     string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To          string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To          string `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 }
 
 // ListIn is the input of prompt.list.

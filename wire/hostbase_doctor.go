@@ -108,9 +108,10 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	a.doctorSecretRulesOff(ctx, note)
 	a.doctorCIPins(ctx, warn)
 	a.doctorClaudeLocal(ctx, warn)
-	a.doctorAttrOverride(ctx, warn)  // gitattr_override.go: a later .gitattributes line beats lore's block (devco:Q-11)
-	a.doctorStaleLinks(ctx, warn)    // hostbase_doctor_links.go: links on rewritten commits (H-8)
-	a.doctorSignals(ctx, warn, note) // hostbase_doctor_signals.go: expired files only report (a note: they do not change the status)
+	a.doctorAttrOverride(ctx, warn)    // gitattr_override.go: a later .gitattributes line beats lore's block (devco:Q-11)
+	a.doctorStaleLinks(ctx, warn)      // hostbase_doctor_links.go: links on rewritten commits (H-8)
+	a.doctorLinkedLeftovers(ctx, warn) // hostbase_doctor_leftover.go: notes left in a linked repo (D-729)
+	a.doctorSignals(ctx, warn, note)   // hostbase_doctor_signals.go: expired files only report (a note: they do not change the status)
 	if pin, floorErr := a.doctorVersionPin(ctx); floorErr != "" {
 		b.Errors = append(b.Errors, floorErr)
 		b.Status = opsdoctor.StatusBroken

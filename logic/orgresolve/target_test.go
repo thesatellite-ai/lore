@@ -36,11 +36,13 @@ func TestResolveTarget(t *testing.T) {
 		{"no to, link unknown even when patterns say own", TargetInputs{Org: "northwind", Role: RoleOwn, LinkUnknown: true, Kind: "memory"}, want{err: ErrLinkUnknown}},
 		{"no to, own repo", TargetInputs{Org: "northwind", Role: RoleOwn, Kind: "memory", StoreDefaults: shipped}, want{repo: true}},
 		{"no to, no org", TargetInputs{Role: RoleNone, Kind: "memory"}, want{repo: true}},
-		// D-723: an own repo linked to a store folder whose notes moved out
-		// writes to the linked folder; one still holding notes stays put.
+		// D-723, D-729: an own repo linked to a store folder writes to the
+		// linked folder, whether or not its .lore/data still holds notes.
 		{"no to, own repo linked, notes moved out → linked", TargetInputs{Org: "northwind", Role: RoleOwn, Kind: "memory", Links: acme}, want{folder: "acme"}},
 		{"no to, own repo linked, rule moved out → linked", TargetInputs{Org: "northwind", Role: RoleOwn, Kind: "rule", Links: acme, StoreDefaults: shipped}, want{folder: "acme"}},
-		{"no to, own repo linked, still holds notes → repo", TargetInputs{Org: "northwind", Role: RoleOwn, Kind: "memory", Links: acme, RepoHoldsNotes: true}, want{repo: true}},
+		{"no to, own repo linked, still holds notes → linked (D-729)", TargetInputs{Org: "northwind", Role: RoleOwn, Kind: "memory", Links: acme}, want{folder: "acme"}},
+		{"no to, own repo linked, task with old rows left → linked (D-729)", TargetInputs{Org: "northwind", Role: RoleOwn, Kind: "task", Links: acme, StoreDefaults: shipped, CommittedProject: "sync-app"}, want{folder: "acme"}},
+		{"no to, own repo linked, to repo → repo (D-729)", TargetInputs{To: ToRepo, Org: "northwind", Role: RoleOwn, Kind: "task", Links: acme}, want{repo: true}},
 		{"no to, own repo two links default, moved out → default", TargetInputs{Org: "northwind", Role: RoleOwn, Kind: "task", Links: twoDef}, want{folder: "acme"}},
 		{"no to, own repo two links no default, moved out → refused", TargetInputs{Org: "northwind", Role: RoleOwn, Kind: "task", Links: two}, want{err: ErrTwoLinksNoDefault}},
 		{"client memory → linked", TargetInputs{Org: "northwind", Role: RoleClient, Kind: "memory", Links: acme, StoreDefaults: shipped}, want{folder: "acme"}},

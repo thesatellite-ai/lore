@@ -65,11 +65,6 @@ type TargetInputs struct {
 	// CommittedProject is .lore/org.yaml's project (an own repo's internal
 	// folder), "" when none.
 	CommittedProject string
-	// RepoHoldsNotes: the repo's .lore/data holds a live note row of its
-	// own (orgcfg.HoldsNotes). An own repo linked to a store folder that
-	// holds none writes to that folder (D-723); one that does keeps
-	// writing next to its notes.
-	RepoHoldsNotes bool
 }
 
 // TargetDecision is where the row goes, and why (printed by --dry-run).
@@ -127,16 +122,19 @@ func ResolveTarget(in TargetInputs) (TargetDecision, error) {
 		return TargetDecision{Repo: true, Rule: "own repo or no org: this repo"}, nil
 	}
 	if in.Role != RoleClient {
-		// D-723: an own repo linked to a store folder whose notes moved
-		// out (adopt --remove-source, move) writes to that folder, as its
-		// reads do; before, the row and its author's actor row went back
-		// into the code repo's .lore/data.
-		if len(in.Links) > 0 && !in.RepoHoldsNotes {
+		// D-723, D-729: an own repo linked to a store folder writes to
+		// that folder, the place its reads come from, whatever its
+		// .lore/data still holds (old memories, a hotfix, actors): rows
+		// left there are a move not yet done (lore doctor names it), never
+		// a reason to file new rows next to them. Before, a linked repo
+		// that still held notes wrote the new row into the code repo, and
+		// it went out in a pull request. --to repo is the one way in.
+		if len(in.Links) > 0 {
 			f, why, err := defaultLink(in)
 			if err != nil {
 				return TargetDecision{}, err
 			}
-			return TargetDecision{Folder: f, Rule: "this repo keeps no notes of its own; its link names " + in.Org + "/" + f + " (" + why + ")"}, nil
+			return TargetDecision{Folder: f, Rule: "this repo is linked to " + in.Org + "/" + f + " (" + why + "); --to repo writes the repo"}, nil
 		}
 		return TargetDecision{Repo: true, Rule: "own repo or no org: this repo"}, nil
 	}

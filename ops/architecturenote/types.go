@@ -41,7 +41,7 @@ type AddIn struct {
 	// the row in lore context only.
 	Scope   string `json:"scope,omitempty" flag:"scope" desc:"where it attaches: global | project | repo | dir:<path> (folder scopes rank it in lore context)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 }
 
 // ListIn is the input of architecturenote.list.

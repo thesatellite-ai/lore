@@ -679,6 +679,17 @@ var routeKinds = map[row.Table]string{
 	schema.TableCookbookRecipes:   "cookbook_recipe",
 	schema.TableHandoffs:          "handoff",
 	schema.TableTechDocs:          "tech_doc",
+	// D-729: the rest of the notes a person writes, so a linked repo files
+	// every one of them in its store folder and none lands in a pull
+	// request of the code repo (tags, links, task views and templates are
+	// settings that stay with the rows they serve).
+	schema.TableBehaviours:      "behaviour",
+	schema.TableSuggestions:     "suggestion",
+	schema.TableTastePrefs:      "taste_pref",
+	schema.TableWorkflows:       "workflow",
+	schema.TableWorkspaces:      "workspace",
+	schema.TableSnapshots:       "snapshot",
+	schema.TableExternalSources: "external_source",
 }
 
 // Routed is the F14 rule that chose the target of this process's routed
@@ -714,9 +725,10 @@ func (r *OrgResolution) DefaultTarget(ctx context.Context, q WriteQuery) (store.
 		return r.linkedFolderTarget(ctx, s)
 	}
 	if s.Result.Role != orgresolve.RoleClient {
-		// D-723: an own repo linked to a store folder that keeps no notes
-		// of its own writes to that folder; one not attached here is
-		// refused with the exact --to (L-4), as a repo linked by remote is.
+		// D-723, D-729: an own repo linked to a store folder writes to
+		// that folder, whatever its .lore/data still holds; one not
+		// attached here is refused with the exact --to (L-4), as a repo
+		// linked by remote is.
 		return r.linkedFolderTarget(ctx, s)
 	}
 	attached, err := r.OrgStores(ctx)
@@ -734,10 +746,10 @@ func (r *OrgResolution) DefaultTarget(ctx context.Context, q WriteQuery) (store.
 
 // linkedFolderTarget is the attached store of the folder a link names
 // (OrgStores attaches it under the entry's name), for a repo linked by
-// remote (no lore files) and an own repo whose notes moved out (D-723);
+// remote (no lore files) and a linked own repo (D-723, D-729);
 // a linked folder that is not attached is refused naming the --to.
 func (r *OrgResolution) linkedFolderTarget(ctx context.Context, s *orgcfg.Situation) (store.Source, error) {
-	why := "this repo keeps no notes of its own and its link"
+	why := "this repo's link"
 	if s.LinkedByRemote != "" {
 		why = "this repo holds no lore files and its store link by remote (" + s.LinkedByRemote + ")"
 	}
@@ -846,9 +858,6 @@ func (r *OrgResolution) decide(ctx context.Context, explicit bool, kind string, 
 	}
 	if s.Committed != nil {
 		in.CommittedProject = s.Committed.Project
-	}
-	if res.Role != orgresolve.RoleClient && len(in.Links) > 0 {
-		in.RepoHoldsNotes = orgcfg.HoldsNotes(s.Dir, isRoutedTable) // D-723: read only where F14 uses it
 	}
 	if res.Org != nil {
 		in.PersonalDefaults = res.Org.Defaults.ClientRepos

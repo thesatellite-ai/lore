@@ -92,7 +92,7 @@ type AddIn struct {
 	OnTable string `json:"on_table,omitempty" flag:"on-table" desc:"target entity table (memories|rules|decisions|...); default: the table of the --on-id prefix"`
 	OnID    string `json:"on_id" flag:"on-id" desc:"target entity id"`
 	Body    string `json:"body" flag:"body" desc:"the comment text" ui:"widget=markdown"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 }
 
 // AddOut is the output of comment.add.
