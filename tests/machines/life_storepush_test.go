@@ -340,6 +340,10 @@ func spRowIDs(t *testing.T, m *Machine, cwd string) string {
 	return lsRun(t, m, cwd, "memory", "list")
 }
 
+// spMemberFolder is the org store's folder of the member's team, where
+// the member's own row goes (devco D-694: never the org folder).
+const spMemberFolder = "ops"
+
 // spCompactionLife: an admin (owner-like machine) and a member (shape)
 // of one team; see the file comment.
 func spCompactionLife(t *testing.T, shape string) {
@@ -367,6 +371,14 @@ func spCompactionLife(t *testing.T, shape string) {
 	tm.rewrite(t, member)
 	lsCreate(t, member, "joined", kindMember, "member@example.test", []string{lsFolder}, false, tm, lsAlpha)
 	mRepo := member.Repos[RepoWorkApp]
+	// devco D-694: a member adds notes only in the folder of a team they
+	// are on, never in the org folder; the admin makes one for the member
+	lsRun(t, admin, aRepo, "sync")
+	lsRun(t, admin, aRepo, "store", "folder", "add", "--store", lsOrg, "--folder", spMemberFolder)
+	lsRun(t, admin, aRepo, "team", "add", "--handle", "@"+spMemberFolder, "--members", "member@example.test", "--yes")
+	lsRun(t, admin, aRepo, "sync")
+	lsRun(t, member, mRepo, "sync")
+	inTeam := lsOrg + "/" + spMemberFolder
 
 	// Old history: three rows written in September by the admin.
 	var ids []string
@@ -382,7 +394,7 @@ func spCompactionLife(t *testing.T, shape string) {
 	lsRun(t, admin, aRepo, "sync")
 	lsRun(t, member, mRepo, "sync")
 	spEnv(member, "LORE_LIVE_AUTOPUSH", "0")
-	unpushed := spMemAdd(t, member, mRepo, lsOrg, "member's unpushed fact")
+	unpushed := spMemAdd(t, member, mRepo, inTeam, "member's unpushed fact")
 	// autopush stays off until the member's sync after the compaction: with
 	// it on, every write-access command retries the waiting push (D-o),
 	// even one refused afterwards (the member's compact and set below)
@@ -475,7 +487,7 @@ func spCompactionLife(t *testing.T, shape string) {
 		m    *Machine
 		repo string
 	}{{"admin", admin, aRepo}, {"member", member, mRepo}} {
-		l := spRowIDs(t, mm.m, mm.repo)
+		l := spRowIDs(t, mm.m, mm.repo) + lsRun(t, mm.m, mm.repo, "memory", "list", "--store", inTeam)
 		for _, id := range append(ids, unpushed) {
 			if !strings.Contains(l, id) {
 				t.Errorf("%s after the replay misses %s", mm.who, id)

@@ -51,6 +51,7 @@ func TestStoryWCTUp4CountOwnerShape(t *testing.T) {
 	bm.MoveClone(t, bc, filepath.Join(bm.Home, "code", "platform"))
 	journeys.Join(t, bm, bc.Dir, wSetup, line, wqMember, []string{wFolders})
 	m.Lore(m.Home, "sync", "--setup", wSetup).OK(t)
+	inTeam := wqPutOnTeam(t, m, pc, bm, bc)
 
 	clone := storeCloneDir(t, m)
 	for i, p := range []struct{ name, dir string }{
@@ -77,7 +78,7 @@ func TestStoryWCTUp4CountOwnerShape(t *testing.T) {
 
 			// the teammate pushes 2 commits meanwhile
 			for _, body := range []string{"the teammate notes the release train", "the teammate keeps a runbook"} {
-				bm.LoreIn(bc, "memory", "add", "--body", body+" "+n, "--to", wOrg+"/org").OK(t)
+				bm.LoreIn(bc, "memory", "add", "--body", body+" "+n, "--to", inTeam).OK(t)
 			}
 			bm.LoreIn(bc, "sync").OK(t)
 

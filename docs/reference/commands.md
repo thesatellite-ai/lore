@@ -483,8 +483,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 |---|---|---|
 | `lore org` … | Choose and inspect which org a repo belongs to | — |
 | `lore org config` … | Read and edit the org file's own and repos patterns (get, set) | — |
-| `lore org config get` | Show the org's shared lore-org.yaml: own and repos patterns, stores | — |
-| `lore org config set` | Change the org's shared lore-org.yaml (admin only): own or repos patterns; committed in the org store and copied to this machine's org entry | — |
+| `lore org config get` | Show the org's shared lore-org.yaml: own and repos patterns, stores; and min_lore_version, the lore version its stores need | — |
+| `lore org config set` | Change the org's shared lore-org.yaml (admin only): own or repos patterns, committed in the org store and copied to this machine's org entry; or min_lore_version, the lore version the org's stores need (an older lore goes read-only there) | — |
 | `lore org create` | Start a new org on a lore store: suggest it to teammates, add it with your identity, join its roster | [team/profiles › Step 9 — Create or rename an org](../../docs/team/profiles.md#step-9--create-or-rename-an-org) |
 | `lore org import` | Adopt the org entry a team suggests in its store, with your identity, and join its roster | [team/identity-and-stores › Step 4 — Join your company's setup in one command: lore org import](../../docs/team/identity-and-stores.md#step-4--join-your-companys-setup-in-one-command-lore-org-import) |
 | `lore org link` | Link this repo to an internal project in the org's store | [team/commands › lore org link](../../docs/team/commands.md#lore-org-link) |

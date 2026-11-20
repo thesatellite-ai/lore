@@ -601,7 +601,7 @@ func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options)
 	// a failed clone/fetch/push names the access rule it went through
 	route = git.Join(route, git.WithAccessNote(accessNoteFor(opts.Home)))
 	// devco:D-735: a folder a clone creates declares its org's floor
-	route = git.Join(route, folderFloorOption(opts.Home))
+	route = git.Join(route, folderFloorOption(opts.Home), markerOrgOption(opts.Home))
 	// Store commits are dated by the app clock (the wall clock; LORE_NOW in
 	// a test build), so the age a compaction cuts at follows the same time
 	// as every row stamp (store push modes, 2026-11-09).
@@ -1161,7 +1161,7 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 	// store without it made every later command refuse the store).
 	newMarker := gb.Marker().Version == 0
 	if newMarker {
-		m, merr := rowfs.NewMarker(a.opts.Wall())
+		m, merr := newStoreMarker(ctx, a.opts.Home, src.URL, a.opts.Wall)
 		if merr != nil {
 			return merr
 		}

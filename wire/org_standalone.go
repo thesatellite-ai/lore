@@ -25,7 +25,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
-	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
@@ -243,8 +242,8 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 		return opsorgcmd.Report{Lines: lines, Ask: "Continue?"}, nil
 	}
 	res, err := g.WriteLink(ctx, orgcfg.LinkWrite{Plan: plan, Signature: storeSignature(org), FolderProjectID: storeFolderProjectID,
-		NewMarker: func() ([]byte, error) {
-			m, merr := rowfs.NewMarker(h.wall()())
+		NewMarker: func(store string) ([]byte, error) {
+			m, merr := newStoreMarker(ctx, h.home, store, h.wall())
 			if merr != nil {
 				return nil, merr
 			}

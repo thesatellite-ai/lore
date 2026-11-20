@@ -128,6 +128,13 @@ func TestStoryWCTStoreMoveTakeIn(t *testing.T) {
 	journeys.Join(t, bm, bc.Dir, wSetup, line, wqMember, []string{wFolders})
 	m.Lore(m.Home, "sync", "--setup", wSetup).OK(t)
 	bm.LoreIn(bc, "sync").OK(t)
+	inTeam := wqPutOnTeam(t, m, pc, bm, bc)
+	// the teammate's first note in the team folder brings its folder files
+	// along (a second commit); it is sent and taken in before the moves, so
+	// each note below is the one commit the take-in line counts
+	bm.LoreIn(bc, "memory", "add", "--body", "the teammate's first note in the team folder", "--to", inTeam).OK(t)
+	bm.LoreIn(bc, "sync").OK(t)
+	m.Lore(m.Home, "sync", "--setup", wSetup).OK(t)
 
 	cur := store
 	for _, f := range []struct {
@@ -141,13 +148,13 @@ func TestStoryWCTStoreMoveTakeIn(t *testing.T) {
 			old := cur
 			fresh := s.Remote("github.com/acme-co/lore-team-takein-" + f.name)
 			wqGit(t, old.Dir, "push", "-q", "--mirror", fresh.Dir) // the new repo: a copy from before the teammate's notes
-			bm.LoreIn(bc, "memory", "add", "--body", "pushed to the old repo before the move "+f.name, "--to", wOrg+"/org").OK(t)
+			bm.LoreIn(bc, "memory", "add", "--body", "pushed to the old repo before the move "+f.name, "--to", inTeam).OK(t)
 			bm.LoreIn(bc, "sync").OK(t)
 
 			m.Lore(m.Home, "store", "set-url", "--name", wOrg, "--url", fresh.SSHURL(), "--yes").OK(t).
 				Says(t, "took in 1 commit a teammate pushed to the old address "+old.SSHURL()+" before following the move into the clone of "+fresh.SSHURL()).
 				Never(t, "commit(s) a teammate")
-			bm.LoreIn(bc, "memory", "add", "--body", "pushed to the old repo after the move "+f.name, "--to", wOrg+"/org").OK(t)
+			bm.LoreIn(bc, "memory", "add", "--body", "pushed to the old repo after the move "+f.name, "--to", inTeam).OK(t)
 			bm.LoreIn(bc, "sync").OK(t)
 			oldBefore := wqGit(t, old.Dir, "rev-parse", "main")
 
