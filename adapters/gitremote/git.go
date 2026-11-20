@@ -14,9 +14,13 @@ import (
 // reached: Name's url is read from the repo's config only then, so a run
 // without --trace costs nothing extra (issue 15).
 func (g *Git) run(ctx context.Context, args []string) ([]byte, error) {
+	key := g.reachKey()
 	start := time.Now()
 	out, err := g.runOnce(ctx, args)
-	if err == nil || !neverConnected(err) || !RetryAfter(time.Since(start)) {
+	// devco:H-6: a remote that already never connected in this command
+	// gets no retry; offline, every call would fail twice
+	if err == nil || !neverConnected(err) || !RetryAfter(time.Since(start)) || !retryDue(key) {
+		noteReach(key, err)
 		return out, err
 	}
 	// L-12 / L-10: one dropped connection (a flaky link, a timed-out ssh
@@ -29,7 +33,37 @@ func (g *Git) run(ctx context.Context, args []string) ([]byte, error) {
 		return out, err
 	case <-time.After(RetryPause):
 	}
-	return g.runOnce(ctx, args)
+	out, err = g.runOnce(ctx, args)
+	noteReach(key, err)
+	return out, err
+}
+
+// reachKey is g's remoteKey: its repository, remote and route.
+func (g *Git) reachKey() string {
+	dir := ""
+	if g.Repo != nil {
+		dir = g.Repo.Dir()
+	}
+	return remoteKey(dir, g.Name, g.RouteArgs, g.RouteEnv)
+}
+
+// noteReach records how a network call to key ended: a connection that
+// never opened marks key unreachable, a call that reached the remote
+// (success, or git exiting on the remote's answer) clears it; a call git
+// did not run (cancelled, no binary) says nothing about the remote.
+func noteReach(key string, err error) {
+	if err == nil {
+		markReached(key)
+		return
+	}
+	if _, isExit := gitref.ExitCode(err); !isExit {
+		return
+	}
+	if neverConnected(err) {
+		markUnreachable(key)
+		return
+	}
+	markReached(key)
 }
 
 // retryWithin is how long a failed first try may have taken for the one

@@ -135,3 +135,37 @@ func TestTimedOutConnectIsNotRetried(t *testing.T) {
 		t.Fatalf("a timed-out fetch made %d ssh calls, want 1 (no retry after a timeout)", n)
 	}
 }
+
+// TestDownRemoteIsRetriedOncePerCommand (devco:H-6): offline, the first
+// call to a remote has its one retry, but once that retry also never
+// connected the remote is down for the rest of the process: the push
+// that follows runs once (a sync made four failing round trips, two of
+// them the same push). A call that connects again clears the mark.
+func TestDownRemoteIsRetriedOncePerCommand(t *testing.T) {
+	c, dir := sshClone(t, 0, timedOut)
+	ctx := context.Background()
+	err := c.Remote.Fetch(ctx, gitremote.FetchRequest{Refspecs: gitremote.TrackingRefspecs(gt.RemoteName, gt.DefaultBranch)})
+	if !errors.Is(err, gitremote.ErrUnconfirmed) {
+		t.Fatalf("fetch through a down host: %v, want ErrUnconfirmed", err)
+	}
+	if n := sshCalls(t, dir); n != 2 {
+		t.Fatalf("the first call to a down remote made %d ssh calls, want 2 (one retry)", n)
+	}
+	tip := c.Write(signals, "claims/t1.json", "v1")
+	if _, err := c.Remote.Push(ctx, gitremote.PushRequest{Updates: []gitremote.RefUpdate{{Src: tip, Dst: signals, Mode: gitremote.ModeFastForward}}}); !errors.Is(err, gitremote.ErrUnconfirmed) {
+		t.Fatalf("push through a down host: %v, want ErrUnconfirmed", err)
+	}
+	if n := sshCalls(t, dir); n != 3 {
+		t.Fatalf("after the push %d ssh calls, want 3: a remote that never connected in this command gets no second retry", n)
+	}
+	// the link is back: a call that connects clears the mark, so the
+	// next drop has its retry again
+	c.Remote = &gitremote.Git{Repo: c.Repo, Name: gt.RemoteName, RouteEnv: flakySSH(t, dir, -1, "")}
+	c.Fetch()
+	before := sshCalls(t, dir)
+	c.Remote = &gitremote.Git{Repo: c.Repo, Name: gt.RemoteName, RouteEnv: flakySSH(t, dir, before+1, timedOut)}
+	c.Fetch() // fails the test if the retry did not run
+	if n := sshCalls(t, dir) - before; n != 2 {
+		t.Fatalf("a drop after the remote answered made %d ssh calls, want 2 (its retry is back)", n)
+	}
+}
