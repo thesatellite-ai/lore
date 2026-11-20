@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // commitFile writes rel in dir, commits it with msg and returns the commit.
@@ -60,11 +61,11 @@ func TestPushDocsAreOnlyWhatTheRemoteLacks(t *testing.T) {
 		t.Fatal(err)
 	}
 	zero := strings.Repeat("0", len(tip))
-	whereSet := func(sets []map[string][]byte) string {
+	whereSet := func(sets []pushSet) string {
 		var w []string
 		docs := map[string][]byte{}
 		for _, set := range sets {
-			for where, b := range set {
+			for where, b := range set.docs {
 				docs[where] = b
 			}
 		}
@@ -135,7 +136,7 @@ func TestPushOfSeveralCommitsChecksEveryVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkPushDocs(ctx, leakStub, sets); !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), row) {
+	if err := checkPushDocs(ctx, leakStub, sets, nil); !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), row) {
 		t.Fatalf("a key in the newest of two versions of %s went through: %v", row, err)
 	}
 	cleanTip := commitFile(t, dir, row, `{"body":"retry the flaky job twice"}`+"\n", "drop the key")
@@ -143,7 +144,7 @@ func TestPushOfSeveralCommitsChecksEveryVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkPushDocs(ctx, leakStub, sets); !errs.Has(err, errs.LeakBlocked) {
+	if err := checkPushDocs(ctx, leakStub, sets, nil); !errs.Has(err, errs.LeakBlocked) {
 		t.Fatalf("a key an earlier commit of the push carries went through: %v", err)
 	}
 }
@@ -160,5 +161,54 @@ func TestParsePushUpdates(t *testing.T) {
 		if isZeroOID(oid) != zero {
 			t.Fatalf("isZeroOID(%q) = %v", oid, !zero)
 		}
+	}
+}
+
+// TestPushLeakChecksOnlyAddedLines (devco:D-728): the pre-push F16 check
+// reads only the lines the pushed commits add. A file pushed long ago
+// holds text the check refuses; a push of a commit that adds an unrelated
+// line goes out, and a push of a commit that adds such a line again is
+// refused, the finding on the added line (the old one blanked).
+func TestPushLeakChecksOnlyAddedLines(t *testing.T) {
+	testenv.SetHome(t, t.TempDir())
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	ctx := context.Background()
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	dir := t.TempDir()
+	gitT(t, dir, "init", "-q", "--bare", "-b", "main", origin)
+	gitT(t, dir, "init", "-q", "-b", "main")
+	gitT(t, dir, "remote", "add", "origin", origin)
+	old := "# Notes\n\nold " + fakeKey + "\n"
+	base := commitFile(t, dir, "CLAUDE.md", old, "add notes")
+	gitT(t, dir, "push", "-q", "--no-verify", "origin", "main")
+	gitT(t, dir, "fetch", "-q", "origin")
+	repo, err := gitref.Open(ctx, dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen string
+	check := func(ctx context.Context, where string, docs map[string][]byte) error {
+		narrowed := wire.AddedLinesOnly(ctx, docs)
+		seen = string(narrowed["CLAUDE.md"])
+		return leakStub(ctx, where, narrowed)
+	}
+	push := func(tip string) error {
+		u := []pushUpdate{{"refs/heads/main", tip, "refs/heads/main", base}}
+		sets, err := pushDocs(ctx, repo, "origin", u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return checkPushDocs(ctx, check, sets, pushAddedLines(ctx, repo, "origin", u))
+	}
+	tip := commitFile(t, dir, "CLAUDE.md", old+"\nRun make test first.\n", "document the build")
+	if err := push(tip); err != nil {
+		t.Fatalf("a push adding an unrelated line was refused for a line pushed long ago: %v", err)
+	}
+	tip = commitFile(t, dir, "CLAUDE.md", old+"\nRun make test first.\nnew "+fakeKey+"\n", "repeat it")
+	if err := push(tip); !errs.Has(err, errs.LeakBlocked) {
+		t.Fatalf("a pushed line the check refuses went out: %v", err)
+	}
+	if want := "\n\n\n\n\nnew " + fakeKey + "\n"; seen != want {
+		t.Fatalf("the check read %q, want only the added line %q", seen, want)
 	}
 }

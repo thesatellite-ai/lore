@@ -348,7 +348,7 @@ func (s *liveSession) unguardedLeaks(ctx context.Context) string {
 	if err != nil || len(sets) == 0 {
 		return ""
 	}
-	cerr := checkPushDocs(wire.WithPushBases(ctx, pushBases(ctx, s.repo, remote, updates)), s.h.cfg.LeakCheck, sets)
+	cerr := checkPushDocs(wire.WithPushBases(ctx, pushBases(ctx, s.repo, remote, updates)), s.h.cfg.LeakCheck, sets, pushAddedLines(ctx, s.repo, remote, updates))
 	if cerr == nil {
 		return ""
 	}
