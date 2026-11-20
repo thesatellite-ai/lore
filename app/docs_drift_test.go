@@ -429,9 +429,9 @@ func checkInvocation(rootCmd *cobra.Command, code string) string {
 	// U-4 (named args everywhere): a command built from the registry is
 	// shown with every value under its flag (`lore task show --id tsk_…`);
 	// its positional form is a quiet alias that no doc, skill or example
-	// may teach. Host commands (lore init <dir>, lore help <cmd>) keep
-	// their own arguments.
-	if v := positionalValue(positional); !notation && v != "" && cli.Generated(cmd) && !cmd.HasSubCommands() {
+	// may teach. Host commands (lore help <cmd>) keep their own arguments,
+	// unless marked named (lore edit --id <id>, cli.MarkNamed).
+	if v := positionalValue(positional); !notation && v != "" && cli.Named(cmd) && !cmd.HasSubCommands() {
 		return "`" + cmd.CommandPath() + "` given the positional value " + v + ": write it with its flag (" + namedHint(cmd) + ")"
 	}
 	abbreviated := strings.Contains(code, placeholderUnicode) || strings.Contains(code, placeholderEllipsis)

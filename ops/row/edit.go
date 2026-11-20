@@ -246,7 +246,7 @@ func noFile(id ids.AnyID, loc Location) error {
 			WithHint("git pull brings its file; lore show --id " + id.String() + " prints it now")
 	case loc.LiveRef != "":
 		return errs.New(errs.NotFound, id.String()+" has no file of its own yet: it is a live row, kept on the git ref "+loc.LiveRef+" ("+loc.LivePath+") so everyone sees it before any commit").
-			WithHint("lore edit " + id.String() + " edits it there; lore show --id " + id.String() + " prints it; it gets a file at " + loc.Path + " when it lands on the default branch (lore land)")
+			WithHint("lore edit --id " + id.String() + " edits it there; lore show --id " + id.String() + " prints it; it gets a file at " + loc.Path + " when it lands on the default branch (lore land)")
 	case !loc.Exists:
 		return errs.New(errs.NotFound, id.String()+" is in store "+loc.Store+" but its file "+loc.Path+" is missing (deleted by hand?)").
 			WithHint("lore doctor checks the store; lore show --id " + id.String() + " prints the copy lore still has")
@@ -276,7 +276,7 @@ func (o ops) load(ctx context.Context, id ids.AnyID) (view, error) {
 	def, ok := o.env.TableSchema(ctx, r.Table)
 	if !ok {
 		return view{}, errs.New(errs.Unsupported, "edit: this lore version has no table "+string(r.Table)+" for "+id.String()).
-			WithHint("lore upgrade, or edit the JSON file directly (lore path " + id.String() + ")")
+			WithHint("lore upgrade, or edit the JSON file directly (lore path --id " + id.String() + ")")
 	}
 	for _, f := range def.Fields {
 		if v, held := r.Fields[f.Name]; f.Sensitive && held && v.Kind() != value.KindNull {

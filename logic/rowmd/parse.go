@@ -136,7 +136,7 @@ func Parse(def schema.TableDef, cur row.Row, file string, text []byte) (Result, 
 		return Result{}, errs.New(errs.Stale, file+":"+strconv.Itoa(fmLine(hn.Line))+": "+cur.ID.String()+
 			" was written since this view was made (_hlc is "+systemValue(cur, KeyHLC)+" now, the view has "+scalarText(hn)+
 			"), or the _hlc line was changed by hand; "+systemWhy[KeyHLC]).
-			WithHint("open the row again (lore edit " + cur.ID.String() + ") and redo the change on the current version")
+			WithHint("open the row again (lore edit --id " + cur.ID.String() + ") and redo the change on the current version")
 	}
 	seen := map[string]int{}
 	for i := 0; i+1 < len(m.Content); i += 2 {

@@ -236,6 +236,29 @@ func ours(c *cobra.Command) bool { return c.Annotations[annotationOwner] == anno
 // (or a group of them), as opposed to one the host added beside them.
 func Generated(c *cobra.Command) bool { return ours(c) }
 
+// annotationNamed marks a host command whose values are named flags and
+// whose positional is only a quiet alias (`lore edit --id <id>`; `lore edit
+// <id>` still runs). Generated commands are named by construction; a host
+// command opts in with MarkNamed so the printed-command and docs guards hold
+// it to --flag value too (H-11: "lore edit " + id was printed with the id by
+// position and no guard saw it, because host commands keep their own args).
+const annotationNamed = "lore.surface.cli.named"
+
+// MarkNamed marks a host command as named (see annotationNamed).
+func MarkNamed(c *cobra.Command) {
+	if c.Annotations == nil {
+		c.Annotations = map[string]string{}
+	}
+	c.Annotations[annotationNamed] = annotationValue
+}
+
+// Named reports whether c gives every value by flag: a generated command,
+// or a host command marked with MarkNamed. A positional there is a quiet
+// alias nothing lore prints may teach.
+func Named(c *cobra.Command) bool {
+	return ours(c) || c.Annotations[annotationNamed] == annotationValue
+}
+
 // group returns the noun command name under parent, creating it.
 func group(parent *cobra.Command, name string, cfg config) *cobra.Command {
 	if c := child(parent, name); c != nil {

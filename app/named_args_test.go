@@ -34,7 +34,7 @@ func TestHelpExamplesNamed(t *testing.T) {
 	walk = func(c *cobra.Command) {
 		for _, s := range c.Commands() {
 			walk(s)
-			if !cli.Generated(s) || s.Example == "" {
+			if !cli.Named(s) || s.Example == "" {
 				continue
 			}
 			for _, line := range strings.Split(s.Example, "\n") {
@@ -70,9 +70,11 @@ var namedArgsSourceDirs = []string{"app", "cmd", "engine", "ops", "surface", "wi
 // TestPrintedCommandsNamed: every `lore …` command spelled out in a Go
 // string literal of the binary's source (a hint, a "run this" line, an
 // error message) gives its values by flag, each as --flag value (not
-// --flag=value). A literal cut before its value
-// ("lore task show " + id) has nothing to check and passes; write such a
-// line with the flag in the literal ("lore task show --id " + id).
+// --flag=value). A literal cut before its value and joined to a variable
+// ("lore task show " + id) is checked with the joined value standing in as
+// <value> (H-11: "lore edit " + id printed `lore edit mem_…` with the id by
+// position and the scan passed it); write such a line with the flag in the
+// literal ("lore task show --id " + id).
 func TestPrintedCommandsNamed(t *testing.T) {
 	root := driftRoot(t)
 	checked := 0
@@ -89,29 +91,47 @@ func TestPrintedCommandsNamed(t *testing.T) {
 			if perr != nil {
 				return perr
 			}
+			rel, _ := filepath.Rel(docsRoot, path)
 			ast.Inspect(f, func(n ast.Node) bool {
-				lit, ok := n.(*ast.BasicLit)
-				if !ok || lit.Kind != token.STRING {
-					return true
-				}
-				s, uerr := strconv.Unquote(lit.Value)
-				if uerr != nil {
-					return true
-				}
-				for _, line := range strings.Split(s, "\n") {
-					quoted := strings.Contains(line, "`")
-					for _, span := range commandSpans(line) {
-						checked++
-						if _, ok := printedAllowed[span]; ok {
-							continue
+				switch x := n.(type) {
+				case *ast.BasicLit:
+					s, ok := stringLit(x)
+					if !ok {
+						return true
+					}
+					for _, line := range strings.Split(s, "\n") {
+						n, problems := printedProblems(root, line)
+						checked += n
+						for _, p := range problems {
+							t.Errorf("%s:%d: %s", rel, fset.Position(x.Pos()).Line, p)
 						}
-						if f := equalsValue(span); f != "" {
-							rel, _ := filepath.Rel(docsRoot, path)
-							t.Errorf("%s:%d: gives %s with =: write it %s\n    %s", rel, fset.Position(lit.Pos()).Line, f, spaced(f), span)
-						}
-						if p := checkInvocation(root, span); p != "" && strings.Contains(p, "positional value") && (quoted || valueLike(p)) {
-							rel, _ := filepath.Rel(docsRoot, path)
-							t.Errorf("%s:%d: %s\n    %s", rel, fset.Position(lit.Pos()).Line, p, span)
+					}
+				case *ast.BinaryExpr:
+					// "lore edit " + id: the literal's last line with the
+					// joined value standing in. Only what the join adds is
+					// reported; the literal alone is checked above.
+					lit, ok := joinedLit(x)
+					if !ok {
+						return true
+					}
+					lines := strings.Split(lit, "\n")
+					last := lines[len(lines)-1]
+					if !strings.HasSuffix(last, " ") || joinsVerb(root, last) {
+						return true // "--"+name, "--claim"+s: part of a token; "lore sync "+verb: a subcommand
+					}
+					_, plain := printedProblems(root, last)
+					seen := map[string]bool{}
+					for _, p := range plain {
+						seen[p] = true
+					}
+					joined := last + joinedValue
+					if strings.Count(last, "`")%2 == 1 {
+						joined += "`" // the literal opened a backtick span the value sits in
+					}
+					_, added := printedProblems(root, joined)
+					for _, p := range added {
+						if !seen[p] {
+							t.Errorf("%s:%d: %s (the value joined on with +)", rel, fset.Position(x.Pos()).Line, p)
 						}
 					}
 				}
@@ -126,6 +146,84 @@ func TestPrintedCommandsNamed(t *testing.T) {
 	if checked < minDocInvocations {
 		t.Fatalf("only %d commands found in the source; the scan is broken", checked)
 	}
+}
+
+// joinedValue stands in for a value joined onto a literal with + ("lore
+// edit " + id): a placeholder, so checkInvocation names it when it lands
+// as a positional.
+const joinedValue = "<value>"
+
+// stringLit is the text of a Go string literal (false for any other
+// literal, or one that does not unquote).
+func stringLit(lit *ast.BasicLit) (string, bool) {
+	if lit.Kind != token.STRING {
+		return "", false
+	}
+	s, err := strconv.Unquote(lit.Value)
+	return s, err == nil
+}
+
+// joinedLit is the literal a non-literal value is joined onto in a + chain:
+// the left operand's last literal ("lore edit " in "lore edit " + id, or in
+// "x " + y + " lore edit " + id, which Go groups to the left). False when
+// the right operand is itself a literal (both are scanned on their own) or
+// the left side does not end in a literal.
+func joinedLit(b *ast.BinaryExpr) (string, bool) {
+	if b.Op != token.ADD {
+		return "", false
+	}
+	if _, isLit := b.Y.(*ast.BasicLit); isLit {
+		return "", false
+	}
+	left := b.X
+	if inner, ok := left.(*ast.BinaryExpr); ok && inner.Op == token.ADD {
+		left = inner.Y
+	}
+	lit, ok := left.(*ast.BasicLit)
+	if !ok {
+		return "", false
+	}
+	return stringLit(lit)
+}
+
+// joinsVerb reports whether the last command of a literal stops at a
+// command group ("lore sync " + verb): the joined value is a subcommand
+// name, not a value given by position.
+func joinsVerb(root *cobra.Command, line string) bool {
+	spans := commandSpans(line)
+	if len(spans) == 0 {
+		return false
+	}
+	toks := docTokens(spans[len(spans)-1])[1:] // drop "lore"
+	cmd := root
+	for _, tok := range toks {
+		next := findSub(cmd, tok)
+		if next == nil {
+			return false
+		}
+		cmd = next
+	}
+	return cmd.HasSubCommands()
+}
+
+// printedProblems checks the `lore …` commands of one printed line: how
+// many it found, and each problem with the command it is about.
+func printedProblems(root *cobra.Command, line string) (int, []string) {
+	quoted := strings.Contains(line, "`")
+	spans := commandSpans(line)
+	var out []string
+	for _, span := range spans {
+		if _, ok := printedAllowed[span]; ok {
+			continue
+		}
+		if f := equalsValue(span); f != "" {
+			out = append(out, "gives "+f+" with =: write it "+spaced(f)+"\n    "+span)
+		}
+		if p := checkInvocation(root, span); p != "" && strings.Contains(p, "positional value") && (quoted || valueLike(p)) {
+			out = append(out, p+"\n    "+span)
+		}
+	}
+	return len(spans), out
 }
 
 // printedAllowed are commands in the source that are wrong on purpose,
