@@ -42,3 +42,26 @@ func TestConfigSetList(t *testing.T) {
 		t.Fatalf("a partial pattern refused: %v", err)
 	}
 }
+
+// TestConfigSetMinLore (devco:D-735): min_lore_version takes one release
+// version with --value; --add/--remove, several values or a version lore
+// cannot compare are refused before anything is read.
+func TestConfigSetMinLore(t *testing.T) {
+	if err := CheckConfigSet(ConfigSetIn{Key: ConfigKeyMinLore, Values: []string{"0.1.20"}}); err != nil {
+		t.Fatalf("0.1.20 refused: %v", err)
+	}
+	for _, in := range []ConfigSetIn{
+		{Key: ConfigKeyMinLore},
+		{Key: ConfigKeyMinLore, Values: []string{"0.1.20", "0.1.21"}},
+		{Key: ConfigKeyMinLore, Add: []string{"0.1.20"}},
+		{Key: ConfigKeyMinLore, Values: []string{"soon"}},
+		{Key: ConfigKeyMinLore, Values: []string{"0.1.20-dev"}},
+	} {
+		if err := CheckConfigSet(in); errs.CodeOf(err) != errs.InvalidInput {
+			t.Errorf("%+v: got %v, want E_INVALID_INPUT", in, err)
+		}
+	}
+	if got := MinLoreCommand("acme", "0.1.20"); got != "lore org config set --org acme --key min_lore_version --value 0.1.20 --push --yes" {
+		t.Errorf("MinLoreCommand = %q", got)
+	}
+}

@@ -78,6 +78,9 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 		lines = append(lines, "  "+audienceAdminsLine)
 	} else if team, ok := aud.Team(); ok {
 		lines = append(lines, "  "+audienceTeamLine(team))
+		// devco:D-735: an older member's lore skips a team store silently;
+		// offer the org floor that makes it say so (never set unasked)
+		lines = append(lines, h.teamAudienceFloorLines(ctx, &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}, in.Org, sc)...)
 	}
 	otherStore := !storeaddr.Same(in.URL, sc.URL)
 	if otherStore {

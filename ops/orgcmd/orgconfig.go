@@ -12,12 +12,17 @@ package orgcmd
 //	               ─▶ lore-org.yaml's key replaced (or removed), committed in
 //	                  the org store's clone (pushed only with --push)
 //	               ─▶ this machine's org entry copies it (the refresh)
+//	               ─▶ key min_lore_version (devco:D-735): every folder's
+//	                  _meta.json in each of the org's stores gets the floor
+//	                  (a lore below it goes read-only there, with its
+//	                  upgrade line; never lowered), one commit per store
 
 import (
 	"context"
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -36,22 +41,34 @@ const (
 const (
 	ConfigKeyOwn   = "own"
 	ConfigKeyRepos = "repos"
+	// ConfigKeyMinLore is the lore version the org's stores need
+	// (devco:D-735). It is not a lore-org.yaml key: it is written as
+	// min_lore_version into every folder's _meta.json of the org's
+	// stores, the floor every lore since 0.1.18 already obeys, so an
+	// older client goes read-only there without a new release.
+	ConfigKeyMinLore = "min_lore_version"
 )
 
 // ConfigKeys are the keys org config set changes, in file order.
-func ConfigKeys() []string { return []string{ConfigKeyOwn, ConfigKeyRepos} }
+func ConfigKeys() []string { return []string{ConfigKeyOwn, ConfigKeyRepos, ConfigKeyMinLore} }
+
+// MinLoreCommand is the command that declares version as the lore version
+// org's stores need.
+func MinLoreCommand(org, version string) string {
+	return "lore org config set --org " + org + " --key " + ConfigKeyMinLore + " --value " + version + " --push --yes"
+}
 
 // ConfigGetIn is the input of org.config.get.
 type ConfigGetIn struct {
 	Org string `json:"org,omitempty" flag:"org" desc:"the org entry (default: the only org entry on this machine, else the active setup's org)"`
-	Key string `json:"key,omitempty" flag:"key" desc:"only this key: own or repos (default every key)"`
+	Key string `json:"key,omitempty" flag:"key" desc:"only this key: own, repos, min_lore_version or stores (default every key)"`
 }
 
 // ConfigSetIn is the input of org.config.set.
 type ConfigSetIn struct {
 	Org    string   `json:"org,omitempty" flag:"org" desc:"the org entry (default: the only org entry on this machine, else the active setup's org)"`
-	Key    string   `json:"key" flag:"key" desc:"the key to change: own (the org's own repo patterns) or repos (client repo patterns)"`
-	Values []string `json:"values,omitempty" flag:"value" desc:"the new list, one pattern per --value (repeat; replaces the whole list); host/owner/repo with * inside or as a segment, ** as a segment"`
+	Key    string   `json:"key" flag:"key" desc:"the key to change: own (the org's own repo patterns), repos (client repo patterns) or min_lore_version (the lore version the org's stores need: an older lore goes read-only there)"`
+	Values []string `json:"values,omitempty" flag:"value" desc:"the new list, one pattern per --value (repeat; replaces the whole list); host/owner/repo with * inside or as a segment, ** as a segment; for min_lore_version one version like 0.1.20"`
 	Add    []string `json:"add,omitempty" flag:"add" desc:"a pattern to add to the list (repeat; keeps the others)"`
 	Remove []string `json:"remove,omitempty" flag:"remove" desc:"a pattern to take out of the list (repeat)"`
 	Push   bool     `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store <org>, sends it)"`
@@ -66,6 +83,9 @@ type ConfigGetOut struct {
 	// Stores are the store urls the file lists, admins-only ones marked
 	// " (admins)".
 	Stores []string `json:"stores"`
+	// MinLoreVersion is the lore version every folder of the org folder's
+	// store declares it needs ("" none; devco:D-735).
+	MinLoreVersion string `json:"min_lore_version"`
 	// key is the --key asked for ("" every key).
 	key string
 	// overlaps are orgresolve.OwnRepoOverlaps of Own and Repos, printed
@@ -98,6 +118,9 @@ func (o ConfigGetOut) Text() string {
 		}
 	}
 	line("stores", o.Stores)
+	if o.key == "" || o.key == ConfigKeyMinLore {
+		b.WriteString(ConfigKeyMinLore + ": " + orNone(o.MinLoreVersion) + "\n")
+	}
 	return b.String()
 }
 
@@ -122,6 +145,9 @@ func ConfigSetCommand(org, key string) string {
 // CheckConfigSet refuses an org config set that cannot be applied: an
 // unknown key, no change named, or a pattern repourl.Compile refuses.
 func CheckConfigSet(in ConfigSetIn) error {
+	if in.Key == ConfigKeyMinLore {
+		return checkMinLore(in)
+	}
 	if !slices.Contains(ConfigKeys(), in.Key) {
 		return errs.New(errs.InvalidInput, "org config set: --key "+strconvQuote(in.Key)+" is not one of "+strings.Join(ConfigKeys(), ", ")).
 			WithHint("lore org config set --org <org> --key repos --add 'github.com/agency/client-*' --yes")
@@ -135,6 +161,20 @@ func CheckConfigSet(in ConfigSetIn) error {
 			return errs.Wrap(errs.InvalidInput, "org config set --key "+in.Key+": "+strings.TrimPrefix(err.Error(), "repourl: "), err).
 				WithHint("write host/owner/repo with ** as a whole segment and * as a segment or inside one, like github.com/agency/client-*")
 		}
+	}
+	return nil
+}
+
+// checkMinLore refuses a min_lore_version change that is not one release
+// version given with --value: --add/--remove make no sense for one
+// version, and a floor lore cannot parse is ignored by every lore.
+func checkMinLore(in ConfigSetIn) error {
+	hint := "lore org config set --org <org> --key " + ConfigKeyMinLore + " --value 0.1.20 --push --yes"
+	if len(in.Add) > 0 || len(in.Remove) > 0 || len(in.Values) != 1 {
+		return errs.New(errs.InvalidInput, "org config set --key "+ConfigKeyMinLore+" takes one version with --value (no --add or --remove)").WithHint(hint)
+	}
+	if !formatgate.ValidVersion(in.Values[0]) {
+		return errs.New(errs.InvalidInput, "org config set --key "+ConfigKeyMinLore+": "+strconvQuote(in.Values[0])+" is not a release version (major.minor.patch, like 0.1.20)").WithHint(hint)
 	}
 	return nil
 }
@@ -171,13 +211,13 @@ func configOps(o ops, spec func(name, summary string, errCodes []errs.Code, mayA
 		}
 		return e, nil
 	}
-	get := spec(OpConfigGet, "Show the org's shared lore-org.yaml: own and repos patterns, stores", codes, false,
+	get := spec(OpConfigGet, "Show the org's shared lore-org.yaml: own and repos patterns, stores; and min_lore_version, the lore version its stores need", codes, false,
 		op.Example{Title: "the org's repo patterns", CLI: "lore org config get --org agency", Want: "repos:"})
 	get.Permission, get.Access = op.PermRead, op.AccessRead
 	return []op.Entry{
 		op.Define(get, func(ctx context.Context, in ConfigGetIn) (ConfigGetOut, error) {
 			if in.Key != "" && !slices.Contains(ConfigKeys(), in.Key) && in.Key != "stores" {
-				return ConfigGetOut{}, errs.New(errs.InvalidInput, "org config get: --key "+strconvQuote(in.Key)+" is not one of own, repos, stores").
+				return ConfigGetOut{}, errs.New(errs.InvalidInput, "org config get: --key "+strconvQuote(in.Key)+" is not one of own, repos, stores, min_lore_version").
 					WithHint("lore org config get --org <org> --key repos")
 			}
 			h, err := o.host(ctx, OpConfigGet)
@@ -197,8 +237,9 @@ func configOps(o ops, spec func(name, summary string, errCodes []errs.Code, mayA
 			out.key = in.Key
 			return out, err
 		}),
-		op.Define(spec(OpConfigSet, "Change the org's shared lore-org.yaml (admin only): own or repos patterns; committed in the org store and copied to this machine's org entry", append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...), true,
-			op.Example{Title: "add a client repo pattern", CLI: "lore org config set --org agency --key repos --add 'github.com/agency/client-*' --push --yes", Want: "repos"}),
+		op.Define(spec(OpConfigSet, "Change the org's shared lore-org.yaml (admin only): own or repos patterns, committed in the org store and copied to this machine's org entry; or min_lore_version, the lore version the org's stores need (an older lore goes read-only there)", append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...), true,
+			op.Example{Title: "add a client repo pattern", CLI: "lore org config set --org agency --key repos --add 'github.com/agency/client-*' --push --yes", Want: "repos"},
+			op.Example{Title: "require lore 0.1.20 on every store of the org", CLI: "lore org config set --org agency --key min_lore_version --value 0.1.20 --push --yes", Want: "min_lore_version"}),
 			func(ctx context.Context, in ConfigSetIn) (Report, error) {
 				if err := CheckConfigSet(in); err != nil {
 					return Report{}, err

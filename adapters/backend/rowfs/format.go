@@ -258,3 +258,43 @@ func (f *Folder) RaiseFeatures(need []string) (string, error) {
 	}
 	return f.storePath(MetaFileName), nil
 }
+
+// RaiseFloorDoc is doc (a folder's _meta.json, rel its store path) with
+// min_lore_version raised to floor (never lowered; features and every
+// other key kept), canonically encoded; changed is false when doc already
+// declares floor or higher. It is how an org declares the lore version
+// its stores need (devco:D-735): every lore since 0.1.18 already refuses
+// to write a folder whose floor is above its own version, so older
+// clients turn read-only with their upgrade line without a new release.
+func RaiseFloorDoc(doc []byte, rel, floor string) (out []byte, changed bool, err error) {
+	o, err := decodeObject(doc)
+	if err != nil {
+		return nil, false, unreadableDoc(rel, doc)
+	}
+	cur, err := decodeFormat(o, rel)
+	if err != nil {
+		return nil, false, err
+	}
+	if !formatgate.VersionBelow(cur.MinLoreVersion, floor) {
+		return doc, false, nil
+	}
+	cur.MinLoreVersion = formatgate.MaxVersion(cur.MinLoreVersion, floor)
+	if err = setFormat(o, cur); err != nil {
+		return nil, false, err
+	}
+	if out, err = encodeObject(o, rel); err != nil {
+		return nil, false, err
+	}
+	return out, !bytes.Equal(out, doc), nil
+}
+
+// FloorOfDoc is the min_lore_version doc (a folder's _meta.json) declares
+// ("" when none).
+func FloorOfDoc(doc []byte, rel string) (string, error) {
+	o, err := decodeObject(doc)
+	if err != nil {
+		return "", unreadableDoc(rel, doc)
+	}
+	d, err := decodeFormat(o, rel)
+	return d.MinLoreVersion, err
+}

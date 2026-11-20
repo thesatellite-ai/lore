@@ -128,6 +128,9 @@ func (h *standaloneOrg) SetStoreAudience(ctx context.Context, in opsorgcmd.Store
 	lines := []string{"set who uses store " + want + " in org " + in.Org + ": " + aud.String()}
 	if team, ok := aud.Team(); ok {
 		lines = append(lines, "  "+audienceTeamLine(team), "  a member outside @"+team+" drops the store at their next sync after they get the commit; their clone of it, if any, stays on disk and is no longer read")
+		// devco:D-735: an older member's lore skips a team store silently;
+		// offer the org floor that makes it say so (never set unasked)
+		lines = append(lines, h.teamAudienceFloorLines(ctx, &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}, in.Org, sc)...)
 	} else if aud == orgconf.AudienceAdmins {
 		lines = append(lines, "  "+audienceAdminsLine, "  members' lore drops the store at their next open after they get the commit; their clone of it, if any, stays on disk")
 	} else {
