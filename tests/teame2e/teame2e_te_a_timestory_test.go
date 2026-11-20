@@ -146,7 +146,7 @@ func TestTeA_TimeStory_ThreeClones(t *testing.T) {
 
 	// Land, compact the live ref: the same numbers everywhere, unchanged.
 	miraC.MustLore("land", "--all")
-	miraC.MustLore("live", "compact")
+	miraC.MustLore("live", "compact", "--yes")
 	for _, step := range []string{"after land", "after live compact"} {
 		if got := teASameEverywhere(t, step, id, doneAt.Add(time.Minute), people, all...).canon(t); got != before {
 			t.Fatalf("%s the time is what it was at done:\n%s\n%s", step, before, got)

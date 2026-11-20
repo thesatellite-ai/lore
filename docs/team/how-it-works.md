@@ -252,9 +252,9 @@ Every live write is a commit, so the live list's history keeps growing. **Compac
 ```console
 # alice, in website
 $ lore live compact --dry-run
-refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2
-$ lore live compact
-✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
+refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2, and force-push it to the remote origin (every clone fetches the rewritten ref)
+$ lore live compact --yes
+✓ compacted refs/lore/live to 1 commit (epoch 2) and force-pushed it to the remote origin, so every clone gets the rewritten ref on its next fetch; backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
 epoch 2
 601d285 2026-11-02 alice  lore: live compact (epoch 2)

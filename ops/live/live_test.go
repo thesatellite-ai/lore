@@ -8,17 +8,20 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 )
 
 // fakeRef is an in-memory Ref recording what it was asked.
 type fakeRef struct {
-	listing  Listing
-	file     map[string][]byte
-	refs     Refs
-	hist     History
-	logN     int
-	compact  Compacted
-	dryRun   bool
+	listing Listing
+	file    map[string][]byte
+	refs    Refs
+	hist    History
+	logN    int
+	compact Compacted
+	dryRun  bool
+	// compacts records the dryRun of every Compact call, in order
+	compacts []bool
 	purged   []string
 	purgeErr error
 }
@@ -40,6 +43,7 @@ func (f *fakeRef) Restore(context.Context) (Restored, error) {
 }
 func (f *fakeRef) Compact(_ context.Context, dry bool) (Compacted, error) {
 	f.dryRun = dry
+	f.compacts = append(f.compacts, dry)
 	return f.compact, nil
 }
 func (f *fakeRef) Purge(_ context.Context, ids []string) error {
@@ -107,9 +111,14 @@ func TestTexts(t *testing.T) {
 	if !f.dryRun || c.Text() != "refs/lore/live has 4 commits (threshold 1000); compacting would keep 3 files, epoch 1 → 2, dropping 1 purged rows\n" {
 		t.Fatalf("compact dry: %q", c.Text())
 	}
-	c, _ = compact(ctx, e, CompactIn{})
-	if c.Text() != "✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/x\n" {
+	yes := op.WithConfirmed(ctx, true) // --yes: the compaction asks first (D-751)
+	c, _ = compact(yes, e, CompactIn{})
+	if c.Text() != "✓ compacted refs/lore/live to 1 commit (epoch 2) on this machine only (no remote); backup kept locally as refs/lore-backup/live/x\n" {
 		t.Fatalf("compact: %q", c.Text())
+	}
+	f.compact.Plan.Remote = "origin"
+	if c, _ = compact(yes, e, CompactIn{}); c.Text() != "✓ compacted refs/lore/live to 1 commit (epoch 2) and force-pushed it to the remote origin, so every clone gets the rewritten ref on its next fetch; backup kept locally as refs/lore-backup/live/x\n" {
+		t.Fatalf("compact with a remote: %q", c.Text())
 	}
 	f.compact = Compacted{Nothing: true, Plan: CompactPlan{Ref: "refs/lore/live", Commits: 1, Files: 4, FromEpoch: 3, ToEpoch: 3}}
 	for _, dry := range []bool{false, true} {
@@ -126,6 +135,52 @@ func TestTexts(t *testing.T) {
 	p, _ := purge(ctx, e, PurgeIn{IDs: []string{" " + purgeIDA + " ", purgeIDB}, Confirm: true})
 	if strings.Join(f.purged, ",") != purgeIDA+","+purgeIDB || p.Text() != "✓ purged "+purgeIDA+", "+purgeIDB+" from live; run `lore live compact` to drop them from the ref's history too\n" {
 		t.Fatalf("purge: %v %q", f.purged, p.Text())
+	}
+}
+
+// TestCompactAsksBeforeRewritingTheRemote (devco D-751): a compaction
+// force-pushes the rewritten live ref to the code repo's remote, the ref
+// every teammate's clone fetches, so without a yes (--yes, a terminal's
+// answer) it only plans and answers E_NEEDS_CONFIRM whose question names
+// the rewrite and the remote and whose next step is `live compact --yes`;
+// a yes runs it; a dry run and a ref with nothing to compact never ask.
+func TestCompactAsksBeforeRewritingTheRemote(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	plan := CompactPlan{Ref: "refs/lore/live", Commits: 7, Threshold: 1000, Files: 3, FromEpoch: 1, ToEpoch: 2, Remote: "origin"}
+	f := &fakeRef{compact: Compacted{Plan: plan, Backup: "refs/lore-backup/live/x"}}
+	_, err := compact(ctx, env{r: f}, CompactIn{})
+	var e *errs.Error
+	if !errors.As(err, &e) || e.Code != errs.NeedsConfirm {
+		t.Fatalf("compact without a yes must ask, got %v", err)
+	}
+	if len(f.compacts) != 1 || !f.compacts[0] {
+		t.Fatalf("without a yes only the plan is read (dry run), got calls %v", f.compacts)
+	}
+	want := "rewrite refs/lore/live (7 commits) to 1 commit, epoch 1 → 2, and force-push it to the remote origin that every teammate's clone fetches (a backup stays on this machine)?"
+	if e.Question != want || !strings.Contains(e.Message, want) || !strings.Contains(e.Hint, "--yes") {
+		t.Fatalf("the question names the rewrite and the remote:\n%q\nhint %q", e.Question, e.Hint)
+	}
+	if next := strings.Join(e.Next.Args, " "); e.Next.Command != "lore" || next != "live compact --yes" {
+		t.Fatalf("next step: %q %q", e.Next.Command, next)
+	}
+	f.compacts = nil
+	c, err := compact(op.WithConfirmed(ctx, true), env{r: f}, CompactIn{})
+	if err != nil || len(f.compacts) != 1 || f.compacts[0] || c.Remote != "origin" || !strings.Contains(c.Text(), "force-pushed it to the remote origin") {
+		t.Fatalf("a yes compacts and says the remote changed: %+v %v calls %v", c, err, f.compacts)
+	}
+	f.compacts = nil
+	if c, err = compact(ctx, env{r: f}, CompactIn{DryRun: true}); err != nil || !c.DryRun || len(f.compacts) != 1 || !f.compacts[0] || !strings.Contains(c.Text(), "force-push it to the remote origin") {
+		t.Fatalf("a dry run never asks and names the remote: %q %v calls %v", c.Text(), err, f.compacts)
+	}
+	f.compacts = nil
+	f.compact = Compacted{Nothing: true, Plan: CompactPlan{Ref: "refs/lore/live", Commits: 1, FromEpoch: 2, ToEpoch: 2, Remote: "origin"}}
+	if c, err = compact(ctx, env{r: f}, CompactIn{}); err != nil || c.DryRun || !strings.HasPrefix(c.Text(), "nothing to compact") || len(f.compacts) != 1 {
+		t.Fatalf("nothing to compact never asks: %q %v calls %v", c.Text(), err, f.compacts)
+	}
+	f.compact = Compacted{Plan: CompactPlan{Ref: "refs/lore/live", Commits: 3, FromEpoch: 1, ToEpoch: 2}}
+	if _, err = compact(ctx, env{r: f}, CompactIn{}); !errors.As(err, &e) || !strings.HasSuffix(e.Question, "on this machine only (no remote)?") {
+		t.Fatalf("no remote: the question says only this machine changes: %v", err)
 	}
 }
 
