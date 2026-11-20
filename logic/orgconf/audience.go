@@ -28,9 +28,13 @@ import (
 // it. The empty value (the key left out) is every member.
 type Audience string
 
-// Audience values. Closed set: a value lore does not know is read as
-// AudienceAdmins (ForMembers), so a member never tries a store the file
-// does not plainly open to them.
+// Audience values. A value this lore does not know (a kind a newer lore
+// added, or a typo) is kept as it is, in an explicit "unknown" state
+// (Unknown): a member never uses the store (fail safe, as for admins),
+// and whoami and doctor say which store it is and that this lore must be
+// upgraded to read its audience (devco D-734: lore 0.1.18 met team:@web,
+// read it as admins and left a team member without the store, saying
+// nothing).
 const (
 	// AudienceEveryone is the default: every member of the org uses the
 	// store. It is written as no key at all.
@@ -85,6 +89,31 @@ func (a Audience) Known() bool {
 	_, ok := a.Team()
 	return ok
 }
+
+// Unknown reports whether a is an audience this lore does not know
+// (D-734): the store is kept from every member who is not an admin, and
+// whoami and doctor name it with the upgrade to run.
+func (a Audience) Unknown() bool { return !a.Known() }
+
+// WellFormed reports whether a can be an audience value at all: one word
+// with no space or control character (any kind, known or not). A config
+// entry with such a value validates, so an admin's lore copies a store of
+// an audience kind it does not know instead of failing the whole copy
+// (D-734).
+func (a Audience) WellFormed() bool {
+	if len(a) > maxAudienceLen {
+		return false
+	}
+	for _, r := range string(a) {
+		if r <= ' ' || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// maxAudienceLen bounds an audience value (a team handle is far shorter).
+const maxAudienceLen = 128
 
 // Viewer is what decides which of an org's stores one person uses: an
 // admin uses every store; a member uses the everyone stores and those of
@@ -170,9 +199,10 @@ func (sh Shared) HasRestricted() bool {
 
 // ForPerson is sh as one person's org entry holds it: an admin's copy is
 // the whole file; a member's leaves out every store they do not use. The
-// admins-only ones come back as skipped (in file order) for doctor's
-// note; a team store of a team they are not in is left out without a
-// word (D-727: they never hear of it).
+// admins-only ones and those of an audience this lore does not know
+// (Unknown, D-734) come back as skipped (in file order) for whoami's and
+// doctor's notes; a team store of a team they are not in is left out
+// without a word (D-727: they never hear of it).
 func (sh Shared) ForPerson(v Viewer) (Shared, []Store) {
 	if v.Admin || !sh.HasRestricted() {
 		return sh, nil

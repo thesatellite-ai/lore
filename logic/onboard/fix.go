@@ -102,6 +102,10 @@ const (
 	// period at all. "You are marked as left" would be wrong (they never
 	// had a stint); the fix is to record the first one (teamfix n3).
 	FixNoPeriod FixVariant = "no_period"
+	// FixUnknownAudience: org.source found a store of lore-org.yaml whose
+	// audience this lore does not know (devco D-734). A refresh copies the
+	// same file again; the fix is a lore that reads the audience.
+	FixUnknownAudience FixVariant = "unknown_audience"
 )
 
 // VarLevel is the ProbeResult.Vars key a prober sets to "info" to lower a
@@ -460,6 +464,8 @@ var fixes = map[fixKey]Fix{
 		Command: argv(cmdLore, "store", "set-url", "--name", "{store_id}", "--url", "{url}"), Runnable: true},
 	{check: CheckOrgSource}: {Text: "The {org} entry in ~/.lore/config.yaml is older than, or differs from, the store's lore-org.yaml (the team's source for its stores and repo patterns). Run it to copy them in: lore org refresh --org {org}",
 		Command: argv(cmdLore, "org", "refresh", "--org", "{org}"), Runnable: true},
+	{check: CheckOrgSource, variant: FixUnknownAudience}: {Text: "A store of {org} has an audience this lore cannot read, so it is never cloned or read here. Upgrade lore, then run lore sync: lore upgrade",
+		Command: argv(cmdLore, "upgrade")},
 	{check: CheckIdentityRoster}:                       {Text: "Your email is not on the {org} roster yet; finish the join step or run lore actor contact add --actor <you> --type email --value <your-email>"},
 	{check: CheckIdentityPeriod}:                       {Text: "You are marked as left in {org}. If you are back, ask an admin of {org} to run lore member add --email {email} (it reopens a stint that ended today)"},
 	{check: CheckIdentityPeriod, variant: FixNoPeriod}: {Text: "{org} has no period (stint) for you yet, so lore cannot tell since when you are a member. Ask an admin of {org} to record your first one: lore actor period add --actor <you> --type employee --started-on <your-first-day>"},

@@ -467,7 +467,10 @@ func (o *Org) validate() []error {
 			add(fmt.Errorf("%s: same store and branch as stores[%d]", w, j))
 		}
 		stores[key] = i
-		if !s.Audience.Known() {
+		if !s.Audience.WellFormed() {
+			// D-734: an audience kind this lore does not know validates
+			// (a newer lore wrote it; the store is kept from members and
+			// named by whoami/doctor), a value no lore could write does not
 			add(fmt.Errorf("%s.audience %q: use %q, %q or leave it out (every member)", w, s.Audience, AudienceAdmins, audienceTeamPrefix+"<team>"))
 		}
 		if s.OrgFolder != "" {

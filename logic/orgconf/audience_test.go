@@ -51,16 +51,51 @@ func TestParseAudience(t *testing.T) {
 }
 
 // TestValidateAudience: config.yaml's copy of a store with an audience
-// lore does not know is refused, naming the key.
+// no lore could write (spaces, control characters) is refused, naming the
+// key; one of a kind this lore does not know validates (D-734).
 func TestValidateAudience(t *testing.T) {
 	t.Parallel()
-	c := Config{Orgs: []Org{{Name: "acme", Stores: []Store{{URL: "git@example.invalid:acme/team.git", OrgFolder: "org"}, {URL: "git@example.invalid:acme/ops.git", Audience: "owners"}}}}}
+	c := Config{Orgs: []Org{{Name: "acme", Stores: []Store{{URL: "git@example.invalid:acme/team.git", OrgFolder: "org"}, {URL: "git@example.invalid:acme/ops.git", Audience: "the owners"}}}}}
 	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "stores[1].audience") {
 		t.Errorf("Validate = %v; want stores[1].audience named", err)
 	}
 	c.Orgs[0].Stores[1].Audience = AudienceAdmins
 	if err := c.Validate(); err != nil {
 		t.Errorf("Validate with audience admins = %v", err)
+	}
+}
+
+// TestUnknownAudienceKept (devco D-734): an audience kind this lore does
+// not know (a newer lore wrote it) is an explicit unknown state, never
+// dropped: a member's copy leaves the store out and returns it as skipped
+// (whoami and doctor name it with the upgrade), an admin's copy keeps it
+// and config.yaml validates with it (lore 0.1.18 refused the admin's copy
+// of a team:@web store and skipped a member's without a word).
+func TestUnknownAudienceKept(t *testing.T) {
+	t.Parallel()
+	later := Audience("group:@web-and-ops")
+	if !later.Unknown() || later.Known() || !later.WellFormed() {
+		t.Fatalf("%q: Unknown %v Known %v WellFormed %v; want unknown and well-formed", later, later.Unknown(), later.Known(), later.WellFormed())
+	}
+	for _, a := range []Audience{AudienceEveryone, AudienceAdmins, TeamAudience("@web")} {
+		if a.Unknown() {
+			t.Errorf("%q reads as unknown", a)
+		}
+	}
+	sh := Shared{Stores: []Store{
+		{URL: "git@example.invalid:acme/lore.git", OrgFolder: "org"},
+		{URL: "git@example.invalid:acme/lore-web.git", Audience: later},
+	}}
+	got, skipped := sh.ForPerson(Viewer{Teams: []string{"web"}})
+	if len(got.Stores) != 1 || len(skipped) != 1 || skipped[0].Audience != later {
+		t.Errorf("member: stores %+v skipped %+v; want the unknown-audience store skipped with its audience kept", got.Stores, skipped)
+	}
+	if got, _ := sh.ForPerson(Viewer{Admin: true}); len(got.Stores) != 2 {
+		t.Errorf("admin: %+v; want both stores", got.Stores)
+	}
+	c := Config{Orgs: []Org{{Name: "acme", Stores: sh.Stores}}}
+	if err := c.Validate(); err != nil {
+		t.Errorf("Validate with an unknown audience kind = %v; want it kept", err)
 	}
 }
 
