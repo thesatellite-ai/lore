@@ -97,6 +97,48 @@ func TestJourneyNoUntrackedFilesTrackedHooks(t *testing.T) {
 			t.Fatalf("shared: the agent hooks are not in settings.json:\n%s", got)
 		}
 	})
+
+	// The team commits lore's blocks with `lore fix --tracked-hooks`, but
+	// post-checkout, post-merge and post-rewrite land without the exec bit
+	// (100644). A teammate's sync, write or doctor --fix chmodded them: git
+	// showed all three modified (mode 100644 -> 100755) in a fresh clone.
+	posts := []string{"post-checkout", "post-merge", "post-rewrite"}
+	w.Step("day3/the-team-commits-lore's-post-hooks-without-the-exec-bit", func() {
+		ida.LoreIn(c, "fix", "--tracked-hooks", "--yes").OK(t)
+		c.Git("add", "-A", ".githooks", ".claude")
+		for _, h := range posts {
+			c.Git("update-index", "--chmod=-x", ".githooks/"+h)
+		}
+		c.TryGit("commit", "-q", "--no-verify", "-m", "lore's hook blocks").OK(t)
+		c.Git("push", "-q", "origin", "HEAD")
+		for _, h := range posts {
+			if got, _ := c.ReadFile(".githooks/" + h); !strings.Contains(got, "# >>> lore-sync") {
+				t.Fatalf("lore fix --tracked-hooks wrote no block in %s:\n%s", h, got)
+			}
+		}
+	})
+
+	w.Step("day3/a-teammate's-sync-write-and-doctor-fix-leave-them-as-committed", func() {
+		ola := w.Persona("Ola Brand", "ola@orchard.example").Laptop()
+		oc := ola.Clone(app, "gate")
+		oc.Git("config", "core.hooksPath", ".githooks")
+		committed := map[string]string{}
+		for _, h := range posts {
+			committed[h], _ = oc.ReadFile(".githooks/" + h)
+		}
+		ola.LoreIn(oc, "sync")
+		ola.LoreIn(oc, "memory", "add", "--body", "a teammate's first note").OK(t)
+		ola.LoreIn(oc, "doctor", "--fix")
+		if st := oc.Git("status", "--porcelain", "--untracked-files=all", "--", ".githooks"); st != "" {
+			t.Fatalf("a teammate's lore changed the committed .githooks:\n%s\n%s", st, oc.Git("diff", "--", ".githooks"))
+		}
+		for _, h := range posts {
+			if got, _ := oc.ReadFile(".githooks/" + h); got != committed[h] {
+				t.Fatalf("a teammate's lore rewrote %s:\n%s", h, got)
+			}
+		}
+		ola.LoreIn(oc, "doctor").Says(t, "post-checkout, post-merge, post-rewrite", "`lore fix --tracked-hooks`")
+	})
 }
 
 // TestJourneyNoUntrackedFilesLinkedShapes (devco D-732, the standing
