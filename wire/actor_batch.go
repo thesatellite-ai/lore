@@ -53,14 +53,17 @@ const actorBatchAttempts = 4
 
 // actorBatchOnce is one staged attempt of withActorRows.
 func (a *App) actorBatchOnce(ctx context.Context, st *state, write func(context.Context) (engine.Written, error)) (engine.Written, error) {
-	st.actorMu.Lock()
+	_, unlock, err := lockActors(ctx, st) // D-738: a chain inside ensureActor gets E_INTERNAL, not a hang
+	if err != nil {
+		return engine.Written{}, err
+	}
 	before := make(map[store.Source]bool, len(st.actorDone))
 	for k, v := range st.actorDone {
 		before[k] = v
 	}
-	st.actorMu.Unlock()
+	unlock()
 	undo := func() {
-		st.actorMu.Lock()
+		st.actorMu.Lock() // only reached after write returned: this chain holds no actorMu here
 		defer st.actorMu.Unlock()
 		for k := range st.actorDone {
 			if !before[k] {
