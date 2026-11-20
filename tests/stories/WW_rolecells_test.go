@@ -46,6 +46,17 @@ func wrcHead(t *testing.T, m *journeys.Machine) string {
 	return strings.TrimSpace(string(out))
 }
 
+// wrcLog is what the commits after before hold in m's company store
+// clone: a failing cell names what a refused write left behind.
+func wrcLog(m *journeys.Machine, before string) string {
+	dir := filepath.Join(m.Home, ".lore", "stores", "acme-co", "lore-team")
+	out, err := exec.Command("git", "-C", dir, "log", "--stat", "--format=%h %s", before+"..HEAD").CombinedOutput()
+	if err != nil {
+		return err.Error()
+	}
+	return string(out)
+}
+
 func TestStoryWWRoleCellPerOp(t *testing.T) {
 	t.Parallel()
 	s := &Story{World: journeys.NewWorld(t), ID: "WW"}
@@ -99,7 +110,7 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 			t.Errorf("devco:D-694 cell %s: the refusal does not say nothing was written:\n%s", cell, r)
 		}
 		if after := wrcHead(t, mo); after != before {
-			t.Fatalf("devco:D-694 cell %s: a refused member write committed to the store clone (%s -> %s)", cell, before, after)
+			t.Fatalf("devco:D-694 cell %s: a refused member write committed to the store clone (%s -> %s):\n%s", cell, before, after, wrcLog(mo, before))
 		}
 	}
 	// admin runs args as Ada in her linked web repo: it works.
