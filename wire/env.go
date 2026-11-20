@@ -99,19 +99,33 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 	// G-ENGINE-2: the actor rows and the row land as one batch, so a refused
 	// create writes nothing (not even the caller's actor row)
 	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
-		if aerr := a.ensureActor(ctx, st, target); aerr != nil {
-			return engine.Written{}, aerr
-		}
-		if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
-			return engine.Written{}, aerr
-		}
-		if perr := a.folderProjectFirst(ctx, st, target, fields); perr != nil {
+		if perr := a.createRowsFirst(ctx, st, target, table, fields); perr != nil {
 			return engine.Written{}, perr
 		}
 		w, err := st.eng.Create(ctx, target, table, fields)
 		a.wroteTo(target, err)
 		return w, err
 	})
+}
+
+// createRowsFirst stages, in the open batch of a create (Create and
+// CreateWithID alike), the rows the new row needs before it: the caller's
+// actor row, the actors the row names, and the folder project row of a
+// `--to <store>/<folder>` write (folderProjectFirst). Both create paths
+// run this one step so neither can miss a row the other stages
+// (devco:D-746: task add's default list is made with CreateWithID, which
+// skipped folderProjectFirst, so once D-740 stopped targetFolderProject
+// from committing the folder's project row on the side, the list's
+// project_id named a row no store held and `task add --to <org>/<folder>`
+// failed E_NOT_FOUND).
+func (a *App) createRowsFirst(ctx context.Context, st *state, target store.Source, table row.Table, fields map[string]value.Value) error {
+	if err := a.ensureActor(ctx, st, target); err != nil {
+		return err
+	}
+	if err := a.ensureNamedActors(ctx, st, target, table, fields); err != nil {
+		return err
+	}
+	return a.folderProjectFirst(ctx, st, target, fields)
 }
 
 // Update implements opsmemory.Env.
@@ -782,11 +796,8 @@ func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.T
 		return engine.Written{}, err
 	}
 	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) { // G-ENGINE-2
-		if aerr := a.ensureActor(ctx, st, target); aerr != nil {
-			return engine.Written{}, aerr
-		}
-		if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
-			return engine.Written{}, aerr
+		if perr := a.createRowsFirst(ctx, st, target, table, fields); perr != nil {
+			return engine.Written{}, perr
 		}
 		w, err := st.eng.CreateWithID(ctx, target, table, id, fields)
 		a.wroteTo(target, err)
