@@ -22,6 +22,7 @@ A story is a [journeys](../journeys/README.md) World (`New(t, "<id>")`): the fak
 | `ownershape.go` | the owner-shaped machine every store or setup story can use (`OwnerShaped`): two git identities by folder (includeIf), the org account behind an ssh host alias with url.insteadOf and git carried over it, a GitHub org move (`MoveRemote`), `GitignoredLore`, `ClaudeLinkOut` (story O) |
 | `harness_test.go` | the harness's own tests: every rule check bites, the generators build their shapes, one short replay |
 | `<id>-<name>.md` + `<id>_<name>_test.go` | one story |
+| `GRID.md` + `GRID_*_test.go` | the feature grid: one line per pair of features (live rows, branch layers, linked stores, client guards, tracked hooks, 0.1.17 data, audiences, moves, org links, migrate) saying what must hold and which test replays it; one `TestStoryGRID…` per cell no other test covered |
 
 Every fixture is generated: no file is copied from a real repo, and every name, email, URL and text is made up.
 
