@@ -188,6 +188,7 @@ func OpenClone(ctx context.Context, remote, dir, folder string, o store.OpenOpti
 		return nil, err
 	}
 	b.folder.SetMetaSource(b.sharedFile)
+	b.folder.SetFloorSource(cfg.floorFor(remote))
 	if err := b.checkMarker(ctx); err != nil {
 		return nil, err
 	}
@@ -1104,6 +1105,15 @@ func branchOf(u *url.URL) (string, *url.URL, error) {
 	rest := *u
 	rest.RawQuery = q.Encode()
 	return vals[0], &rest, nil
+}
+
+// floorFor is the rowfs.FloorSource of a clone of remote (nil without
+// WithFolderFloor).
+func (c config) floorFor(remote string) rowfs.FloorSource {
+	if c.folderFloor == nil {
+		return nil
+	}
+	return func(ctx context.Context) string { return c.folderFloor(ctx, remote) }
 }
 
 // sharedFile is the folder's rowfs.MetaSource in clone mode: before a

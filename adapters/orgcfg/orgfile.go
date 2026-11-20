@@ -62,6 +62,14 @@ type OrgFileDoc struct {
 		// <org>/<folder>.
 		ClientRepos map[string]string `yaml:"client_repos,omitempty"`
 	} `yaml:"defaults,omitempty"`
+	// MinLoreVersion is the lore version the org's stores need (devco:
+	// D-735). It lives here, beside the store list, so every member's org
+	// entry copies it (orgconf.Refresh) and each lore that creates a
+	// folder or live ref for the org stamps it there; the _meta.json
+	// floors alone covered only the folders that existed when it was
+	// declared. Every lore reads this file leniently (yamlerr.Lenient
+	// since 0.1.18), so an older one ignores the key.
+	MinLoreVersion string `yaml:"min_lore_version,omitempty"`
 }
 
 // OrgFileStore is one store in lore-org.yaml.

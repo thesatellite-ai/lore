@@ -219,6 +219,13 @@ func run(ctx context.Context, args []string) int {
 				return sit.Result.Org.Live
 			}
 			return nil
+		},
+		// devco:D-735: live commits carry the resolved org's min_lore_version.
+		OrgFloor: func(ctx context.Context) string {
+			if sit, err := org.Situation(ctx); err == nil && sit != nil && sit.Result.Org != nil {
+				return sit.Result.Org.MinLoreVersion
+			}
+			return ""
 		}})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
 	hooks = append(hooks, readOnlyHomeHook(home))          // guard.go: a write in a read-only lore home is refused up front

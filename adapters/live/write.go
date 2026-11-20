@@ -202,6 +202,9 @@ func (r *Ref) changesFor(tree Tree, req WriteRequest) (gitref.Changes, []RowKey,
 	if err := raiseMeta(tree, ch, req.Rows, written); err != nil {
 		return gitref.Changes{}, nil, err
 	}
+	if err := raiseMetaFloor(tree, ch, r.Floor); err != nil {
+		return gitref.Changes{}, nil, err
+	}
 	for _, k := range sortedRowKeys(req.Exact) {
 		b, err := req.Exact[k].Encode()
 		if err != nil {
@@ -318,6 +321,39 @@ func raiseMeta(tree Tree, ch gitref.Changes, rows map[RowKey]File, written []Row
 		cur = nil
 	}
 	b, changed, err := raiseMetaFile(cur, need)
+	if err != nil || !changed {
+		return err
+	}
+	ch.Put[MetaPath] = b
+	return nil
+}
+
+// raiseMetaFloor raises _live/meta.json's min_lore_version to floor (the
+// org's declared floor, Ref.Floor) in the same commit, never lowering it:
+// a ref without meta yet gets DefaultMeta raised when the commit writes
+// something (addRefFiles then keeps it); an existing ref below floor is
+// raised by any write, even one with nothing else to change, so a current
+// lore heals a ref an older lore made after the declaration. floor ""
+// (no org floor) changes nothing (devco:D-735).
+func raiseMetaFloor(tree Tree, ch gitref.Changes, floor string) error {
+	if floor == "" {
+		return nil
+	}
+	cur, has := ch.Put[MetaPath]
+	if !has {
+		cur, has = tree[MetaPath]
+	}
+	if !has && ch.Empty() {
+		return nil // no live ref yet and nothing to write: make none
+	}
+	if !has {
+		def, err := DefaultMeta().Encode()
+		if err != nil {
+			return err
+		}
+		cur = def
+	}
+	b, changed, err := RaiseMetaFloor(cur, floor)
 	if err != nil || !changed {
 		return err
 	}

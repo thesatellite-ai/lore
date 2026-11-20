@@ -42,8 +42,11 @@ import (
 const (
 	orgKeyStores = "stores"
 	orgKeyOwn    = "own"
-	orgKeyRepos  = "repos"
-	orgKeySource = "source"
+	// orgKeyMinLore is the org entry's copy of lore-org.yaml's
+	// min_lore_version (devco:D-735).
+	orgKeyMinLore = "min_lore_version"
+	orgKeyRepos   = "repos"
+	orgKeySource  = "source"
 )
 
 // orgRefreshLockWait bounds the automatic refresh's wait for the config
@@ -284,12 +287,17 @@ func setOrgSourceNode(root *yaml.Node, name string, sh orgconf.Shared, src orgco
 	if err := setOrgKey(entry, orgKeyDefaults, sh.Defaults, len(sh.Defaults.ClientRepos) == 0); err != nil {
 		return err
 	}
+	// devco:D-735: the org's floor, which folders and live refs this
+	// machine creates for the org get
+	if err := setOrgKey(entry, orgKeyMinLore, sh.MinLoreVersion, sh.MinLoreVersion == ""); err != nil {
+		return err
+	}
 	return setOrgKey(entry, orgKeySource, src, false)
 }
 
 // orgKeyValue is a value setOrgSourceNode writes.
 type orgKeyValue interface {
-	[]orgconf.Store | []string | orgconf.OrgDefaults | orgconf.OrgSource
+	[]orgconf.Store | []string | orgconf.OrgDefaults | orgconf.OrgSource | string
 }
 
 // setOrgKey sets key of entry to v (removed when empty).

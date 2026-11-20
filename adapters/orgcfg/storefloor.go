@@ -40,6 +40,13 @@ type StoreFloorEdit struct {
 	Push bool
 	// Signature signs the commit.
 	Signature gitref.Signature
+	// OrgFile, for the store holding the org folder OrgFolder, also
+	// records Floor as lore-org.yaml's min_lore_version in the same
+	// commit: every member's org entry copies it from there, and each
+	// folder, store and live ref a current lore creates for the org later
+	// gets it (devco:D-735).
+	OrgFile   bool
+	OrgFolder string
 }
 
 // StoreFloorResult says what RaiseStoreFloor did.
@@ -52,6 +59,8 @@ type StoreFloorResult struct {
 	Pushed, Offline, NoPush bool
 	// Empty: the store has no commit yet, so no folder to raise.
 	Empty bool
+	// OrgFile: lore-org.yaml's min_lore_version was raised (OrgFile set).
+	OrgFile bool
 }
 
 // RaiseStoreFloor commits min_lore_version e.Floor into every folder's
@@ -91,6 +100,15 @@ func (g *GitLinks) RaiseStoreFloor(ctx context.Context, e StoreFloorEdit) (Store
 				}
 			}
 			res.Folders = len(out)
+			if e.OrgFile {
+				p, body, changed, ferr := orgFileFloorChange(ctx, repo, dir, tip, e.OrgFolder, e.Floor)
+				if ferr != nil {
+					return nil, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, ferr)
+				}
+				if changed {
+					out[p], res.OrgFile = body, true
+				}
+			}
 			return out, nil
 		}})
 	res.Pushed, res.Offline = cr.Pushed, cr.Offline
@@ -100,6 +118,23 @@ func (g *GitLinks) RaiseStoreFloor(ctx context.Context, e StoreFloorEdit) (Store
 		return res, nil
 	}
 	return res, err
+}
+
+// orgFileFloorChange is the org folder's lore-org.yaml at tip (the version
+// an admin last wrote, as every org file edit reads it) with floor as its
+// min_lore_version; changed is false when it already declares floor or
+// higher. A store whose org folder holds no lore-org.yaml is refused.
+func orgFileFloorChange(ctx context.Context, repo *gitref.Repo, dir, tip, folder, floor string) (p string, body []byte, changed bool, err error) {
+	p = orgFilePath(folder)
+	raw, found, err := repo.ReadFile(ctx, tip, p)
+	if err != nil {
+		return p, nil, false, err
+	}
+	if !found {
+		return p, nil, false, ErrNoOrgFile
+	}
+	body, changed, err = raiseOrgFileFloor(acceptedOrgRaw(ctx, dir, tip, folder, raw), floor)
+	return p, body, changed, err
 }
 
 // StoreFloor is the lowest min_lore_version the folders of the store

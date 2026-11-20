@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -33,6 +34,9 @@ type Folder struct {
 	// metaSource, when set, is asked for the shared copy of the folder's
 	// _meta.json before a first write creates one (SetMetaSource).
 	metaSource MetaSource
+	// floor, when set, is the lore version a new _meta.json declares at
+	// least (SetFloorSource).
+	floor FloorSource
 	// memo keeps the rows Read decoded (readmemo.go); a Folder is only
 	// used through its pointer, so the memo is never copied.
 	memo readMemo
@@ -73,6 +77,18 @@ type MetaSource func(ctx context.Context, rel string) (doc []byte, found bool, e
 // SetMetaSource installs src (nil removes it). Not safe to call while the
 // folder is being written; backends call it once at open.
 func (f *Folder) SetMetaSource(src MetaSource) { f.metaSource = src }
+
+// FloorSource returns the lore version the store's org declares its
+// stores need ("" none): lore-org.yaml's min_lore_version as this
+// machine's org entry copied it (devco:D-735).
+type FloorSource func(ctx context.Context) string
+
+// SetFloorSource installs src (nil removes it): a folder this lore creates
+// (first write, lore store folder add) declares min_lore_version at least
+// src's version, so an older lore is read-only in a folder made after the
+// org declared its floor as in every older one. Not safe to call while
+// the folder is in use.
+func (f *Folder) SetFloorSource(src FloorSource) { f.floor = src }
 
 // Name is the clean folder name (FolderRoot for the root folder).
 func (f *Folder) Name() string { return f.name }
@@ -771,12 +787,30 @@ func (f *Folder) ensureMeta(ctx context.Context, a *Applied) error {
 	if err != nil {
 		return err
 	}
+	if doc, err = f.withFloor(ctx, doc, rel); err != nil {
+		return err
+	}
 	if err := writeAtomic(full, doc, f.root.modes); err != nil {
 		return err
 	}
 	a.undo = append(a.undo, undoStep{full: full, m: f.root.modes})
 	a.Paths = append(a.Paths, rel)
 	return nil
+}
+
+// withFloor is doc (a new _meta.json) raised to the org's floor
+// (SetFloorSource; unchanged without one, or when doc already declares it
+// or higher, e.g. a shared copy the org's floor commit raised).
+func (f *Folder) withFloor(ctx context.Context, doc []byte, rel string) ([]byte, error) {
+	if f.floor == nil {
+		return doc, nil
+	}
+	floor := f.floor(ctx)
+	if !formatgate.ValidVersion(floor) {
+		return doc, nil
+	}
+	out, _, err := RaiseFloorDoc(doc, rel, floor)
+	return out, err
 }
 
 // metaNamespaceTable is the table part of a folder project's natural id

@@ -34,11 +34,13 @@ type Shared struct {
 	Own      []string
 	Repos    []string
 	Defaults OrgDefaults
+	// MinLoreVersion is lore-org.yaml's min_lore_version (devco:D-735).
+	MinLoreVersion string
 }
 
 // SharedOf is o's copied fields.
 func SharedOf(o *Org) Shared {
-	return Shared{Stores: o.Stores, Own: o.Own, Repos: o.Repos, Defaults: o.Defaults}
+	return Shared{Stores: o.Stores, Own: o.Own, Repos: o.Repos, Defaults: o.Defaults, MinLoreVersion: o.MinLoreVersion}
 }
 
 // Equal reports whether a and b hold the same fields (an empty list or
@@ -47,7 +49,7 @@ func (a Shared) Equal(b Shared) bool {
 	return slices.EqualFunc(a.Stores, b.Stores, func(x, y Store) bool {
 		return x.URL == y.URL && x.EffectiveBranch() == y.EffectiveBranch() && x.OrgFolder == y.OrgFolder && x.Audience == y.Audience
 	}) && slices.Equal(a.Own, b.Own) && slices.Equal(a.Repos, b.Repos) &&
-		maps.Equal(a.Defaults.ClientRepos, b.Defaults.ClientRepos)
+		maps.Equal(a.Defaults.ClientRepos, b.Defaults.ClientRepos) && a.MinLoreVersion == b.MinLoreVersion
 }
 
 // SourceState is how an entry's copy compares with the store's file.
@@ -85,6 +87,7 @@ func Refresh(o *Org, sh Shared, src OrgSource) bool {
 	changed := !SharedOf(o).Equal(sh)
 	o.Stores, o.Own, o.Repos = slices.Clone(sh.Stores), slices.Clone(sh.Own), slices.Clone(sh.Repos)
 	o.Defaults = OrgDefaults{ClientRepos: maps.Clone(sh.Defaults.ClientRepos)}
+	o.MinLoreVersion = sh.MinLoreVersion
 	o.Source = &src
 	return changed
 }

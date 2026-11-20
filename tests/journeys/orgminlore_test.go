@@ -24,6 +24,11 @@ import (
 )
 
 const (
+	// omLateFolder is a folder created after the org declared its floor,
+	// omLateBody the admin's note in it (devco:D-735).
+	omLateFolder = "ops"
+	omLateBody   = "late folder runbook"
+
 	omBody     = "staging resets every sunday night"
 	omOldBody  = "an old lore must not write this"
 	omNewBody  = "the current lore writes this"
@@ -143,6 +148,16 @@ func TestJourneyOrgMinLoreVersion(t *testing.T) {
 		tt.lore(tlLee, "sync").OK(t)
 	})
 
+	// devco:D-735: a folder made after the declaration (the floor lives in
+	// lore-org.yaml and the org entry, not only in the folders that
+	// existed) declares it too
+	w.Step("day2/a-folder-made-after-the-declaration-needs-it-too", func() {
+		tt.lore(tlLee, "team", "add", "--handle", "@"+omLateFolder, "--members", "@ann", "--yes").OK(t) // ann may write there
+		tt.lore(tlLee, "store", "folder", "add", "--store", "team", "--folder", omLateFolder).OK(t)
+		tt.lore(tlLee, "memory", "add", "--body", omLateBody, "--to", tlOrg+"/"+omLateFolder, "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
+	})
+
 	w.Step("day3/ann-on-an-old-lore-reads-but-cannot-write", func() {
 		w.AdvanceDays(1)
 		c := tt.repo[tlAnn.Email]
@@ -152,6 +167,9 @@ func TestJourneyOrgMinLoreVersion(t *testing.T) {
 		withBin(t, old, c, "memory", "add", "--body", omOldBody, "--yes").
 			Refused(t, "needs lore 0.1.20 or later to write (this is "+omOldStamp+")", "Reading works", "lore upgrade")
 		tt.lore(tlAnn, "search", "must not write").OK(t).Never(t, omOldBody)
+		// the folder made after the declaration is read-only for her too
+		withBin(t, old, c, "memory", "add", "--body", omOldBody, "--to", tlOrg+"/"+omLateFolder, "--yes").
+			Refused(t, "needs lore 0.1.20 or later to write (this is "+omOldStamp+")")
 	})
 
 	w.Step("day3/ann-upgrades-and-writes", func() {
