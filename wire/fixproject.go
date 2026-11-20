@@ -555,11 +555,6 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 		}
 		st.Detail = append(st.Detail, line)
 	}
-	if len(fresh) > 0 && !dry {
-		// a new settings file git does not ignore shows in git status:
-		// said once, as the run's next step, so nobody is surprised by it
-		st.Next = fmt.Sprintf(fixHookNewNextF, strings.Join(fresh, ", "))
-	}
 	st.Changed = true
 	if dry {
 		st.Result = fmt.Sprintf("would write %d settings file(s)", len(files))
@@ -570,6 +565,14 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 		return st
 	}
 	st.Result = fmt.Sprintf("wrote %d settings file(s)", len(files))
+	// a new settings file git does not ignore shows in git status: said
+	// once, as the run's next step, so nobody is surprised by it. Checked
+	// after the write (devco:D-744): writing the personal file adds it to
+	// .git/info/exclude, so git status does not list it and the line
+	// telling the person to commit a personal file was false
+	if fresh = untrackedVisible(ctx, top, fresh); len(fresh) > 0 {
+		st.Next = fmt.Sprintf(fixHookNewNextF, strings.Join(fresh, ", "))
+	}
 	return st
 }
 
@@ -1057,6 +1060,23 @@ const (
 func hookFileTracked(ctx context.Context, top, rel string) bool {
 	out, err := gitRun{dir: top, args: []string{"ls-files", "--", filepath.FromSlash(rel)}}.output(ctx)
 	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}
+
+// untrackedVisible keeps the files of rels (slash paths under top) that
+// exist and git neither tracks nor ignores: the ones git status lists as
+// untracked.
+func untrackedVisible(ctx context.Context, top string, rels []string) []string {
+	var out []string
+	for _, rel := range rels {
+		if _, err := os.Lstat(filepath.Join(top, filepath.FromSlash(rel))); err != nil {
+			continue
+		}
+		if _, err := (gitRun{dir: top, args: []string{"check-ignore", "-q", "--", filepath.FromSlash(rel)}}).output(ctx); err == nil {
+			continue
+		}
+		out = append(out, rel)
+	}
+	return out
 }
 
 // hookFileNew reports whether rel does not exist yet and git does not

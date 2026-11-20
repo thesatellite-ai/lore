@@ -169,6 +169,12 @@ func FixProject(ctx context.Context, env Env, dry bool) (Report, error) {
 // fixProject is FixProject before finalize (doctor.run adds its setups).
 func fixProject(ctx context.Context, env Env, dry bool) (Report, error) {
 	var steps []FixStep
+	var tracked trackedSnapshot
+	if !dry {
+		// devco:D-744: measured around every step and repair, so each
+		// tracked file the run changed is named for its commit
+		tracked = snapshotTracked(ctx, env)
+	}
 	if ue, ok := env.(FixStepsEnv); ok {
 		steps = ue.FixSteps(ctx, dry)
 	}
@@ -194,7 +200,7 @@ func fixProject(ctx context.Context, env Env, dry bool) (Report, error) {
 		if err != nil {
 			return Report{}, err
 		}
-		r.Steps = append(steps, FixStep{Step: StepDoctorFix, Result: ResultSkippedMigrateFailed})
+		r.Steps = tracked.withTracked(ctx, append(steps, FixStep{Step: StepDoctorFix, Result: ResultSkippedMigrateFailed}))
 		return r, nil
 	}
 	// owner item 43: render ran before the doctor fixes, and a repair that
@@ -230,6 +236,7 @@ func fixProject(ctx context.Context, env Env, dry bool) (Report, error) {
 	if again != nil {
 		r.Steps = append(r.Steps, *again)
 	}
+	r.Steps = tracked.withTracked(ctx, r.Steps)
 	return r, nil
 }
 
