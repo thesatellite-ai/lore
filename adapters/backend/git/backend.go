@@ -418,7 +418,7 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 	err = b.heldWriteErr(changes, err)
 	if err == nil && b.mode == modeClone {
 		var undo func()
-		if undo, err = b.addMissingMarker(applied); err == nil {
+		if undo, err = b.addMissingMarker(ctx, applied); err == nil {
 			if err = b.addMissingReadme(ctx, applied); err == nil {
 				err = b.addMissingSignpost(ctx, applied)
 			}
@@ -440,7 +440,7 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 // refuse it as "not a lore store"). It runs under the store lock; the
 // marker joins applied's paths, so a failed commit removes the file again
 // (Undo), and the returned undo forgets it on the handle.
-func (b *Backend) addMissingMarker(applied *rowfs.Applied) (undo func(), err error) {
+func (b *Backend) addMissingMarker(ctx context.Context, applied *rowfs.Applied) (undo func(), err error) {
 	undo = func() {}
 	if b.marker.Version > 0 || applied == nil || len(applied.Paths) == 0 {
 		return undo, nil
@@ -448,6 +448,11 @@ func (b *Backend) addMissingMarker(applied *rowfs.Applied) (undo func(), err err
 	m, err := rowfs.NewMarker(b.cfg.now())
 	if err != nil {
 		return undo, err
+	}
+	if b.cfg.markerOrg != nil {
+		// devco:D-721: the org an admin's sync would name later is named
+		// in this first commit already
+		m.Org, m.OrgStore = b.cfg.markerOrg(ctx, b.git.remote)
 	}
 	if err = rowfs.WriteMarker(b.work, m); err != nil {
 		return undo, err
@@ -555,7 +560,7 @@ func (b *Backend) writePurge(ctx context.Context, changes []store.Change, purged
 	applied, err := b.folder.ApplyPurgeAudited(ctx, changes, purged, recs)
 	undo := func() {}
 	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {
-		if undo, err = b.addMissingMarker(applied); err == nil {
+		if undo, err = b.addMissingMarker(ctx, applied); err == nil {
 			if err = b.addMissingReadme(ctx, applied); err == nil {
 				err = b.addMissingSignpost(ctx, applied)
 			}

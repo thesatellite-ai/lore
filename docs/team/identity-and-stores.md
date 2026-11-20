@@ -199,6 +199,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd…3f10.json (st
 lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
 lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ mem_76bd…3f10 moved to store agency (same id; the old copy is tombstoned)
+  warning: projects/prj_05e9…4603 stays: repos/rep_d431…313a project_id references it
 $ lore memory list
 mem_76bd…3f10 [retrieved] the client replies faster on WhatsApp than email [agency/client]
 ```

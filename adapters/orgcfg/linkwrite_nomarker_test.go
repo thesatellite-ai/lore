@@ -63,7 +63,7 @@ func (w *linkWorld) linkWith(t *testing.T, folder string, newMarker bool) (LinkW
 		FolderProjectID: func(string, string, string) (string, error) { return lwFolderID, nil },
 	}
 	if newMarker {
-		lw.NewMarker = func() ([]byte, error) { return []byte(nmMarker), nil }
+		lw.NewMarker = func(string) ([]byte, error) { return []byte(nmMarker), nil }
 	}
 	return w.links.WriteLink(context.Background(), lw)
 }

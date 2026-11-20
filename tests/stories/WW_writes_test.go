@@ -918,6 +918,10 @@ var (
 	wwPad = regexp.MustCompile(`(\S) {2,}`)
 	// each place's world lives under its own temp folder
 	wwRoot = regexp.MustCompile(`/[^\s"'\x60]*?/homes/`)
+	// wwOrgStores is doctor's list of an org entry's stores on its store
+	// line, printed only for an entry with more than one store (D-727,
+	// a03ead62): acme has its client store too, acmeops one store only
+	wwOrgStores = regexp.MustCompile(`(?m) · stores [^\n]*$`)
 )
 
 // wwNormalize strips what differs between twin places by name only.
@@ -938,6 +942,7 @@ func wwNormalize(out string) string {
 	out = wwInvite.ReplaceAllString(out, "INVITE")
 	// acme has a client store, acmeops none: lists of the org's folders
 	out = strings.ReplaceAll(out, "client_shop (lore-client-shop), ", "")
+	out = wwOrgStores.ReplaceAllString(out, "")
 	out = wwIDs.ReplaceAllString(out, "ID")
 	out = wwHex.ReplaceAllString(out, "SHA")
 	out = wwDigits.ReplaceAllString(out, "N")

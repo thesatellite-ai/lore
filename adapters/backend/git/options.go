@@ -104,6 +104,20 @@ type config struct {
 	// folderFloor is the lore version the store's org declares its stores
 	// need (WithFolderFloor); nil = none.
 	folderFloor func(ctx context.Context, remote string) string
+	// markerOrg is the org and main store url the marker a first write
+	// adds names (WithMarkerOrg); nil = none.
+	markerOrg func(ctx context.Context, remote string) (org, main string)
+}
+
+// WithMarkerOrg gives the backend the org (and the url of its main store)
+// that a store's new lore-store.yaml names ("", "" none; wire passes what
+// an admin's sync would name, devco:D-721). Why: the first row write into
+// an empty store adds the marker; naming the org there keeps that first
+// commit the only one, instead of the admin's next sync adding a second
+// just to name the org. Asked only when a write adds the marker, with
+// the remote url the clone fetches from.
+func WithMarkerOrg(f func(ctx context.Context, remote string) (org, main string)) Option {
+	return func(c *config) { c.markerOrg = f }
 }
 
 // WithFolderFloor gives the backend the lore version the org of a store

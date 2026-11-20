@@ -33,6 +33,26 @@ import (
 // wqMember is the teammate whose work the admin pulls (made-up names).
 var wqMember = journeys.Person{Name: "Ben Builder", Email: "ben@example.test", Login: "ben-gh"}
 
+// wqTeamFolder is the org store's folder the teammate writes into: devco
+// D-694's role rule lets a member add rules and notes only in the folder
+// of a team they are on, never in <org>/org.
+const wqTeamFolder = "ops"
+
+// wqPutOnTeam has the admin (m, in pc) add wqTeamFolder to the org store
+// and put the joined teammate (bm, in bc) on the team named like it, then
+// both sync, so the teammate's writes --to the returned target are theirs
+// to make (devco D-694). Why: the stories that need a teammate's pushed
+// commits test counts and moves, not the role rule; this keeps their
+// teammate a plain member writing where a member may.
+func wqPutOnTeam(t *testing.T, m *journeys.Machine, pc *teamharness.Clone, bm *journeys.Machine, bc *teamharness.Clone) string {
+	t.Helper()
+	m.LoreIn(pc, "store", "folder", "add", "--store", wOrg, "--folder", wqTeamFolder).OK(t)
+	m.LoreIn(pc, "team", "add", "--handle", "@"+wqTeamFolder, "--members", wqMember.Email, "--yes").OK(t)
+	m.LoreIn(pc, "sync").OK(t)
+	bm.LoreIn(bc, "sync").OK(t)
+	return wOrg + "/" + wqTeamFolder
+}
+
 // wqRosterLabel is how every sentence names the org's roster (D-647, D-663).
 const wqRosterLabel = "the roster of " + wOrg + " (" + wOrg + "/org)"
 
@@ -49,6 +69,7 @@ func TestStoryWQUp3Polish2(t *testing.T) {
 	m.MoveClone(t, pc, filepath.Join(m.Home, "code", "platform"))
 	journeys.StartTeam(t, m, pc.Dir, wSetup, wOrg, store.SSHURL(), wAdmin, []string{wFolders})
 	inOrg := wOrg + "/org"
+	inTeam := ""             // the teammate's team folder (wqPutOnTeam, D-660 on)
 	var bm *journeys.Machine // the teammate's laptop and clone (D-660 on)
 	var bc *teamharness.Clone
 
@@ -136,8 +157,9 @@ func TestStoryWQUp3Polish2(t *testing.T) {
 		bc = bm.Clone(app, "platform")
 		bm.MoveClone(t, bc, filepath.Join(bm.Home, "code", "platform"))
 		journeys.Join(t, bm, bc.Dir, wSetup, line, wqMember, []string{wFolders})
+		inTeam = wqPutOnTeam(t, m, pc, bm, bc)
 		for _, body := range []string{"the build cache lives on the ci host", "flaky tests are quarantined, not skipped"} {
-			id := wuMemID.FindString(bm.LoreIn(bc, "memory", "add", "--body", body, "--to", inOrg).OK(t).Out())
+			id := wuMemID.FindString(bm.LoreIn(bc, "memory", "add", "--body", body, "--to", inTeam).OK(t).Out())
 			bm.LoreIn(bc, "memory", "edit", "--id", id, "--body", body+" (checked)").OK(t)
 			bm.LoreIn(bc, "sync").OK(t)
 		}
@@ -166,7 +188,7 @@ func TestStoryWQUp3Polish2(t *testing.T) {
 		m.LoreIn(lc, "org", "link", "--org", wOrg, "--project", "linked", "--yes").OK(t)
 		ag := pc.With(wqAgentEnv("wq-session-1")...)
 		ag.Lore("memory", "add", "--body", "the agent notes the release checklist", "--to", inOrg).OK(t)
-		bc.With(wqAgentEnv("wq-session-2")...).Lore("memory", "add", "--body", "the agent keeps the changelog short", "--to", inOrg).OK(t)
+		bc.With(wqAgentEnv("wq-session-2")...).Lore("memory", "add", "--body", "the agent keeps the changelog short", "--to", inTeam).OK(t)
 		bm.LoreIn(bc, "sync").OK(t)
 		m.Lore(m.Home, "sync", "--setup", wSetup).OK(t)
 		clone := storeCloneDir(t, m)

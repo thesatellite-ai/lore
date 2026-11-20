@@ -98,8 +98,9 @@ type LinkWrite struct {
 	// NewMarker encodes a new lore-store.yaml for a store whose branch has
 	// lore files but no marker yet (its first lore write predates it): the
 	// link commit adds it, as `lore store init` would have. nil refuses
-	// such a store (ErrNotAStore).
-	NewMarker func() ([]byte, error)
+	// such a store (ErrNotAStore). store is the normalised url of the
+	// store the link writes to, so the marker can name its org (devco:D-721).
+	NewMarker func(store string) ([]byte, error)
 }
 
 // LinkWriteResult says what happened.
@@ -129,7 +130,7 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 		return LinkWriteResult{}, err
 	}
 	res := LinkWriteResult{StoreURL: target, NoPush: !g.autopush(o.Live) || g.held(g.cloneDirOf(target))}
-	cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(target), Store: target, Branch: w.Plan.Branch, NoPush: res.NoPush, Route: g.Route, NewMarker: w.NewMarker,
+	cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(target), Store: target, Branch: w.Plan.Branch, NoPush: res.NoPush, Route: g.Route, NewMarker: w.markerFor(target),
 		FirstCommit: w.NewMarker != nil,
 		Message:     fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature,
 		Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
@@ -674,4 +675,13 @@ func commitSignature(ctx context.Context, repo *gitref.Repo, sig gitref.Signatur
 		return id
 	}
 	return gitref.Signature{Name: gitbackend.DefaultAuthor.Name, Email: gitbackend.DefaultAuthor.Email, When: when}
+}
+
+// markerFor is w.NewMarker for the store at target, as storeCommit wants
+// it (nil when w has none: such a store is refused).
+func (w LinkWrite) markerFor(target string) func() ([]byte, error) {
+	if w.NewMarker == nil {
+		return nil
+	}
+	return func() ([]byte, error) { return w.NewMarker(target) }
 }
