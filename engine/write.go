@@ -991,7 +991,7 @@ func (e *Engine) locateIn(ctx context.Context, names []store.Source, table row.T
 	if len(found) == 0 {
 		return "", row.Row{}, false, errs.Wrap(errs.NotFound, "no row "+ref.ID.String(), store.ErrNotFound)
 	}
-	h, err := pickCopy(ref.ID, found)
+	h, err := e.pickCopy(ref.ID, found)
 	if err != nil {
 		return "", row.Row{}, false, err
 	}
@@ -1013,12 +1013,18 @@ type copyHit struct {
 // copy the nearest tombstone answers (`show` says deleted, a purged id
 // says E_PURGED on a write). An actor id is the exception: its copies are
 // one person and the newest answers (newestCopy).
-func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
+//
+// A copy a move left behind (its tombstone has not arrived) yields to the
+// moved copy (moved_leftover.go, devco:D-749).
+func (e *Engine) pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	var live []copyHit
 	for _, h := range found {
 		if !h.row.Deleted {
 			live = append(live, h)
 		}
+	}
+	if len(live) > 1 && id.Prefix() != ids.PrefixActor {
+		live = e.dropMoveLeftovers(live)
 	}
 	switch len(live) {
 	case 0:
@@ -1032,6 +1038,9 @@ func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	parts := make([]string, len(live))
 	for i, h := range live {
 		parts[i] = string(h.src)
+	}
+	if e.repoFormatOld && slices.Contains(parts, string(store.SourceRepo)) {
+		return copyHit{}, ambiguousOldFormatErr(id.String(), parts)
 	}
 	return copyHit{}, AmbiguousIDErr(id.String(), parts)
 }
@@ -1057,6 +1066,20 @@ func AmbiguousIDErr(id string, places []string) error {
 	}
 	return errs.New(errs.AmbiguousID, id+" is in "+strings.Join(places, " and ")+": two live rows with one id").
 		WithHint("read each with " + strings.Join(reads, " or ") + "; if they are copies of one row, `lore row move --id " + id + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
+}
+
+// ambiguousOldFormatErr is AmbiguousIDErr in a repo still on the lore
+// 0.1.17 format (devco:D-749): row move and lore fix are refused there
+// (E_FORMAT_OLD), so the hint names what runs: reading each copy by its
+// store, and lore migrate run, whose moved-rows step merges the repo's
+// copy into the moved one.
+func ambiguousOldFormatErr(id string, places []string) error {
+	reads := make([]string, len(places))
+	for i, p := range places {
+		reads[i] = "`lore show --id " + id + " --store " + p + "`"
+	}
+	return errs.New(errs.AmbiguousID, id+" is in "+strings.Join(places, " and ")+": two live rows with one id").
+		WithHint("read each with " + strings.Join(reads, " or ") + "; this repo is still on the lore 0.1.17 format: `git pull` brings a teammate's migration, else `lore migrate run` upgrades it and settles a row a newer lore moved")
 }
 
 // newestCopy is the copy an unqualified actor ref means when several

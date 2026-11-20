@@ -392,6 +392,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	st.defaultTarget = store.SourceRepo
 	engOpts = append(engOpts, aliasOpts...)
 	linkRosterSources(attached) // contractorgate.go: a client store is checked against its org's roster (R-15)
+	if ProjectFormatOld(st.repoTop) {
+		engOpts = append(engOpts, engine.WithRepoFormatOld()) // devco:D-749: its E_AMBIGUOUS_ID hint names what runs there
+	}
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}
@@ -1467,6 +1470,9 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		engOpts = append(engOpts, engine.WithDefaultTarget(store.SourceMachine))
 	}
 	linkRosterSources(attached) // contractorgate.go: a client store is checked against its org's roster (R-15)
+	if ProjectFormatOld(st.repoTop) {
+		engOpts = append(engOpts, engine.WithRepoFormatOld()) // devco:D-749: its E_AMBIGUOUS_ID hint names what runs there
+	}
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}

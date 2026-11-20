@@ -8,7 +8,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -17,10 +16,11 @@ import (
 
 // TestMigrateMovedLeftovers pins B1-5: a row a newer lore moved to
 // another store (its copy there records the move) while this checkout
-// kept the old copy is E_AMBIGUOUS_ID everywhere; the migrate step settles
-// it as the move would have: the dry run names it and writes nothing, the
-// real run leaves a tombstone here, the row resolves to the store that
-// owns it, and a second run has nothing to do.
+// kept the old copy; the migrate step settles it as the move would have:
+// the dry run names it and writes nothing, the real run leaves a tombstone
+// here, and a second run has nothing to do. Since devco:D-749 the bare id
+// already resolves to the moved copy before the run (the move record
+// decides; it was E_AMBIGUOUS_ID, unreadable in a 0.1.17-format clone).
 func TestMigrateMovedLeftovers(t *testing.T) {
 	t.Parallel()
 	ctx := background()
@@ -61,17 +61,22 @@ func TestMigrateMovedLeftovers(t *testing.T) {
 	if _, err = st.eng.Refresh(ctx, "agency"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = st.eng.Get(ctx, engine.Ref{ID: id}); !errs.Has(err, errs.AmbiguousID) {
-		t.Fatalf("before: %v, want E_AMBIGUOUS_ID", err)
+	repoLive := func(when string) {
+		t.Helper()
+		if here, gerr := st.byName[store.SourceRepo].Get(ctx, schema.TableMemories, id); gerr != nil || here.Deleted {
+			t.Fatalf("%s: the repo's leftover copy is gone: %+v %v", when, here, gerr)
+		}
+		if src, _, gerr := st.eng.Get(ctx, engine.Ref{ID: id}); gerr != nil || src != "agency" {
+			t.Fatalf("%s: the bare id reads %s %v, want the moved copy in agency", when, src, gerr)
+		}
 	}
+	repoLive("before")
 
 	lines, n, err := a.migrateMovedLeftovers(ctx, true)
 	if err != nil || n != 1 || len(lines) != 1 || !strings.Contains(lines[0], id.String()) || !strings.Contains(lines[0], "is in agency") {
 		t.Fatalf("dry run: %v %d %v", lines, n, err)
 	}
-	if _, _, err = st.eng.Get(ctx, engine.Ref{ID: id}); !errs.Has(err, errs.AmbiguousID) {
-		t.Fatalf("the dry run wrote: %v", err)
-	}
+	repoLive("after the dry run")
 
 	if _, n, err = a.migrateMovedLeftovers(ctx, false); err != nil || n != 1 {
 		t.Fatalf("run: %d %v", n, err)

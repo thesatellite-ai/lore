@@ -148,6 +148,10 @@ type IDSource interface {
 type Engine struct {
 	// guard is the role check every write passes (writeguard.go).
 	guard WriteGuard
+	// repoFormatOld is set when the repo is still on the lore 0.1.17
+	// format (WithRepoFormatOld): it is read, never written, so an
+	// E_AMBIGUOUS_ID hint there names lore migrate run (devco:D-749).
+	repoFormatOld bool
 	// open is every stage (Staging) this engine writes into and that is
 	// not committed or discarded yet, so a lookup that has no context
 	// (ActorAs: agentOwner) still sees an actor row the running write
@@ -326,6 +330,12 @@ func (e *Engine) StoreName(name store.Source) store.Source {
 	}
 	return name
 }
+
+// WithRepoFormatOld marks the repo as still on the lore 0.1.17 format
+// (wire D13): its rows are read, writes are refused, so the commands an
+// E_AMBIGUOUS_ID hint names elsewhere (row move, lore fix) cannot run
+// there and the hint names lore migrate run instead (devco:D-749).
+func WithRepoFormatOld() Option { return func(e *Engine) error { e.repoFormatOld = true; return nil } }
 
 // WithCache sets the cache port (required).
 func WithCache(c store.Cache) Option { return func(e *Engine) error { e.cache = c; return nil } }
