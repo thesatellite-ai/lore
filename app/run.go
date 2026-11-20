@@ -196,7 +196,7 @@ func run(ctx context.Context, args []string) int {
 	// the flag is parsed later, so the runner reads it per call.
 	flags := &rootFlags{} // rootflags.go: --trace, --color
 	liveGit := hosthooks.TraceGit{Inner: gitref.Exec{}, On: hosthooks.TraceOn(&flags.trace), W: os.Stderr}
-	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak, Git: liveGit,
+	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, PinVersion: pinVersion(version), Clock: clk, LeakCheck: leak, Git: liveGit,
 		HoldFinishLines: true, // the run's push/landing lines follow the result (flushed after Execute)
 		RepoAddresses:   func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) },
 		// FLAG4: live commits fall back to the lore identity, as store commits do.

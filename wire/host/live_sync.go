@@ -618,7 +618,7 @@ func (liveSync) SyncMergeRows(context.Context, opssync.MergeRowsIn) (opssync.Don
 // repo is the repo-level sync host (install-action, ci-merge, peek,
 // promote; wire/syncrepo_standalone.go, b11-sync).
 func (l liveSync) repo() wire.RepoSync {
-	return wire.RepoSync{WorkDir: l.h.cfg.WorkDir, Version: l.h.cfg.Version, Clock: l.h.clock()}
+	return wire.RepoSync{WorkDir: l.h.cfg.WorkDir, Version: l.h.pinVersion(), Clock: l.h.clock()}
 }
 
 // SyncCIMerge implements opssync.Env.

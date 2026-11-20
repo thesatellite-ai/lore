@@ -157,8 +157,8 @@ lore copies your notes into `.lore/data`, the folder git commits, before and aft
 <!-- ds:block id=sync-env-pe9vvf3f -->
 | Variable | What it does |
 |---|---|
-| `LORE_SYNC` | `0` turns live rows off for this command or shell (like `LORE_LIVE=0`) and stops lore updating the version pin in `.github/workflows/lore-sync-merge.yml`. Rows are still written to `.lore/data`: since 0.1.18 the files are where lore keeps your notes, and the clone is set up for git as with `LORE_LIVE=0` |
-| `LORE_SYNC_GIT` | `0` keeps syncing the files but stops lore from running git setup by itself: no hooks, no `.gitattributes`, no git config, no workflow pin update |
+| `LORE_SYNC` | `0` turns live rows off for this command or shell (like `LORE_LIVE=0`) and stops the line saying the version pin in `.github/workflows/lore-sync-merge.yml` is out of date. Rows are still written to `.lore/data`: since 0.1.18 the files are where lore keeps your notes, and the clone is set up for git as with `LORE_LIVE=0` |
+| `LORE_SYNC_GIT` | `0` keeps syncing the files but stops lore from running git setup by itself: no hooks, no `.gitattributes`, no git config, no stale workflow pin line |
 | `LORE_SYNC_QUIET` | `1` hides sync's progress lines; errors still print |
 | `LORE_SYNC_ALLOW_SECRETS` | removed in 0.1.18 and ignored; `lore doctor` warns while it is still set. A row you confirmed with `--not-a-secret --reason "<why>" --yes` is already in `.lore/data`; lore's commit hook still refuses a file that holds a credential pattern |
 
