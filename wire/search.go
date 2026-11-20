@@ -23,6 +23,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/logic/querywords"
@@ -71,17 +72,23 @@ type searchScope struct {
 	only store.Source
 	// born is --born-branch (D-392): only rows created on that branch.
 	born string
+	// window is --since / --until (P-9): only rows whose date
+	// (schema.RowDate: valid_at, else created_at) falls in it.
+	window dates.Window
 }
 
-// bornOK reports whether r passes --born-branch (always without one).
-func (sc searchScope) bornOK(r row.Row) bool { return sc.born == "" || engine.BornOn(r, sc.born) }
+// rowOK reports whether r passes --born-branch and --since / --until
+// (always without them): the filters every kind and store share.
+func (sc searchScope) rowOK(r row.Row) bool {
+	return (sc.born == "" || engine.BornOn(r, sc.born)) && sc.window.Keeps(schema.RowDate(r))
+}
 
 // fromStore reports whether a hit from src passes --store.
 func (sc searchScope) fromStore(src store.Source) bool { return opsmemory.FromStore(sc.only, src) }
 
 // keeps reports whether repo row r passes t's v0.1.17 filters under sc.
 func (sc searchScope) keeps(t opssearch.Target, r row.Row) bool {
-	if r.Deleted || !sc.bornOK(r) {
+	if r.Deleted || !sc.rowOK(r) {
 		return false
 	}
 	if t.HasProject && sc.projectID != "" {
@@ -109,7 +116,7 @@ func (sc searchScope) keeps(t opssearch.Target, r row.Row) bool {
 // project/repo scope does not apply to another store's rows; the deleted
 // and archived filters do.
 func (sc searchScope) keepsStoreRow(t opssearch.Target, r row.Row) bool {
-	if r.Deleted || !sc.bornOK(r) {
+	if r.Deleted || !sc.rowOK(r) {
 		return false
 	}
 	return !t.HasArchived || sc.includeArchived || searchField(r, searchFieldArchived) == ""
@@ -164,8 +171,8 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	for _, t := range r.Targets {
 		var hits []opssearch.Hit
 		switch {
-		case t.Roster && (len(mconds) > 0 || len(conds) > 0 || r.Store != "" || r.Repo != "" || r.BornBranch != ""):
-			continue // people and teams carry no metadata, fields, store, repo or branch
+		case t.Roster && (len(mconds) > 0 || len(conds) > 0 || r.Store != "" || r.Repo != "" || r.BornBranch != "" || !r.Window.IsZero()):
+			continue // people and teams carry no metadata, fields, store, repo, branch or date
 		case t.Roster:
 			hits, err = a.searchRoster(ctx, t, words, r.PerTable)
 		case len(mconds) > 0:
@@ -219,6 +226,7 @@ func (a *App) searchScope(ctx context.Context, r opssearch.Request) (searchScope
 		return searchScope{}, err
 	}
 	sc.born = born
+	sc.window = r.Window
 	only, err := opsmemory.SearchStore(a, "search", r.Store)
 	if err != nil {
 		return searchScope{}, err

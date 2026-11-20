@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
+	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
 	"github.com/thesatellite-ai/lore/ops/internal/repohome"
 	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
@@ -64,7 +65,7 @@ const (
 	fieldTxAt       = "tx_at"
 	fieldTrust      = "trust_score"
 	fieldConfidence = "confidence"
-	fieldValidAt    = "valid_at"
+	fieldValidAt    = schema.FieldValidAt
 	fieldValidated  = "last_validated_at"
 	fieldCreatedBy  = "created_by_actor_id"
 	fieldValidBy    = "validated_by_actor_id"
@@ -252,6 +253,10 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 			return WriteOut{}, err
 		}
 	}
+	atNote, err := o.atField(ctx, store.Source(in.To), in.At, fields)
+	if err != nil {
+		return WriteOut{}, err
+	}
 	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, o.env); v != nil {
 		fields[fieldCreatedBy] = v // the calling actor, never caller-set (INTEG-AUDIT-1)
@@ -322,8 +327,31 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	out.CarriedMeta = carry.Count
 	// v0.1.17: "✓ <id> <label>" ("" in the repo, keeping its space), then
 	// the scope line.
-	out.Human = strings.TrimSpace(mark+" "+out.ID+" "+Label(LabelerOf(o.env), src)) + "\n  scope: [" + addScopeLabel(st, in.Repo) + "]\n" + carry.Line()
+	out.Human = strings.TrimSpace(mark+" "+out.ID+" "+Label(LabelerOf(o.env), src)) + "\n  scope: [" + addScopeLabel(st, in.Repo) + "]\n" + atNote + carry.Line()
 	return out, nil
+}
+
+// atField reads --at (P-9) into fields as valid_at, the date the memory
+// is about, with the phrase table every date flag reads (dateflag); the
+// returned line says what a phrase was read as ("" for a plain date or
+// no --at), since lore never converts a date silently (R12).
+func (o ops) atField(ctx context.Context, target store.Source, raw string, fields map[string]value.Value) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", nil
+	}
+	clk, err := dateflag.Clock(ctx, o.env, target)
+	if err != nil {
+		return "", err
+	}
+	r, note, err := dateflag.Parse(clk, "at", raw)
+	if err != nil {
+		return "", err
+	}
+	fields[fieldValidAt] = value.DateTimeFrom(r.At)
+	if note == "" {
+		return "", nil
+	}
+	return "  " + note + "\n", nil
 }
 
 // addScopeLabel is the scope the add line prints. --scope global or
@@ -496,6 +524,10 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
+	win, err := dateflag.Window(dateflag.LocalClock(o.env), in.Since, in.Until)
+	if err != nil {
+		return ListOut{}, err
+	}
 	sources := engine.ReadStoresOf(o.env)
 	if in.Store != "" {
 		sources = engine.NamedSources(o.env, store.Source(in.Store))
@@ -517,7 +549,8 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			return ListOut{}, lerr
 		}
 		for _, r := range rows {
-			if (in.Kind != "" && field(r, fieldKind) != in.Kind) || (project != "" && field(r, fieldProject) != project) || !hasTags(idx, r, in.Tags) {
+			if (in.Kind != "" && field(r, fieldKind) != in.Kind) || (project != "" && field(r, fieldProject) != project) || !hasTags(idx, r, in.Tags) ||
+				!win.Keeps(schema.RowDate(r)) {
 				continue
 			}
 			// what the scope and the archive filter leave out is counted
@@ -618,11 +651,17 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 		}
 		patch[schema.FieldTagIDs] = v
 	}
+	atNote, err := o.atField(ctx, "", in.At, patch)
+	if err != nil {
+		return WriteOut{}, err
+	}
 	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return WriteOut{}, errs.New(errs.InvalidInput, "memory edit: nothing to change").
-			WithHint("give at least one of --body, --kind, --source, --source-ref, --scope, --rebind-repo, --rebind-master, --tag, --untag")
+			WithHint("give at least one of --body, --kind, --source, --source-ref, --at, --scope, --rebind-repo, --rebind-master, --tag, --untag")
 	}
-	return withLine(o.patch(ctx, id, patch))("updated")
+	out, err := withLine(o.patch(ctx, id, patch))("updated")
+	out.Human += atNote
+	return out, err
 }
 
 // retagPatch is the new tag_ids of memory id: its tags plus add, minus
@@ -736,6 +775,10 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	if err != nil {
 		return SearchOut{}, err
 	}
+	win, err := dateflag.Window(dateflag.LocalClock(o.env), in.Since, in.Until)
+	if err != nil {
+		return SearchOut{}, err
+	}
 	hits, err := SearchFields(ctx, o.env, Noun, table, in.Query, in.Columns, in.Store, searchFetch)
 	if err != nil {
 		return SearchOut{}, err
@@ -756,7 +799,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 		}
 		archived := field(r, fieldArchivedAt) != ""
 		if r.Deleted || (archived && !in.IncludeArchived) || !sc.keeps(repoOf(r), repo) ||
-			(project != "" && field(r, fieldProject) != project) {
+			(project != "" && field(r, fieldProject) != project) || !win.Keeps(schema.RowDate(r)) {
 			continue
 		}
 		out.Data = append(out.Data, hitOf(LabelerOf(o.env), src, h, r))

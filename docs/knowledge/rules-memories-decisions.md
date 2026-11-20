@@ -72,6 +72,8 @@ mem_c0f3…b5b8 [retrieved] The staging site is reset every Monday morning
 ```
 <!-- /example -->
 
+`--at <date>` records the day a memory is about when that is not today, like notes from last week's call: `lore memory add --body 'The vendor quoted 40 units' --at 2025-03-14` (a date or a phrase such as `yesterday` or `mon`; `lore memory edit --id <id> --at <date>` changes it). It is stored as `valid_at` and shown as `valid-at` in `lore memory show`. `--since <date>` and `--until <date>` on `lore memory list`, `lore memory search` and `lore search` keep only the rows about those days (both days included): a memory's `--at` day, or the day it was added when it has none, so `lore memory search --query vendor --since 2025-03-01 --until 2025-03-31` answers "what did the vendor quote in March" in one call. In `lore sql` the column is `valid_at`.
+
 ## Step 3 — Add a decision
 
 A decision needs a short `--title` (the choice) and a `--body` (the reason). `--status` is `accepted` unless you say `proposed`, `superseded` or `deprecated`.

@@ -22,11 +22,13 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
@@ -192,6 +194,9 @@ type Request struct {
 	BornBranch string
 	// Full is --full (D-758): every hit carries the row's whole text.
 	Full bool
+	// Window is --since / --until (P-9): only rows whose date
+	// (schema.RowDate: valid_at, else created_at) falls in it; zero = all.
+	Window dates.Window
 }
 
 // Hit is one cross-table match, the v0.1.17 globalSearchHit JSON shape.
@@ -286,6 +291,11 @@ type RunIn struct {
 	Full            bool     `json:"full,omitempty" flag:"full" desc:"print each hit's whole text (its body) under its line, not only the snippet; --json adds it as text"`
 	// Born is the --born-branch flag every list shares (D-392).
 	metalist.Born
+	// Since / Until keep rows whose date falls in the window (P-9): the
+	// day a memory is about (memory add --at), else when the row was
+	// added; days inclusive.
+	Since string `json:"since,omitempty" flag:"since" desc:"only rows about this day or later: a memory's valid_at (memory add --at), else when the row was added (YYYY-MM-DD or a date phrase)"`
+	Until string `json:"until,omitempty" flag:"until" desc:"only rows about this day or earlier: valid_at, else when added (YYYY-MM-DD or a date phrase)"`
 }
 
 // RunData is the data of the search.global envelope.
@@ -397,6 +407,10 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if err != nil {
 		return RunOut{}, err
 	}
+	win, err := dateflag.Window(dateflag.LocalClock(env), in.Since, in.Until)
+	if err != nil {
+		return RunOut{}, err
+	}
 	if in.Limit <= 0 {
 		in.Limit = DefaultLimit
 	}
@@ -407,7 +421,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 		Query: in.Query, Targets: targets, Limit: in.Limit, PerTable: in.PerTable,
 		IncludeArchived: in.IncludeArchived, IncludeDeleted: in.IncludeDeleted,
 		AllRepos: in.AllRepos, MasterOnly: in.MasterOnly, Repo: in.Repo, Store: in.Store,
-		BornBranch: in.BornBranch, Full: in.Full,
+		BornBranch: in.BornBranch, Full: in.Full, Window: win,
 	})
 	if err != nil {
 		return RunOut{}, err

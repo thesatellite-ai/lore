@@ -79,6 +79,10 @@ type AddIn struct {
 	// over (project, key), so a retry with the same key finds the row it
 	// stored and returns it without writing; stored as idempotency_key.
 	Key string `json:"key,omitempty" flag:"key" desc:"idempotency key: a retry with the same key returns the memory already added and writes nothing"`
+	// At is the date the memory is about, stored as valid_at (P-9): a
+	// note written today about last week's call carries last week, and
+	// --since/--until of memory list/search and lore search find it there.
+	At string `json:"at,omitempty" flag:"at" desc:"the date this memory is about, stored as valid_at (YYYY-MM-DD, RFC3339 or a phrase: yesterday, mon, in 3d; default none: list/search --since/--until then use when it was added)"`
 }
 
 // WriteOut is the output of every write operation: the row's id, the store
@@ -121,6 +125,10 @@ type ListIn struct {
 	// Tags keeps memories carrying every named tag.
 	Tags  []string `json:"tags,omitempty" flag:"tag" desc:"only memories with this tag (repeatable: all must match)"`
 	Store string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only memories of this store and its folders, <store>/<folder> (default every attached store)"`
+	// Since / Until keep memories whose date (valid_at, else created_at;
+	// schema.RowDate) falls in the window, days inclusive (P-9).
+	Since string `json:"since,omitempty" flag:"since" desc:"only memories about this day or later: valid_at (memory add --at), else when added (YYYY-MM-DD or a date phrase)"`
+	Until string `json:"until,omitempty" flag:"until" desc:"only memories about this day or earlier: valid_at, else when added (YYYY-MM-DD or a date phrase)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
 	metalist.Flags
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
@@ -244,6 +252,8 @@ type EditIn struct {
 	// Tags adds and Untags removes tags by name (repeatable).
 	Tags   []string `json:"tags,omitempty" flag:"tag" desc:"add this tag (repeatable; the tag must exist)"`
 	Untags []string `json:"untags,omitempty" flag:"untag" desc:"remove this tag (repeatable)"`
+	// At changes the date the memory is about (valid_at, P-9).
+	At string `json:"at,omitempty" flag:"at" desc:"new date this memory is about, stored as valid_at (YYYY-MM-DD, RFC3339 or a date phrase)"`
 }
 
 // DeleteIn is the input of memory.delete.
@@ -281,6 +291,10 @@ type SearchIn struct {
 	Limit           int    `json:"limit,omitempty" flag:"limit" min:"1" desc:"at most this many results (default 10)"`
 	IncludeArchived bool   `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived memories"`
 	Store           string `json:"store,omitempty" flag:"store" alias:"to" desc:"only memories of this store and its folders, <store>/<folder> (default every attached store)"`
+	// Since / Until keep memories whose date (valid_at, else created_at;
+	// schema.RowDate) falls in the window, days inclusive (P-9).
+	Since string `json:"since,omitempty" flag:"since" desc:"only memories about this day or later: valid_at (memory add --at), else when added (YYYY-MM-DD or a date phrase)"`
+	Until string `json:"until,omitempty" flag:"until" desc:"only memories about this day or earlier: valid_at, else when added (YYYY-MM-DD or a date phrase)"`
 }
 
 // SearchOut is the output of memory.search: v0.1.17's search envelope

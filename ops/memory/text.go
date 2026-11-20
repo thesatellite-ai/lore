@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 )
@@ -82,8 +83,8 @@ func (o ListOut) rowsText() string {
 	return b.String() + ext.String()
 }
 
-// baseText prints the id, kind/trust/source (plus superseded-by, archived-at
-// and valid-until when set), a blank line and the body.
+// baseText prints the id, kind/trust/source (plus superseded-by, archived-at,
+// valid-at and valid-until when set), a blank line and the body.
 func (o ShowOut) baseText() string {
 	r := o.Data
 	var b strings.Builder
@@ -94,6 +95,9 @@ func (o ShowOut) baseText() string {
 	}
 	if !r.ArchivedAt.IsZero() {
 		fmt.Fprintf(&b, "  archived-at: %s\n", r.ArchivedAt.Format(time.RFC3339))
+	}
+	if !r.ValidAt.IsZero() {
+		fmt.Fprintf(&b, "  valid-at: %s\n", dateText(r.ValidAt))
 	}
 	if !r.ValidUntil.IsZero() {
 		fmt.Fprintf(&b, "  valid-until: %s\n", r.ValidUntil.Format(time.RFC3339))
@@ -114,4 +118,13 @@ func (o SearchOut) Text() string {
 		fmt.Fprintf(&b, "%s %s\n", h.ID, h.Row.Body)
 	}
 	return b.String()
+}
+
+// dateText is a stored date as the user gave it: a calendar day as
+// YYYY-MM-DD (memory add --at 2025-03-14), an instant as RFC3339 UTC.
+func dateText(t time.Time) string {
+	if dates.IsDay(t) {
+		return t.UTC().Format(dates.DayLayout)
+	}
+	return t.UTC().Format(time.RFC3339)
 }
