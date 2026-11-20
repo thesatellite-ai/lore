@@ -199,6 +199,16 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 		return res, err
 	}
 	defer unlock()
+	// devco:D-782: the clone gets the identity this commit is signed with
+	// (the org identity), by the git backend's rule: a clone this layer
+	// made (a link, lore-org.yaml, an added store's marker or floor) took
+	// the person's global git user, so a hand commit there carried their
+	// personal email. A person's own repo-local user.email stays.
+	if sig := (gitbackend.Signature{Name: c.Signature.Name, Email: c.Signature.Email}); !sig.IsZero() {
+		if _, _, ierr := gitbackend.EnsureCloneIdentity(ctx, dir, gitbackend.CloneIdentity{Signature: sig}); ierr != nil {
+			return res, ierr
+		}
+	}
 	for attempt := 0; attempt <= linkPushRetries; attempt++ {
 		offline := false
 		if attempt > 0 {
