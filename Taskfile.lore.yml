@@ -120,6 +120,8 @@ vars:
   GATE_STEPS: |
     userscen          13  test:scen PARALLEL=13
     setupe2e          11  test:setupe2e:run PARALLEL=10
+    stories-ww-writes 4   test:stories:ww:writes PARALLEL=12
+    stories-ww-stand  4   test:stories:ww:stand PARALLEL=12
     stories-ww        3   test:stories:ww PARALLEL=6
     stories           4   test:stories:rest PARALLEL=8
     journey-teamlead  3   test:journeys:teamlead PARALLEL=2
@@ -145,7 +147,9 @@ vars:
     journey-folders   2   test:journeys:folders PARALLEL=2
     journey-land      2   test:journeys:land PARALLEL=2
     journey-upgrader  2   test:journeys:upgrader PARALLEL=2
-    journey-rest      2   test:journeys:rest PARALLEL=2
+    journey-rest-ah   3   test:journeys:rest-ah PARALLEL=3
+    journey-rest-in   3   test:journeys:rest-in PARALLEL=3
+    journey-rest      3   test:journeys:rest PARALLEL=3
     scenarios         3   scenarios:run JOBS=4
     chaos             1   chaos:run JOBS=4
     race              2   test:race:rest
@@ -655,11 +659,29 @@ tasks:
       - CGO_ENABLED=0 go build -tags loretest -o {{.STORIES_BIN}} ./cmd/lore
       - "STORIES_LORE={{.STORIES_BIN}} go test -tags 'stories journeys' -count=1 -parallel {{.PARALLEL | default 8}} -timeout $({{.TEST_TIME}} 15m) {{.FILTER}} ./tests/stories/"
 
-  test:stories:ww:
-    desc: "Story WW alone: every write of the registry from every place a person stands (the gate's long pole, its own step)"
+  # Story WW's two matrices are one top-level test each whose places run as parallel subtests:
+  # TestStoryWWWrites (twelve places of ~400 writes) and TestStoryWWhereYouStand each ran 14-15
+  # minutes inside the one stories-ww step at -parallel 6 and took the step past its 15 (devco
+  # D-779). Each now has its own step at -parallel 12, so all its places run at once; the step
+  # stories-ww keeps every other WW test. internal/repoguard TestGateStepsFitTheirTimeout holds
+  # each to 70 % of its limit with the measured times in tests/lib/gate-test-times.tsv.
+  test:stories:ww:writes:
+    desc: "Story WW's write matrix alone (TestStoryWWWrites): every write of the registry from every place a person stands, its places in parallel"
     cmds:
       - task: test:stories:part
-        vars: {PART: ww, FILTER: "-run '^TestStoryWW'", PARALLEL: "{{.PARALLEL}}"}
+        vars: {PART: ww-writes, FILTER: "-run '^TestStoryWWWrites$'", PARALLEL: "{{.PARALLEL}}"}
+
+  test:stories:ww:stand:
+    desc: "Story WW's where-you-stand matrix alone (TestStoryWWhereYouStand): what each command does from every place, its places in parallel"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: ww-stand, FILTER: "-run '^TestStoryWWhereYouStand$'", PARALLEL: "{{.PARALLEL}}"}
+
+  test:stories:ww:
+    desc: "Story WW's other tests (every TestStoryWW... but the two matrices, which have their own steps)"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: ww, FILTER: "-run '^TestStoryWW' -skip '^TestStoryWW(Writes|hereYouStand)$'", PARALLEL: "{{.PARALLEL}}"}
 
   test:stories:rest:
     desc: "Every story the ww part does not run (the catch-all of the gate's stories parts)"
@@ -721,15 +743,33 @@ tasks:
       - task: test:journeys:part
         vars: {PART: upgrader, FILTER: "-run '^TestJourneyUpgrader'"}
 
-  # The parts above run the journeys their -run names; journey-rest runs every other test of the
-  # package (-skip of exactly those names), so a new journey is in the gate the day it is added.
+  # The parts above run the journeys their -run names; the journeys no persona part names run in
+  # three parts by the first letter after TestJourney (rest-ah: A-H, rest-in: I-N, rest: every
+  # other test of the package, -skip of exactly the names and letters before it), so a new journey
+  # is in the gate the day it is added. One catch-all of about 210 journeys at -parallel 2 needed
+  # about 28 minutes of its 15 and died with about 85 never started (devco D-779); each part now
+  # needs about 6-7 minutes at -parallel 3 (measured times in tests/lib/gate-test-times.tsv), and
+  # internal/repoguard TestGateStepsFitTheirTimeout fails when one needs more than 70 % of its
+  # limit: split again (another letter range) rather than raise the limit.
   # tests/journeys/gate_parts_test.go fails when a test is in no part or in two, and when a part
-  # is missing from GATE_STEPS: keep its -skip in step with the parts above.
-  test:journeys:rest:
-    desc: "Every journey no named part runs (the catch-all of the gate's journey parts): staff, store commands, offline, pull --rebase, init in a linked repo, mixed versions on one store, moves, and every journey added later"
+  # is missing from GATE_STEPS: keep the -run and -skip patterns in step with each other.
+  test:journeys:rest-ah:
+    desc: "Journeys no persona part runs, A to H after TestJourney (adopt, admin, CI, contractor, doctor, hooks, ...): the first of the three catch-all parts"
     cmds:
       - task: test:journeys:part
-        vars: {PART: rest, FILTER: "-skip '^Test(Frame|Journey(Land|Solo|Agency|TeamLead|Joiner|Agents|Folders|Upgrader))'"}
+        vars: {PART: rest-ah, FILTER: "-run '^TestJourney[A-H]' -skip '^TestJourney(Agency|Agents|Folders)'"}
+
+  test:journeys:rest-in:
+    desc: "Journeys no persona part runs, I to N after TestJourney (join, links, moves, mixed versions, new laptop, ...): the second of the three catch-all parts"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: rest-in, FILTER: "-run '^TestJourney[I-N]' -skip '^TestJourney(Joiner|Land)'"}
+
+  test:journeys:rest:
+    desc: "Every journey no other part runs (the catch-all of the gate's journey parts): O to Z after TestJourney (offline, pull --rebase, staff, store commands, ...) and every journey added later under another name"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: rest, FILTER: "-skip '^Test(Frame|Journey([A-N]|Land|Solo|Agency|TeamLead|Joiner|Agents|Folders|Upgrader))'"}
 
 
   trial:github:

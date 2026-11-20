@@ -22,12 +22,15 @@ import (
 	"go/build/constraint"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -39,6 +42,12 @@ type gateSelector struct {
 	tags map[string]bool
 	run  *regexp.Regexp // nil: every test
 	skip *regexp.Regexp // nil: none skipped
+	// parallel is the go test -parallel the step runs it at (0: none
+	// given, go test's GOMAXPROCS default); timeout is its -timeout before
+	// the machine factor (0: none given). The budget guard
+	// (gatebudget_test.go, devco D-779) reads both.
+	parallel int
+	timeout  time.Duration
 }
 
 // selects reports whether go test runs the top-level test name.
@@ -59,8 +68,24 @@ var (
 	goTestTags  = regexp.MustCompile(`-tags (?:'([^']*)'|"([^"]*)"|(\S+))`)
 	goTestFlag  = regexp.MustCompile(`-(run|skip) '([^']*)'`)
 	callsTask   = regexp.MustCompile(`\btask (?:lore:)?([a-z0-9:-]+)`)
-	templateVar = regexp.MustCompile(`\{\{\s*\.([A-Z_]+)[^}]*\}\}`)
+	// templateVar is a Taskfile {{.NAME}} with an optional `| default X`
+	// (group 2), which stands in when the step does not set NAME.
+	templateVar  = regexp.MustCompile(`\{\{\s*\.([A-Z_]+)(?:\s*\|\s*default\s+"?([^"}\s]*)"?)?[^}]*\}\}`)
+	goTestPar    = regexp.MustCompile(`-parallel (\d+)`)
+	goTestLimit  = regexp.MustCompile(`-timeout \$\([^)]*?(\S+)\)|-timeout (\S+)`)
+	stepVarToken = regexp.MustCompile(`^([A-Z_]+)=(\S*)$`)
 )
+
+// expand fills a command's {{.NAME}} from vars, else from its default.
+func expand(cmd string, vars map[string]string) string {
+	return templateVar.ReplaceAllStringFunc(cmd, func(m string) string {
+		sm := templateVar.FindStringSubmatch(m)
+		if v := vars[sm[1]]; v != "" {
+			return v
+		}
+		return sm[2]
+	})
+}
 
 // gateSelectors reads every go test selector the gate's steps reach.
 func gateSelectors(t *testing.T, raw []byte) []gateSelector {
@@ -78,6 +103,12 @@ func gateSelectors(t *testing.T, raw []byte) []gateSelector {
 		f := strings.Fields(line)
 		if len(f) < 3 || strings.HasPrefix(f[0], "#") {
 			continue
+		}
+		stepVars := map[string]string{}
+		for _, tok := range f[3:] {
+			if m := stepVarToken.FindStringSubmatch(tok); m != nil {
+				stepVars[m[1]] = m[2]
+			}
 		}
 		seen := map[string]bool{}
 		var walk func(task string, vars map[string]string)
@@ -100,16 +131,21 @@ func gateSelectors(t *testing.T, raw []byte) []gateSelector {
 					if err := c.Decode(&call); err != nil || call.Task == "" {
 						continue
 					}
-					walk(call.Task, call.Vars)
+					// The step line's vars (PARALLEL=2) reach every task the
+					// step calls, as task's command-line vars do; a call's own
+					// vars win and may name the caller's ({{.PARALLEL}}).
+					next := maps.Clone(stepVars)
+					for k, v := range call.Vars {
+						next[k] = expand(v, vars)
+					}
+					walk(call.Task, next)
 					continue
 				}
-				cmd := templateVar.ReplaceAllStringFunc(c.Value, func(m string) string {
-					return vars[templateVar.FindStringSubmatch(m)[1]]
-				})
+				cmd := expand(c.Value, vars)
 				if !strings.Contains(cmd, "go test") {
 					for _, m := range callsTask.FindAllStringSubmatch(cmd, -1) {
 						if _, ok := doc.Tasks[m[1]]; ok {
-							walk(m[1], nil)
+							walk(m[1], maps.Clone(stepVars))
 						}
 					}
 					continue
@@ -123,6 +159,16 @@ func gateSelectors(t *testing.T, raw []byte) []gateSelector {
 					for _, tag := range strings.FieldsFunc(tm[1]+tm[2]+tm[3], func(r rune) bool { return r == ' ' || r == ',' }) {
 						s.tags[tag] = true
 					}
+				}
+				if pm := goTestPar.FindStringSubmatch(cmd); pm != nil {
+					s.parallel, _ = strconv.Atoi(pm[1])
+				}
+				if lm := goTestLimit.FindStringSubmatch(cmd); lm != nil {
+					d, err := time.ParseDuration(lm[1] + lm[2])
+					if err != nil {
+						t.Errorf("gate step %s: bad -timeout in %q: %v", f[0], cmd, err)
+					}
+					s.timeout = d
 				}
 				for _, fl := range goTestFlag.FindAllStringSubmatch(cmd, -1) {
 					re, err := regexp.Compile(fl[2])
@@ -139,7 +185,7 @@ func gateSelectors(t *testing.T, raw []byte) []gateSelector {
 				out = append(out, s)
 			}
 		}
-		walk(f[2], nil)
+		walk(f[2], stepVars)
 	}
 	return out
 }
