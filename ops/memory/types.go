@@ -288,7 +288,7 @@ type SearchIn struct {
 	Columns    []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable)"`
 	// Limit caps the hits AFTER the scope filter; 0 means
 	// DefaultSearchLimit.
-	Limit           int    `json:"limit,omitempty" flag:"limit" min:"1" desc:"at most this many results (default 10)"`
+	Limit           int    `json:"limit,omitempty" flag:"limit" min:"1" desc:"at most this many results (default 10); a cut list ends with a note and --json says \"more\": true"`
 	IncludeArchived bool   `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived memories"`
 	Store           string `json:"store,omitempty" flag:"store" alias:"to" desc:"only memories of this store and its folders, <store>/<folder> (default every attached store)"`
 	// Since / Until keep memories whose date (valid_at, else created_at;
@@ -305,6 +305,11 @@ type SearchOut struct {
 	Query         string      `json:"query"`
 	Count         int         `json:"count"`
 	Data          []SearchHit `json:"data"`
+	// More says the hits are cut at --limit: more memories in scope match
+	// (devco D-767; ten listed of fifty read as the whole answer).
+	More bool `json:"more,omitempty" desc:"more memories match than are listed; raise --limit to list more"`
+	// limit is the --limit the search ran with, for the cut note.
+	limit int
 }
 
 // SearchHit is one v0.1.17 search hit (entitySearchHit): id, BM25 score,

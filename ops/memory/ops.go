@@ -787,9 +787,6 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	// (entitySearchEnvelope), and --json is byte-compatible with it.
 	out := SearchOut{SchemaVersion: SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, h := range hits {
-		if len(out.Data) == limit {
-			break
-		}
 		src, r, err := o.env.Get(ctx, engine.Ref{Store: h.Source, Table: table, ID: h.ID})
 		if errs.Has(err, errs.NotFound) {
 			continue // deleted since the cache was refreshed
@@ -801,6 +798,11 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 		if r.Deleted || (archived && !in.IncludeArchived) || !sc.keeps(repoOf(r), repo) ||
 			(project != "" && field(r, fieldProject) != project) || !win.Keeps(schema.RowDate(r)) {
 			continue
+		}
+		if len(out.Data) == limit {
+			// D-767: one more row in scope matches: say the list is cut
+			out.More, out.limit = true, limit
+			break
 		}
 		out.Data = append(out.Data, hitOf(LabelerOf(o.env), src, h, r))
 		hm := metashow.Row(ctx, o.env, r) // MQ13: metadata on every read

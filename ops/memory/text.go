@@ -7,6 +7,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 )
 
@@ -116,6 +117,9 @@ func (o SearchOut) Text() string {
 	var b strings.Builder
 	for _, h := range o.Data {
 		fmt.Fprintf(&b, "%s %s\n", h.ID, h.Row.Body)
+	}
+	if o.More {
+		b.WriteString(morehits.Note(len(o.Data), o.limit))
 	}
 	return b.String()
 }

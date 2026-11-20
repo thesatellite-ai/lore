@@ -168,6 +168,10 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	}
 
 	var res opssearch.Result
+	// D-767: each kind is asked for one hit past its cut, so a cut kind is
+	// known (Result.More) and the list can say more rows match
+	perTable := r.PerTable
+	r.PerTable++
 	for _, t := range r.Targets {
 		var hits []opssearch.Hit
 		switch {
@@ -192,6 +196,9 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		if len(hits) == 0 {
 			continue
 		}
+		if len(hits) > perTable {
+			res.More, hits = true, hits[:perTable]
+		}
 		res.MatchedTables++
 		res.Hits = append(res.Hits, hits...)
 	}
@@ -202,7 +209,7 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	// table order (deterministic output).
 	sort.SliceStable(res.Hits, func(i, j int) bool { return res.Hits[i].Score > res.Hits[j].Score })
 	if len(res.Hits) > r.Limit {
-		res.Hits = res.Hits[:r.Limit]
+		res.More, res.Hits = true, res.Hits[:r.Limit]
 	}
 	if r.IncludeDeleted {
 		// DELETION 2.9 (FA-META-4): the cache holds no trashed row, so rows

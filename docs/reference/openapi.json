@@ -31490,7 +31490,7 @@
                   },
                   "limit": {
                     "type": "integer",
-                    "description": "at most this many results (default 10)"
+                    "description": "at most this many results (default 10); a cut list ends with a note and --json says \"more\": true"
                   },
                   "master_only": {
                     "type": "boolean",
@@ -31626,6 +31626,10 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "more memories match than are listed; raise --limit to list more"
                     },
                     "query": {
                       "type": "string"
@@ -72413,7 +72417,7 @@
                   },
                   "limit": {
                     "type": "integer",
-                    "description": "max total hits after merge (default 20)"
+                    "description": "max total hits after merge (default 20); a cut list ends with a note and --json says \"more\": true"
                   },
                   "master_only": {
                     "type": "boolean",
@@ -72425,7 +72429,7 @@
                   },
                   "per_table": {
                     "type": "integer",
-                    "description": "per-entity top-K before merge (default 10)"
+                    "description": "per-entity top-K before merge (default 10, or --limit when --limit is given)"
                   },
                   "query": {
                     "type": "string",
@@ -72657,6 +72661,10 @@
                               "score"
                             ]
                           }
+                        },
+                        "more": {
+                          "type": "boolean",
+                          "description": "more rows match than are listed; raise --limit to list more"
                         },
                         "query": {
                           "type": "string"
