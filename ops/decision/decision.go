@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/content"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
@@ -374,6 +375,9 @@ type SearchOut struct {
 	Query         string      `json:"query"`
 	Count         int         `json:"count"`
 	Data          []SearchHit `json:"data"`
+	// More says the hits are cut at --limit: more rows in scope match
+	// (devco D-770; ten listed of fifty read as the whole answer).
+	More bool `json:"more,omitempty" desc:"more rows match than are listed; raise --limit to list more"`
 }
 
 // Text prints one line per hit, or "(no matches)".
@@ -385,6 +389,7 @@ func (o SearchOut) Text() string {
 	for _, h := range o.Data {
 		fmt.Fprintf(&b, "%s [%s] %s\n", h.ID, h.Row.Status, h.Row.Title)
 	}
+	b.WriteString(morehits.Line(o.More, len(o.Data)))
 	return b.String()
 }
 
@@ -646,12 +651,12 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 
 // search runs the full-text search.
 func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
-	found, err := kn.Search(ctx, o.env, noun, in.Query, in.Columns, in.Limit,
+	found, more, err := kn.Search(ctx, o.env, noun, in.Query, in.Columns, in.Limit,
 		kn.Scope{Repo: in.Repo, NoInherit: in.NoInherit, MasterOnly: in.MasterOnly, AllRepos: in.AllRepos, Project: in.Project, Store: in.Store}, in.IncludeArchived)
 	if err != nil {
 		return SearchOut{}, err
 	}
-	out := SearchOut{SchemaVersion: SchemaVersion, Kind: KindSearch, Query: in.Query}
+	out := SearchOut{SchemaVersion: SchemaVersion, Kind: KindSearch, Query: in.Query, More: more}
 	for _, f := range found {
 		r := f.Row
 		out.Data = append(out.Data, SearchHit{

@@ -487,40 +487,42 @@ type Found struct {
 
 // Search matches the query against every attached store's cache and keeps
 // the live hits keep accepts (archived ones only with IncludeArchived),
-// best first, cut at the limit after the filter.
-func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(row.Row) bool) ([]Found, error) {
+// best first, cut at the limit after the filter. more says one more hit in
+// scope matched past the limit (devco D-770: the cut was silent, so ten
+// listed read as the whole answer); the caller's SearchOut says so.
+func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(row.Row) bool) (found []Found, more bool, err error) {
 	if strings.TrimSpace(a.Query) == "" {
-		return nil, errs.New(errs.InvalidInput, o.Noun+" search: empty query")
+		return nil, false, errs.New(errs.InvalidInput, o.Noun+" search: empty query")
 	}
 	limit := a.Limit
 	switch {
 	case limit == 0:
 		limit = DefaultSearchLimit
 	case limit < 0 || limit > MaxSearchLimit:
-		return nil, errs.New(errs.InvalidInput, o.Noun+" search: --limit must be between 1 and 1000")
+		return nil, false, errs.New(errs.InvalidInput, o.Noun+" search: --limit must be between 1 and 1000")
 	}
 	hits, err := opsmemory.SearchFields(ctx, o.Env, o.Noun, o.Table, a.Query, a.Columns, a.Store, MaxSearchLimit)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	out := []Found{}
 	for _, h := range hits {
-		if len(out) == limit {
-			break
-		}
 		src, r, err := o.Env.Get(ctx, engine.Ref{Store: h.Source, Table: o.Table, ID: h.ID})
 		if errs.Has(err, errs.NotFound) {
 			continue // deleted since the cache was refreshed
 		}
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if r.Deleted || (Field(r, FieldArchivedAt) != "" && !a.IncludeArchived) || !keep(r) {
 			continue
 		}
+		if len(out) == limit {
+			return out, true, nil // one more hit in scope: the list is cut
+		}
 		out = append(out, Found{Source: src, Row: r, Score: h.Score, Snippet: h.Snippet})
 	}
-	return out, nil
+	return out, false, nil
 }
 
 // ProjectFilter resolves a --project value to the project id a read keeps.

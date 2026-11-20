@@ -574,43 +574,44 @@ type Found struct {
 
 // Search matches query against every attached store's cache, keeps live
 // hits in scope (archived only with withArchived), best first, cut at
-// limit after the filter (0 = DefaultSearchLimit).
-func Search(ctx context.Context, env Env, n Noun, query string, columns []string, limit int, s Scope, withArchived bool) ([]Found, error) {
+// limit after the filter (0 = DefaultSearchLimit). more says one more hit
+// in scope matched past the limit (devco D-770: the cut was silent).
+func Search(ctx context.Context, env Env, n Noun, query string, columns []string, limit int, s Scope, withArchived bool) (found []Found, more bool, err error) {
 	if strings.TrimSpace(query) == "" {
-		return nil, errs.New(errs.InvalidInput, n.Name+" search: empty query")
+		return nil, false, errs.New(errs.InvalidInput, n.Name+" search: empty query")
 	}
 	switch {
 	case limit == 0:
 		limit = DefaultSearchLimit
 	case limit < 0 || limit > MaxSearchLimit:
-		return nil, errs.New(errs.InvalidInput, n.Name+" search: --limit must be between 1 and 1000")
+		return nil, false, errs.New(errs.InvalidInput, n.Name+" search: --limit must be between 1 and 1000")
 	}
 	f, err := s.resolve(ctx, env, n)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	hits, err := opsmemory.SearchFields(ctx, env, n.Name, n.Table, query, columns, s.Store, MaxSearchLimit)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var out []Found
 	for _, h := range hits {
-		if len(out) == limit {
-			break
-		}
 		src, r, err := env.Get(ctx, engine.Ref{Store: h.Source, Table: n.Table, ID: h.ID})
 		if errs.Has(err, errs.NotFound) {
 			continue // deleted since the cache was refreshed
 		}
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if r.Deleted || (!withArchived && Archived(r)) || !f.keeps(r) {
 			continue
 		}
+		if len(out) == limit {
+			return out, true, nil // one more hit in scope: the list is cut
+		}
 		out = append(out, Found{Item: Item{Source: src, Row: r}, Hit: h})
 	}
-	return out, nil
+	return out, false, nil
 }
 
 // StoreOf names the store that holds id after a write: the requested one,

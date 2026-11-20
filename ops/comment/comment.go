@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
@@ -198,6 +199,9 @@ type SearchOut struct {
 	Query         string      `json:"query"`
 	Count         int         `json:"count"`
 	Data          []SearchHit `json:"data"`
+	// More says the hits are cut at --limit: more comments in scope match
+	// (devco D-770; ten listed of fifty read as the whole answer).
+	More bool `json:"more,omitempty" desc:"more comments match than are listed; raise --limit to list more"`
 }
 
 // Text is v0.1.17's search output: "<id> [<table>/<id>] <body…>".
@@ -210,6 +214,7 @@ func (o SearchOut) Text() string {
 		body := textcut.Cut(h.Row.Body, searchBodyMax, searchBodyMax)
 		fmt.Fprintf(&b, "%s [%s/%s] %s\n", h.ID, h.Row.EntityTable, h.Row.EntityID, body)
 	}
+	b.WriteString(morehits.Line(o.More, len(o.Data)))
 	return b.String()
 }
 
@@ -460,9 +465,6 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	}
 	out := SearchOut{SchemaVersion: SchemaVersion, Kind: KindSearch, Query: in.Query}
 	for _, h := range hits {
-		if len(out.Data) == limit {
-			break
-		}
 		if !opsmemory.FromStore(only, h.Source) {
 			continue
 		}
@@ -475,6 +477,10 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 		}
 		if r.Deleted {
 			continue
+		}
+		if len(out.Data) == limit {
+			out.More = true // D-770: one more comment in scope, the list is cut
+			break
 		}
 		hit := SearchHit{ID: r.ID.String(), Score: h.Score, Snippet: h.Snippet, Row: HitRow{
 			Body: field(r, fieldBody), EntityID: field(r, schema.FieldEntityID), EntityTable: field(r, schema.FieldEntityTable),

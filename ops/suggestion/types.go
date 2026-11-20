@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
 
+	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -169,6 +170,9 @@ type SearchOut struct {
 	Query         string      `json:"query"`
 	Count         int         `json:"count"`
 	Data          []SearchHit `json:"data"`
+	// More says the hits are cut at --limit: more rows in scope match
+	// (devco D-770; ten listed of fifty read as the whole answer).
+	More bool `json:"more,omitempty" desc:"more rows match than are listed; raise --limit to list more"`
 }
 
 // Text prints v0.1.17's "<id> <title>" lines, or "(no matches)".
@@ -180,6 +184,7 @@ func (o SearchOut) Text() string {
 	for _, h := range o.Data {
 		b.WriteString(h.ID + " " + h.Row.Title + "\n")
 	}
+	b.WriteString(morehits.Line(o.More, len(o.Data)))
 	return b.String()
 }
 
