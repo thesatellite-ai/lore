@@ -28,7 +28,14 @@ func TestE2ERepoSetURLFollowsStoreLinks(t *testing.T) {
 	if meta, _ := a.store.Read(refMain, folderAcme+"/"+metaFile); strings.Contains(meta, mirror) {
 		t.Fatalf("the link reached the store without a push: %s", meta)
 	}
-	a.aliceApp.MustLore("sync").Says(t, "pushed local commit(s)")
+	// devco D-698/D-778: the sync's line counts the link commit it sent
+	// ("sent 1 … pushed 1 local commit with no note rows"), the same count
+	// as its stderr push line; the countless "pushed local commit(s)" is
+	// only for a backend without commits, never git
+	a.aliceApp.MustLore("sync").OK(t).Says(t,
+		"store "+orgNorthwind+"/"+folderAcme+": pushed (sent 1, received 0, merged 0, refused 0); pushed 1 local commit with no note rows (store links or org settings)",
+		"lore: pushed store "+orgNorthwind+"/"+folderAcme+": commit", "(1 commit)").
+		Never(t, "pushed local commit(s)", "pushed (sent 0")
 	meta, _ := a.store.Read(refMain, folderAcme+"/"+metaFile)
 	for _, slug := range []string{slugApp, mirror} {
 		if !strings.Contains(meta, `"remote": "`+slug+`"`) && !strings.Contains(meta, `"remote":"`+slug+`"`) {
