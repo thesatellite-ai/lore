@@ -7,6 +7,7 @@ import (
 	"hash/fnv"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Opening a cache used to take the write lock (BEGIN IMMEDIATE) on every
@@ -22,7 +23,14 @@ import (
 // internal DDL gains statements without a layoutVersion bump (CREATE ... IF
 // NOT EXISTS is safe to run again), so the version alone cannot tell a
 // reader that every internal object exists.
-var ddlStamp = func() int32 {
+//
+// A function computed on first use, not a package variable: Go initializes
+// every package variable before any init() runs, and files append to
+// internalDDL in init() (team_versions.go's view, kindsgood.go,
+// team_versions_memo.go). A variable hashed the list before those appends,
+// so a file stamped by an older binary looked current and never got the
+// new tables, views or triggers (D-739).
+var ddlStamp = sync.OnceValue(func() int32 {
 	h := fnv.New32a()
 	for _, s := range internalDDL {
 		_, _ = h.Write([]byte(s))
@@ -34,11 +42,11 @@ var ddlStamp = func() int32 {
 	}
 	_, _ = h.Write([]byte(strconv.Itoa(layoutVersion)))
 	return int32(h.Sum32()) // application_id is a signed 32-bit header field
-}()
+})
 
 // qStampDDL records ddlStamp in the file header (init's write path, after
 // the DDL ran).
-var qStampDDL = "PRAGMA application_id = " + strconv.Itoa(int(ddlStamp))
+func qStampDDL() string { return "PRAGMA application_id = " + strconv.Itoa(int(ddlStamp())) }
 
 // initRead loads the state of a cache file that needs no change, inside
 // one read transaction (no write lock). ok is false when anything is out
@@ -58,7 +66,7 @@ func (c *Cache) initRead(ctx context.Context) (state, bool, error) {
 	if err := tx.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app); err != nil {
 		return state{}, false, dbErr("read layout stamp", err)
 	}
-	if ver != layoutVersion || int32(app) != ddlStamp {
+	if ver != layoutVersion || int32(app) != ddlStamp() {
 		return state{}, false, nil
 	}
 	var fill bool
