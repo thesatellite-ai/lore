@@ -178,8 +178,13 @@ const (
 	KeyContextWarnAt Key = "context.warn_at"
 	// KeyContextHookCap: bytes of `lore context` output from a hook (under the 10,000-char hook cap).
 	KeyContextHookCap Key = "context.hook_cap"
+	// AgentHooksPersonal and AgentHooksShared are KeyContextAgentHooks' values.
+	AgentHooksPersonal = "personal"
+	AgentHooksShared   = "shared"
 	// KeyContextPromptSearch: lore setup --agent-hooks also installs the per-prompt search hook (CQ5: off).
 	KeyContextPromptSearch Key = "context.hooks.prompt_search"
+	// KeyContextAgentHooks: where lore setup --agent-hooks puts a tool's session hooks (D-732): personal (the tool's untracked file, .claude/settings.local.json) or shared (its committed file, .claude/settings.json).
+	KeyContextAgentHooks Key = "context.hooks.agent_hooks"
 	// KeyContextFullFile: render also writes .lore/LORE.full.md (CQ2).
 	KeyContextFullFile Key = "context.full_file"
 	// KeyContextDirFiles: render writes per-directory LORE.md files (6.2.7, CQ10): on by default in own repos; a client repo is off until set for that client.
@@ -476,6 +481,8 @@ func Keys() []KeyDef {
 		{Key: KeyContextWarnAt, Shape: ShapeLimit, Ceiling: ceilingContextWarnAtPct, Default: value.Int(defaultContextWarnAtPct), Doc: "percent of a context budget above which doctor and lore render --check warn"},
 		{Key: KeyContextHookCap, Shape: ShapeLimit, Default: value.Int(defaultContextHookCap), Doc: "bytes of lore context output answered to a tool hook"},
 		// CQ5: off by default; off is the strict value (no search on every prompt).
+		// D-732: personal first (the strict value: no new file git would list).
+		{Key: KeyContextAgentHooks, Shape: ShapeRank, Choices: []string{AgentHooksPersonal, AgentHooksShared}, Default: mustText(AgentHooksPersonal), Doc: "where lore setup --agent-hooks puts the session hooks: personal (.claude/settings.local.json, never committed) or shared (.claude/settings.json, committed for the team)"},
 		{Key: KeyContextPromptSearch, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(false), Doc: "lore setup --agent-hooks also installs the per-prompt search hook"},
 		{Key: KeyContextFullFile, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true), Doc: "lore render also writes .lore/LORE.full.md, every pinned entry in full"},
 		// CQ10: off is the strict value (no new files in a repo); client repos read an unset key as off.

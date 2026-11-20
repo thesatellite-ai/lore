@@ -53,12 +53,12 @@ func TestSessionEndHookPlannedInstalledRemoved(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	claudeFile := filepath.Join(root, ".claude", "settings.json")
+	claudeFile := filepath.Join(root, ".claude", "settings.local.json") // D-732: personal by default
 	own := `{"hooks":{"SessionEnd":[{"hooks":[{"type":"command","command":"echo bye"}]}]}}`
 	if err := os.WriteFile(claudeFile, []byte(own), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	plans, err := planAgentHooks(root, false, false)
+	plans, err := planAgentHooks(root, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestSessionEndHookPlannedInstalledRemoved(t *testing.T) {
 			t.Fatalf("%s: only Claude Code's end hook needs a timeout, got %v", f, e[0])
 		}
 	}
-	again, err := planAgentHooks(root, false, false)
+	again, err := planAgentHooks(root, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,12 +116,12 @@ func TestSessionEndHookPlannedInstalledRemoved(t *testing.T) {
 	if got := endHookEntries(t, claudeFile); len(got) != 1 || got[0]["command"] != "echo bye" {
 		t.Fatalf("remove: want only the user's SessionEnd hook left, got %v", got)
 	}
-	p, err := planOneHook(root, toolprofile.NameClaudeCode, end, false)
+	p, err := planOneHook(root, toolprofile.NameClaudeCode, end, false, false)
 	if err != nil || !p.change || !strings.Contains(p.note, "add SessionEnd hook") {
 		t.Fatalf("start hook only: want the end hook planned as missing, got %+v %v", p, err)
 	}
 	// --remove plans the end hook's removal with the others.
-	rm, err := planAgentHooks(root, true, false)
+	rm, err := planAgentHooks(root, true, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

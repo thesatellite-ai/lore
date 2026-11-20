@@ -169,17 +169,22 @@ func TestForeignTools(t *testing.T) {
 				t.Errorf("[%s] .claude/settings.json lost the person's %s hook %q", step, ev, cmd)
 			}
 		}
-		if !fgHasHook(after, "SessionStart", "lore agent start --tool claude_code --hook-stdin") {
-			t.Errorf("[%s] .claude/settings.json has no lore session hook", step)
+		// D-732: lore's session hook goes in the personal settings.local.json,
+		// never the committed settings.json
+		if fgHasHook(after, "SessionStart", "lore agent start --tool claude_code --hook-stdin") {
+			t.Errorf("[%s] lore wrote its session hook into .claude/settings.json", step)
 		}
 		local := fgJSON(t, at(".claude/settings.local.json"))
+		if !fgHasHook(local, "SessionStart", "lore agent start --tool claude_code --hook-stdin") {
+			t.Errorf("[%s] .claude/settings.local.json has no lore session hook", step)
+		}
 		if perms, _ := local["permissions"].(map[string]any); !reflect.DeepEqual(perms["deny"], []any{"Bash(rm:*)"}) {
 			t.Errorf("[%s] settings.local.json lost the person's deny list: %v", step, local)
 		}
 		// Every hook list holds lore's hook once, however often it ran.
 		hooks, _ := after["hooks"].(map[string]any)
-		if list, _ := hooks["SessionStart"].([]any); len(list) != 2 {
-			t.Errorf("[%s] SessionStart holds %d entries, want the person's and lore's: %v", step, len(list), list)
+		if list, _ := hooks["SessionStart"].([]any); len(list) != 1 {
+			t.Errorf("[%s] settings.json SessionStart holds %d entries, want only the person's: %v", step, len(list), list)
 		}
 		m.CheckModes(t, ShapeForeignTools+"/"+step)
 	}

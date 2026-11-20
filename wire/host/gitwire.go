@@ -502,6 +502,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		}
 		teamNew, teamChanged = nil, nil
 	}
+	s.noteTrackedAsked(teamNew) // D-732: created on the person's yes; doctor --fix keeps them
 	for _, n := range names {
 		b := blocks[n]
 		if skip[n] {

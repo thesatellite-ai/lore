@@ -114,13 +114,13 @@ func TestClaudeSessionHookEndToEnd(t *testing.T) {
 	if code, out, errOut := w.lore(t, root, "setup", "--agent-hooks", "--yes"); code != 0 {
 		t.Fatalf("setup --agent-hooks: exit %d\n%s\n%s", code, out, errOut)
 	}
-	settings, err := os.ReadFile(filepath.Clean(filepath.Join(root, ".claude", "settings.json")))
+	settings, err := os.ReadFile(filepath.Clean(filepath.Join(root, ".claude", "settings.local.json"))) // D-732: personal by default
 	if err != nil {
 		t.Fatal(err)
 	}
 	const hookCmd = "lore agent start --tool claude_code --hook-stdin"
 	if !strings.Contains(string(settings), hookCmd) || !strings.Contains(string(settings), "SessionStart") {
-		t.Fatalf("settings.json has no SessionStart hook %q:\n%s", hookCmd, settings)
+		t.Fatalf("settings.local.json has no SessionStart hook %q:\n%s", hookCmd, settings)
 	}
 	hookArgs := strings.Fields(hookCmd)[1:]
 

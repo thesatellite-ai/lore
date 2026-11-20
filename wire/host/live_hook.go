@@ -966,6 +966,9 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if !wired && err == nil {
 		h.installClientGuard(ctx, spec.Name) // clientguard.go: a linked client repo with no .lore/ (J-11)
 	}
+	if !wired {
+		h.clientGuardPasteOnDoctor(ctx, spec.Name) // trackedhooks.go: its committed hooks folder takes pasted lines (D-732)
+	}
 	if !wired && err == nil && !leavesWorkRepo(spec.Name) {
 		// The operation made the project (repo.init from the setup page or
 		// `lore repo init`): wire the clone now, as `lore init` does through
