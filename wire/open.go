@@ -141,9 +141,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	// link` in a client repo, never `lore init`) is never written to: its
 	// repo store is read-only and its cache lives under ~/.lore. Decided
 	// from the root OpenRepo found (no further git call), and only for a
-	// repo with no .lore/, so a lore project pays nothing for it.
+	// repo with no project id of its own (ownProjectAt: a .lore/ holding
+	// only stores.yaml is still one, D-750), so a lore project pays
+	// nothing for it.
 	remote := ""
-	if !repoOnly && opts.RepoLinkedByRemote != nil && !loreFolderAt(repo.Dir()) && !settingUpHere(ctx, repo.Dir()) {
+	if !repoOnly && opts.RepoLinkedByRemote != nil && !ownProjectAt(repo.Dir()) && !settingUpHere(ctx, repo.Dir()) {
 		if remote = opts.RepoLinkedByRemote(ctx); remote != "" {
 			// devco:V-3: an own repo linked to a store folder is not called a
 			// client repo (repoIsClient fails closed: an unknown answer keeps
@@ -1101,8 +1103,9 @@ func remoteRepoCachePath(home, repoTop string) (string, error) {
 }
 
 // linkedByRemote is the remote a store link names the repo of opts by
-// when the repo holds no lore data (no .lore/ at its top); "" when it has
-// .lore/, is not a git repo, or no store links it by its remote.
+// when the repo holds no project id of its own (ownProjectAt; a .lore/
+// with only stores.yaml in it counts as none, D-750); "" when it has one,
+// is not a git repo, or no store links it by its remote.
 func linkedByRemote(ctx context.Context, opts Options) string {
 	if opts.RepoLinkedByRemote == nil {
 		return ""
@@ -1112,7 +1115,7 @@ func linkedByRemote(ctx context.Context, opts Options) string {
 		return ""
 	}
 	top, err := git.RepoRoot(ctx, opts.RepoDir, opts.Home)
-	if err != nil || loreFolderAt(top) {
+	if err != nil || ownProjectAt(top) {
 		return ""
 	}
 	return remote

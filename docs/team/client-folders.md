@@ -119,6 +119,8 @@ README.md
 ```
 <!-- /example -->
 
+A repo whose `.lore/` holds only the `stores.yaml` that `lore store init` or `lore store add` wrote has no lore project of its own either, so it is linked the same way, own (`--own`) or client: after `lore org link` its writes (`lore rule add`, `lore memory add`, …) go to the linked folder and no `.lore/data` is made in the repo.
+
 ## Step 6 — Remove a folder made by mistake
 
 Folder names are unique across all of an org's stores, so a folder made in the wrong store blocks that name everywhere else. `lore store folder remove --store <store> --folder <folder>` removes an empty folder (no rows, no repo links) after asking (`--yes` without a terminal), as one store commit, pushed per the store's push mode; `lore store folder list` stops showing it and the name is free again. A folder that holds rows or repo links is refused with the counts and the next step:
