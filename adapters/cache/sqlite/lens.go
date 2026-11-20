@@ -393,7 +393,8 @@ func (l *Lens) placeExpr(s LensSource, src string) string {
 }
 
 // createViews creates "<n>_all" over every source that has table n (by
-// column name, NULL where a source lacks a column) and, on a masked lens,
+// column name, NULL where a source lacks a column) and, on a masked lens
+// or when that source is a Shared file (only its own name's rows, D-757),
 // the plain TEMP VIEW "<n>" over the first source that has it: TEMP shadows
 // the attached files for an unqualified name, so `SELECT ip FROM
 // res_server` reads the masked copy exactly where SQLite would otherwise
@@ -461,7 +462,14 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 			del = &srcs[i]
 		}
 	}
-	if !l.masked && del == nil {
+	// devco D-757 (owner P-7): a Shared file holds each row once per name
+	// that ever filled it (a repo's stores.yaml name, `--store me/<folder>`,
+	// the store clone's own name), and the plain name read the attached
+	// table whole, so `SELECT * FROM memories` listed every row twice or
+	// more while memories_all, filtered by _source, listed it once. The
+	// plain view keeps the nearest source's own name's rows, as its _all part does.
+	own := l.sources[first.src].Shared && !l.sources[first.src].ownSource() && slices.Contains(first.cols, colSource)
+	if !l.masked && del == nil && !own {
 		return nil
 	}
 	plainCols := first.cols
@@ -478,6 +486,9 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 		return err
 	}
 	body := "SELECT " + sel + ` FROM "` + attachedName(first.src) + `".` + tq
+	if own {
+		body += ` WHERE "` + colSource + `" = ` + literal(l.sources[first.src].Name)
+	}
 	if del != nil {
 		dsel, dErr := m.columns(n, plainCols, del.cols)
 		if dErr != nil {

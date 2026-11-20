@@ -75,7 +75,17 @@ func (c *Cache) loadState(ctx context.Context, tx *sql.Tx) (state, error) {
 		return state{}, err
 	}
 	byKind := map[string][]row.Row{}
+	// devco D-757: a store's cache file is one per place and holds each
+	// row once per name that filled it (a repo's stores.yaml name, `--store
+	// me/<folder>`, the clone's own name), so one field came back once per
+	// name, the kind got the field twice and was skipped (no res_<kind>).
+	// One field row per id, as kinds below keep one row per kind id.
+	seenField := map[string]bool{}
 	for _, fr := range fieldRows {
+		if seenField[fr.ID.String()] {
+			continue
+		}
+		seenField[fr.ID.String()] = true
 		if v, ok := fr.Fields[fieldKindID]; ok {
 			byKind[v.String()] = append(byKind[v.String()], fr)
 		}
