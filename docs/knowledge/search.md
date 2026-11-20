@@ -187,6 +187,8 @@ The query needs at least one word to search for: `lore search --query=-friday` i
 
 `lore search status` compares the index with the rows, kind by kind; every line should say `✓ ok`. `lore search rebuild` throws the index away and builds it again from the rows (`--kind memory` for one kind). Run it when status shows a difference, or after a restore from a backup.
 
+`lore search rebuild --store <store>[/<folder>]` rebuilds one store's index, and works from any folder: `lore search rebuild --store me/notes` from your home folder rebuilds that folder of your personal store. You rarely need it after a hand change to a store's clone: when the clone's `HEAD` no longer follows from the commit the index was built at (a `git reset --hard` to an older commit, a clone made again), lore notices on the next command and rebuilds that store's index by itself, so rows the reset dropped stop showing in search, sql and lists.
+
 <!-- example: search#status lines=6 -->
 ```console
 # alice, in website

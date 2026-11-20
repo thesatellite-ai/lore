@@ -21,7 +21,6 @@ var readsWithoutStore = map[string]string{
 	"store.list":      "lists the stores themselves",
 	"sync.run":        "syncs every store; `lore sync <store>` names one by argument",
 	"sync.status":     "reports every store's sync state",
-	"search.rebuild":  "rebuilds this machine's cache of every attached store",
 	"search.status":   "reports this machine's cache",
 	"machine.show":    "this machine's own row",
 	"branch.mode":     "this repo's branch mode",
