@@ -54,8 +54,8 @@ count: 1
 alice (work/website)$ lore store folder add --store notes --folder golang
 ✓ created folder golang in notes (prj_2ad3618e878ebbf527d34d446ef4f891; shown only in repos that attach it)
 alice (work/website)$ lore memory add --to notes/golang --body 'Close every channel from the sender side.'
-lore: wrote ~/stores/agency-notes/golang/projects/prj_2ad3618e878ebbf527d34d446ef4f891.json (store notes/golang)
 lore: wrote ~/stores/agency-notes/golang/actors/act_162df51b7f78b785c97c26b41ea89666.json (store notes/golang)
+lore: wrote ~/stores/agency-notes/golang/projects/prj_2ad3618e878ebbf527d34d446ef4f891.json (store notes/golang)
 lore: wrote ~/stores/agency-notes/golang/memories/mem_54fe984c9b495744c0217776765a28f2.json (store notes/golang)
 ✓ mem_54fe984c9b495744c0217776765a28f2 [notes/golang]
   scope: [project]
