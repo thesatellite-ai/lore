@@ -802,7 +802,7 @@ func (o ops) secretsMove(ctx context.Context, in SecretsMoveIn) (SecretsBatchOut
 		}
 		for _, src := range order {
 			tid, _, terr := task.AddSecretTask(ctx, we, task.SecretTask{Store: src, Title: fmt.Sprintf(rotateTitle, in.From, total),
-				Body: "lore secrets move " + bat.String() + " moved " + plural.Count(total, "reference") + " from " + in.From +
+				Body: "lore secrets move (batch " + bat.String() + ") moved " + plural.Count(total, "reference") + " from " + in.From +
 					". They had the values: rotate each entry, then close this task.", Key: "secret-rotate-" + bat.String(), Rows: byStore[src]})
 			if terr != nil {
 				return SecretsBatchOut{}, terr

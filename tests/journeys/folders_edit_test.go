@@ -123,7 +123,7 @@ func TestJourneyFoldersEditRows(t *testing.T) {
 
 	w.Step("day3/a-live-row-has-no-file-yet", func() {
 		w.AdvanceDays(1)
-		lee.Lore(web, "path", liveTask).Refused(t).Says(t, "E_NOT_FOUND", "live row", "refs/lore/live", "lore edit "+liveTask)
+		lee.Lore(web, "path", liveTask).Refused(t).Says(t, "E_NOT_FOUND", "live row", "refs/lore/live", "lore edit --id "+liveTask)
 		editor(good)
 		lee.Lore(web, "edit", liveTask).OK(t).Says(t, "updated in store repo")
 		lee.Lore(web, "show", liveTask).OK(t).Says(t, jEditTitle, jEditBodyLine)

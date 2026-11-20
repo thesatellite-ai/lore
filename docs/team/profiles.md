@@ -413,7 +413,7 @@ Adding someone again on the day an ended membership began reopens that membershi
 Teams (`@frontend` and so on) are org-wide groups; adding someone to a project does not change any team. When a member of a team the project uses has no membership on the project, `project member list --project <project>` ends with a warning, and `project member remove` prints the same warning when the person stays in an org team. A team the project uses is one tied to the project, one with at least one member of the project, or one whose handle is the project's name (`@sync` for `sync`); the other teams of the org (a client's team, say) say nothing. Inside a store clone's project folder, `project member list` with no `--project` lists that folder's project:
 
 ```text
-W_TEAM_NOT_MEMBER @frontend: @carol is in the org team but not a member of acme-hub (lore project member add acme-hub @carol --role dev)
+W_TEAM_NOT_MEMBER @frontend: @carol is in the org team but not a member of acme-hub (lore project member add --project acme-hub --actor @carol --role dev)
 ```
 
 With `--json`, the keys `actor show` printed before team profiles are unchanged; `status`, `leave_from`, `leave_until`, `profile`, `contacts`, `periods` and `memberships` are added. A status line appears once the person is not `active`.

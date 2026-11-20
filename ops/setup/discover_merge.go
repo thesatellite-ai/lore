@@ -370,10 +370,10 @@ func MergeDiscovery(f DiscoverFacts, t AliasesOut) DiscoverOut {
 	// an ssh alias, is kept when a GitHub repo is the same owner/repo),
 	// then each account's store-like repos (storeRepoScore).
 	for _, s := range f.KnownStores {
-		label, sc := "lore setup "+s.Detail, scoreHigh
+		label, sc := "lore's setup "+s.Detail, scoreHigh // a source, not a command: no "lore setup <name>" a person would copy
 		switch s.Kind {
 		case SrcLoreOrg:
-			label = "lore org " + s.Detail
+			label = "lore's org " + s.Detail
 		case SrcLoreRepo:
 			label, sc = "stores.yaml of "+s.Detail, scoreStrong
 		case SrcRepoScan:

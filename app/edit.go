@@ -109,6 +109,7 @@ func (h *host) editCommand(target *cobra.Command) *cobra.Command {
 	c.Flags().StringVar(&file, flagFile, "", "write back this Markdown view without opening an editor (a view kept by a refused edit, or one made with lore row markdown)")
 	c.Flags().BoolVar(&yes, flagYes, false, "answer yes to a confirmation the write asks without a terminal (a secret finding)")
 	c.Flags().BoolVar(&asJSON, cli.FlagJSON, false, "print the result (or the error) as JSON")
+	cli.MarkNamed(c) // the positional id is a quiet alias: guards hold printed lines to --id
 	return c
 }
 

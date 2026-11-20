@@ -449,7 +449,7 @@ func requireAdminOrLead(ctx context.Context, r profilestore.Roster, p Project, a
 		}
 	}
 	return errs.New(errs.Refused, "only an admin of the org or a lead of "+p.Shown()+" can change who is on it, and you are neither on the roster of "+r.Label()+"; nothing was written").
-		WithHint("ask an admin of the org or a lead of the project to run it, e.g. lore project member add " + p.Shown() + " <@handle> --role <role>")
+		WithHint("ask an admin of the org or a lead of the project to run it, e.g. lore project member add --project " + p.Shown() + " --actor <@handle> --role <role>")
 }
 
 func memberAdd(ctx context.Context, env Env, in MemberAddIn) (MemberWriteOut, error) {

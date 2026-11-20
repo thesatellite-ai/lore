@@ -102,7 +102,7 @@ func (c *standaloneClones) ForgetClone(ctx context.Context, in opsstores.ForgetI
 		if !op.Confirmed(ctx) { // a Local op: --yes arrives as op.WithConfirmed (localops.go)
 			q := "the store at " + shown + " was reset; delete this machine's copy of the old store (" + strings.Join(pending, ", ") + ")?"
 			return opsstores.ForgetOut{}, errs.New(errs.NeedsConfirm, "store forget: "+q).WithQuestion(q).
-				WithHint("ask the person, then rerun with --yes; or keep it: lore store push --restore " + in.URL)
+				WithHint("ask the person, then rerun with --yes; or keep it: lore store push --restore --store " + in.URL)
 		}
 		pending = nil
 	}
