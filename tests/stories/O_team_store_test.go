@@ -46,6 +46,7 @@ func TestStoryOTeamStore(t *testing.T) {
 	})
 
 	mo := s.OwnerShaped(OwnerShape{Personal: oMemPersonal, Org: oMemOrg, OrgFolder: oOrg, Alias: oAlias, OrgOwners: []string{oOwner}})
+	mo.TraceGit(t) // every git process on Mo's machine, from his setup on
 	_, line := journeys.Invite(t, ada.Machine, pc.Dir, oMemOrg.Email)
 	mwc := mo.CloneTo(web, mo.OrgDir("web"))
 	oSetupFlow(t, mo, mwc.Dir, oMSetup, "member", oMemOrg, oAlias, map[string]any{"invite": line}, []string{"~/code/" + oOrg + "/**"})
@@ -61,9 +62,14 @@ func TestStoryOTeamStore(t *testing.T) {
 			}
 		}
 		oCheck(t, "D-727/member-outside-team-no-mention", len(said) == 0, "a member outside @secret is told about the team store:\n%s", strings.Join(said, "\n"))
-		_, err := os.Stat(oStoreClone(mo, oOwner, "lore-secret"))
+		// a clone found by its origin url anywhere under ~/.lore/stores
+		// (the folder drops the host and follows the alias, so a guessed
+		// path passes vacuously) and every git process of his (trace2)
+		clones := mo.ClonesOfStore(secret)
 		cfg, _ := os.ReadFile(mo.LorePath("config.yaml"))
-		oCheck(t, "D-727/member-outside-team-no-clone", err != nil && !strings.Contains(string(cfg), "lore-secret"), "a member outside @secret has the team store (clone err %v) or it is in his org entry:\n%s", err, cfg)
+		oCheck(t, "D-727/member-outside-team-no-clone", len(clones) == 0 && !strings.Contains(string(cfg), "lore-secret"), "a member outside @secret has the team store (clones %v) or it is in his org entry:\n%s", clones, cfg)
+		touched := mo.GitTouched(t, secret)
+		oCheck(t, "D-727/member-outside-team-no-fetch", len(touched) == 0, "a member outside @secret had git reach for the team store:\n%s", strings.Join(touched, "\n"))
 	})
 
 	s.Step("D-727/member-in-the-team-reads-writes-it", func() {
@@ -75,6 +81,12 @@ func TestStoryOTeamStore(t *testing.T) {
 		oCheck(t, "D-727/member-in-team-reads", r.Code == 0 && strings.Contains(r.Out(), "SECRETNOTE"), "a member on @secret does not read the team store after his sync:\n%s", r)
 		r = mo.LoreIn(mwc, "memory", "add", "--body", "member note for the client", "--to", "lore-secret/secret", "--yes")
 		oCheck(t, "D-727/member-in-team-writes", r.Code == 0, "a member on @secret cannot write into the team store's folder:\n%s", r)
+		// whoami and doctor name the team store beside the main one, with
+		// who uses it (they named only the main store before)
+		w := mo.LoreIn(mwc, "whoami")
+		oCheck(t, "D-727/member-in-team-whoami-lists-team-store", strings.Contains(w.Out(), "lore-secret.git on branch main  (audience team:@secret)"), "a member on @secret does not see the team store with its audience in whoami:\n%s", w)
+		d := mo.LoreIn(mwc, "doctor")
+		oCheck(t, "D-727/member-in-team-doctor-lists-team-store", strings.Contains(d.Out(), "lore-secret (team:@secret)"), "a member on @secret does not see the team store with its audience in doctor:\n%s", d)
 	})
 
 	s.Step("D-727/member-leaves-the-team-told-once", func() {

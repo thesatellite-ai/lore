@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/ops/setup"
 )
 
@@ -55,6 +56,14 @@ type RepoStore struct {
 	// none: a member/admin setup of that org already checks it as
 	// "store <org>".
 	Org string
+}
+
+// OrgStoresEnv is the optional upgrade of SetupEnv that lists the stores
+// of an org entry as this person's config.yaml holds them (a member's copy
+// already leaves out the stores they do not use); *wire.App implements it.
+// Without it the org's store line names only the main store.
+type OrgStoresEnv interface {
+	OrgEntryStores(ctx context.Context, org string) []orgconf.Store
 }
 
 // RepoStoresEnv is the optional upgrade of SetupEnv that lists the stores

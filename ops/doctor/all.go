@@ -36,6 +36,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/setup"
@@ -265,6 +266,10 @@ type setupSummary struct {
 	// (H-17: a dead laptop lost every personal note, and doctor --all
 	// showed only "read ✓ write ✓").
 	localPersonal bool
+	// orgStores: every store of the setup's org entry (OrgStoresEnv), so
+	// the org's store line names a second store (a team's or the admins')
+	// with who uses it, not only the main one (devco D-727).
+	orgStores []orgconf.Store
 }
 
 // MachineReport is the machine-wide block (6.3 machine).
@@ -491,9 +496,11 @@ type setupRun struct {
 	// stamps / stores are StampEnv and RepoStoresEnv when the env has them.
 	stamps StampEnv
 	stores RepoStoresEnv
-	fresh  bool
-	home   string
-	now    func() time.Time
+	// orgs is OrgStoresEnv when the env has it.
+	orgs  OrgStoresEnv
+	fresh bool
+	home  string
+	now   func() time.Time
 }
 
 // allOut is what the setup part adds to the Report.
@@ -554,6 +561,9 @@ func newSetupRun(ctx context.Context, env SetupEnv, fresh bool) (*setupRun, erro
 	}
 	if rs, ok := env.(RepoStoresEnv); ok {
 		sr.stores = rs
+	}
+	if oe, ok := env.(OrgStoresEnv); ok {
+		sr.orgs = oe
 	}
 	return sr, nil
 }
@@ -738,6 +748,9 @@ func (sr *setupRun) runSetups(ctx context.Context, entries []onboard.SetupEntry,
 		reports[i].summary.storeRepos = map[string][]string{}
 		for _, as := range attached[e.Name] {
 			reports[i].summary.storeRepos[as.target] = as.repos
+		}
+		if e.Org != "" && sr.orgs != nil {
+			reports[i].summary.orgStores = sr.orgs.OrgEntryStores(ctx, e.Org)
 		}
 		stamp := ""
 		if sr.stamps != nil {

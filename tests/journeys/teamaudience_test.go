@@ -13,7 +13,6 @@ package journeys
 // stays on disk, no longer read).
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,7 +56,7 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 
 	ann := tt.person(tlAnn)
 	asDeny(t, ann, taSecretSlug)
-	secClone := filepath.Join(ann.Home, ".lore", "stores", "github.com", "acme-co", "lore-secret")
+	ann.TraceGit(t) // every git process on Ann's machine from here on
 
 	w.Step("day1/ann-outside-the-team-never-touches-it", func() {
 		tlJoin(t, ann, tt.repo[tlAnn.Email].Dir, tlTeamSetup, line, tlAnn, []string{tlFolders})
@@ -71,8 +70,14 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 		if cfg := asConfig(t, ann); strings.Contains(cfg, "lore-secret") {
 			t.Fatalf("Ann's org entry lists the @secret store:\n%s", cfg)
 		}
-		if _, err := os.Stat(secClone); err == nil {
-			t.Fatalf("Ann has a clone of the @secret store at %s", secClone)
+		// D-727: no clone of the store anywhere under ~/.lore/stores (by
+		// origin url, whatever folder it would sit in) and no git process
+		// of hers ever reached for it (clone, fetch, ls-remote)
+		if got := ann.ClonesOfStore(sec); len(got) > 0 {
+			t.Fatalf("Ann has a clone of the @secret store at %v", got)
+		}
+		if got := ann.GitTouched(t, sec); len(got) > 0 {
+			t.Fatalf("Ann's git reached for the @secret store:\n%s", strings.Join(got, "\n"))
 		}
 		// a member cannot change who uses a store
 		tt.lore(tlAnn, "org", "store", "audience", "--org", tlOrg, "--url", sec.SSHURL(), "--audience", "everyone", "--yes").
@@ -97,6 +102,9 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 		}
 		tt.lore(tlAnn, "sync").OK(t)
 		ann.Lore(filepath.Join(ann.Home, "code"), "search", "blue cluster").OK(t).Says(t, "blue cluster")
+		// whoami and doctor name the team's store with who uses it
+		tt.lore(tlAnn, "whoami").OK(t).Says(t, "lore-secret.git on branch main  (audience team:@secret)")
+		tt.lore(tlAnn, "doctor").Says(t, "lore-secret (team:@secret)")
 	})
 
 	// Ann leaves the team: her next sync drops the store from her entry;
