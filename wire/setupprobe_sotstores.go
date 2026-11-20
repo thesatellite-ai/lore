@@ -95,7 +95,16 @@ func (sp setupProber) orgSourceProbe(ctx context.Context, r opssetup.ProbeReques
 	}
 	vars := map[string]string{onboard.VarOrg: o.Name}
 	mine, skipped := mineOf(ctx, cfg, o, sg)
-	now := detailOrgSourceNow + skippedStoresNote(o.Name, skipped)
+	now := detailOrgSourceNow + skippedStoresNote(o.Name, knownSkippedStores(skipped))
+	if unknown := unknownAudienceStores(skipped); len(unknown) > 0 {
+		// D-734: an audience this lore cannot read fails the probe (doctor
+		// --all shows it as an error row with the upgrade), never ok
+		notes := make([]string, 0, len(unknown))
+		for _, st := range unknown {
+			notes = append(notes, unknownAudienceNote(o.Name, sp.a.BinaryVersion(), st))
+		}
+		return result(onboard.StatusFail, strings.Join(notes, "; "), map[string]string{onboard.VarOrg: o.Name, onboard.VarFixVariant: string(onboard.FixUnknownAudience)})
+	}
 	switch orgconf.StateOf(o, sg.StoreID, sg.Version) {
 	case orgconf.SourceCurrent:
 		return result(onboard.StatusOK, now, nil)

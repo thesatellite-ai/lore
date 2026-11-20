@@ -335,11 +335,15 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 		if !ok {
 			continue
 		}
-		if _, skipped := mineOf(ctx, cfg, o, sg); len(skipped) > 0 {
+		_, skipped := mineOf(ctx, cfg, o, sg)
+		if known := knownSkippedStores(skipped); len(known) > 0 {
 			// D-442: say why a store of the org is not on this machine, as
 			// information: nothing to fix
-			out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorNote, Message: strings.TrimPrefix(skippedStoresNote(o.Name, skipped), " · ")})
+			out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorNote, Message: strings.TrimPrefix(skippedStoresNote(o.Name, known), " · ")})
 		}
+		// D-734: a store of an audience this lore does not know is a
+		// warning with the upgrade, never left out without a word
+		out = append(out, unknownAudienceFindings(o.Name, a.BinaryVersion(), skipped)...)
 		msg := ""
 		switch orgconf.StateOf(o, sg.StoreID, sg.Version) {
 		case orgconf.SourceCurrent:
