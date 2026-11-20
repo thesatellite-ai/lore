@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 const (
@@ -46,7 +48,7 @@ func TestJourneyOrgLinkFirstAgentWrite(t *testing.T) {
 		r := jAgentsRun(lena, app, &jClaude, "ses-ledger-1", "memory", "add", "--body", fwBody, "--yes")
 		took := time.Since(start)
 		r.OK(t).Says(t, fwOrg+"/"+fwFolder)
-		if took > 60*time.Second {
+		if bar := testtime.SpeedBar(60 * time.Second); took > bar {
 			t.Fatalf("[devco:D-738] the first agent write after org link took %s (it hung on its own actor lock before)", took)
 		}
 		out := jAgentsRun(lena, app, &jClaude, "ses-ledger-1", "memory", "list").OK(t).String()
