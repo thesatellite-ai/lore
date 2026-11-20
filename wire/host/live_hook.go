@@ -71,6 +71,11 @@ type LiveConfig struct {
 	WorkDir string
 	// Version is the binary's version (min_lore_version floor, live meta).
 	Version string
+	// PinVersion is the release the lore-sync-merge workflow pins: Version,
+	// or a loretest build's LORE_TEST_PIN_VERSION, so stories can see a
+	// stale pin (doctor's warning, install-action's update; devco:D-742).
+	// Empty means Version.
+	PinVersion string
 	// Stderr receives the live status lines; nil is os.Stderr.
 	Stderr io.Writer
 	// HoldFinishLines keeps the lines a CLI operation's end-of-run push and

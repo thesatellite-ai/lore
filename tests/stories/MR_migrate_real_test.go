@@ -140,14 +140,15 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 		// (fail closed); the tools repo is the org's own
 		m.LoreIn(sc, "whoami").OK(t).Says(t, "client repo")
 		m.LoreIn(tc, "whoami").OK(t).Says(t, "own repo")
-		// D-708: a dry run writes nothing, ever: the workflow update a real
-		// run makes is in its plan, and nothing of the repo or home moved
+		// D-708: a dry run writes nothing, ever, and nothing of the repo or
+		// home moved; D-742: no command but install-action and doctor --fix
+		// moves the workflow pin, so the run names that command instead
 		m.SetEnv("LORE_TEST_PIN_VERSION", mrPinVersion)
 		roots := []string{sc.Dir, m.LorePath()}
 		before := drySnap(t, roots...)
 		dry := m.LoreIn(sc, "migrate", "run", "--dry-run").OK(t)
 		dry.Says(t, "org_defaults_to_policy", "Nothing written (dry run)",
-			"would update "+mrWorkflow+" to lore v"+mrPinVersion, "not written (dry run)")
+			mrWorkflow+" pins lore ", "; run `lore sync install-action` to update it to v"+mrPinVersion)
 		if d := dryDiff(before, drySnap(t, roots...)); len(d) > 0 {
 			t.Errorf("lore migrate run --dry-run changed files:\n%s\n%s", strings.Join(d, "\n"), dry)
 		}
