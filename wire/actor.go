@@ -114,8 +114,11 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	if target == store.SourceMachine {
 		return nil
 	}
-	st.actorMu.Lock()
-	defer st.actorMu.Unlock()
+	ctx, unlock, lerr := lockActors(ctx, st) // D-738: a nested request on this chain is refused, never waited on
+	if lerr != nil {
+		return lerr
+	}
+	defer unlock()
 	if st.wroteTo == nil {
 		st.wroteTo = map[store.Source]bool{}
 	}

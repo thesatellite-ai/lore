@@ -239,11 +239,13 @@ func (a *App) RosterRegister(ctx context.Context, target store.Source, sp Roster
 	if err != nil {
 		return "", false, err
 	}
-	st.actorMu.Lock()
+	// a chain inside ensureActor already holds actorMu (D-738): its holder
+	// is parked in the call this one runs inside, so the map is set as is
+	_, unlock, _ := lockActors(ctx, st)
 	if aid == st.actor {
 		st.actorDone[target] = true // the caller's own row: ensureActor must not write it again
 	}
-	st.actorMu.Unlock()
+	unlock()
 	return aid.String(), true, nil
 }
 
@@ -374,6 +376,20 @@ func (a *App) rosterProject(ctx context.Context, st *state, target store.Source,
 	if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
 		return value.Ref{}, errs.Wrap(errs.NotFound, "store "+string(target)+" has no project row yet, and a read never makes one", engine.ErrNoPlaceProject).
 			WithHint(noPlaceProjectHint(target))
+	}
+	// devco D-738: the audit's session lookup (chainAudit.Session ->
+	// CurrentSession -> Project) runs inside the write it records, often
+	// while ensureActor holds actorMu, so it must never write the folder's
+	// project row itself: that write took actorMu again and an agent's
+	// first write after lore org link waited on itself forever. The row is
+	// the folder's natural id, which the write in progress (or the next)
+	// creates, so the session links to that id; with no natural id there
+	// is no project to link yet.
+	if findingSessionOf(ctx) {
+		if !pid.IsZero() {
+			return value.RefOf(pid.Any())
+		}
+		return value.Ref{}, errs.Wrap(errs.NotFound, "store "+string(target)+" has no project row yet, and the session lookup never makes one", engine.ErrNoPlaceProject)
 	}
 	n, err := value.TextOf(folder)
 	if err != nil {

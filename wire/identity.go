@@ -299,8 +299,10 @@ func (a *App) wroteToMachineTarget(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	st.actorMu.Lock()
-	defer st.actorMu.Unlock()
+	// a chain that already holds actorMu (D-738) gets a no-op unlock: its
+	// holder is parked in the call this one runs inside, so the map is read as it stands
+	_, unlock, _ := lockActors(ctx, st)
+	defer unlock()
 	return st.wroteTo[target]
 }
 
