@@ -48,11 +48,13 @@ const adoptLoreData = ".lore/data"
 
 // adoptLiveKeys are the keys of the source rows a folder takes (every
 // table but the place rows): the ones --remove-source takes off the live
-// ref when the local ref holds them, whichever copy won the adoption.
+// ref when the local ref holds them, whichever copy won the adoption. A
+// deleted, trashed or purged row is not one (adoptGone, D-737): its live
+// tombstone stays, so no stale clone pushes the row back.
 func adoptLiveKeys(rows []adoptRow) []store.Key {
 	out := make([]store.Key, 0, len(rows))
 	for _, x := range rows {
-		if _, skip := adoptSkipped[x.r.Table]; skip {
+		if _, skip := adoptSkipped[x.r.Table]; skip || adoptGone(x.r) {
 			continue
 		}
 		out = append(out, store.Key{Table: x.r.Table, ID: x.r.ID})

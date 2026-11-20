@@ -2,9 +2,11 @@ package wire
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"slices"
 	"sort"
@@ -139,15 +141,28 @@ func liveRefCommit(ctx context.Context, top, ref string) (string, bool) {
 
 // readLiveRows returns the live rows of the tables in want from refs (in
 // git dir dir), keeping only rows under folder when folder is not "". A
-// row on several refs is merged (logic/merge, no common base: the newer
-// side wins per field), so a clone that fetched but never integrated still
-// sees the remote's newer edit. A ref that does not exist adds nothing.
+// ref that does not exist adds nothing.
+//
+// D-737: the result is the refs' current rows, as the live ref resolves
+// them. A ref and its tracking copy (the usual pair: refs/lore/live and
+// refs/lore-remote/origin/live) are merged three-way over their merge base
+// with live.MergeTrees, the merge `lore sync` integrates them with: a row
+// taken off one side since the base stays off, a trash or a tombstone is
+// never overruled by the other side's stale copy, and an id either side
+// lists on _live/purged.json (`lore live purge`, `lore trash purge`) is
+// gone except its tombstone. Before, the pair was merged with no base and
+// purged.json unread: until the next push the tracking copy handed back
+// every row the owner had deleted, trashed or purged, and `lore store
+// adopt` counted and copied them until `lore live compact`. Refs that are
+// not such a pair (one ref, or more) merge with no base (logic/merge: the
+// newer side wins per field, a tombstone is never undone) after the same
+// purge rule.
 //
 // oldOnly keeps only rows older than the current format (the ones a
 // migration brings in); a current-format row is then recognised from its
 // bytes and never decoded (liveRowCurrent).
 func readLiveRows(ctx context.Context, dir string, refs []string, folder string, want map[row.Table]bool, oldOnly bool) ([]liveRow, error) {
-	byKey := map[store.Key]liveRow{}
+	var present, commits []string
 	read := map[string]bool{} // commits already read: a tracking ref at the local ref's commit adds nothing (T-12)
 	for _, ref := range refs {
 		commit, ok := liveRefCommit(ctx, dir, ref)
@@ -155,9 +170,48 @@ func readLiveRows(ctx context.Context, dir string, refs []string, folder string,
 			continue
 		}
 		read[commit] = true
-		got, err := readLiveRef(ctx, dir, ref, folder, want, oldOnly)
+		present, commits = append(present, ref), append(commits, commit)
+	}
+	var got []liveRow
+	purged := map[string]bool{}
+	var err error
+	if len(present) == 2 {
+		got, purged, err = readLivePair(ctx, dir, present, commits, folder, want, oldOnly)
+	} else {
+		got, purged, err = readLiveNoBase(ctx, dir, present, folder, want, oldOnly)
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := make([]liveRow, 0, len(got))
+	for _, lr := range got {
+		if purged[lr.row.ID.String()] && !lr.row.Deleted {
+			continue // purged: gone from every ref, whichever still held it (live.dropsPurged's rule)
+		}
+		out = append(out, lr)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].row.Table != out[j].row.Table {
+			return out[i].row.Table < out[j].row.Table
+		}
+		return out[i].row.ID.String() < out[j].row.ID.String()
+	})
+	return out, nil
+}
+
+// readLiveNoBase reads refs one by one and merges a row several hold with
+// no common base (the newer side wins per field), with the union of their
+// purged ids.
+func readLiveNoBase(ctx context.Context, dir string, refs []string, folder string, want map[row.Table]bool, oldOnly bool) ([]liveRow, map[string]bool, error) {
+	byKey := map[store.Key]liveRow{}
+	purged := map[string]bool{}
+	for _, ref := range refs {
+		got, gone, err := readLiveRef(ctx, dir, ref, folder, want, oldOnly)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		for id := range gone {
+			purged[id] = true
 		}
 		for _, lr := range got {
 			k := store.Key{Table: lr.row.Table, ID: lr.row.ID}
@@ -171,7 +225,7 @@ func readLiveRows(ctx context.Context, dir string, refs []string, folder string,
 			}
 			m, err := mergeRow(prev.row, lr.row)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			// The merge is built in memory (SourceVersion 0); it keeps the
 			// oldest format of its copies, so a current-format row stays
@@ -185,27 +239,29 @@ func readLiveRows(ctx context.Context, dir string, refs []string, folder string,
 	for _, lr := range byKey {
 		out = append(out, lr)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].row.Table != out[j].row.Table {
-			return out[i].row.Table < out[j].row.Table
-		}
-		return out[i].row.ID.String() < out[j].row.ID.String()
-	})
-	return out, nil
+	return out, purged, nil
 }
 
-// readLiveRef lists one ref's rows of the wanted tables.
-func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Table]bool, oldOnly bool) ([]liveRow, error) {
-	listing, err := liveGit(ctx, top, "ls-tree", "-r", "-z", "--full-tree", ref)
+// liveEntry is one wanted file of a live tree listing: its blob and, for a
+// row file, its table.
+type liveEntry struct {
+	oid   string
+	table row.Table
+}
+
+// listLiveTree lists rev's wanted row files (tables in want, under folder
+// when not "") by path, and the blob of its _live/purged.json ("" when
+// none). rev "" lists nothing.
+func listLiveTree(ctx context.Context, top, rev, folder string, want map[row.Table]bool) (map[string]liveEntry, string, error) {
+	out := map[string]liveEntry{}
+	if rev == "" {
+		return out, "", nil
+	}
+	listing, err := liveGit(ctx, top, "ls-tree", "-r", "-z", "--full-tree", rev)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	type wanted struct {
-		path  string
-		oid   string
-		table row.Table
-	}
-	var rows []wanted
+	purgedOID := ""
 	for _, entry := range bytes.Split(listing, []byte{0}) {
 		meta, path, ok := strings.Cut(string(entry), "\t")
 		if !ok {
@@ -215,46 +271,280 @@ func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Tabl
 		if len(fields) != 3 || fields[1] != "blob" {
 			continue
 		}
+		if path == live.PurgedPath {
+			purgedOID = fields[2]
+			continue
+		}
 		table, ok := liveRowTable(path)
 		if !ok || !want[table] || (folder != "" && liveRowFolder(path) != folder) {
 			continue
 		}
-		rows = append(rows, wanted{path: path, oid: fields[2], table: table})
+		out[path] = liveEntry{oid: fields[2], table: table}
 	}
+	return out, purgedOID, nil
+}
+
+// readLiveRef lists one ref's rows of the wanted tables, and the ids its
+// _live/purged.json lists (purged; readLiveRows drops them from every ref).
+func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Table]bool, oldOnly bool) ([]liveRow, map[string]bool, error) {
+	entries, purgedOID, err := listLiveTree(ctx, top, ref, folder, want)
+	if err != nil {
+		return nil, nil, err
+	}
+	paths := slices.Sorted(maps.Keys(entries))
 	// One git cat-file --batch for every row (B1-16: a git process per
 	// live row made each command start hundreds of them in a big repo), by
 	// blob id: "<ref>:<path>" rescanned the folder per row (T-12).
-	oids := make([]string, len(rows))
-	for i, w := range rows {
-		oids[i] = w.oid
+	oids := make([]string, len(paths), len(paths)+1)
+	for i, p := range paths {
+		oids[i] = entries[p].oid
+	}
+	if purgedOID != "" {
+		oids = append(oids, purgedOID) // read in the same batch, last
 	}
 	blobs, err := catFileBatch(ctx, top, nil, oids)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	purged := map[string]bool{}
+	if purgedOID != "" {
+		if purged, err = livePurgedSet(blobs[len(paths)], ref); err != nil {
+			return nil, nil, err
+		}
 	}
 	var out []liveRow
-	for i, w := range rows {
-		path, table := w.path, w.table
-		b := blobs[i]
-		if b == nil {
-			return nil, errs.New(errs.Internal, "wire: live row "+path+" could not be read from "+ref)
+	for i, p := range paths {
+		if blobs[i] == nil {
+			return nil, nil, errs.New(errs.Internal, "wire: live row "+p+" could not be read from "+ref)
 		}
-		if oldOnly && liveRowCurrent(b) {
-			continue
-		}
-		r, writer, err := decodeLiveRow(b)
+		lr, keep, err := decodeLiveEntry(ref, p, entries[p].oid, entries[p].table, blobs[i], oldOnly)
 		if err != nil {
-			return nil, errs.Prefix("wire: live row "+path, err)
+			return nil, nil, err
 		}
-		if r.Table != table {
-			continue // a row filed under another table's folder: not ours to guess
+		if keep {
+			out = append(out, lr)
 		}
-		if oldOnly && r.SourceVersion >= row.FormatVersion {
+	}
+	return out, purged, nil
+}
+
+// livePurgedSet decodes a _live/purged.json read from ref.
+func livePurgedSet(b []byte, ref string) (map[string]bool, error) {
+	set, err := (live.Tree{live.PurgedPath: b}).Purged()
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "wire: "+live.PurgedPath+" on "+ref, err)
+	}
+	return set, nil
+}
+
+// decodeLiveEntry decodes the live file b at path (blob oid, "" when
+// merged in memory) as a row of table; keep false when oldOnly skips it or
+// it is filed under another table's folder.
+func decodeLiveEntry(ref, path, oid string, table row.Table, b []byte, oldOnly bool) (liveRow, bool, error) {
+	if oldOnly && liveRowCurrent(b) {
+		return liveRow{}, false, nil
+	}
+	r, writer, err := decodeLiveRow(b)
+	if err != nil {
+		return liveRow{}, false, errs.Prefix("wire: live row "+path, err)
+	}
+	if r.Table != table {
+		return liveRow{}, false, nil // a row filed under another table's folder: not ours to guess
+	}
+	if oldOnly && r.SourceVersion >= row.FormatVersion {
+		return liveRow{}, false, nil
+	}
+	return liveRow{ref: ref, path: path, oid: oid, row: r, writer: writer}, true, nil
+}
+
+// readLivePair resolves a live ref and its tracking copy (refs[0], refs[1]
+// at commits) as `lore sync` would integrate them, over the pair's merge
+// base (none when unrelated): a row file both hold as one blob is read
+// once; a file only one side changed since the base stands as that side
+// has it (its removal too); a file both changed goes through
+// live.MergeTrees. Only the files that differ are read beyond the shared
+// ones (T-20: a big repo whose sides agree pays one listing per ref). It
+// returns the resolved rows and the union of both sides' purged ids.
+func readLivePair(ctx context.Context, dir string, refs, commits []string, folder string, want map[row.Table]bool, oldOnly bool) ([]liveRow, map[string]bool, error) {
+	base := ""
+	if b, err := liveGit(ctx, dir, "merge-base", commits[0], commits[1]); err == nil {
+		base = strings.TrimSpace(string(b)) // unrelated (a rewritten remote): no base, every row is an add
+	}
+	ours, oursPurged, err := listLiveTree(ctx, dir, commits[0], folder, want)
+	if err != nil {
+		return nil, nil, err
+	}
+	theirs, theirsPurged, err := listLiveTree(ctx, dir, commits[1], folder, want)
+	if err != nil {
+		return nil, nil, err
+	}
+	same := map[string]liveEntry{} // both sides hold the blob: no merge
+	var differ []string
+	for _, p := range slices.Sorted(maps.Keys(ours)) {
+		if t, ok := theirs[p]; ok && t.oid == ours[p].oid {
+			same[p] = ours[p]
 			continue
 		}
-		out = append(out, liveRow{ref: ref, path: path, oid: w.oid, row: r, writer: writer})
+		differ = append(differ, p)
 	}
-	return out, nil
+	for _, p := range slices.Sorted(maps.Keys(theirs)) {
+		if _, ok := ours[p]; !ok {
+			differ = append(differ, p)
+		}
+	}
+	baseEntries := map[string]liveEntry{}
+	if len(differ) > 0 {
+		if baseEntries, _, err = listLiveTree(ctx, dir, base, folder, want); err != nil {
+			return nil, nil, err
+		}
+	}
+	// The trivial three-way cases take a side as it is (one side kept
+	// the base's blob: the other side's file, or its absence, stands);
+	// only a file both sides changed goes through live.MergeTrees.
+	taken := map[string]liveEntry{} // path → the side's entry that stands
+	takenRef := map[string]string{}
+	var both []string
+	for _, p := range differ {
+		o, t, b := ours[p], theirs[p], baseEntries[p]
+		switch {
+		case o.oid == b.oid: // ours unchanged since the base (or absent from both)
+			if t.oid != "" {
+				taken[p], takenRef[p] = t, refs[1]
+			}
+		case t.oid == b.oid:
+			if o.oid != "" {
+				taken[p], takenRef[p] = o, refs[0]
+			}
+		default:
+			both = append(both, p)
+		}
+	}
+	// one batch: the rows that stand as they are, each side's files of the
+	// rows both changed, and both purged lists
+	var oids []string
+	at := map[string]int{} // oid → index in oids (a blob is read once)
+	need := func(oid string) {
+		if oid == "" {
+			return
+		}
+		if _, ok := at[oid]; !ok {
+			at[oid] = len(oids)
+			oids = append(oids, oid)
+		}
+	}
+	for _, e := range same {
+		need(e.oid)
+	}
+	for _, e := range taken {
+		need(e.oid)
+	}
+	for _, p := range both {
+		need(ours[p].oid)
+		need(theirs[p].oid)
+		need(baseEntries[p].oid)
+	}
+	need(oursPurged)
+	need(theirsPurged)
+	blobs, err := catFileBatch(ctx, dir, nil, oids)
+	if err != nil {
+		return nil, nil, err
+	}
+	blob := func(oid string) ([]byte, error) {
+		b := blobs[at[oid]]
+		if b == nil {
+			return nil, errs.New(errs.Internal, "wire: live blob "+oid+" could not be read from "+refs[0]+" or "+refs[1])
+		}
+		return b, nil
+	}
+	purged := map[string]bool{} // set union: a purge on either side holds (live.MergeTrees' rule)
+	for _, po := range []struct{ oid, ref string }{{oursPurged, refs[0]}, {theirsPurged, refs[1]}} {
+		if po.oid == "" {
+			continue
+		}
+		b, err := blob(po.oid)
+		if err != nil {
+			return nil, nil, err
+		}
+		set, err := livePurgedSet(b, po.ref)
+		if err != nil {
+			return nil, nil, err
+		}
+		for id := range set {
+			purged[id] = true
+		}
+	}
+	var out []liveRow
+	add := func(ref, p, oid string, table row.Table, b []byte) error {
+		lr, keep, err := decodeLiveEntry(ref, p, oid, table, b, oldOnly)
+		if err != nil {
+			return err
+		}
+		if keep {
+			out = append(out, lr)
+		}
+		return nil
+	}
+	for _, p := range slices.Sorted(maps.Keys(same)) {
+		b, err := blob(same[p].oid)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := add(refs[0], p, same[p].oid, same[p].table, b); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, p := range slices.Sorted(maps.Keys(taken)) {
+		b, err := blob(taken[p].oid)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := add(takenRef[p], p, taken[p].oid, taken[p].table, b); err != nil {
+			return nil, nil, err
+		}
+	}
+	if len(both) == 0 {
+		return out, purged, nil
+	}
+	tree := func(entries map[string]liveEntry) (live.Tree, error) {
+		t := live.Tree{}
+		for _, p := range both {
+			if e, ok := entries[p]; ok {
+				b, err := blob(e.oid)
+				if err != nil {
+					return nil, err
+				}
+				t[p] = b
+			}
+		}
+		return t, nil
+	}
+	bt, err := tree(baseEntries)
+	if err != nil {
+		return nil, nil, err
+	}
+	ot, err := tree(ours)
+	if err != nil {
+		return nil, nil, err
+	}
+	tt, err := tree(theirs)
+	if err != nil {
+		return nil, nil, err
+	}
+	merged, _, err := live.MergeTrees(bt, ot, tt, nil)
+	if err != nil {
+		return nil, nil, errs.Prefix("wire: resolve "+refs[0]+" with "+refs[1], err)
+	}
+	for _, p := range both {
+		b, ok := merged[p]
+		if !ok {
+			continue // deleted on one side, unchanged on the other's terms (merge3's file rule)
+		}
+		table := cmp.Or(ours[p].table, theirs[p].table)
+		if err := add(refs[0], p, "", table, b); err != nil {
+			return nil, nil, err
+		}
+	}
+	return out, purged, nil
 }
 
 // liveRowTable is the table of a live-tree row path, ok=false for the ref's

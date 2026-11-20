@@ -18,6 +18,10 @@ package wire
 //	   vs the folder's rows: absent or older ─▶ written; the same bytes
 //	   ─▶ unchanged; newer or deleted there ─▶ kept (never overwritten,
 //	   never brought back)
+//	   a row the repo deleted, trashed or purged (adoptGone) is never
+//	   adopted: not counted, not copied, never a near-duplicate, its
+//	   files and live tombstone left in the repo (D-737); only a folder
+//	   row it was adopted to before takes the deletion
 //	write: one rowfs batch in the store's local copy, ONE commit (the org
 //	   identity signs an org store's), pushed per the store's push mode
 //	--remove-source: then the adopted branch row files are deleted from
@@ -442,6 +446,19 @@ func (a *App) readAdoptSource(ctx context.Context, top string) ([]adoptRow, map[
 	return out, linkFiles, left, nil
 }
 
+// adoptGoneWhy is the "left in the repo" reason of the rows adoptGone
+// keeps out of a folder.
+const adoptGoneWhy = "deleted, in the trash or purged: never adopted"
+
+// adoptGone reports a source row the repo no longer has as a note: a
+// tombstone (deleted, or purged by lore trash purge) or a row in the
+// trash. Adopt moves the repo's notes, so it never copies one into a
+// folder that does not hold it (D-737: the owner's deleted and purged live
+// tasks were counted and copied, 38 of them, until lore live compact).
+func adoptGone(r row.Row) bool {
+	return r.Deleted || trashed(r)
+}
+
 // trashed reports a row in the trash (deleted_at set).
 func trashed(r row.Row) bool {
 	at, ok := r.Fields[auditfill.FieldDeletedAt]
@@ -537,6 +554,10 @@ func adoptChanges(rows []adoptRow, have []store.Row, pid ids.ID[ids.Project], ou
 			return nil, nil, errs.Prefix(adoptVerb+": "+r.Table.String()+"/"+r.ID.String(), err)
 		}
 		cur, held := there[sr.Key()]
+		if adoptGone(r) && (!held || cur.Deleted) {
+			leftCount[r.Table.String()+": "+adoptGoneWhy]++
+			continue
+		}
 		switch {
 		case !held:
 			changes = append(changes, store.Change{Row: sr})
