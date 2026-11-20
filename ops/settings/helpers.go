@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -420,4 +421,62 @@ func (o ops) place(src store.Source) string {
 		return place(src)
 	}
 	return o.placeLabel(src)
+}
+
+// repoHomer is the optional Env upgrade (wire.App) naming the store a
+// write with no --to that means "this repo" goes to: the repo store, or in
+// a linked repo the store folder its link names (devco D-736: a linked
+// repo's .lore/data holds no rows). An error is a linked folder not open
+// here (E_STORE_UNREACHABLE), so the write is refused, never put in the
+// repo.
+type repoHomer interface {
+	RepoHomeStore(ctx context.Context) (src store.Source, linked bool, err error)
+}
+
+// home is the store a settings write goes to: --to as given, else the
+// repo's home (repoHomer; the repo store without it). Every settings
+// writer whose default is "this repo" goes through it (secrets rule and
+// allow, policy, vars, meta, kinds, resources), so none writes a row into
+// a linked repo (devco D-736).
+func (o ops) home(ctx context.Context, to string) (store.Source, error) {
+	if to != "" {
+		return store.Source(to), nil
+	}
+	h, ok := upgrade.As[repoHomer](o.env)
+	if !ok {
+		return store.SourceRepo, nil
+	}
+	src, _, err := h.RepoHomeStore(ctx)
+	return src, err
+}
+
+// projecter is the optional Env upgrade (wire.App) answering this repo's
+// project: in a linked repo with no project row of its own, the linked
+// folder's project (devco D-736).
+type projecter interface {
+	Project(ctx context.Context) (ids.ID[ids.Project], error)
+}
+
+// homeProject is the project a file allow entry names as its row_id (a
+// placeholder older releases read as a row entry that allows nothing):
+// this repo's project (projecter), else the first live project row of
+// home. None is E_NOT_A_STORE with the init hint, as before.
+func (o ops) homeProject(ctx context.Context, home store.Source) (ids.AnyID, error) {
+	if p, ok := upgrade.As[projecter](o.env); ok {
+		pid, err := p.Project(ctx)
+		if err == nil {
+			return pid.Any(), nil
+		}
+		if errs.CodeOf(err) == errs.StoreUnreachable {
+			return ids.AnyID{}, err
+		}
+	}
+	projects, err := liveRows(ctx, o.env, []store.Source{home}, schema.TableProjects)
+	if err != nil {
+		return ids.AnyID{}, err
+	}
+	if len(projects) == 0 {
+		return ids.AnyID{}, errs.New(errs.NotAStore, "secrets allow --file: this repo has no lore project").WithHint("run lore init here first")
+	}
+	return projects[0].Row.ID, nil
 }

@@ -116,7 +116,11 @@ func (o ops) adopt(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 	if !ok {
 		return AdoptOut{}, errs.New(errs.Unsupported, "resource adopt needs the engine's move")
 	}
-	from, to := store.Source(in.From), targetOf(in.To)
+	from := store.Source(in.From)
+	to, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return AdoptOut{}, herr
+	}
 	if err := personalPlaceRefused("resource adopt", "kinds", "adopt into the repo (the default) or an org store: drop --to me", to); err != nil {
 		return AdoptOut{}, err
 	}

@@ -205,7 +205,8 @@ func (a *App) asClientSecrets(ctx context.Context, root string) (leakcheck.Secre
 	if err != nil {
 		return nil, err
 	}
-	_ = sc.Scan("", "") // build a lazy scanner once, before leakcheck.Check's workers share it
+	allows.entries = append(allows.entries, a.linkedAllows(ctx)...) // D-736: a linked repo's entries live in its folder
+	_ = sc.Scan("", "")                                             // build a lazy scanner once, before leakcheck.Check's workers share it
 	return func(it leakcheck.Item) []leakcheck.SecretHit {
 		return scanDoc(sc, allows, it.Path, it.Content, false)
 	}, nil

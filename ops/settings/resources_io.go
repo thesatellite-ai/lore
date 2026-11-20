@@ -501,7 +501,10 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 	if err != nil {
 		return ResImportOut{}, err
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return ResImportOut{}, herr
+	}
 	if err = checkPlace(ctx, o.env, target); err != nil {
 		return ResImportOut{}, err
 	}

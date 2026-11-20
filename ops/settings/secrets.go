@@ -195,27 +195,35 @@ func (o ops) allowFile(ctx context.Context, in AllowIn) (RowOut, error) {
 	case strings.TrimSpace(string(in.MatchHash)) == "":
 		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow --file: give --match-hash <sha256:… fingerprint> (the refused commit prints it)")
 	}
-	projects, err := liveRows(ctx, o.env, []store.Source{store.SourceRepo}, schema.TableProjects)
+	// devco D-736: a linked repo's .lore/data holds no rows, so the entry
+	// and the project it names come from the folder its link names (the
+	// repo store in an unlinked repo).
+	home, err := o.home(ctx, "")
 	if err != nil {
 		return RowOut{}, err
 	}
-	if len(projects) == 0 {
-		return RowOut{}, errs.New(errs.NotAStore, "secrets allow --file: this repo has no lore project").WithHint("run lore init here first")
+	pid, err := o.homeProject(ctx, home)
+	if err != nil {
+		return RowOut{}, err
 	}
 	fields := map[string]value.Value{aHash: value.Int(int64(hash))}
 	if err = optTexts(fields, map[string]string{aField: fileAllowField, aPath: path, aRuleID: in.Rule, aReason: in.Reason}); err != nil {
 		return RowOut{}, err
 	}
-	if fields[aRowID], err = ref(projects[0].Row.ID); err != nil {
+	if fields[aRowID], err = ref(pid); err != nil {
 		return RowOut{}, err
 	}
-	w, err := o.env.Create(ctx, store.SourceRepo, schema.TableSecretAllows, fields)
+	w, err := o.env.Create(ctx, home, schema.TableSecretAllows, fields)
 	if err != nil {
 		return RowOut{}, err
 	}
-	if err = o.auditSecretEvent(ctx, auditAllowAdded, "secrets allow", projects[0].Row.ID, "allow="+w.Row.ID.String(), "file="+path,
+	if err = o.auditSecretEvent(ctx, auditAllowAdded, "secrets allow", pid, "allow="+w.Row.ID.String(), "file="+path,
 		"rule="+in.Rule, "reason="+strings.TrimSpace(in.Reason)); err != nil {
 		return RowOut{}, err
+	}
+	if home != store.SourceRepo {
+		return RowOut{ID: w.Row.ID.String(), Store: string(home),
+			Human: fmt.Sprintf("✓ %s: %s marked not a secret (%s), saved in %s; this repo's commit check reads it from there, so there is no file to commit here\n", in.Rule, path, short(w.Row.ID), o.place(home))}, nil
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(store.SourceRepo),
 		Human: fmt.Sprintf("✓ %s: %s marked not a secret (%s); commit the new .lore/data/secret_allows file with it\n", in.Rule, path, short(w.Row.ID))}, nil
@@ -526,7 +534,10 @@ func (o ops) ruleAdd(ctx context.Context, in RuleAddIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	if have, herr := o.ruleAt(ctx, target, in.RuleID); herr != nil {
 		return RowOut{}, herr
 	} else if have != nil {
@@ -546,7 +557,10 @@ func (o ops) ruleEdit(ctx context.Context, in RuleAddIn) (RowOut, error) {
 	if len(fields) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "secrets rule edit: nothing to change").WithHint("give --regex, --keywords, --entropy or --description")
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	have, err := o.ruleAt(ctx, target, in.RuleID)
 	if err != nil {
 		return RowOut{}, err
@@ -574,11 +588,18 @@ func (o ops) ruleOff(ctx context.Context, in RuleOffIn) (RowOut, error) {
 	if err := optTexts(fields, map[string]string{sState: schema.SecretRuleOff, sReason: in.Reason}); err != nil {
 		return RowOut{}, err
 	}
-	return o.putRule(ctx, targetOf(in.To), in.RuleID, fields, "off")
+	target, err := o.home(ctx, in.To)
+	if err != nil {
+		return RowOut{}, err
+	}
+	return o.putRule(ctx, target, in.RuleID, fields, "off")
 }
 
 func (o ops) ruleOn(ctx context.Context, in RuleOnIn) (RowOut, error) {
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	have, err := o.ruleAt(ctx, target, in.RuleID)
 	if err != nil {
 		return RowOut{}, err

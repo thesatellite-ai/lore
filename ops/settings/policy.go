@@ -335,7 +335,10 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	if !ok {
 		return RowOut{}, errs.New(errs.InvalidInput, "unknown policy key "+quote(in.Key)).WithHint("lore policy show lists the keys")
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	if string(target) == storeMe {
 		return RowOut{}, errs.New(errs.InvalidInput, "--to me: a personal store holds no team rules").WithHint("--to repo, --to <store> or --to <store>/<folder>")
 	}
@@ -500,7 +503,10 @@ func (o ops) policyUnset(ctx context.Context, in PolicyUnsetIn) (RowOut, error) 
 	if _, ok := policy.Lookup(policy.Key(in.Key)); !ok {
 		return RowOut{}, errs.New(errs.InvalidInput, "unknown policy key "+quote(in.Key)).WithHint("lore policy show lists the keys")
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	if err := o.requirePolicyAdmin(ctx, target, policy.Key(in.Key), policyCommand("unset", in.Key, "", o.adminTo(ctx, target, in.To))); err != nil {
 		return RowOut{}, err
 	}

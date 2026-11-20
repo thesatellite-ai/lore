@@ -276,7 +276,10 @@ func (o ops) varsSet(ctx context.Context, in VarsSetIn) (RowOut, error) {
 			return RowOut{}, err
 		}
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	rows, err := liveRows(ctx, o.env, sources(o.env, string(target)), schema.TableVars)
 	if err != nil {
 		return RowOut{}, err

@@ -336,7 +336,10 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 	if err := checkMetaValues(vals); err != nil {
 		return RowOut{}, err
 	}
-	target := targetOf(in.To)
+	target, herr := o.home(ctx, in.To)
+	if herr != nil {
+		return RowOut{}, herr
+	}
 	if err := o.checkRegistryCaps(ctx, target, in.Name); err != nil {
 		return RowOut{}, err
 	}
