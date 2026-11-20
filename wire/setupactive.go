@@ -670,7 +670,7 @@ func checkPersonalTarget(ctx context.Context, home, dir, to string, instead func
 // `--to me` has no personal store, in the order to try them. Why (devco
 // D-690, owner use pass 4 weak 7): the refusal offered "--to repo" first,
 // which an own repo linked to a store folder refuses (its notes live in
-// the folder). A repo linked by its remote (no .lore/) offers its linked
+// the folder). A repo linked by its remote (no project id) offers its linked
 // folder as <org>/<folder>; a lore project offers repo, then its linked
 // folder when one is attached; anywhere else nothing is offered by name
 // (the caller prints the placeholder form and setup list).
@@ -680,7 +680,7 @@ func (a *App) personalNoneTargets(ctx context.Context) []string {
 		return nil
 	}
 	linked := a.linkedFolderTarget(ctx, top)
-	if a.LinkedByRemote(ctx) != "" && !loreFolderAt(top) {
+	if a.LinkedByRemote(ctx) != "" {
 		if linked != "" {
 			return []string{"--to " + linked}
 		}

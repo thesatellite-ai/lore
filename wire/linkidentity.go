@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -58,6 +59,19 @@ func (a *App) ownLinkedTop(ctx context.Context) string {
 		return ""
 	}
 	return a.repoLinkedTop(ctx)
+}
+
+// ownProjectAt reports whether the checkout at top holds a project id of
+// its own (.lore/data/_meta.json), the test orgcfg's Situation decides
+// LinkedByRemote by. Why (devco D-750): open used "a .lore/ with anything
+// in it" instead, so a repo whose .lore/ held only the stores.yaml that
+// `lore store init` writes, then linked by `lore org link --own`, was
+// neither linked by its remote (it had a .lore/) nor an own linked repo
+// (ownLinkedTop: the link names it by its remote), and every write failed
+// "this repository has no lore project" while whoami showed the link.
+// One test on both sides keeps the two cases each other's complement.
+func ownProjectAt(top string) bool {
+	return orgcfg.ProjectID(top) != ""
 }
 
 // linkedRepoProject is Project() of a linked repo whose .lore/data holds
