@@ -107,6 +107,9 @@ func (e *Engine) MoveMany(ctx context.Context, refs []Ref, to store.Source, opt 
 			return MovedMany{}, err
 		}
 	}
+	if opt.Plan { // D-761: the dry run stops here, every check passed
+		return out, nil
+	}
 	srcNames := make([]string, len(order))
 	for i, n := range order {
 		srcNames[i] = string(n)
@@ -156,30 +159,45 @@ func (m *MovedMany) addWarnings(ws []Warning) {
 	m.Rows[0].Warnings = append(m.Rows[0].Warnings, ws...)
 }
 
-// parentsFirst orders refs so a task comes after its parent when both are
-// moved (a parent missing from refs puts no constraint); every other row
-// keeps its place. The parent is read from the row as it is now.
+// parentsFirst orders refs so a row comes after every row of refs it
+// points at: a task after its parent, and (devco D-761) any row after the
+// container it belongs to (its task list, mission, plan, …). A pointer to
+// a row not in refs puts no constraint; every other row keeps its place.
+// Pointers are read from the rows as they are now. Without the container
+// rule a folder's tasks (table order: task_lists after tasks) moved before
+// their list, leaveContainers found the list only in the source and
+// cleared every task's tasklist_id although the list moved in the same
+// batch.
 func (e *Engine) parentsFirst(ctx context.Context, refs []Ref) []Ref {
-	parent := map[ids.AnyID]ids.AnyID{}
 	in := map[ids.AnyID]bool{}
 	for _, r := range refs {
 		in[r.ID] = true
 	}
+	deps := map[ids.AnyID][]ids.AnyID{}
 	for _, r := range refs {
-		if r.Table != schema.TableTasks {
+		def, err := e.tableDef(r.Table)
+		if err != nil {
+			continue // MoveWith reports it in order
+		}
+		fields := pointerFields(def)
+		if len(fields) == 0 {
 			continue
 		}
 		_, cur, err := e.locate(ctx, r)
 		if err != nil {
 			continue // MoveWith reports it in order
 		}
-		if p := parentOf(cur); p != "" {
-			if pid, perr := ids.ParseAny(p); perr == nil && in[pid] {
-				parent[r.ID] = pid
+		for _, f := range fields {
+			v, ok := cur.Fields[f]
+			if !ok || v == nil || v.String() == "" {
+				continue
+			}
+			if pid, perr := ids.ParseAny(v.String()); perr == nil && in[pid] && pid != r.ID {
+				deps[r.ID] = append(deps[r.ID], pid)
 			}
 		}
 	}
-	if len(parent) == 0 {
+	if len(deps) == 0 {
 		return refs
 	}
 	out := make([]Ref, 0, len(refs))
@@ -188,19 +206,36 @@ func (e *Engine) parentsFirst(ctx context.Context, refs []Ref) []Ref {
 	for _, r := range refs {
 		byID[r.ID] = r
 	}
-	var visit func(r Ref, depth int)
-	visit = func(r Ref, depth int) {
+	var visit func(r Ref)
+	visit = func(r Ref) {
 		if done[r.ID] {
 			return
 		}
-		done[r.ID] = true // marked first: a parent cycle ends here
-		if p, ok := parent[r.ID]; ok && depth < len(refs) {
-			visit(byID[p], depth+1)
+		done[r.ID] = true // marked first: a pointer cycle ends here
+		for _, d := range deps[r.ID] {
+			visit(byID[d])
 		}
 		out = append(out, r)
 	}
 	for _, r := range refs {
-		visit(r, 0)
+		visit(r)
+	}
+	return out
+}
+
+// pointerFields are the fields of def whose target a bulk move must move
+// first: the self pointer (a task's parent_id) and every belongs-to
+// container leaveContainers would clear (not the project, kinds and
+// metadata keys, which have their own move rule, nor roster pointers).
+func pointerFields(def schema.TableDef) []string {
+	var out []string
+	for _, rel := range def.Relations {
+		switch {
+		case rel.Kind == schema.Self:
+			out = append(out, rel.Field)
+		case rel.Kind == schema.BelongsTo && !ownMoveRule[rel.Target] && !rosterTables[rel.Target]:
+			out = append(out, rel.Field)
+		}
 	}
 	return out
 }

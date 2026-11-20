@@ -2,12 +2,16 @@ package wire
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/store"
@@ -32,6 +36,9 @@ func (a *App) MoveWith(ctx context.Context, ref engine.Ref, to store.Source, opt
 	w, err := a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
 		if aerr := a.ensureActor(ctx, st, to); aerr != nil {
 			return engine.Written{}, aerr
+		}
+		if perr := a.moveFolderProjectFirst(ctx, st, to); perr != nil {
+			return engine.Written{}, perr
 		}
 		w, err := st.eng.MoveWith(ctx, ref, to, opt)
 		a.wroteTo(to, err)
@@ -79,11 +86,26 @@ func (a *App) MoveMany(ctx context.Context, refs []engine.Ref, to store.Source, 
 		if aerr := a.ensureActor(ctx, st, to); aerr != nil {
 			return engine.Written{}, aerr
 		}
+		if perr := a.moveFolderProjectFirst(ctx, st, to); perr != nil {
+			return engine.Written{}, perr
+		}
 		var merr error
 		out, merr = st.eng.MoveMany(ctx, refs, to, opt)
+		if opt.Plan {
+			if merr == nil {
+				merr = errMovePlanned // drops the batch: a preview writes nothing
+			}
+			return engine.Written{}, merr
+		}
 		a.wroteTo(to, merr)
 		return engine.Written{}, merr
 	})
+	if opt.Plan {
+		if errors.Is(err, errMovePlanned) {
+			return out, nil
+		}
+		return engine.MovedMany{}, err
+	}
 	if err != nil || len(out.Rows) == 0 {
 		return out, err
 	}
@@ -97,16 +119,64 @@ func (a *App) MoveMany(ctx context.Context, refs []engine.Ref, to store.Source, 
 	return out, derr
 }
 
-// PlanMoveSecrets implements opsrow.ManyMover: the bulk move's secret
-// pre-scan for its dry run (devco D-717), with the caller's flags;
-// nothing is written.
-func (a *App) PlanMoveSecrets(ctx context.Context, refs []engine.Ref, to store.Source, rerun string) error {
-	eng, err := a.Engine(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = eng.PlanMoveSecrets(ctx, refs, eng.StoreName(to), rerun)
+// PlanMove implements opsrow.ManyMover: the bulk move's dry run (devco
+// D-717, D-761). It runs MoveMany itself with opt.Plan (every row through
+// the one-row move: secret scan, project and container rules, reference
+// check, role guard), then drops the batch, so a preview refuses whatever
+// the real run refuses and writes nothing. Before, the dry run ran only
+// the secret scan and promised a move whose reference check then failed.
+func (a *App) PlanMove(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) error {
+	opt.Plan = true
+	_, err := a.MoveMany(ctx, refs, to, opt)
 	return err
+}
+
+// errMovePlanned ends a planned bulk move's batch (PlanMove) so
+// withActorRows discards it instead of committing it.
+var errMovePlanned = errors.New("bulk move planned; nothing written")
+
+// moveFolderProjectFirst stages, in a move's batch, the project row of
+// the store folder to when it has none yet (devco D-761), as
+// folderProjectFirst does for a create: the engine then points every
+// moved row at the folder's own project (placeFolderProject). Before,
+// the row was made only after the move (ensureFolderProject), so rows
+// moved into a fresh folder kept the old folder's project_id. A target
+// with no folder id (a store root, the repo) or whose folder name is
+// unknown (a linked folder attached under the bare org name, which has
+// its row already) is left as it is.
+func (a *App) moveFolderProjectFirst(ctx context.Context, st *state, to store.Source) error {
+	folder := ""
+	if nf, ok := ctx.Value(newFolderKey{}).(newFolder); ok && nf.target == to {
+		folder = nf.folder
+	} else if strings.Contains(string(to), targetSep) {
+		folder = rosterFolderName(to)
+	}
+	if folder == "" {
+		return nil
+	}
+	pid, err := folderProjectIDOf(ctx, st, to)
+	if err != nil || pid.IsZero() {
+		return nil // no folder id: the engine keeps the row's project (rehomeProject)
+	}
+	rows, err := st.eng.List(ctx, to, schema.TableProjects)
+	if err != nil {
+		return fmt.Errorf("folder project of %s: %w", to, err)
+	}
+	for _, r := range rows {
+		if r.ID == pid.Any() && !r.Deleted {
+			return nil
+		}
+	}
+	// staged in the move's batch, the dry run's too (its batch is dropped):
+	// not rosterProject, whose read guard refuses a --dry-run's access
+	n, err := value.TextOf(folder)
+	if err != nil {
+		return errs.Wrap(errs.InvalidInput, "move: the folder name is not valid text", err)
+	}
+	if _, err = a.createFolderProject(ctx, st, to, pid, map[string]value.Value{rosterFieldName: n}); err != nil {
+		return fmt.Errorf("folder project of %s: %w", to, err)
+	}
+	return nil
 }
 
 // AttachedStore implements opsrow.ManyMover: the attached store a flag
