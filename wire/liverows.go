@@ -173,7 +173,7 @@ func readLiveRows(ctx context.Context, dir string, refs []string, folder string,
 		present, commits = append(present, ref), append(commits, commit)
 	}
 	var got []liveRow
-	purged := map[string]bool{}
+	var purged map[string]bool // set by either reader below
 	var err error
 	if len(present) == 2 {
 		got, purged, err = readLivePair(ctx, dir, present, commits, folder, want, oldOnly)
