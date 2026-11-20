@@ -107,7 +107,8 @@ func TestText(t *testing.T) {
 	want := "name      ip            note\n" +
 		"hub_prod  203.0.113.10  two lines and tab\n" +
 		"héé       NULL          " + strings.Repeat("x", cutKeepRunes) + ellipsis + "\n" +
-		"(2 rows)\n"
+		"(2 rows)\n" +
+		"note: cells over 60" + cutNote + "\n"
 	if got != want {
 		t.Fatalf("Text =\n%s\nwant\n%s", got, want)
 	}
@@ -117,6 +118,26 @@ func TestText(t *testing.T) {
 	}
 	if got := (RunOut{Columns: []string{"a", "b"}}).Text(); got != "a  b\n(no rows)\n" {
 		t.Fatalf("empty = %q", got)
+	}
+}
+
+// TestTextWide (devco D-758, owner P-8): --wide prints a long cell whole
+// and without the cut note; --format csv and json were already whole.
+func TestTextWide(t *testing.T) {
+	long := strings.Repeat("ledger totals ", 20)
+	out := RunOut{Columns: []string{"body"}, Rows: []Row{{Cells: []Cell{{"text", long}}}}, Count: 1, Wide: true}
+	if got, want := out.Text(), "body\n"+long+"\n(1 row)\n"; got != want {
+		t.Fatalf("--wide Text =\n%q\nwant\n%q", got, want)
+	}
+	out.Wide = false
+	if got := out.Text(); strings.Contains(got, long) || !strings.Contains(got, "--wide") {
+		t.Fatalf("default Text must cut the cell and name --wide:\n%s", got)
+	}
+	for _, f := range []string{FormatCSV, FormatJSON} {
+		out.Format = f
+		if got := out.Text(); !strings.Contains(got, strings.TrimSpace(long)) {
+			t.Fatalf("--format %s cut the cell:\n%s", f, got)
+		}
 	}
 }
 

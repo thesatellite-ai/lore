@@ -72281,6 +72281,10 @@
                     "type": "string",
                     "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
                   },
+                  "full": {
+                    "type": "boolean",
+                    "description": "print each hit's whole text (its body) under its line, not only the snippet; --json adds it as text"
+                  },
                   "include_archived": {
                     "type": "boolean",
                     "description": "include archived rows"
@@ -72422,6 +72426,10 @@
                                 "type": "string",
                                 "description": "the matched excerpt, matches in \u003cb\u003e…\u003c/b\u003e"
                               },
+                              "text": {
+                                "type": "string",
+                                "description": "the row's whole text (body), only with --full"
+                              },
                               "title": {
                                 "type": "string",
                                 "description": "the row's title or name; empty for a kind without one"
@@ -72506,6 +72514,10 @@
                               "snippet": {
                                 "type": "string",
                                 "description": "the matched excerpt, matches in \u003cb\u003e…\u003c/b\u003e"
+                              },
+                              "text": {
+                                "type": "string",
+                                "description": "the row's whole text (body), only with --full"
                               },
                               "title": {
                                 "type": "string",
@@ -84165,6 +84177,10 @@
                     "type": "integer",
                     "format": "duration-ns",
                     "description": "stop the statement after this long (default 10s); past it E_SQL_TIMEOUT"
+                  },
+                  "wide": {
+                    "type": "boolean",
+                    "description": "print every table cell whole (by default a cell over 60 characters is cut; --json and --format csv|json are always whole)"
                   },
                   "yes": {
                     "type": "boolean",

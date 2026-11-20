@@ -109,11 +109,15 @@ func Formats() []string { return []string{FormatTable, FormatCSV, FormatJSON} }
 
 // RunIn is the input of sql.run.
 type RunIn struct {
-	Query         string        `json:"query" arg:"0" rest:"true" desc:"one SELECT, WITH or VALUES statement (quote it; several words are joined)"`
-	ShowSensitive bool          `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
-	Format        string        `json:"format,omitempty" flag:"format" desc:"table (default), csv or json (an array of row objects)"`
-	Timeout       time.Duration `json:"timeout,omitempty" flag:"timeout" desc:"stop the statement after this long (default 10s); past it E_SQL_TIMEOUT"`
-	Internal      bool          `json:"internal,omitempty" flag:"internal" desc:"in a client repo, also read the internal stores (their rows are internal: never copy them into the repo)"`
+	Query         string `json:"query" arg:"0" rest:"true" desc:"one SELECT, WITH or VALUES statement (quote it; several words are joined)"`
+	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
+	Format        string `json:"format,omitempty" flag:"format" desc:"table (default), csv or json (an array of row objects)"`
+	// Wide is devco D-758 (owner P-8): the table cuts a long cell so one
+	// body cannot push every other column off screen, which left a reader
+	// of notes a second query per row; --wide prints every value whole.
+	Wide     bool          `json:"wide,omitempty" flag:"wide" desc:"print every table cell whole (by default a cell over 60 characters is cut; --json and --format csv|json are always whole)"`
+	Timeout  time.Duration `json:"timeout,omitempty" flag:"timeout" desc:"stop the statement after this long (default 10s); past it E_SQL_TIMEOUT"`
+	Internal bool          `json:"internal,omitempty" flag:"internal" desc:"in a client repo, also read the internal stores (their rows are internal: never copy them into the repo)"`
 	// IncludeDeleted: DELETION 2.9 (FA-META-2).
 	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also read the rows in the trash (tables and their _all views; time_spent counts deleted tasks)"`
 	// Store names the stores the lens reads (devco D-473), as every other
@@ -140,6 +144,8 @@ type RunOut struct {
 	Internal []string `json:"internal,omitempty"`
 	// Format is RunIn.Format for Text; not part of the --json shape.
 	Format string `json:"-"`
+	// Wide is RunIn.Wide for Text (no cell is cut); not in --json.
+	Wide bool `json:"-"`
 }
 
 // Row is one result row, its cells in Columns order.
@@ -259,7 +265,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if cols == nil {
 		cols = []string{}
 	}
-	return RunOut{Columns: cols, Rows: rows, Count: len(rows), Internal: res.Internal, Format: format}, nil
+	return RunOut{Columns: cols, Rows: rows, Count: len(rows), Internal: res.Internal, Format: format, Wide: in.Wide}, nil
 }
 
 // internalNote is the line under the table of a query that read internal stores
@@ -311,10 +317,13 @@ func (o RunOut) tableText() string {
 	}
 	cells := make([][]string, 0, len(o.Rows)+1)
 	cells = append(cells, o.Columns)
+	cut := false
 	for _, r := range o.Rows {
 		line := make([]string, len(r.Cells))
 		for i, c := range r.Cells {
-			line[i] = cellText(c)
+			var wasCut bool
+			line[i], wasCut = cellText(c, o.Wide)
+			cut = cut || wasCut
 		}
 		cells = append(cells, line)
 	}
@@ -340,8 +349,16 @@ func (o RunOut) tableText() string {
 		b.WriteString("\n")
 	}
 	b.WriteString(rowCount(len(o.Rows)) + "\n")
+	if cut {
+		// D-758: say a value was cut and how to see it whole, so the
+		// reader does not take the cut text for the value
+		b.WriteString("note: cells over " + strconv.Itoa(maxCellRunes) + cutNote + "\n")
+	}
 	return b.String()
 }
+
+// cutNote ends the line under a table with a cut cell.
+const cutNote = " characters are cut (…); add --wide to print every value whole, or --json"
 
 // rowCount is "(1 row)" / "(N rows)".
 func rowCount(n int) string {
@@ -352,10 +369,10 @@ func rowCount(n int) string {
 }
 
 // cellText is one cell's human form: NULL, or the value's text on one
-// line, capped at maxCellRunes characters.
-func cellText(c Cell) string {
+// line, capped at maxCellRunes characters unless wide; cut reports a cap.
+func cellText(c Cell, wide bool) (text string, cut bool) {
 	if c.Kind == string(value.KindNull) {
-		return nullText
+		return nullText, false
 	}
 	s := strings.Map(func(r rune) rune {
 		if r == '\n' || r == '\r' || r == '\t' {
@@ -363,10 +380,10 @@ func cellText(c Cell) string {
 		}
 		return r
 	}, c.Value)
-	if utf8.RuneCountInString(s) > maxCellRunes {
-		s = string([]rune(s)[:cutKeepRunes]) + ellipsis
+	if !wide && utf8.RuneCountInString(s) > maxCellRunes {
+		return string([]rune(s)[:cutKeepRunes]) + ellipsis, true
 	}
-	return s
+	return s, false
 }
 
 // csvText is RFC 4180 csv: a header of the column names, then one record

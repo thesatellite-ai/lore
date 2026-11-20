@@ -34,6 +34,7 @@ import (
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -481,8 +482,23 @@ func hitOf(t opssearch.Target, id, snippet string, r row.Row) opssearch.Hit {
 		h.ResourceKind = searchField(r, searchFieldKind)
 	}
 	h.Fallback = opssearch.TruncBody(strings.Join(strings.Fields(searchField(r, "body")), " "), opssearch.BodyMax)
+	// D-758: the whole text for --full (search.run drops it without
+	// the flag). A resource's text is its field values, some
+	// sensitive: resource show prints those, masked.
+	if t.Entity != opssearch.EntityResource && !t.Roster {
+		h.Text = opssearch.FullText(func(n string) string { return searchField(r, n) }, searchedFields(t.Table), t.Label.Field)
+	}
 	return h
 }
+
+// searchedFields is the full-text fields of a built-in table, by table.
+var searchedFields = func() func(row.Table) []string {
+	by := map[row.Table][]string{}
+	for _, d := range schema.Builtin() {
+		by[d.Name] = d.FTS
+	}
+	return func(t row.Table) []string { return by[t] }
+}()
 
 // resourceCond is one field:value term: a resource field name and the
 // value it must equal (case-insensitive). sensitive is set when any kind

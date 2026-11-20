@@ -297,6 +297,11 @@ func (l *Lens) setup(ctx context.Context) error {
 			tables[n] = append(tables[n], srcTable{src: i, cols: cols})
 		}
 	}
+	// devco D-758: a res_<kind> view also reads the sources whose own
+	// cache lacks the kind (lens_kindarms.go).
+	if err := l.addKindArms(ctx, tables); err != nil {
+		return err
+	}
 	var m mask
 	if l.masked {
 		var maskErr error
@@ -350,6 +355,18 @@ func (l *Lens) setup(ctx context.Context) error {
 type srcTable struct {
 	src  int
 	cols []string
+	// from is the SQL the rows come from when they are not the source's
+	// own copy of the table: a kind arm over its resources (D-758); ""
+	// reads "s_<src>".<table>.
+	from string
+}
+
+// fromSQL is what st's rows are read from for table tq (quoted).
+func (st srcTable) fromSQL(tq string) string {
+	if st.from != "" {
+		return st.from + ` AS ` + tq
+	}
+	return `"` + attachedName(st.src) + `".` + tq
 }
 
 // LensPlaceColumn is the column after `source` in every "<table>_all"
@@ -436,7 +453,7 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 		if withPlace {
 			head += label + ` AS "` + LensPlaceColumn + `", `
 		}
-		part := head + sel + ` FROM "` + attachedName(st.src) + `".` + tq
+		part := head + sel + ` FROM ` + st.fromSQL(tq)
 		if l.sources[st.src].Shared && !l.sources[st.src].ownSource() && slices.Contains(st.cols, colSource) {
 			part += ` WHERE "` + colSource + `" = ` + literal(l.sources[st.src].Name)
 		}
@@ -469,8 +486,8 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 	// more while memories_all, filtered by _source, listed it once. The
 	// plain view keeps the nearest source's own name's rows, as its _all part does.
 	own := l.sources[first.src].Shared && !l.sources[first.src].ownSource() && slices.Contains(first.cols, colSource)
-	if !l.masked && del == nil && !own {
-		return nil
+	if !l.masked && del == nil && !own && first.from == "" {
+		return nil // the attached file's own table is the nearest copy
 	}
 	plainCols := first.cols
 	if del != nil {
@@ -485,7 +502,7 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 	if err != nil {
 		return err
 	}
-	body := "SELECT " + sel + ` FROM "` + attachedName(first.src) + `".` + tq
+	body := "SELECT " + sel + ` FROM ` + first.fromSQL(tq)
 	if own {
 		body += ` WHERE "` + colSource + `" = ` + literal(l.sources[first.src].Name)
 	}

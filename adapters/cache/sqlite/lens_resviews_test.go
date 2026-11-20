@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -87,5 +88,55 @@ func TestResourceFullText(t *testing.T) {
 		if len(got) != want {
 			t.Errorf("search %s = %v, want %d hits", match, got, want)
 		}
+	}
+}
+
+// TestLensKindViewAllSources (devco D-758, owner P-8): a resource held in
+// a store whose own cache lacks its kind (the kind lives in the repo) is a
+// row of res_<kind>_all and of the res_<kind id> view, its field values
+// read from the resource; a sensitive field stays masked in that arm, and
+// a source holding no resource of the kind adds nothing.
+func TestLensKindViewAllSources(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	repo, acme, empty := f.open("repo.db"), f.open("acme.db"), f.open("empty.db")
+	kind, ip, token := must(ids.New[ids.Kind]()), must(ids.New[ids.KindField]()), must(ids.New[ids.KindField]())
+	const secret = "tok-acme-zz91"
+	f.apply(repo, store.SourceRepo, "1",
+		f.kindRow(kind, "server"),
+		f.fieldRow(ip, kind, "ip", "text", ids.ID[ids.Kind]{}),
+		f.live(schema.TableKindFields, token.Any(), map[string]value.Value{
+			fieldKindID: text(t, kind.String()), fieldName: text(t, "token"), "type": text(t, "text"), fieldSensitive: value.BoolOf(true),
+		}),
+		f.resource(must(ids.New[ids.Resource]()), kind, "db_one", map[ids.ID[ids.KindField]][2]string{ip: {"ip", `"10.0.0.9"`}}),
+	)
+	f.apply(acme, "acme", "1", f.resource(must(ids.New[ids.Resource]()), kind, "api_two", map[ids.ID[ids.KindField]][2]string{
+		ip: {"ip", `"10.0.0.5"`}, token: {"token", `"` + secret + `"`},
+	}))
+	f.apply(empty, "empty", "1", f.memory(must(ids.New[ids.Memory]()).Any(), must(ids.New[ids.Project]()).Any(), "no resources here"))
+	for _, c := range []*Cache{repo, acme, empty} {
+		if err := c.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srcs := []LensSource{
+		{Name: string(store.SourceRepo), Path: filepath.Join(f.dir, "repo.db")},
+		{Name: "acme", Path: filepath.Join(f.dir, "acme.db")},
+		{Name: "empty", Path: filepath.Join(f.dir, "empty.db")},
+	}
+	q := func(l *Lens, sql string) string { return dump(must(l.Query(context.Background(), sql))) }
+	l := openMasked(t, srcs, false)
+	if got, want := q(l, `SELECT source, name, ip FROM res_server_all ORDER BY name`), "source|name|ip|acme|api_two|10.0.0.5|repo|db_one|10.0.0.9"; got != want {
+		t.Fatalf("res_server_all = %s, want %s", got, want)
+	}
+	if got, want := q(l, `SELECT name FROM "res_`+kind.String()+`_all" ORDER BY name`), "name|api_two|db_one"; got != want {
+		t.Fatalf("res_<kind id>_all = %s, want %s", got, want)
+	}
+	if got, want := q(l, `SELECT name FROM res_server`), "name|db_one"; got != want {
+		t.Fatalf("res_server (nearest copy) = %s, want %s", got, want)
+	}
+	m := openMasked(t, srcs, true)
+	if got := q(m, `SELECT name, token FROM res_server_all WHERE source = 'acme'`); strings.Contains(got, secret) || !strings.Contains(got, "api_two") {
+		t.Fatalf("masked res_server_all = %s: the sensitive token must be masked in the arm", got)
 	}
 }
