@@ -19,11 +19,35 @@ func effective(binary string) string {
 	for _, f := range known {
 		top = MaxVersion(top, f.Since)
 	}
-	if _, ok := versionCore(binary); !ok {
-		return top
+	if _, ok := versionCore(binary); !ok || DevBuild(binary) {
+		// a source build is at least the release its tree descends from
+		// (devco:D-735): an org that declares min_lore_version 0.1.20 must
+		// not lock out a `go build` of 0.1.20's own source, which stamps
+		// "dev" and knows no feature newer than 0.1.18
+		return MaxVersion(MaxVersion(binary, top), SourceRelease)
 	}
 	return MaxVersion(binary, top)
 }
+
+// SourceRelease is the newest release this source tree contains (raised
+// at each release tag). A development build counts as at least this
+// version in the format gate (effective), so a version floor an org
+// declares (lore org config set --key min_lore_version) never shuts out a
+// build of the very code that set it. A stamped release binary is compared
+// by its own version only.
+const SourceRelease = "0.1.20"
+
+// ValidVersion reports whether v is a release version the gate compares
+// (major.minor.patch, an optional leading v): the only shape a declared
+// floor may take, since an unparseable floor is ignored by every lore.
+func ValidVersion(v string) bool {
+	_, ok := versionCore(v)
+	return ok && !strings.ContainsAny(strings.TrimPrefix(strings.TrimSpace(v), "v"), "-+")
+}
+
+// MayWrite reports whether this binary passes a min_lore_version floor
+// (the same compare Check makes, a dev build counted as SourceRelease).
+func MayWrite(binary, floor string) bool { return !versionBelow(effective(binary), floor) }
 
 // VersionBelow reports whether binary is older than floor, comparing the
 // numeric major.minor.patch core only ("0.1.19-dev" and "v0.1.19" count as

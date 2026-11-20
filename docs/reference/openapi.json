@@ -41801,7 +41801,7 @@
     "/v1/org/configs/get": {
       "post": {
         "operationId": "org.config.get",
-        "summary": "Show the org's shared lore-org.yaml: own and repos patterns, stores",
+        "summary": "Show the org's shared lore-org.yaml: own and repos patterns, stores; and min_lore_version, the lore version its stores need",
         "tags": [
           "org"
         ],
@@ -41814,7 +41814,7 @@
                 "properties": {
                   "key": {
                     "type": "string",
-                    "description": "only this key: own or repos (default every key)"
+                    "description": "only this key: own, repos, min_lore_version or stores (default every key)"
                   },
                   "org": {
                     "type": "string",
@@ -41835,6 +41835,9 @@
                   "type": "object",
                   "properties": {
                     "file": {
+                      "type": "string"
+                    },
+                    "min_lore_version": {
                       "type": "string"
                     },
                     "org": {
@@ -41864,7 +41867,8 @@
                     "file",
                     "own",
                     "repos",
-                    "stores"
+                    "stores",
+                    "min_lore_version"
                   ]
                 }
               }
@@ -41946,7 +41950,7 @@
     "/v1/org/configs/set": {
       "post": {
         "operationId": "org.config.set",
-        "summary": "Change the org's shared lore-org.yaml (admin only): own or repos patterns; committed in the org store and copied to this machine's org entry",
+        "summary": "Change the org's shared lore-org.yaml (admin only): own or repos patterns, committed in the org store and copied to this machine's org entry; or min_lore_version, the lore version the org's stores need (an older lore goes read-only there)",
         "tags": [
           "org"
         ],
@@ -41966,7 +41970,7 @@
                   },
                   "key": {
                     "type": "string",
-                    "description": "the key to change: own (the org's own repo patterns) or repos (client repo patterns)"
+                    "description": "the key to change: own (the org's own repo patterns), repos (client repo patterns) or min_lore_version (the lore version the org's stores need: an older lore goes read-only there)"
                   },
                   "org": {
                     "type": "string",
@@ -41985,7 +41989,7 @@
                   },
                   "values": {
                     "type": "array",
-                    "description": "the new list, one pattern per --value (repeat; replaces the whole list); host/owner/repo with * inside or as a segment, ** as a segment",
+                    "description": "the new list, one pattern per --value (repeat; replaces the whole list); host/owner/repo with * inside or as a segment, ** as a segment; for min_lore_version one version like 0.1.20",
                     "items": {
                       "type": "string"
                     }

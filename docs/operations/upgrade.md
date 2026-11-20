@@ -126,6 +126,16 @@ auto_upgrade: true      # upgrade instead of printing the line
 
 With `auto_upgrade: true` lore installs the new release itself and prints one line naming both versions (for example, upgraded 0.1.18 → 0.1.19). It only does this for Homebrew and script installs (others get `not upgraded automatically (installed by …)`), never past a pin, and a failed attempt leaves the old program in place and says why.
 
+## Require a lore version for an org
+
+An admin can declare the lore version every store of the org needs, for example when a feature the team relies on (team audiences need 0.1.19) is silently missed by an older lore:
+
+```bash
+lore org config set --org acme --key min_lore_version --value 0.1.20 --push --yes
+```
+
+lore writes `min_lore_version` into every folder's `_meta.json` of each store the org lists, one commit per store (a folder that already needs more keeps it; the floor is never lowered). Every lore since 0.1.18 already checks that floor before it writes, so a teammate on an older lore still reads the org's notes, but each write there is refused with `this project needs lore 0.1.20 or later to write (this is 0.1.19). Reading works; writing is off until you upgrade.` and the hint `lore upgrade`. The admin's own lore must pass the floor (a value above it is refused). `lore org config get --org acme --key min_lore_version` prints the floor the org's stores have now.
+
 ## Fix a project: `lore fix`
 
 `lore fix` brings the project you are in up to date in one go. It runs, in order, everything `lore doctor` can repair for it and prints one line per step (what, where, result), then checks again and prints the status last. It never changes a project's format by itself: in a project still on the lore 0.1.17 format, `lore fix` (and `lore fix --dry-run`) only prints `<project> is on the lore 0.1.17 format; run lore migrate run to upgrade it (teammates need lore 0.1.18)` and exits 24 (`E_FORMAT_OLD`), changing nothing. `lore fix --migrate` migrates it (its migrate step is `lore migrate run`) and then runs the other steps; run it once, as a person, when the team is ready for lore 0.1.18. `lore doctor --fix` never migrates either: its migrate step prints the same line.

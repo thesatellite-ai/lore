@@ -63,6 +63,7 @@ func (h *standaloneOrg) OrgConfigGet(ctx context.Context, in opsorgcmd.ConfigGet
 		}
 		out.Stores = append(out.Stores, s)
 	}
+	out.MinLoreVersion = h.orgFloor(ctx, g, sc)
 	// devco D-585: an own pattern covering repos entries is named, with
 	// the rule that decides (repos wins)
 	return out.WithOverlaps(orgresolve.OwnRepoOverlaps(out.Own, out.Repos)), nil
@@ -86,6 +87,9 @@ func (h *standaloneOrg) OrgConfigSet(ctx context.Context, in opsorgcmd.ConfigSet
 	if !isOrgAdmin(h.home, in.Org) {
 		return opsorgcmd.Report{}, errs.New(errs.Refused, "org config set: only an admin of "+in.Org+" changes its lore-org.yaml; this machine has no admin setup of "+in.Org).
 			WithHint("ask the org admin to run `" + cmd + " --add <pattern> --push --yes`")
+	}
+	if in.Key == opsorgcmd.ConfigKeyMinLore {
+		return h.setOrgMinLore(ctx, cfg, o, in, yes)
 	}
 	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}
 	sg, err := g.LocalSuggestion(ctx, sc.URL, sc.Branch)
