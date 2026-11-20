@@ -673,7 +673,7 @@ s_leak_cleanup() {
   note "purge"
   on alice work/website "lore live purge --ids $t --confirm"
   on alice work/website "lore live compact --dry-run"
-  on alice work/website "lore live compact"
+  on alice work/website "lore live compact --yes"
   on alice work/website "lore live log"
   on carol work/app "lore sync >/dev/null; lore task list"
   person newdev newdev@client.example

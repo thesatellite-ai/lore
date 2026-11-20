@@ -951,7 +951,7 @@ func TestF08_CompactKeepsRowsAndRaisesEpoch(t *testing.T) {
 	if rt.app.Rev(refLive) != revBefore {
 		t.Fatal("--dry-run must not change the ref")
 	}
-	rt.c1.MustLore("live", "compact")
+	rt.c1.MustLore("live", "compact", "--yes")
 	if n, p := rt.app.CommitCount(refLive), rt.app.Parents(refLive); n != 1 || p != 0 {
 		t.Fatalf("compacted live: %d commits, %d parents; want 1, 0", n, p)
 	}
@@ -995,7 +995,7 @@ func TestE06_CompactionWhileACloneHoldsAPendingWrite(t *testing.T) {
 	pending := mustID(t, rt.c1.MustLore("task", "add", "pending on A", "--tasklist", rt.tasklist), "tsk")
 	b1 := rt.addTask(t, rt.c2, "B one")
 	b2 := rt.addTask(t, rt.c2, "B two")
-	rt.c2.MustLore("live", "compact")
+	rt.c2.MustLore("live", "compact", "--yes")
 	epoch, _ := rt.app.Read(refLive, liveEpochPath)
 	rt.dev1.Online()
 	if titles := listedTitles(t, rt.c1); !hasItem(titles, "pending on A") || !hasItem(titles, "B one") || !hasItem(titles, "B two") {
@@ -1018,7 +1018,7 @@ func TestF08_Race_CompactionVersusWriter(t *testing.T) {
 	old := rt.addTask(t, rt.c1, "old row")
 	rt.c2.MustLore("task", "list")
 	res := rt.w.Simultaneously(
-		rt.c2.Prepare("live", "compact"),
+		rt.c2.Prepare("live", "compact", "--yes"),
 		rt.c1.Prepare("task", "add", "racing row", "--tasklist", rt.tasklist),
 	)
 	res[0].OK(t)
@@ -1040,9 +1040,9 @@ func TestF08_OfflineAcrossTwoCompactions(t *testing.T) {
 	rt.dev1.Offline()
 	pending := mustID(t, rt.c1.MustLore("task", "add", "slept through two", "--tasklist", rt.tasklist), "tsk")
 	rt.addTask(t, rt.c2, "between")
-	rt.c2.MustLore("live", "compact")
+	rt.c2.MustLore("live", "compact", "--yes")
 	rt.addTask(t, rt.c2, "between again")
-	rt.c2.MustLore("live", "compact")
+	rt.c2.MustLore("live", "compact", "--yes")
 	rt.dev1.Online()
 	if !hasItem(listedTitles(t, rt.c1), "slept through two") {
 		t.Fatal("a write held across two compactions was lost in the reader path")
@@ -1066,7 +1066,7 @@ func TestLeak_LivePurgeDropsRowFromEveryClone(t *testing.T) {
 	if purged, _ := rt.app.Read(refLive, livePurgedPath); !strings.Contains(purged, id) {
 		t.Fatalf("%s must list the id: %q", livePurgedPath, purged)
 	}
-	rt.c1.MustLore("live", "compact")
+	rt.c1.MustLore("live", "compact", "--yes")
 	for _, rev := range strings.Split(rt.w.Git(rt.app.Dir, "rev-list", refLive), "\n") {
 		if strings.Contains(rt.w.Git(rt.app.Dir, "ls-tree", "-r", "--name-only", rev), id) {
 			t.Fatal("compaction must remove the purged row from the ref's history")

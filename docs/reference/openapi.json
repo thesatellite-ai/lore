@@ -27468,7 +27468,7 @@
     "/v1/live/compact": {
       "post": {
         "operationId": "live.compact",
-        "summary": "Rewrite the live ref to one commit with a higher epoch (keeps every row; a local backup is kept)",
+        "summary": "Rewrite the live ref to one commit with a higher epoch and force-push it to the code repo's remote, which every clone fetches (keeps every row and a local backup; asks first, --yes without a terminal)",
         "tags": [
           "live"
         ],
@@ -27482,6 +27482,10 @@
                   "dry_run": {
                     "type": "boolean",
                     "description": "print what would happen, change nothing"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "additionalProperties": false
@@ -27519,6 +27523,9 @@
                       "type": "integer"
                     },
                     "ref": {
+                      "type": "string"
+                    },
+                    "remote": {
                       "type": "string"
                     },
                     "threshold": {
@@ -27573,6 +27580,16 @@
           },
           "409": {
             "description": "E_NOT_PROJECT_ROOT, E_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {

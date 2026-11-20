@@ -515,7 +515,7 @@ Flags:
 ### `lore live compact`
 
 <!-- help: live compact -->
-Rewrite the live ref to one commit with a higher epoch (keeps every row; a local backup is kept)
+Rewrite the live ref to one commit with a higher epoch and force-push it to the code repo's remote, which every clone fetches (keeps every row and a local backup; asks first, --yes without a terminal)
 
 ```text
 Usage:
@@ -524,8 +524,8 @@ Usage:
 Examples:
   # see what a compaction would do
   lore live compact --dry-run
-  # rewrite the live ref to one commit
-  lore live compact
+  # rewrite the live ref to one commit and push it to the remote
+  lore live compact --yes
 
 Flags:
       --dry-run   print what would happen, change nothing
@@ -534,7 +534,7 @@ Flags:
 ```
 <!-- /help -->
 
-Each compaction raises the epoch by exactly one. A live ref that is already one commit with no purged rows to drop has nothing to compact: the command says `nothing to compact: refs/lore/live is already 1 commit with no purged rows (epoch N, unchanged)`, writes nothing and keeps the epoch, so teammates are not sent through the re-apply path for nothing.
+A compaction force-pushes the rewritten ref to the code repo's remote, which every teammate's clone fetches, so it asks first: at a terminal it asks yes or no; without one it answers `E_NEEDS_CONFIRM` with a question naming the rewrite and the remote, changes nothing, and runs only as `lore live compact --yes`. `--dry-run` and a ref with nothing to compact never ask. Each compaction raises the epoch by exactly one. A live ref that is already one commit with no purged rows to drop has nothing to compact: the command says `nothing to compact: refs/lore/live is already 1 commit with no purged rows (epoch N, unchanged)`, writes nothing and keeps the epoch, so teammates are not sent through the re-apply path for nothing.
 
 ### `lore live restore`
 

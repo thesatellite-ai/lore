@@ -211,7 +211,7 @@ func TestSyncLive_CompactPurgeRestore(t *testing.T) {
 	if st.app.Rev(syncRefLive) != rev {
 		t.Fatal("compact --dry-run must not change the remote live ref")
 	}
-	a.MustLore("live", "compact").Says(t, "compacted refs/lore/live to 1 commit (epoch 2)", "backup kept locally")
+	a.MustLore("live", "compact", "--yes").Says(t, "compacted refs/lore/live to 1 commit (epoch 2)", "backup kept locally")
 	if st.app.CommitCount(syncRefLive) != 1 || len(st.app.Refs("refs/lore-backup/")) != 0 {
 		t.Fatalf("compacted: %d commits on the remote, backups pushed %v", st.app.CommitCount(syncRefLive), st.app.Refs("refs/lore-backup/"))
 	}

@@ -363,7 +363,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore live` … | Inspect and maintain the live ref (refs/lore/live) | — |
-| `lore live compact` | Rewrite the live ref to one commit with a higher epoch (keeps every row; a local backup is kept) | [team/commands › lore live compact](../../docs/team/commands.md#lore-live-compact) |
+| `lore live compact` | Rewrite the live ref to one commit with a higher epoch and force-push it to the code repo's remote, which every clone fetches (keeps every row and a local backup; asks first, --yes without a terminal) | [team/commands › lore live compact](../../docs/team/commands.md#lore-live-compact) |
 | `lore live diff` | Local, tracking and remote live ref, and the writes not pushed yet | [team/commands › lore live diff](../../docs/team/commands.md#lore-live-diff) |
 | `lore live log` | History of the live ref with its epoch | [team/commands › lore live log](../../docs/team/commands.md#lore-live-log) |
 | `lore live purge` | Remove rows from live for good (leak cleanup): no clone can push them back | [team/commands › lore live purge](../../docs/team/commands.md#lore-live-purge) |

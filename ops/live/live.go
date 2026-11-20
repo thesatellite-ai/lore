@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
@@ -114,6 +115,11 @@ type CompactPlan struct {
 	FromEpoch, ToEpoch int
 	// Purged counts purged rows the compaction drops.
 	Purged int
+	// Remote names the code repo's remote the rewrite is pushed to
+	// ("origin"); "" when the repo has none and only the local ref changes.
+	// Why: the question and the result line must say that every teammate's
+	// clone fetches the rewritten ref (devco D-751).
+	Remote string
 }
 
 // Compacted is the result of a compaction. Nothing is true when there was
@@ -289,6 +295,9 @@ type CompactOut struct {
 	ToEpoch   int    `json:"to_epoch"`
 	Purged    int    `json:"purged"`
 	Backup    string `json:"backup,omitempty"`
+	// Remote is the code repo's remote the rewritten ref went to (or, in a
+	// dry run, would go to); empty when the repo has no remote.
+	Remote string `json:"remote,omitempty"`
 }
 
 // Text prints v0.1.17's plan line (--dry-run) or result line.
@@ -305,9 +314,29 @@ func (o CompactOut) Text() string {
 		if o.Purged > 0 {
 			s += fmt.Sprintf(", dropping %d purged rows", o.Purged)
 		}
+		if o.Remote != "" {
+			s += fmt.Sprintf(", and force-push it to the remote %s (every clone fetches the rewritten ref)", o.Remote)
+		}
 		return s + "\n"
 	}
-	return fmt.Sprintf("✓ compacted %s to 1 commit (epoch %d); backup kept locally as %s\n", o.Ref, o.ToEpoch, o.Backup)
+	if o.Remote == "" {
+		return fmt.Sprintf("✓ compacted %s to 1 commit (epoch %d) on this machine only (no remote); backup kept locally as %s\n", o.Ref, o.ToEpoch, o.Backup)
+	}
+	return fmt.Sprintf("✓ compacted %s to 1 commit (epoch %d) and force-pushed it to the remote %s, so every clone gets the rewritten ref on its next fetch; backup kept locally as %s\n", o.Ref, o.ToEpoch, o.Remote, o.Backup)
+}
+
+// compactQuestion is the confirm question of a compaction that will run:
+// it names the remote rewrite, so the person (or the agent relaying
+// E_NEEDS_CONFIRM) knows teammates' clones are affected (devco D-751).
+func compactQuestion(o CompactOut) string {
+	what := fmt.Sprintf("rewrite %s (%d commits) to 1 commit, epoch %d → %d", o.Ref, o.Commits, o.FromEpoch, o.ToEpoch)
+	if o.Purged > 0 {
+		what += fmt.Sprintf(", dropping %d purged rows", o.Purged)
+	}
+	if o.Remote == "" {
+		return what + ", on this machine only (no remote)?"
+	}
+	return what + ", and force-push it to the remote " + o.Remote + " that every teammate's clone fetches (a backup stays on this machine)?"
 }
 
 // PurgeIn is the input of live.purge. Like `lore trash purge`, only the
@@ -379,11 +408,14 @@ func Ops(env Env) []op.Entry {
 		}, func(ctx context.Context, _ RestoreIn) (RestoreOut, error) { return restore(ctx, env) }),
 		op.Define(op.Spec{
 			Name:       OpCompact,
-			Summary:    "Rewrite the live ref to one commit with a higher epoch (keeps every row; a local backup is kept)",
+			Summary:    "Rewrite the live ref to one commit with a higher epoch and force-push it to the code repo's remote, which every clone fetches (keeps every row and a local backup; asks first, --yes without a terminal)",
 			Permission: op.PermWrite, Access: op.AccessWrite, RESTNoun: restNoun,
-			Confirm:  op.ConfirmRule{PersonOnlyEligible: true},
-			Errors:   writeErrors,
-			Examples: []op.Example{{Title: "see what a compaction would do", CLI: "lore live compact --dry-run"}, {Title: "rewrite the live ref to one commit", CLI: "lore live compact"}},
+			// MayAsk: it asks only when there is something to rewrite (a
+			// no-op compaction answers "nothing to compact" without a
+			// question), so the question is asked by compact itself (D-751).
+			Confirm:  op.ConfirmRule{MayAsk: true, PersonOnlyEligible: true, NoSecretFindings: true},
+			Errors:   append(append([]errs.Code{}, writeErrors...), errs.NeedsConfirm),
+			Examples: []op.Example{{Title: "see what a compaction would do", CLI: "lore live compact --dry-run"}, {Title: "rewrite the live ref to one commit and push it to the remote", CLI: "lore live compact --yes"}},
 		}, func(ctx context.Context, in CompactIn) (CompactOut, error) { return compact(ctx, env, in) }),
 		op.Define(op.Spec{
 			Name:       OpPurge,
@@ -470,21 +502,49 @@ func restore(ctx context.Context, env Env) (RestoreOut, error) {
 	return RestoreOut(res), nil
 }
 
-// compact plans (--dry-run) or runs the compaction (F8).
+// compact plans (--dry-run) or runs the compaction (F8). A compaction
+// force-pushes the rewritten ref to the code repo's remote, the ref every
+// teammate's clone fetches, so it is never a silent side effect: unless
+// the caller already confirmed (--yes, a terminal's yes) it plans first
+// and answers E_NEEDS_CONFIRM naming the rewrite and the remote; a plan
+// with nothing to do answers at once without a question (devco D-751,
+// standing rule: nothing reaches a remote unasked).
 func compact(ctx context.Context, env Env, in CompactIn) (CompactOut, error) {
 	r, err := env.LiveRef(ctx)
 	if err != nil {
 		return CompactOut{}, err
 	}
+	if !in.DryRun && !engine.Confirmed(ctx) && !op.Confirmed(ctx) {
+		c, perr := r.Compact(ctx, true)
+		if perr != nil {
+			return CompactOut{}, perr
+		}
+		plan := compactOut(c, true)
+		if c.Nothing {
+			plan.DryRun = false
+			return plan, nil
+		}
+		q := compactQuestion(plan)
+		return CompactOut{}, errs.New(errs.NeedsConfirm, "live compact: "+q).
+			WithQuestion(q).
+			WithHint("ask the person, then rerun with --yes (--dry-run shows the plan and changes nothing)").
+			WithNext("lore", "live", "compact", "--yes")
+	}
 	c, err := r.Compact(ctx, in.DryRun)
 	if err != nil {
 		return CompactOut{}, err
 	}
+	return compactOut(c, in.DryRun), nil
+}
+
+// compactOut is the output of a compaction result.
+func compactOut(c Compacted, dryRun bool) CompactOut {
 	p := c.Plan
 	return CompactOut{
-		Ref: p.Ref, DryRun: in.DryRun, Nothing: c.Nothing, Commits: p.Commits, Threshold: p.Threshold,
+		Ref: p.Ref, DryRun: dryRun, Nothing: c.Nothing, Commits: p.Commits, Threshold: p.Threshold,
 		Files: p.Files, FromEpoch: p.FromEpoch, ToEpoch: p.ToEpoch, Purged: p.Purged, Backup: c.Backup,
-	}, nil
+		Remote: p.Remote,
+	}
 }
 
 // purge removes the ids from live for good (§6.6).

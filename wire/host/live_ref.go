@@ -146,18 +146,28 @@ func (a *liveRefAdapter) Compact(ctx context.Context, dryRun bool) (opslive.Comp
 		Ref: s.ref.Name, Commits: p.Commits, Threshold: s.cfg.CompactAfter, Files: p.Files,
 		FromEpoch: p.FromEpoch, ToEpoch: p.ToEpoch, Purged: p.Purged,
 	}}
+	if s.ref.Remote != nil {
+		// the question and result line name where the rewrite goes (D-751)
+		out.Plan.Remote = s.ref.RemoteName
+	}
 	if res.Status == live.PushNothing {
 		// No live ref yet, or already one commit with nothing purged
 		// (live.CompactNeeded): the same answer with and without --dry-run.
 		out.Nothing = true
 		return out, nil
 	}
-	if dryRun {
+	if dryRun && res.Status == "" {
+		// a plan read from a fresh fetch; an offline fetch (PushOffline)
+		// has no plan and answers E_OFFLINE below, never a zero plan that a
+		// confirm question would quote (D-751)
 		return out, nil
 	}
 	switch res.Status {
 	case live.PushDone, live.PushNoRemote:
 		s.finished = true
+		if res.Status == live.PushNoRemote {
+			out.Plan.Remote = "" // nothing left this machine
+		}
 		return out, nil
 	default: // offline, refused, retries out (PushNothing answered above)
 	}
