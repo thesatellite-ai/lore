@@ -753,28 +753,9 @@ func (a *App) ensureActorFor(ctx context.Context, st *state, ref engine.Ref) err
 // the old copy is tombstoned), after the O6 format check, with the actor
 // row written into the destination first.
 func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine.Written, error) {
-	st, err := a.writeState(ctx)
-	if err != nil {
-		return engine.Written{}, err
-	}
-	to = st.eng.StoreName(to)
-	if uerr := a.unreachableGuard(ctx, st, explicitTarget(to)); uerr != nil {
-		return engine.Written{}, uerr
-	}
-	if ferr := a.checkTarget(to); ferr != nil {
-		return engine.Written{}, ferr
-	}
-	// batch leftover-3: the actor row is staged with the copy (the engine
-	// writes both before the source tombstone), so a refused move writes
-	// nothing, not even the caller's first actor row in to.
-	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
-		if aerr := a.ensureActor(ctx, st, to); aerr != nil {
-			return engine.Written{}, aerr
-		}
-		w, err := st.eng.Move(ctx, ref, to)
-		a.wroteTo(to, err)
-		return w, err
-	})
+	// batch leftover-3 (actor row staged with the copy) and devco D-731
+	// (a linked repo keeps nothing of a row that left it): MoveWith does both
+	return a.MoveWith(ctx, ref, to, engine.MoveOptions{})
 }
 
 // CreateWithID is engine.CreateWithID behind the same write path as every

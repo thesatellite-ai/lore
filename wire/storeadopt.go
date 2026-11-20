@@ -243,6 +243,17 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 				}
 			}
 		}
+		if in.Move && rerr == nil {
+			// D-731: the actor and project rows nothing left in the repo
+			// references go too (the folder is its own project)
+			var rest []store.Key
+			if rest, rerr = movedDropLeftovers(top); rerr == nil && len(rest) > 0 {
+				var gone []string
+				gone, rerr = removeAdopted(top, rest)
+				removed = append(removed, gone...)
+				out.Removed += len(gone)
+			}
+		}
 		// D-710: the hook commits these deletions (the rows live in the
 		// store now) instead of refusing them as removed by hand
 		if merr := RecordMovedOut(ctx, top, place, removed); merr != nil && rerr == nil {
