@@ -514,6 +514,11 @@ func (a *App) RepoID(ctx context.Context, mountOrID string) (ids.ID[ids.Repo], e
 			return ids.As[ids.Repo](r.ID)
 		}
 	}
+	// devco D-736: a cleaned linked repo has no repos row; its own id
+	// (and its mount name) still name it, the identity being the link.
+	if id, ok := a.linkedOwnRepo(ctx, mountOrID); ok {
+		return id, nil
+	}
 	// devco D-491: in a store folder `--repo org` names a folder (a
 	// project of the store), which --project resolves; say so instead of
 	// a bare "no repo".

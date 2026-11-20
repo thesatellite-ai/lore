@@ -808,6 +808,7 @@ func (a *App) finishOpen(ctx context.Context, st *state) error {
 func (a *App) armEngine(st *state) {
 	st.eng.SetRedactHook(a.redactTask)
 	st.eng.SetWriteGuard(profilestore.WriteGuard{Env: a})
+	st.eng.SetIdentityHolder(a.linkedIdentityHolder) // D-736: a linked repo's repos id lives in the link
 }
 
 // openState is state's open under a.mu. finish reports that this call

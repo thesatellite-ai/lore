@@ -22,7 +22,11 @@ package wire
 
 import (
 	"context"
+	"path/filepath"
+	"slices"
+	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -152,4 +156,54 @@ func (a *App) RepoScopeRows(ctx context.Context) ([]row.Row, error) {
 		}
 	}
 	return rows, nil
+}
+
+// linkedIdentityHolder is the engine's IdentityHolder (armEngine): in a
+// linked own repo whose home moved to its folder (RepoHomeStore), the
+// repo's own repos id (_meta.json repo_id) is held by that folder, since
+// the store link names the repo and doctor --fix removed its repos row
+// (devco D-736). So `--scope dir:<path>` writes its scopes row (repo_id →
+// that id) in the folder, and `--scope repo` stamps the id, without a
+// repos row being made again anywhere. Any other ref: ok false.
+func (a *App) linkedIdentityHolder(ctx context.Context, table row.Table, id ids.AnyID) (store.Source, bool) {
+	if table != schema.TableRepos {
+		return "", false
+	}
+	rid, known := a.RepoIdentity(ctx)
+	if !known || rid != id.String() {
+		return "", false
+	}
+	home, linked, err := a.RepoHomeStore(ctx)
+	if err != nil || !linked {
+		return "", false
+	}
+	return home, true
+}
+
+var _ engine.IdentityHolder = (*App)(nil).linkedIdentityHolder
+
+// linkedOwnRepo answers `--repo <ref>` for this checkout when it is a
+// linked repo whose home moved to its folder (no repos row anywhere,
+// devco D-736): its _meta.json repo_id or one of its aliases, or the
+// mount name its repos row had (the checkout folder's name, lower case,
+// as ops/infra mountFor gave it). ok false otherwise; the caller keeps
+// its "no repo" answer.
+func (a *App) linkedOwnRepo(ctx context.Context, ref string) (ids.ID[ids.Repo], bool) {
+	top, err := a.knownRepoTop(ctx)
+	if err != nil || top == "" {
+		return ids.ID[ids.Repo]{}, false
+	}
+	m, _, err := rowfs.ReadRepoMeta(top)
+	if err != nil || m.RepoID == "" {
+		return ids.ID[ids.Repo]{}, false
+	}
+	hit := ref == m.RepoID || slices.Contains(m.Aliases, ref) || ref == strings.ToLower(filepath.Base(top))
+	if !hit {
+		return ids.ID[ids.Repo]{}, false
+	}
+	if _, linked, herr := a.RepoHomeStore(ctx); herr != nil || !linked {
+		return ids.ID[ids.Repo]{}, false
+	}
+	id, err := ids.Parse[ids.Repo](m.RepoID)
+	return id, err == nil
 }

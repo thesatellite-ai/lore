@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/repohome"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
@@ -541,13 +542,14 @@ func (o Ops) ProjectFilter(ctx context.Context, flag string) (string, error) {
 	return p.String(), nil
 }
 
-// ProjectOf resolves --project (a name among the repo store's projects, or
+// ProjectOf resolves --project (a name among the repo store's projects and
+// a cleaned linked repo's folder's (repohome.ProjectRows), or
 // any prj_ id); "" is the repo's one project.
 func (o Ops) ProjectOf(ctx context.Context, flag string) (ids.ID[ids.Project], error) {
 	if flag == "" {
 		return o.Env.Project(ctx)
 	}
-	rows, err := o.Env.List(ctx, store.SourceRepo, schema.TableProjects)
+	rows, err := repohome.ProjectRows(ctx, o.Env) // D-736: the linked folder's too
 	if err != nil {
 		return ids.ID[ids.Project]{}, err
 	}
