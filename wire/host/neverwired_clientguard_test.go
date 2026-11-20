@@ -12,8 +12,8 @@ import (
 )
 
 // TestNeverWiredIgnoresTheClientGuard (devco:N-10): a client repo where
-// `lore org link` installed only its commit-msg guard (lore.clientrepo
-// set) was never set up for lore, so the first lore init there must not
+// `lore org link` installed only its guard (the commit-msg and pre-push
+// blocks, lore.clientrepo set) was never set up for lore, so the first lore init there must not
 // say the leak guard was off; the same block in a repo that is no client
 // repo still counts as lore's wiring.
 func TestNeverWiredIgnoresTheClientGuard(t *testing.T) {
@@ -22,12 +22,17 @@ func TestNeverWiredIgnoresTheClientGuard(t *testing.T) {
 	dir := t.TempDir()
 	gitT(t, dir, "init", "-q", "-b", "main")
 	hooks := filepath.Join(dir, ".git", "hooks")
-	b := hookBlocks("")[hookCommitMsg]
-	if err := ensureHookBlock(hooks, hookCommitMsg, b.marker, b.lines); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(hooks, hookCommitMsg)); err != nil {
-		t.Fatal(err)
+	// every block the client guard installs (commit-msg, and pre-push
+	// since D-730): with pre-push counted as wiring, the first lore init
+	// after the first link said the guard was off (D-733)
+	for _, n := range clientGuardHookNames {
+		marker, lines := clientGuardBlock(n)
+		if err := ensureHookBlock(hooks, n, marker, lines); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(hooks, n)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	repo, err := gitref.Open(ctx, dir, nil)
 	if err != nil {

@@ -187,6 +187,27 @@ func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error
 	return r.sit, r.err
 }
 
+// Forget drops the kept answer, so the next Situation gathers again from
+// the config and the store clones as they are now. A command that changed
+// what the answer reads during its run calls it after the write: org link
+// and unlink (the store folder's links), org use (config.yaml) and org set
+// (.lore/org.yaml). devco:D-733: the first `lore org link` in a fresh
+// client clone kept the answer gathered before its own link write (no
+// link, so not a client repo), and the leak guard installed after a
+// successful link (wire/host clientguard.go) read that answer and wrote no
+// hook; only a second identical link installed it.
+func (r *OrgResolution) Forget() {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.done {
+		r.reloadLinkConfig()
+	}
+	r.done, r.sit, r.err = false, nil, nil
+}
+
 // uncachedSituationKey marks a ctx whose Situation call keeps nothing.
 type uncachedSituationKey struct{}
 

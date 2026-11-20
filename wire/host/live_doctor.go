@@ -332,7 +332,10 @@ func missingRideHooks(dir string) []string {
 // `lore org link` puts into a client repo (clientguard.go, with
 // lore.clientrepo set) is not a set-up of the clone: the first lore init
 // there said "leak guard off … restored now (commits made meanwhile were
-// not checked)" for hooks lore had never installed (devco:N-10).
+// not checked)" for hooks lore had never installed (devco:N-10). Every
+// hook the guard installs counts (commit-msg and pre-push since D-730):
+// once the first link installed the guard (D-733), init named pre-push
+// as lore's wiring and said the guard was off.
 func (s *liveSession) neverWired(ctx context.Context, dir string) bool {
 	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "merge." + mergeDriverLore + ".driver"}}); err == nil && strings.TrimSpace(string(out)) != "" {
 		return false
@@ -346,7 +349,7 @@ func (s *liveSession) neverWired(ctx context.Context, dir string) bool {
 		return true // no hook folder yet: nothing was ever installed
 	}
 	for _, e := range ents {
-		if e.IsDir() || strings.HasSuffix(e.Name(), ".sample") || (onlyGuard && e.Name() == hookCommitMsg) {
+		if e.IsDir() || strings.HasSuffix(e.Name(), ".sample") || (onlyGuard && slices.Contains(clientGuardHookNames, e.Name())) {
 			continue
 		}
 		if b, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, e.Name()))); rerr == nil && strings.Contains(string(b), gitBlockMarker) {
