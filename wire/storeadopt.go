@@ -247,7 +247,7 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 			// D-731: the actor and project rows nothing left in the repo
 			// references go too (the folder is its own project)
 			var rest []store.Key
-			if rest, rerr = movedDropLeftovers(top); rerr == nil && len(rest) > 0 {
+			if rest, _, rerr = movedDropLeftovers(top); rerr == nil && len(rest) > 0 {
 				var gone []string
 				gone, rerr = removeAdopted(top, rest)
 				removed = append(removed, gone...)

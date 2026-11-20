@@ -10,8 +10,9 @@ package journeys
 // with a rule, a memory with a comment, an open and a done task, links it
 // to a folder, runs `lore move --from repo --to <org>/<folder> --yes`,
 // commits through lore's own hooks and pushes; `git ls-files .lore/data`
-// holds no moved row (only the format marker, policy, repo, actor and
-// project rows the repo keeps), every row and the comment are in the folder with the same
+// holds no moved row and no actor row (only the format marker, policy and
+// repo rows the repo keeps, and the project row its repo row references,
+// which the move names), every row and the comment are in the folder with the same
 // ids, and Ann reads them all from a fresh clone. An unlinked repo still
 // keeps its tombstone after a move (it is still a place people write).
 
@@ -98,14 +99,20 @@ func TestJourneyMoveOutOfLinkedRepo(t *testing.T) {
 
 	w.Step("day2/move-commit-through-the-hooks-nothing-left", func() {
 		w.AdvanceDays(1)
-		lee.LoreIn(repo, "move", "--from", "repo", "--to", place, "--yes").OK(t).
+		mv := lee.LoreIn(repo, "move", "--from", "repo", "--to", place, "--yes").OK(t).
 			Says(t, "✓ moved ").Never(t, "W_MOVED_KEPT", "was not found")
+		// the repos row and _meta.json name the repo's project, so it stays
+		// and the move says why; nothing kept references the actor
+		mv.Says(t, "stays: repos/", "project_id references it").Never(t, "actors/act_")
 		repo.Git("add", "-A", ".lore/data")
 		c := repo.TryGit("commit", "-m", "lore: move the notes to "+place)
 		if c.Code != 0 || strings.Contains(c.Out(), "by removing the file") || strings.Contains(c.Out(), "E_INTERNAL") {
 			t.Fatalf("the commit after the move failed: exit %d\n%s", c.Code, c.Out())
 		}
 		jMlOnlyKept(t, "the linked repo", repo.Git("ls-files", ".lore/data"))
+		jMlOneProject(t, "the linked repo", repo.Git("ls-files", ".lore/data"))
+		// the hooks and reads still find the repo's own policies row
+		lee.LoreIn(repo, "policy", "show").OK(t).Says(t, "context.targets")
 		if n := jAmLiveTasks(t, repo.Git); n != 0 {
 			t.Errorf("%d moved tasks are still on the repo's live ref", n)
 		}
@@ -127,6 +134,7 @@ func TestJourneyMoveOutOfLinkedRepo(t *testing.T) {
 		peer := ann.Clone(w.Remote(jMlSlug), "billing-app")
 		ann.LoreIn(peer, "sync").OK(t)
 		jMlOnlyKept(t, "Ann's clone", peer.Git("ls-files", ".lore/data"))
+		ann.LoreIn(peer, "policy", "show").OK(t).Says(t, "context.targets")
 		for _, id := range s.all() {
 			ann.LoreIn(peer, "show", "--id", id).OK(t).Never(t, "two live rows", "E_AMBIGUOUS_ID", "E_NOT_FOUND")
 		}
@@ -151,10 +159,19 @@ func TestJourneyMoveOutOfLinkedRepo(t *testing.T) {
 }
 
 // jMlKept are the .lore/data entries a linked repo keeps after its notes
-// moved out: the format marker, its branch-mode policy (read by its
-// hooks), its repo row, and the actor and project rows those reference.
-// No moved table (rules, memories, tasks, comments) may be left.
-var jMlKept = []string{".lore/data/_meta.json", ".lore/data/policies/", ".lore/data/repos/", ".lore/data/actors/", ".lore/data/projects/"}
+// moved out: the format marker, its policies (read by its hooks), its repo
+// row, and the one project row the repo row and the marker reference. No
+// moved table (rules, memories, tasks, comments) and no actor row may be
+// left (the store holds the actors).
+var jMlKept = []string{".lore/data/_meta.json", ".lore/data/policies/", ".lore/data/repos/", ".lore/data/projects/"}
+
+// jMlOneProject fails unless files track exactly one project row.
+func jMlOneProject(t *testing.T, who, files string) {
+	t.Helper()
+	if n := strings.Count(files, ".lore/data/projects/"); n != 1 {
+		t.Errorf("%s tracks %d project rows after the move, want only the one its repo row references:\n%s", who, n, files)
+	}
+}
 
 // jMlOnlyKept fails for each tracked path of files outside jMlKept.
 func jMlOnlyKept(t *testing.T, who, files string) {
