@@ -403,9 +403,10 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil {
 		return fail(err)
 	}
-	st.refuseWritesIfLeft(ctx, opts.Home, attached)           // leftgate.go: a removed person writes only to their personal store (B2-12)
-	st.refuseOrgFolderIfContractor(ctx, attached, repoClient) // contractorgate.go: a contractor writes only to their client folders (J-15, R-16)
-	st.armLeftHold(opts.Home, attached)                       // leftgate.go: the sync that brings a removal holds later writes (F-9)
+	linkedFolder := func() string { return linkedFolderTargetOf(ctx, opts, st.repoTop) } // D-736: a cleaned linked repo's project row is there
+	st.refuseWritesIfLeft(ctx, opts.Home, attached)                                      // leftgate.go: a removed person writes only to their personal store (B2-12)
+	st.refuseOrgFolderIfContractor(ctx, attached, repoClient, linkedFolder)              // contractorgate.go: a contractor writes only to their client folders (J-15, R-16)
+	st.armLeftHold(opts.Home, attached)                                                  // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
 		// agent in a client repo is recorded as its owning person; an org
@@ -1473,9 +1474,9 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil { // TEAM_PROFILES 6.3, as in open
 		return fail(err)
 	}
-	st.refuseWritesIfLeft(ctx, opts.Home, attached)     // leftgate.go: inside a store clone too (B2-25)
-	st.refuseOrgFolderIfContractor(ctx, attached, true) // contractorgate.go (J-15); a store clone has no code repo
-	st.armLeftHold(opts.Home, attached)                 // leftgate.go: the sync that brings a removal holds later writes (F-9)
+	st.refuseWritesIfLeft(ctx, opts.Home, attached)          // leftgate.go: inside a store clone too (B2-25)
+	st.refuseOrgFolderIfContractor(ctx, attached, true, nil) // contractorgate.go (J-15); a store clone has no code repo
+	st.armLeftHold(opts.Home, attached)                      // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	// rowState: App.finishOpen reads the formats before the first write
 	if !st.refreshPending {
 		if err = st.readFormats(ctx, opts); err != nil {

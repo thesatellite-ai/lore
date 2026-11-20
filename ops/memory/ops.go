@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
+	"github.com/thesatellite-ai/lore/ops/internal/repohome"
 	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -440,12 +441,13 @@ func (o ops) finishSupersedes(ctx context.Context, oldSrc store.Source, old ids.
 }
 
 // project resolves --project (a prj_ id or a project name among the repo
-// store's projects); "" is the repo's one project (Env.Project).
+// store's projects and, in a cleaned linked repo, its folder's:
+// repohome.ProjectRows); "" is the repo's one project (Env.Project).
 func (o ops) project(ctx context.Context, flag string) (ids.ID[ids.Project], error) {
 	if flag == "" {
 		return o.env.Project(ctx)
 	}
-	rows, err := o.env.List(ctx, store.SourceRepo, schema.TableProjects)
+	rows, err := repohome.ProjectRows(ctx, o.env) // D-736: the linked folder's too
 	if err != nil {
 		return ids.ID[ids.Project]{}, err
 	}

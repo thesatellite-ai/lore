@@ -20,8 +20,11 @@ package journeys
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 const jLcSlug = "github.com/acme-co/billing-clean"
@@ -152,4 +155,122 @@ func TestJourneyLinkedRepoDoctorCleansRows(t *testing.T) {
 		}
 		lee.LoreIn(repo, "whoami").OK(t).Says(t, place)
 	})
+
+	w.Step("day3/everyday-commands-work-and-write-nothing-into-the-repo", func() {
+		// D-736 (cleanlink3): the repo's own project and repos rows are gone
+		// (doctor --fix), its identity is the store link. Every everyday
+		// command run here works, and none writes a row into .lore/data:
+		// `--scope dir:<path>` / `--scope repo` refused "repo_id → rep_…"
+		// (scopes.repo_id is a ref to the repos row no store held) and
+		// `--project <name>` listed only the repo store's project rows.
+		repo.WriteFile("src/billing/invoice.go", "package billing\n")
+		repo.CommitAll("src")
+		prj := jLcProjectName(t, lee, repo)
+		var dirMem, repoMem, dirRule string
+		steps := []struct {
+			name string
+			run  func() teamharness.Result
+		}{
+			{"memory add --scope dir", func() teamharness.Result {
+				r := lee.LoreIn(repo, "memory", "add", "--body", "invoices round in src/billing", "--scope", "dir:src/billing", "--json")
+				dirMem = jLcID(r)
+				return r
+			}},
+			{"memory add --scope repo", func() teamharness.Result {
+				r := lee.LoreIn(repo, "memory", "add", "--body", "the billing repo deploys on tuesday", "--scope", "repo", "--json")
+				repoMem = jLcID(r)
+				return r
+			}},
+			{"rule add --scope dir", func() teamharness.Result {
+				r := lee.LoreIn(repo, "rule", "add", "--body", "Never float money in src/billing", "--severity", "must", "--scope", "dir:src/billing", "--yes", "--json")
+				dirRule = jLcID(r)
+				return r
+			}},
+			{"memory add --project", func() teamharness.Result {
+				return lee.LoreIn(repo, "memory", "add", "--body", "named project note", "--project", prj)
+			}},
+			{"memory list --project", func() teamharness.Result { return lee.LoreIn(repo, "memory", "list", "--project", prj) }},
+			{"rule add --project", func() teamharness.Result {
+				return lee.LoreIn(repo, "rule", "add", "--body", "Name the project rule", "--severity", "should", "--project", prj, "--yes")
+			}},
+			{"task add --project", func() teamharness.Result {
+				return lee.LoreIn(repo, "task", "add", "--title", "Named project task", "--project", prj)
+			}},
+			{"task list --project", func() teamharness.Result { return lee.LoreIn(repo, "task", "list", "--project", prj) }},
+			{"task next", func() teamharness.Result { return lee.LoreIn(repo, "task", "next") }},
+			{"memory list --repo <mount name>", func() teamharness.Result {
+				return lee.LoreIn(repo, "memory", "list", "--repo", "billing-clean")
+			}},
+			{"memory edit --scope dir", func() teamharness.Result {
+				return lee.LoreIn(repo, "memory", "edit", "--id", repoMem, "--scope", "dir:src/billing")
+			}},
+			{"memory edit --scope repo", func() teamharness.Result {
+				return lee.LoreIn(repo, "memory", "edit", "--id", dirMem, "--scope", "repo")
+			}},
+			{"memory list", func() teamharness.Result { return lee.LoreIn(repo, "memory", "list") }},
+			{"show dir rule", func() teamharness.Result { return lee.LoreIn(repo, "show", "--id", dirRule) }},
+			{"search", func() teamharness.Result { return lee.LoreIn(repo, "search", "--query", "billing") }},
+			{"scope list", func() teamharness.Result { return lee.LoreIn(repo, "scope", "list") }},
+			{"scope show", func() teamharness.Result {
+				return lee.LoreIn(repo, "scope", "show", "--path", "src/billing/invoice.go")
+			}},
+			{"context --for-file", func() teamharness.Result {
+				return lee.LoreIn(repo, "context", "--for-file", "src/billing/invoice.go")
+			}},
+			{"policy set", func() teamharness.Result {
+				return lee.LoreIn(repo, "policy", "set", "--key", "context.budget.internal", "--value", "21000", "--yes")
+			}},
+			{"policy show", func() teamharness.Result { return lee.LoreIn(repo, "policy", "show") }},
+			{"secrets allow list", func() teamharness.Result { return lee.LoreIn(repo, "secrets", "allow", "list") }},
+			{"render", func() teamharness.Result { return lee.LoreIn(repo, "render") }},
+		}
+		for _, s := range steps {
+			r := s.run()
+			if r.Code != 0 {
+				t.Errorf("%s in the cleaned linked repo failed: exit %d\n%s", s.name, r.Code, r.Out())
+				continue
+			}
+			if st := repo.Status(); strings.Contains(st, ".lore/data/") && !jLcOnlyMeta(st) {
+				t.Errorf("%s wrote into the cleaned linked repo's .lore/data:\n%s", s.name, st)
+			}
+		}
+		// doctor exits 1 on any warning; none of them is about the repo's
+		// identity or a ref the clean left dangling
+		lee.LoreIn(repo, "doctor").Never(t, "E_NOT_FOUND", "rep_", "run lore init", "no project")
+		if st := repo.Status(); strings.Contains(st, ".lore/data/") && !jLcOnlyMeta(st) {
+			t.Errorf("doctor wrote into the cleaned linked repo's .lore/data:\n%s", st)
+		}
+		// the folder scope answers for the file, with the rule written there
+		lee.LoreIn(repo, "scope", "show", "--path", "src/billing/invoice.go").OK(t).Says(t, "src/billing")
+		lee.LoreIn(repo, "context", "--for-file", "src/billing/invoice.go").OK(t).Says(t, "Never float money in src/billing")
+	})
+}
+
+// jLcProjectName is the name of the project a cleaned linked repo answers:
+// the linked folder's project, which lore project list must show.
+func jLcProjectName(t *testing.T, m *Machine, repo *teamharness.Clone) string {
+	t.Helper()
+	m.LoreIn(repo, "project", "list").OK(t).Says(t, jMlFolder)
+	return jMlFolder
+}
+
+var jLcIDRe = regexp.MustCompile(`"id":\s*"([a-z]+_[0-9a-f]+)"`)
+
+// jLcID is the first id a --json write printed ("" when none).
+func jLcID(r teamharness.Result) string {
+	if m := jLcIDRe.FindStringSubmatch(r.Stdout); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// jLcOnlyMeta reports whether every .lore/data line of a git status is
+// _meta.json (sync may refresh it; it is not a row).
+func jLcOnlyMeta(st string) bool {
+	for _, l := range strings.Split(st, "\n") {
+		if strings.Contains(l, ".lore/data/") && !strings.HasSuffix(l, "/_meta.json") {
+			return false
+		}
+	}
+	return true
 }

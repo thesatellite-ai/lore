@@ -701,7 +701,13 @@ func (a *App) personalNoneTargets(ctx context.Context) []string {
 // link's own --to (Options.RepoLinkTarget, set even when the folder is
 // not attached here); "" when no link names the repo.
 func (a *App) linkedFolderTarget(ctx context.Context, top string) string {
-	raw := rawOrgStores(ctx, a.opts)
+	return linkedFolderTargetOf(ctx, a.opts, top)
+}
+
+// linkedFolderTargetOf is linkedFolderTarget for code that holds only
+// Options (open's contractor gate, devco D-736).
+func linkedFolderTargetOf(ctx context.Context, opts Options, top string) string {
+	raw := rawOrgStores(ctx, opts)
 	for i, s := range renameOrgClashes(raw, top) {
 		if strings.Contains(string(raw[i].Name), targetSep) {
 			continue // the company (org/) folder, not the linked one
@@ -713,8 +719,8 @@ func (a *App) linkedFolderTarget(ctx context.Context, top string) string {
 			return string(s.Name) + targetSep + f
 		}
 	}
-	if a.opts.RepoLinkTarget != nil {
-		return a.opts.RepoLinkTarget(ctx)
+	if opts.RepoLinkTarget != nil {
+		return opts.RepoLinkTarget(ctx)
 	}
 	return ""
 }

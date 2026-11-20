@@ -203,6 +203,9 @@ type Engine struct {
 	readMaskOnce sync.Once
 	readMask     *readMasks
 	readScanner  scan.Scanner // nil: reads are not masked (WithReadScanner)
+	// identity answers for a ref whose target's identity is held outside
+	// the rows (SetIdentityHolder, D-736); nil: none.
+	identity IdentityHolder
 }
 
 // Option configures New.

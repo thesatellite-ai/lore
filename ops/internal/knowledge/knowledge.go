@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/repohome"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
@@ -336,12 +337,13 @@ func finishSupersedes(ctx context.Context, env Env, n Noun, oldSrc store.Source,
 }
 
 // ResolveProject resolves --project (a prj_ id or a project name among
-// the repo store's projects); "" is the repo's one project.
+// the repo store's projects and, in a cleaned linked repo, its folder's:
+// repohome.ProjectRows); "" is the repo's one project.
 func ResolveProject(ctx context.Context, env Env, n Noun, flag string) (ids.ID[ids.Project], error) {
 	if flag == "" {
 		return env.Project(ctx)
 	}
-	rows, err := env.List(ctx, store.SourceRepo, schema.TableProjects)
+	rows, err := repohome.ProjectRows(ctx, env) // D-736: the linked folder's too
 	if err != nil {
 		return ids.ID[ids.Project]{}, err
 	}

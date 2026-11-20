@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -37,7 +38,10 @@ import (
 // way; before, a contractor who cloned an own repo wrote tasks and notes
 // there and their sync pushed them. clientRepo is true in a client repo
 // (or where there is no code repo): the client's folders keep working.
-func (st *state) refuseOrgFolderIfContractor(ctx context.Context, attached []attach.Opened, clientRepo bool) {
+//
+// linkedFolder names the store folder the repo's org link attaches (nil
+// or "": none); a cleaned linked repo's project row is there (D-736).
+func (st *state) refuseOrgFolderIfContractor(ctx context.Context, attached []attach.Opened, clientRepo bool, linkedFolder func() string) {
 	if st.eng == nil || st.actor.IsZero() {
 		return
 	}
@@ -61,7 +65,7 @@ func (st *state) refuseOrgFolderIfContractor(ctx context.Context, attached []att
 		return
 	}
 	refusal := contractorRefusal(st.who.Org)
-	ownRepo := !clientRepo && !st.memberOfRepoProject(ctx, attached)
+	ownRepo := !clientRepo && !st.memberOfRepoProject(ctx, attached, linkedFolder)
 	for _, o := range attached {
 		if o.Level == policy.LevelOrg || (ownRepo && o.Level != policy.LevelPersonal) {
 			st.eng.RefuseWritesUnless(o.Name, refusal, ownRosterRow)
@@ -145,9 +149,21 @@ func linkRosterSources(attached []attach.Opened) {
 // memberOfRepoProject reports whether the caller is a member (a
 // project_members row in an org-level store) of a project the repo's own
 // store holds: then the repo is one of their projects, not only the org's.
-func (st *state) memberOfRepoProject(ctx context.Context, attached []attach.Opened) bool {
+// A linked repo whose .lore/data holds no project row (after lore doctor
+// --fix, devco D-736) is its linked folder's project: that folder's
+// project rows are read instead, so a contractor on that project is not
+// walled out of the repo once it is cleaned.
+func (st *state) memberOfRepoProject(ctx context.Context, attached []attach.Opened, linkedFolder func() string) bool {
 	projects, err := st.eng.List(ctx, store.SourceRepo, schema.TableProjects)
-	if err != nil || len(projects) == 0 {
+	if err != nil {
+		return false
+	}
+	if !liveAny(projects) && linkedFolder != nil {
+		if name := linkedFolder(); name != "" {
+			projects, _ = st.eng.List(ctx, store.Source(name), schema.TableProjects)
+		}
+	}
+	if len(projects) == 0 {
 		return false
 	}
 	here := map[string]bool{}
@@ -188,4 +204,14 @@ func (st *state) isCaller(actor string) bool {
 	}
 	id, err := st.who.Person().ActorID()
 	return err == nil && id.String() == actor
+}
+
+// liveAny reports whether rows holds a row that is not deleted.
+func liveAny(rows []row.Row) bool {
+	for _, r := range rows {
+		if !r.Deleted {
+			return true
+		}
+	}
+	return false
 }

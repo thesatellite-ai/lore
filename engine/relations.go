@@ -55,6 +55,9 @@ func (e *Engine) checkRefs(ctx context.Context, from store.Source, def schema.Ta
 			return err
 		}
 		if len(holders) == 0 {
+			holders = e.identityHolders(ctx, e.targetTable(t), t.ID) // D-736: a linked repo's repos id
+		}
+		if len(holders) == 0 {
 			if !t.AllowDangling {
 				missing = append(missing, t.Field+" → "+t.ID.String())
 			}
