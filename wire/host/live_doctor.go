@@ -207,6 +207,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	if err != nil {
 		return
 	}
+	s.doctorTrackedHooks(ctx, dir, shared, fix, warn, note) // D-732
 	missing := missingRideHooks(dir)
 	if len(missing) == 0 {
 		note("post-commit and pre-push hook blocks installed")
@@ -255,6 +256,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 			warn(what + "; " + fmt.Sprintf(trackedHooksSkipped, teamHookNames(created, changed), dir))
 			return
 		}
+		s.noteTrackedAsked(created) // D-732: the person's yes; doctor --fix keeps them
 	}
 	if !fix {
 		warn(what + "; run `lore fix` (or `lore sync`) to install it; a read never does")

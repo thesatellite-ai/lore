@@ -90,7 +90,7 @@ func (s *SetupHost) PlanAgentHooks(ctx context.Context, remove, promptSearch boo
 			}
 		}
 	}
-	plans, err := planAgentHooks(root, remove, promptSearch)
+	plans, err := planAgentHooks(root, remove, promptSearch, s.sharedHooks(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -115,13 +115,100 @@ func (s *SetupHost) WriteAgentHooks(ctx context.Context, plans []opssetup.HookPl
 	if wire.ProjectFormatOld(root) && slices.ContainsFunc(plans, func(p opssetup.HookPlan) bool { return p.Change }) {
 		return wire.FormatOldErr(root)
 	}
+	return writeHookPlans(ctx, root, plans, remove, s.sharedHooks(ctx))
+}
+
+// writeHookPlans writes every changed plan into its settings file under
+// root, moving lore's entry out of the tool's other file (D-732).
+func writeHookPlans(ctx context.Context, root string, plans []opssetup.HookPlan, remove, shared bool) error {
 	for _, p := range plans {
 		if !p.Change {
 			continue
 		}
-		if err := writeHookFile(root, filepath.Join(root, filepath.FromSlash(p.Hook.ConfigFile)), p.Hook, remove); err != nil {
+		path := filepath.Join(root, filepath.FromSlash(p.Hook.ConfigFile))
+		if has, herr := hookInstalled(path, p.Hook); herr != nil {
+			return herr
+		} else if has == remove {
+			if err := writeHookFile(root, path, p.Hook, remove); err != nil {
+				return err
+			}
+		}
+		if !remove && p.Hook.ConfigFile == toolprofile.ClaudeLocalSettings {
+			if err := excludePersonal(ctx, root, p.Hook.ConfigFile); err != nil {
+				return err
+			}
+		}
+		// D-732: the same entry in the tool's other file (an older lore's
+		// .claude/settings.json, or the mode switched) moves: it leaves
+		// that file, the person's own entries there stay as they were.
+		if err := dropFromOther(ctx, root, p.Hook, shared); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// sharedHooks reports whether the team opted in to committed agent hooks
+// (context.hooks.agent_hooks shared, D-732); personal otherwise.
+func (s *SetupHost) sharedHooks(ctx context.Context) bool {
+	set, ok := s.h.policySet(ctx)
+	if !ok {
+		return false
+	}
+	mode, _ := set.Text(policy.KeyContextAgentHooks)
+	return mode == policy.AgentHooksShared
+}
+
+// dropFromOther removes lore's entry for h from the settings file h is not
+// placed in for the mode, when it is there. A file left holding nothing
+// ({}) that git does not track is removed: lore made it, and it would
+// only show as untracked in `git status` (D-732). A tracked one stays.
+func dropFromOther(ctx context.Context, root string, h toolprofile.SessionHook, shared bool) error {
+	other := h.OtherFile(shared)
+	if other == "" {
+		return nil
+	}
+	path := filepath.Join(root, filepath.FromSlash(other))
+	has, err := hookInstalled(path, h)
+	if err != nil || !has {
+		return err
+	}
+	moved := h
+	moved.ConfigFile = other
+	if err := writeHookFile(root, path, moved, true); err != nil {
+		return err
+	}
+	return removeIfEmptyUntracked(ctx, root, path)
+}
+
+// excludePersonal keeps the personal settings file rel (Claude Code's
+// settings.local.json) out of `git status` (D-732): Claude Code adds it
+// to git's ignore list only when Claude Code creates it, so a file lore
+// creates first would show as untracked. A file git already ignores or
+// tracks is left as it is; the line goes in the clone's info/exclude,
+// never in a tracked .gitignore.
+func excludePersonal(ctx context.Context, root, rel string) error {
+	if tracked, err := gitTracks(ctx, root, rel); err != nil || tracked {
+		return err
+	}
+	if _, err := runGit(ctx, false, "-C", root, "check-ignore", "-q", "--", rel); err == nil {
+		return nil
+	}
+	return excludeInGitAs(ctx, root, rel, "# lore: personal agent hooks (Claude Code's local settings, never committed)")
+}
+
+// removeIfEmptyUntracked removes the settings file at path when it holds
+// an empty JSON object and git does not track it.
+func removeIfEmptyUntracked(ctx context.Context, root, path string) error {
+	doc, err := readSettings(path)
+	if err != nil || len(doc) > 0 {
+		return err
+	}
+	if tracked, terr := gitTracks(ctx, root, path); terr != nil || tracked {
+		return terr // tracked: the team's file, left for them to commit
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return wire.WriteError("remove", path, err, renderWriteHint)
 	}
 	return nil
 }
@@ -167,7 +254,7 @@ func agentHooksRoot(ctx context.Context) (string, error) {
 }
 
 // planAgentHooks lists what --agent-hooks would do per built-in profile.
-func planAgentHooks(root string, remove, promptSearch bool) ([]hookPlan, error) {
+func planAgentHooks(root string, remove, promptSearch, shared bool) ([]hookPlan, error) {
 	var out []hookPlan
 	for _, prof := range toolprofile.Builtins() {
 		h, ok := toolprofile.SessionHookFor(prof.Name)
@@ -185,7 +272,7 @@ func planAgentHooks(root string, remove, promptSearch bool) ([]hookPlan, error) 
 			hooks = append(hooks, end)
 		}
 		for _, hk := range append(hooks, toolprofile.ContextHooksFor(prof.Name, promptSearch)...) {
-			p, err := planOneHook(root, prof.Name, hk, remove)
+			p, err := planOneHook(root, prof.Name, hk.In(shared), remove, shared)
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +283,7 @@ func planAgentHooks(root string, remove, promptSearch bool) ([]hookPlan, error) 
 }
 
 // planOneHook plans one hook of one tool.
-func planOneHook(root, tool string, h toolprofile.SessionHook, remove bool) (hookPlan, error) {
+func planOneHook(root, tool string, h toolprofile.SessionHook, remove, shared bool) (hookPlan, error) {
 	path := filepath.Join(root, filepath.FromSlash(h.ConfigFile))
 	if _, err := os.Stat(filepath.Dir(path)); err != nil {
 		return hookPlan{tool: tool, file: h.ConfigFile, note: "not set up here (" + filepath.ToSlash(filepath.Dir(h.ConfigFile)) + "/ missing)"}, nil
@@ -205,8 +292,19 @@ func planOneHook(root, tool string, h toolprofile.SessionHook, remove bool) (hoo
 	if err != nil {
 		return hookPlan{}, err
 	}
+	inOther := false
+	if other := h.OtherFile(shared); other != "" {
+		if inOther, err = hookInstalled(filepath.Join(root, filepath.FromSlash(other)), h); err != nil {
+			return hookPlan{}, err
+		}
+	}
 	p := hookPlan{tool: tool, file: h.ConfigFile, hook: h}
 	switch {
+	case remove && inOther:
+		p.note, p.change = "remove "+h.Event+" hook: "+h.Command()+" (also from "+h.OtherFile(shared)+")", true
+	case !remove && inOther:
+		// D-732: an entry an older lore wrote to the committed file
+		p.note, p.change = "move "+h.Event+" hook from "+h.OtherFile(shared)+": "+h.Command(), true
 	case remove && has:
 		p.note, p.change = "remove "+h.Event+" hook: "+h.Command(), true
 	case remove:

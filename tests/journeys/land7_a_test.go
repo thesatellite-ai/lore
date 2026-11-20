@@ -38,10 +38,11 @@ const (
 	l7aHookCmd = "lore agent end --tool " + l7aClaude
 )
 
-// l7aHooks is every command lore's Claude Code settings file runs per event.
+// l7aHooks is every command lore's Claude Code settings file runs per event
+// (the personal settings.local.json since D-732).
 func l7aHooks(t testing.TB, repoDir string) map[string][]string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoDir, ".claude", "settings.json"))
+	b, err := os.ReadFile(filepath.Join(repoDir, ".claude", "settings.local.json"))
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -57,7 +58,7 @@ func l7aHooks(t testing.TB, repoDir string) map[string][]string {
 		} `json:"hooks"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
-		t.Fatalf(".claude/settings.json: %v", err)
+		t.Fatalf(".claude/settings.local.json: %v", err)
 	}
 	out := map[string][]string{}
 	for ev, groups := range doc.Hooks {

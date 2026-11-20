@@ -56,6 +56,43 @@ type SessionHook struct {
 	// default, no key written). Claude Code gives SessionEnd hooks 1.5 s
 	// in all unless a hook asks for more, which the end hook's push needs.
 	Timeout int
+	// SharedFile is the tool's committed settings file the hook goes in
+	// instead of ConfigFile when the team opts in (context.hooks.agent_hooks
+	// shared, D-732); "" when the tool has only the one file. ConfigFile is
+	// then the personal file git does not track by the tool's convention, so
+	// lore's hooks never show up as an untracked file in `git status`.
+	SharedFile string
+}
+
+// Claude Code's two project settings files (code.claude.com/docs/en/settings):
+// settings.local.json is personal (Claude Code adds it to git's ignore
+// list), settings.json is the team's, committed with the repo.
+const (
+	ClaudeLocalSettings  = ".claude/settings.local.json"
+	ClaudeSharedSettings = ".claude/settings.json"
+)
+
+// In returns h placed for the agent_hooks mode: with shared and a
+// SharedFile, the hook goes in that committed file; otherwise in
+// ConfigFile (D-732: personal by default).
+func (h SessionHook) In(shared bool) SessionHook {
+	if shared && h.SharedFile != "" {
+		h.ConfigFile = h.SharedFile
+	}
+	return h
+}
+
+// OtherFile is the settings file h is NOT placed in for the mode (where an
+// older lore, or the other mode, may have left the same entry); "" when
+// the tool has one file.
+func (h SessionHook) OtherFile(shared bool) string {
+	if h.SharedFile == "" {
+		return ""
+	}
+	if shared {
+		return ClaudeLocalSettings
+	}
+	return h.SharedFile
 }
 
 // Command is the snippet's command line (6.4).
@@ -90,7 +127,7 @@ const EndHookTimeout = 30
 // CLI SessionEnd (fires on exit; the CLI does not wait for it).
 func SessionEndHooks() []SessionHook {
 	return []SessionHook{
-		{Tool: NameClaudeCode, ConfigFile: ".claude/settings.json", Event: EventSessionEnd,
+		{Tool: NameClaudeCode, ConfigFile: ClaudeLocalSettings, SharedFile: ClaudeSharedSettings, Event: EventSessionEnd,
 			Source: "https://code.claude.com/docs/en/hooks", Cmd: EndHookCommand(NameClaudeCode), Timeout: EndHookTimeout},
 		{Tool: NameCodex, ConfigFile: codexHookFile, Event: EventSessionEnd,
 			Source: codexHookSource, Cmd: EndHookCommand(NameCodex)},
@@ -134,7 +171,7 @@ func parseClaudeHook(b []byte) (HookInput, error) {
 // SessionHooks lists the confirmed session hooks in a fixed order.
 func SessionHooks() []SessionHook {
 	return []SessionHook{
-		{Tool: NameClaudeCode, ConfigFile: ".claude/settings.json", Event: "SessionStart",
+		{Tool: NameClaudeCode, ConfigFile: ClaudeLocalSettings, SharedFile: ClaudeSharedSettings, Event: "SessionStart",
 			Source: "https://code.claude.com/docs/en/hooks", Parse: parseClaudeHook},
 		// Codex: same hooks JSON as Claude Code in <repo>/.codex/hooks.json;
 		// a project hook runs only after the person trusts it (/hooks), so a
@@ -176,13 +213,13 @@ const (
 func ContextHooks(promptSearch bool) []SessionHook {
 	const src = "https://code.claude.com/docs/en/hooks"
 	cmd := "lore context --hook " + NameClaudeCode + " --hook-stdin"
-	out := []SessionHook{{Tool: NameClaudeCode, ConfigFile: ".claude/settings.local.json", Event: "PreToolUse",
+	out := []SessionHook{{Tool: NameClaudeCode, ConfigFile: ClaudeLocalSettings, Event: "PreToolUse",
 		Matcher: "Read|Edit|Write", Cmd: cmd, Source: src},
 		// CONTEXT_BUDGET 6.9: the SessionStart context hook.
-		{Tool: NameClaudeCode, ConfigFile: ".claude/settings.local.json", Event: "SessionStart",
+		{Tool: NameClaudeCode, ConfigFile: ClaudeLocalSettings, Event: "SessionStart",
 			Cmd: cmd + " --session-start", Source: src}}
 	if promptSearch {
-		out = append(out, SessionHook{Tool: NameClaudeCode, ConfigFile: ".claude/settings.local.json",
+		out = append(out, SessionHook{Tool: NameClaudeCode, ConfigFile: ClaudeLocalSettings,
 			Event: "UserPromptSubmit", Cmd: cmd, Source: src})
 	}
 	// Codex (FA-CTX-5): PreToolUse on apply_patch (tool_input.command holds

@@ -15,6 +15,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // guardsOnText is the part of whoami's repo line that claims the guards.
@@ -83,6 +84,11 @@ func guardsOffRepoLine(ctx context.Context, s *orgcfg.Situation, lines []string)
 	}
 	fix := "lore fix here installs it"
 	switch {
+	case trackedHooksDir(ctx, s.Dir) != "":
+		// D-732: lore writes nothing into a hooks folder the repo commits,
+		// so no lore command installs it there: the step is the lines
+		// doctor prints, pasted into the repo's own commit-msg
+		fix = trackedHooksGuardFix(trackedHooksDir(ctx, s.Dir))
 	case s.LinkedByRemote != "":
 		fix = guardLinkFix(s) + " here installs it"
 	case !loreFolderAt(gitTop(ctx, s.Dir)):
@@ -96,6 +102,37 @@ func guardsOffRepoLine(ctx context.Context, s *orgcfg.Situation, lines []string)
 		}
 	}
 	return lines
+}
+
+// trackedHooksDir is the hooks folder git runs for the clone at dir when
+// it is one the repo commits (core.hooksPath inside the work tree, outside
+// .git, a file of it tracked); "" otherwise.
+func trackedHooksDir(ctx context.Context, dir string) string {
+	hp, err := gitRun{dir: dir, args: []string{"config", "--get", "core.hooksPath"}}.output(ctx)
+	p := filepath.FromSlash(strings.TrimSpace(string(hp)))
+	if err != nil || p == "" {
+		return ""
+	}
+	top := gitTop(ctx, dir)
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(top, p)
+	}
+	rel, inside := fspath.Rel(top, p)
+	if !inside || rel == "." || strings.SplitN(filepath.ToSlash(rel), "/", 2)[0] == ".git" {
+		return ""
+	}
+	out, err := gitRun{dir: top, args: []string{"ls-files", "--", rel}}.output(ctx)
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return ""
+	}
+	return p
+}
+
+// trackedHooksGuardFix is whoami's guard step for a clone whose hooks
+// folder is committed (D-732): doctor's paste lines, never a command that
+// would write there.
+func trackedHooksGuardFix(hooks string) string {
+	return "git runs hooks from " + hooks + ", which is committed with the repo, so lore writes nothing there: `lore doctor` prints the lines to paste into its commit-msg"
 }
 
 // unlinkedGuardFix is the guard step of a client repo no store links and

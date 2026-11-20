@@ -501,8 +501,12 @@ func whereRepo(ctx context.Context, top string) []opswhere.Entry {
 		}
 	}
 	for _, h := range toolprofile.SessionHooks() {
-		if f := filepath.Join(top, filepath.FromSlash(h.ConfigFile)); fileHas(f, whereHookWord) {
-			add(f, opswhere.KindBlock, "the agent hook entries lore added for "+h.Tool+" (`lore setup --agent-hooks`)", "removing them stops the hooks; other settings are yours")
+		// D-732: the personal file by default, the committed one when the
+		// team opted in (or an older lore wrote it)
+		for _, file := range []string{h.ConfigFile, h.SharedFile} {
+			if f := filepath.Join(top, filepath.FromSlash(file)); file != "" && fileHas(f, whereHookWord) {
+				add(f, opswhere.KindBlock, "the agent hook entries lore added for "+h.Tool+" (`lore setup --agent-hooks`)", "removing them stops the hooks; other settings are yours")
+			}
 		}
 	}
 	if f := filepath.Join(top, ".gitignore"); fileHas(f, whereIgnoreHeader) {
