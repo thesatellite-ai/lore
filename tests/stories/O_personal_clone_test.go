@@ -134,6 +134,42 @@ func TestStoryOPersonalStoreClone(t *testing.T) {
 			t.Errorf("[O D-640] a plain read in the store clone folder lists the personal note:\n%s", r)
 		}
 	})
+	// devco:D-755 (bug hunt H-16): a row in a folder of the personal store
+	// (`--to me/<folder>`) is written by id from every folder, as it is
+	// read: before the fix each write by id (edit, done, delete, move)
+	// answered E_NOT_FOUND "looked in the stores attached here (me, …)" in
+	// the linked repo, and "lore isn't set up" in the own repo and home.
+	s.Step("member/personal-folder-writes-by-id", func() {
+		ids := regexp.MustCompile(`\b(mem|tsk)_[0-9a-f]{32}\b`)
+		add := func(args ...string) string {
+			t.Helper()
+			id := ids.FindString(mo.Lore(mo.Home, append(args, "--yes")...).OK(t).Out())
+			if id == "" {
+				t.Fatalf("[O D-755] `lore %s` printed no id", strings.Join(args, " "))
+			}
+			return id
+		}
+		for _, place := range []struct{ name, dir string }{
+			{"linked-repo", mwc.Dir},
+			{"unlinked-own-repo", mpc.Dir},
+			{"clone-folder", filepath.Join(oStoreClone(mo, oOwner, "lore-team"), oFolder)},
+			{"home", mo.Home},
+		} {
+			mem := add("memory", "add", "--body", "pclone billing note "+place.name, "--to", "me/billing", "--create")
+			task := add("task", "add", "--title", "pclone billing task "+place.name, "--to", "me/billing")
+			moved := add("memory", "add", "--body", "pclone billing moved "+place.name, "--to", "me/billing")
+			for _, args := range [][]string{
+				{"memory", "edit", "--id", mem, "--body", "pclone billing note edited " + place.name},
+				{"task", "done", "--id", task},
+				{"row", "move", "--id", moved, "--to", "me/archive", "--yes"},
+				{"memory", "delete", "--id", mem, "--yes"},
+			} {
+				if r := mo.Lore(place.dir, args...); r.Code != 0 {
+					t.Errorf("[O D-755 %s] `lore %s` on a me/billing row is refused:\n%s", place.name, strings.Join(args, " "), r)
+				}
+			}
+		}
+	})
 	// devco:D-642, devco:D-665: a member's first write registered their
 	// agent actor in the org store while the row went elsewhere, and that
 	// commit read "lore: memory add act_…" (a memory that is not in it); a

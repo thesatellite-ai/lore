@@ -323,19 +323,47 @@ func (a *App) orgWideFolders(ctx context.Context, base string, root attach.Store
 // `lore search --store me` and `lore sql run --store me` answered nothing
 // while `--store me/<folder>` found the rows.
 func (a *App) personalFolders(ctx context.Context, root attach.Store) []attach.Store {
-	if root.URL == "" {
-		return nil
-	}
 	rootKey := placeKey(root.URL, root.Branch)
-	entries := []opsstores.Entry{{Name: attach.ReservedMe, URL: root.URL, Branch: root.Branch}}
 	var out []attach.Store
-	for _, f := range a.foldersOf(ctx, entries).Folders {
+	for _, f := range a.personalFolderScan(ctx, root.URL, root.Branch).Folders {
 		if f.Folder == root.Folder && placeKey(f.URL, f.Branch) == rootKey {
 			continue
 		}
 		out = append(out, attach.Store{Name: store.Source(attach.ReservedMe + targetSep + f.Folder), URL: f.URL, Folder: f.Folder, Branch: f.Branch, ReadOnly: true})
 	}
 	return out
+}
+
+// personalFolderScan is the one walk of the personal store at url (on
+// branch): its folders beside the root, each labelled `me` so it is named
+// me/<folder>, and `me` in Searched, Unread or NoAccess when the store was
+// looked in, could not be read or refused this login. Both uses of the
+// personal store's folders read this list: a read naming the whole store
+// (personalFolders, D-756) and a write by id looking for its row
+// (personalIDScan, D-755). An empty scan for an empty url (no personal
+// store set up).
+func (a *App) personalFolderScan(ctx context.Context, url, branch string) orgFolderScan {
+	scan := orgFolderScan{Unread: map[string]error{}}
+	if url == "" {
+		return scan
+	}
+	got := a.foldersOf(ctx, []opsstores.Entry{{Name: attach.ReservedMe, URL: url, Branch: branch}})
+	// foldersOf labels a store by its url (shortLabel); the personal store
+	// is `me` to its owner, in every note and every miss
+	if len(got.Searched) > 0 {
+		scan.Searched = []string{attach.ReservedMe}
+	}
+	if len(got.NoAccess) > 0 {
+		scan.NoAccess = []string{attach.ReservedMe}
+	}
+	for _, err := range got.Unread {
+		scan.Unread[attach.ReservedMe] = err
+	}
+	for _, f := range got.Folders {
+		f.Label, f.Org = attach.ReservedMe, attach.ReservedMe
+		scan.Folders = append(scan.Folders, f)
+	}
+	return scan
 }
 
 // cloneRoster is the roster of the org a store clone belongs to: a store
