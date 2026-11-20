@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -18,14 +19,14 @@ import (
 )
 
 // etgSeq makes every planted entity_tags row id distinct (the same link
-// twice is two v0.1.17 rows).
-var etgSeq int
+// twice is two v0.1.17 rows). Atomic: parallel subtests plant rows at once
+// (TestMigrateRunLeavesNoV1Silently offline/online raced on a plain int).
+var etgSeq atomic.Int64
 
 // v1EntityTag writes a v0.1.17 entity_tags row file into repo.
 func v1EntityTag(t *testing.T, repo, entityTable, entityID, tagID string) {
 	t.Helper()
-	etgSeq++
-	id, err := ids.Natural(ids.PrefixEntityTag, entityTable, entityID, tagID, strconv.Itoa(etgSeq))
+	id, err := ids.Natural(ids.PrefixEntityTag, entityTable, entityID, tagID, strconv.FormatInt(etgSeq.Add(1), 10))
 	if err != nil {
 		t.Fatal(err)
 	}
