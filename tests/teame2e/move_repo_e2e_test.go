@@ -135,10 +135,13 @@ func mustGlob(t *testing.T, pattern string) []string {
 // row outside the core tables, exactly like a core move; the v0.1.17 path
 // refused it ("agents cannot confirm a move with --yes"). That path went
 // with saas/cmd/cli, so every move now runs through row.move, which keeps
-// the id and leaves a body-less tombstone at the old place (PROV5). The
-// row is a planted teams row (teams is not a core table, and its id is a
-// real UUIDv7 because row.move parses ids strictly), moved from the client
-// repo to the agent's personal place (`--to me`).
+// the id. The client repo here is linked (org link), so since D-731
+// (e636ac00) the repo copy is removed once the store holds the row, not
+// left as a tombstone (an unlinked repo still keeps its body-less
+// tombstone, PROV5). The row is a planted teams row (teams is not a core
+// table, and its id is a real UUIDv7 because row.move parses ids
+// strictly), moved from the client repo to the agent's personal place
+// (`--to me`).
 func TestMove_V017RowTakesAnAgentsYes(t *testing.T) {
 	a := newAgency(t, th.Cmd("move"), th.Cmd("agent", "start"))
 	const id = "tem_0190d6f3a1b27c3d8e4f5a6b7c8d9e0f"
@@ -149,8 +152,7 @@ func TestMove_V017RowTakesAnAgentsYes(t *testing.T) {
 	a.aliceApp.WriteFile(rel, `{"_table":"teams","_v":1,"id":"`+id+`","name":"checkout squad","body":"checkout squad owns payments"}`)
 	agent := startAgent(t, a.alice, a.aliceApp, agentLabelBackend)
 	a.aliceApp.As(agent).MustLore("move", id, "--to", "me", "--yes").Says(t, id+" moved to store me").Never(t, "agents cannot confirm")
-	left, _ := a.aliceApp.ReadFile(rel)
-	if strings.Contains(left, "checkout squad owns payments") || !strings.Contains(left, `"_deleted": true`) {
-		t.Fatalf("the moved row must leave the repo as a body-less tombstone: %s = %s", rel, left)
+	if left, ok := a.aliceApp.ReadFile(rel); ok {
+		t.Fatalf("the moved row must leave the linked repo with nothing behind (D-731): %s = %s", rel, left)
 	}
 }

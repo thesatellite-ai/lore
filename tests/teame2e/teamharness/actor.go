@@ -115,6 +115,14 @@ func (a *Actor) Advance(d time.Duration) {
 // every session sharing this HOME fails as with no network.
 func (a *Actor) Offline() { a.writeGitconfig(true) }
 
+// OfflineRoute is where Offline sends the fake GitHub: a host that never
+// resolves (.invalid, RFC 6761), so git fails with "Could not resolve
+// host" as with the wifi off, like the journeys' Machine.Offline. A
+// missing folder (the route before) makes git say "does not appear to be
+// a git repository", which lore reads, rightly, as a store that is gone
+// and skips it (D-726), so it no longer stood for an outage.
+const OfflineRoute = "https://github.com.invalid/"
+
 // Online restores the network.
 func (a *Actor) Online() { a.writeGitconfig(false) }
 
@@ -140,7 +148,7 @@ func (a *Actor) writeGitconfig(offline bool) {
 	a.w.T.Helper()
 	target := a.w.hosts + "/" + fakeHost + "/"
 	if offline {
-		target = filepath.Join(a.w.Root, "no-network") + "/"
+		target = OfflineRoute
 	}
 	body := fmt.Sprintf(`[user]
 	email = %s

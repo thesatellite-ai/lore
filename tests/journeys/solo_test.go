@@ -824,13 +824,16 @@ func TestJourneySoloMonth6(t *testing.T) {
 			t.Errorf("setup show does not list codex: %s", show.Stdout)
 		}
 		// Sam uninstalls Claude Code and installs Codex; doctor names the
-		// two things to do (the codex skill, codex's pointer file in the
-		// repo) and Sam runs both fixes.
+		// codex skill. The repo's pointer file is Sam's own pick: since
+		// D-711 (3f6199fe) a setup tool the repo does not use is no doctor
+		// problem and is never written unasked, and with a context.targets
+		// row the row is the repo's pick (no skipped line), so Sam adds
+		// codex with render --add-target. Sam runs both.
 		if err := os.RemoveAll(filepath.Join(desk.Home, ".claude")); err != nil {
 			t.Fatal(err)
 		}
 		d := desk.LoreIn(deskApp, "doctor")
-		d.Says(t, "lore skill install --tool codex", "AGENTS.md")
+		d.Says(t, "lore skill install --tool codex")
 		desk.Lore("", "skill", "install", "--tool", "codex").OK(t)
 		desk.LoreIn(deskApp, "render", "--add-target", "codex").OK(t)
 		if s, ok := deskApp.ReadFile("AGENTS.md"); !ok || !strings.Contains(s, "LORE.md") {

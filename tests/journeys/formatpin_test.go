@@ -224,7 +224,8 @@ func TestJourneyUpgraderFormatPin(t *testing.T) {
 		if !ok {
 			t.Fatalf("no .lore/data/_meta.json on main after the migration: %v", repo.Files("main"))
 		}
-		for _, want := range []string{"migrated_by", "migrated_at", fpOwnerEmail} {
+		// migrated_by holds the name only since D-705 (4868b8b2): an email there kept lore's own hooks from taking the commit in a client repo
+		for _, want := range []string{"migrated_by", "migrated_at", fpOwnerName} {
 			if !strings.Contains(meta, want) {
 				t.Errorf("_meta.json after the migration does not record %q:\n%s", want, meta)
 			}

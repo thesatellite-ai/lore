@@ -378,7 +378,7 @@ func TestSyncStore_OfflineWriteIsSentByTheNextSync(t *testing.T) {
 	b.Git("pull", "-q", "--no-rebase", "origin", "main")
 	b.MustLore("memory", "list")
 
-	netDown(t, st.w, st.people[0])
+	netDown(t, st.people[0])
 	w := a.MustLore("memory", "add", "written on the train", "--to", "notes", "--json")
 	w.Says(t, "committed in the local copy of store notes", "run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)")
 	mem := th.DecodeJSON[syncAddOut](t, w).ID
