@@ -19,6 +19,10 @@ package journeys
 // still fails.
 // devco O-9: doctor in a repo with no lore data created
 // ~/.lore/state/machine.db on the runner. Now it creates no ~/.lore.
+// devco D-781 (hunt H-39): the setup's `git rm --cached .lore/LORE.full.md`
+// was undone by the pre-commit hook, which staged the untracked full file
+// again (the D-759 rule). Now the hook adds only a full file its own
+// refresh created, so the file stays out of the commit.
 
 import (
 	"os"

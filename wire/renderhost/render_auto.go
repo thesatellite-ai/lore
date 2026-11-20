@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -84,34 +85,94 @@ func (h *Host) RenderHeld(ctx context.Context, root string) bool {
 // same commit, unless git ignores it (a repo that keeps it out, or a
 // teammate's clone where keepRenderLocal excluded it) or it is a file of
 // that name lore did not write (never committed on the person's behalf).
+//
+// Only a companion this refresh created counts as new. One that was on
+// disk before the commit started and that git does not track is the
+// person's choice: they rendered it and left it out of the index, or took
+// it out with `git rm --cached` (a migrated repo that keeps its full file
+// local). Staging it again committed internal notes against that choice
+// (devco D-781); it is refreshed on disk and stays untracked. In a client
+// repo lore adds no file to the commit at all (D-754: lore changes none of
+// its tracked files): a new companion goes to the clone's
+// .git/info/exclude instead, so the tree is still clean after the commit.
 func (h *Host) CommitRender(ctx context.Context, root string) []string {
 	if !tracked(ctx, root, LoreMDRel) {
 		return nil
 	}
+	before := renderFilesOnDisk(root)
 	if _, err := h.Run(ctx, Flags{OutPath: filepath.Join(root, filepath.FromSlash(LoreMDRel)), NoPointer: true, Quiet: true}); err != nil {
 		_, _ = os.Stderr.WriteString("lore: pre-commit: re-render " + LoreMDRel + ": " + err.Error() + "\n") // stderr gone: nothing left to report to
 		return nil
 	}
-	return commitRenderStage(ctx, root)
+	stage, fresh := commitRenderStage(ctx, root, before)
+	return h.keepNewRenderLocalInClient(ctx, root, stage, fresh)
+}
+
+// clientRenderComment is the .git/info/exclude comment above a render file
+// the commit hook kept out of a client repo's commit.
+const clientRenderComment = "# lore: render file not committed in this client repo (lore adds no file to a client's commits)"
+
+// keepNewRenderLocalInClient drops fresh (the files of stage git does not
+// track yet) from stage when the repo is a client repo (an unknown answer
+// counts as one: fail closed) and excludes them in the clone instead
+// (devco D-781). The tracked files stay in stage; an own repo, or a commit
+// that adds no new file, gets stage unchanged without asking the repo's
+// class (no extra git call in the hook's common path, D-780).
+func (h *Host) keepNewRenderLocalInClient(ctx context.Context, root string, stage, fresh []string) []string {
+	if len(fresh) == 0 {
+		return stage
+	}
+	if client, err := h.repoIsClient(ctx); err == nil && !client {
+		return stage
+	}
+	kept := stage[:0:0]
+	for _, rel := range stage {
+		if !slices.Contains(fresh, rel) {
+			kept = append(kept, rel)
+			continue
+		}
+		if err := excludeInGitAs(ctx, root, rel, clientRenderComment); err != nil {
+			_, _ = os.Stderr.WriteString("lore: pre-commit: keep " + rel + " local: " + err.Error() + "\n") // stderr gone: nothing left to report to
+		}
+	}
+	return kept
+}
+
+// renderFilesOnDisk is the set of render files (renderFileRels) present
+// under root right now: CommitRender takes it before its refresh, so a
+// file it finds afterwards and not here is one the refresh created.
+func renderFilesOnDisk(root string) map[string]bool {
+	on := make(map[string]bool, len(renderFileRels))
+	for _, rel := range renderFileRels {
+		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+			on[rel] = true
+		}
+	}
+	return on
 }
 
 // commitRenderStage is CommitRender's choice of the render files to stage
-// after the refresh: each one git tracks, plus a new one lore wrote that
-// git does not ignore (newLoreRender).
-func commitRenderStage(ctx context.Context, root string) []string {
-	var stage []string
+// after the refresh: each one git tracks, plus one the refresh created
+// (not in before, the files on disk before it ran) that lore wrote and git
+// does not ignore (newLoreRender); fresh are those new ones. An untracked
+// render file that was already there is never staged (devco D-781).
+func commitRenderStage(ctx context.Context, root string, before map[string]bool) (stage, fresh []string) {
 	for _, rel := range renderFileRels {
-		if tracked(ctx, root, rel) || newLoreRender(ctx, root, rel) {
+		switch {
+		case tracked(ctx, root, rel):
 			stage = append(stage, rel)
+		case !before[rel] && newLoreRender(ctx, root, rel):
+			stage, fresh = append(stage, rel), append(fresh, rel)
 		}
 	}
-	return stage
+	return stage, fresh
 }
 
 // newLoreRender reports whether rel (slash-separated, under root) is a
-// render file lore wrote that git neither tracks nor ignores: the file
-// CommitRender adds to the commit beside the tracked LORE.md. A file of
-// that name without lore's header is the person's and is never staged.
+// render file lore wrote that git neither tracks nor ignores: with the
+// refresh having just created it, the file CommitRender adds to the commit
+// beside the tracked LORE.md. A file of that name without lore's header is
+// the person's and is never staged.
 func newLoreRender(ctx context.Context, root, rel string) bool {
 	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil || !strings.HasPrefix(string(data), fullFileMarker) {
