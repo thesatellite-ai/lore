@@ -427,7 +427,7 @@ func (e *Engine) locateExcept(ctx context.Context, ref Ref, skip store.Source) (
 	if len(found) == 0 {
 		return "", row.Row{}, errs.Wrap(errs.NotFound, "no row "+ref.ID.String()+" outside "+string(skip), store.ErrNotFound)
 	}
-	h, err := pickCopy(ref.ID, found) // a live copy wins over tombstones
+	h, err := e.pickCopy(ref.ID, found) // a live copy wins over tombstones
 	if err != nil {
 		return "", row.Row{}, err
 	}

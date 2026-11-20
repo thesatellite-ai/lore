@@ -97,7 +97,7 @@ func (e *Engine) List(ctx context.Context, source store.Source, table row.Table)
 		out = append(out, e.readRow(ctx, a.Name, r))
 	}
 	slices.SortFunc(out, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
-	return out, nil
+	return e.hideMoveLeftovers(ctx, a.Name, table, out), nil // devco:D-749: listed once, at the moved copy
 }
 
 // rawRows is readRows without the trash filter: purged ids still read as
