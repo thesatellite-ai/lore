@@ -135,8 +135,10 @@ type LiveConfig struct {
 	MetaStatus func(ctx context.Context) (quarantined, overCap []string)
 	// ClientRepo reports whether the repo of WorkDir resolves as a client
 	// repo of an org (J-11: a link of a repo with no .lore/ installs the
-	// leak guard there, clientguard.go); cmd/lore passes the org
-	// resolution's role. nil installs nothing.
+	// leak guard there, clientguard.go; devco:D-754: the git wiring and
+	// lore sync change none of its tracked files, clientwiring.go);
+	// cmd/lore passes the org resolution's role. nil installs nothing and
+	// treats every repo as an own repo.
 	ClientRepo func(ctx context.Context) bool
 }
 

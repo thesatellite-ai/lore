@@ -173,7 +173,15 @@ func run(ctx context.Context, args []string) int {
 	org.Now = clk.Now // a store clone's fetch_ttl on the same clock (storePush)
 	// The host hooks both binaries install (wire/host); the compat hook
 	// also prints v0.1.17's "  filed: <rule>" line under a routed create.
+	// J-11, devco:D-754: whether this repo resolves as a client repo of an
+	// org: the leak guard goes in, and no git wiring or .gitignore line
+	// changes a tracked file of it.
+	clientRepo := func(ctx context.Context) bool {
+		sit, err := org.Situation(ctx)
+		return err == nil && sit != nil && sit.ResolveErr == nil && sit.Result.Role == orgresolve.RoleClient
+	}
 	hooks := hosthooks.Replace(hosthooks.Default(wd), hosthooks.CompatFlagsHook(hosthooks.CompatOptions{Filed: org.Routed}))
+	hooks = hosthooks.Replace(hooks, hosthooks.GitignoreHookFor(wd, clientRepo))
 	// Live rows on refs/lore/live around every operation (LORE_TEAM_SPEC
 	// F1-F3, F8): the old binary has its own live wiring, so only this
 	// binary adds the hook.
@@ -209,10 +217,7 @@ func run(ctx context.Context, args []string) int {
 		// F-9: a removed person's later writes stay local, as in the store clones.
 		PushHold: func(ctx context.Context) (time.Time, string, bool) { return app.LivePushHold(ctx) },
 		// J-11: a link of a client repo with no .lore/ installs the leak guard there.
-		ClientRepo: func(ctx context.Context) bool {
-			sit, err := org.Situation(ctx)
-			return err == nil && sit != nil && sit.ResolveErr == nil && sit.Result.Role == orgresolve.RoleClient
-		},
+		ClientRepo: clientRepo,
 		// P3-MODEB-2: the resolved org entry's live: block overrides the top level.
 		OrgLive: func(ctx context.Context) *orgconf.Live {
 			if sit, err := org.Situation(ctx); err == nil && sit != nil && sit.Result.Org != nil {

@@ -91,7 +91,7 @@ func TestTeammateWriteKeepsWiringLocal(t *testing.T) {
 	}
 
 	// An install step writes them in a teammate's clone too.
-	if _, local := excludeReason(ctx, teammate, false, true); local {
+	if _, local := excludeReason(ctx, teammate, false, true, nil); local {
 		t.Error("lore doctor --fix in a teammate's clone keeps the .gitignore lines local")
 	}
 	// A project no migration recorded (made by this lore) keeps the old rule.
