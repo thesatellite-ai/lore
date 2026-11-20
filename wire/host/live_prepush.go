@@ -58,6 +58,13 @@ func (h *liveHost) prePushLeakCheck(ctx context.Context, repo *gitref.Repo, remo
 	if h.cfg.LeakCheck == nil {
 		return nil
 	}
+	var refs []string
+	for _, u := range updates {
+		if !isZeroOID(u.localSHA) {
+			refs = append(refs, u.remoteRef)
+		}
+	}
+	wire.NoteTagPush(ctx, repo.Dir(), remote, refs) // a pushed tag is listed again on the next check
 	sets, err := pushDocs(ctx, repo, remote, updates)
 	if err != nil {
 		return errs.Wrap(errs.LeakBlocked, "cannot check: could not list what this push sends", err).
@@ -114,11 +121,22 @@ func pushRange(ctx context.Context, repo *gitref.Repo, remote string, updates []
 			}
 		}
 	}
+	return append(args, notOnRemote(ctx, repo, remote)...), ok
+}
+
+// notOnRemote is the rev-list tail excluding what remote already has: its
+// tracking refs (every remote's when remote is "") and the commits of the
+// local tags it holds (a commit pushed only through a tag, issue #51;
+// wire.RemoteTagCommits, cached, no network call per push).
+func notOnRemote(ctx context.Context, repo *gitref.Repo, remote string) []string {
 	notRemote := "--remotes"
+	remotes := []string{remote}
 	if remote != "" {
 		notRemote += "=" + remote
+	} else {
+		remotes = nil
 	}
-	return append(args, "--not", notRemote), ok
+	return append([]string{"--not", notRemote}, wire.RemoteTagCommits(ctx, repo.Dir(), remotes)...)
 }
 
 // pushAddedLines is, per blob id, the line numbers the commits this push
@@ -159,7 +177,8 @@ const maxPushBases = 8
 
 // pushBases returns the commits the remote already has that this push
 // builds on: each updated ref's current remote tip, and the boundary of
-// what the push sends (`rev-list --boundary <tips> --not --remotes=<remote>`).
+// what the push sends (`rev-list --boundary <tips> --not --remotes=<remote>
+// <tags the remote has>`).
 // The secret check treats a value the same row held at one of them as
 // already on the remote (wire.WithPushBases). Nil on any git error or an
 // empty remote: then every finding blocks, as before (fails closed).
@@ -190,11 +209,7 @@ func pushBases(ctx context.Context, repo *gitref.Repo, remote string, updates []
 	if tips == 0 {
 		return bases
 	}
-	notRemote := "--remotes"
-	if remote != "" {
-		notRemote += "=" + remote
-	}
-	out, err := repo.Run(ctx, gitref.Invocation{Args: append(args, "--not", notRemote)})
+	out, err := repo.Run(ctx, gitref.Invocation{Args: append(args, notOnRemote(ctx, repo, remote)...)})
 	if err != nil {
 		return bases
 	}
