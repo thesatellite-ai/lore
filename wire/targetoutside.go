@@ -649,7 +649,11 @@ func (a *App) rowLookupOutside(ctx context.Context, in op.Input) (attach.Store, 
 	if h, ok := a.rowFolderIn(ctx, a.orgFolders(ctx), id, look); ok {
 		return h, true, look
 	}
-	h, ok := a.rowFolderIn(ctx, a.everyOrgFolders(ctx), id, look)
+	if h, ok := a.rowFolderIn(ctx, a.everyOrgFolders(ctx), id, look); ok {
+		return h, true, look
+	}
+	// devco:D-755: then the folders of the personal store (me/<folder>)
+	h, ok := a.rowFolderIn(ctx, a.personalIDScan(ctx), id, look)
 	return h, ok, look
 }
 

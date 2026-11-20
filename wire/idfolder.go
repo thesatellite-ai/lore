@@ -121,6 +121,9 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 		// clone, which is under no setup's folders)
 		scan = a.cloneIDScan(ctx, sc)
 	}
+	// devco:D-755: a row in a folder of the personal store (me/<folder>)
+	// is found by id from any folder, as an org folder's row is
+	scan = a.withPersonalFolders(ctx, scan)
 	var gone *goneRow
 	for _, f := range scan.Folders {
 		name := f.Org
@@ -149,6 +152,12 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 			continue
 		}
 		a.attachExtra(attach.Store{Name: store.Source(target), URL: f.URL, Folder: f.Folder, Branch: f.Branch})
+		if name == attach.ReservedMe {
+			// devco:D-755: `me` is no name store add takes, and an id finds
+			// its personal folder from every folder: no step to print
+			_, _ = fmt.Fprintf(os.Stderr, "lore: %s is in %s (your personal store); found there for this command\n", id, target)
+			return nil, nil
+		}
 		_, _ = fmt.Fprintf(os.Stderr, "lore: %s is in %s, which is not attached here; read from there for this command (lore store add … --folder %s attaches it for good)\n", id, target, f.Folder)
 		return nil, nil
 	}
