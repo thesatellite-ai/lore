@@ -97,6 +97,11 @@ func gitRunEnv(ctx context.Context, env []string, args ...string) (string, error
 // GIT_SSH_COMMAND for a key without an alias). wire's storeRouter is the
 // one implementation: it answers only for a store a setup owns, and
 // nothing for any other url. nil = every call runs as git is configured.
+//
+// A Router must be safe for concurrent use: GitLinks.prefetch fetches an
+// org's stores at the same time (owner item M-4) and asks the Router from
+// each goroutine. A stub that records the urls it is asked for guards its
+// slice (devco D-774: a bare append was a data race under -race).
 type Router func(ctx context.Context, url string) (args, env []string)
 
 // netGit runs one git network call (fetch, ls-remote, push) in the store

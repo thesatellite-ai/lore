@@ -43,11 +43,8 @@ func TestGatherNeverTouchesAnotherOrgsStore(t *testing.T) {
 			}
 			home := t.TempDir()
 			writeFile(t, ConfigPath(home), yml)
-			var asked []string
-			route := func(_ context.Context, u string) ([]string, []string) {
-				asked = append(asked, u)
-				return nil, nil
-			}
+			var routes routeLog // prefetch asks the router from several goroutines (D-774)
+			route := routes.router(nil)
 			links := &GitLinks{Home: home, Config: cfg, Always: true, Route: route}
 			repo := gitRepo(t, "git@github.com:acme/app.git", "prj_app")
 			s, err := Gather(ctx, In{Home: home, Dir: repo, Links: links, Setup: orgresolve.SetupHint{Name: "work", Org: c.setup}})
@@ -60,6 +57,7 @@ func TestGatherNeverTouchesAnotherOrgsStore(t *testing.T) {
 			}
 			dir, _ := cloneDir(home, betaNorm)
 			_, statErr := os.Stat(filepath.Join(dir, ".git"))
+			asked := routes.asked()
 			gotBeta := strings.Contains(strings.Join(asked, " "), "beta/") || statErr == nil
 			if gotBeta != c.wantBeta {
 				t.Fatalf("beta's store touched = %v (router asked %q, clone at %s: %v), want %v", gotBeta, asked, dir, statErr, c.wantBeta)

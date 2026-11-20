@@ -48,14 +48,13 @@ func sshWorld(t *testing.T, origin string) (url, log string) {
 
 // aliasRouter routes only owned through the alias github-work (the shape
 // of wire's storeRouter: nothing for a url no setup owns).
-func aliasRouter(owned string, asked *[]string) Router {
-	return func(_ context.Context, u string) ([]string, []string) {
-		*asked = append(*asked, u)
+func aliasRouter(owned string, routes *routeLog) Router {
+	return routes.router(func(u string) ([]string, []string) {
 		if u != owned {
 			return nil, nil
 		}
 		return []string{"-c", "url.git@github-work:.insteadOf=git@github.com:"}, nil
-	}
+	})
 }
 
 func readLog(t *testing.T, log string) []string {
@@ -84,8 +83,8 @@ func TestNetworkCallsUseTheStoreRoute(t *testing.T) {
 			ctx := gitref.WithTracer(context.Background(), func(tc gitref.TraceCall) { traced = append(traced, gitref.TraceLine(tc)) })
 			origin := storeOrigin(t)
 			url, log := sshWorld(t, origin)
-			var asked []string
-			r := aliasRouter(c.owned, &asked)
+			var routes routeLog
+			r := aliasRouter(c.owned, &routes)
 			home := t.TempDir()
 			cl := Clones{Home: home, Route: r}
 			norm, nerr := repourl.Normalize(url) // the clone is named by the url
@@ -110,6 +109,7 @@ func TestNetworkCallsUseTheStoreRoute(t *testing.T) {
 			if strings.Join(got, "\n") != strings.Join(want, "\n") {
 				t.Errorf("ssh calls\n got %q\nwant %q", got, want)
 			}
+			asked := routes.asked()
 			for _, u := range asked {
 				if u != url {
 					t.Errorf("the router was asked for %q, want the clone's origin %q", u, url)
