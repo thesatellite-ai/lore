@@ -96,6 +96,9 @@ type GraphOut struct {
 	Depth int         `json:"depth"`
 	Nodes []GraphNode `json:"nodes"`
 	Links []GraphLink `json:"links,omitempty"`
+	// Mentions are the rows whose text references the root or a node
+	// (${res:…}, devco D-764): graph --up and impact only.
+	Mentions []GraphMention `json:"mentions,omitempty"`
 	// Notes: the last good definition warning of each conflicted kind the
 	// index read (RES 3.13).
 	Notes []string `json:"notes,omitempty"`
@@ -419,8 +422,16 @@ func (o ops) resGraph(ctx context.Context, in GraphIn) (GraphOut, error) {
 	if err != nil {
 		return GraphOut{}, err
 	}
-	nodes, tree := idx.walk(root.Row.ID.String(), walkOpts{up: in.Up, noArchived: in.NoArchived, depth: depth})
-	return GraphOut{Root: root.Row.ID.String(), Depth: depth, Nodes: nodes, Notes: idx.notes, Tree: tree}, nil
+	rootID := root.Row.ID.String()
+	nodes, tree := idx.walk(rootID, walkOpts{up: in.Up, noArchived: in.NoArchived, depth: depth})
+	var ms []GraphMention
+	if in.Up { // what uses it: the notes that mention it too (devco D-764)
+		if ms, err = o.mentions(ctx, append([]string{rootID}, nodeIDs(nodes)...)); err != nil {
+			return GraphOut{}, err
+		}
+		tree += mentionLines(ms, "", idx.label)
+	}
+	return GraphOut{Root: rootID, Depth: depth, Nodes: nodes, Mentions: ms, Notes: idx.notes, Tree: tree}, nil
 }
 
 // resImpact: graph --up as a list by hops, then the open tasks and
@@ -443,6 +454,10 @@ func (o ops) resImpact(ctx context.Context, in ImpactIn) (GraphOut, error) {
 	rootID := root.Row.ID.String()
 	nodes, _ := idx.walk(rootID, walkOpts{up: true, noArchived: in.NoArchived, depth: depth})
 	links, err := o.openLinks(ctx, append([]string{rootID}, nodeIDs(nodes)...), in.AllLinks)
+	if err != nil {
+		return GraphOut{}, err
+	}
+	ms, err := o.mentions(ctx, append([]string{rootID}, nodeIDs(nodes)...))
 	if err != nil {
 		return GraphOut{}, err
 	}
@@ -469,7 +484,8 @@ func (o ops) resImpact(ctx context.Context, in ImpactIn) (GraphOut, error) {
 		}
 		b.WriteString("  open  " + strings.Join(parts, ", ") + "\n")
 	}
-	return GraphOut{Root: rootID, Depth: depth, Nodes: nodes, Links: links, Notes: idx.notes, Tree: b.String()}, nil
+	b.WriteString(mentionLines(ms, "  ", idx.label))
+	return GraphOut{Root: rootID, Depth: depth, Nodes: nodes, Links: links, Mentions: ms, Notes: idx.notes, Tree: b.String()}, nil
 }
 
 func nodeIDs(ns []GraphNode) []string {

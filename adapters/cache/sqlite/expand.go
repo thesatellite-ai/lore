@@ -197,3 +197,47 @@ func (c *Cache) reexpandWhere(ctx context.Context, tx *sql.Tx, p plan, f, query,
 	}
 	return len(hits), nil
 }
+
+// Referrer is one text field that references a row: row_refs (spec 4.5)
+// read back. RefID is the referenced id the line holds.
+type Referrer struct {
+	Table row.Table
+	ID    string
+	Field string
+	RefID string
+}
+
+// Referrers lists the fields whose text references one of refIDs (a
+// resource a note mentions as ${res:…}, a ${row:…} target), sorted by
+// table, id and field, each (table, id, field, ref) once. It reads
+// row_refs through ix_row_refs_ref and writes nothing: resource graph --up
+// and resource impact list the notes that mention a resource from it
+// (devco D-764).
+func (c *Cache) Referrers(ctx context.Context, refIDs []string) ([]Referrer, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.usable(); err != nil {
+		return nil, err
+	}
+	var out []Referrer
+	for _, refID := range refIDs {
+		rs, err := c.db.QueryContext(ctx,
+			`SELECT DISTINCT entity_table, entity_id, field FROM "`+tblRefs+`" WHERE ref_id = ? ORDER BY 1, 2, 3`, refID)
+		if err != nil {
+			return nil, dbErr("find referencing rows", err)
+		}
+		for rs.Next() {
+			r := Referrer{RefID: refID}
+			var table string
+			if err := rs.Scan(&table, &r.ID, &r.Field); err != nil {
+				return nil, errors.Join(dbErr("find referencing rows", err), rs.Close())
+			}
+			r.Table = row.Table(table)
+			out = append(out, r)
+		}
+		if err := errors.Join(rs.Err(), rs.Close()); err != nil {
+			return nil, dbErr("find referencing rows", err)
+		}
+	}
+	return out, nil
+}
