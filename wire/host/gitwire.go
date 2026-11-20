@@ -437,6 +437,12 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	// before lore migrate run (.gitattributes, .gitignore); the clone's
 	// own .git/config and hooks are not tracked and are still set up
 	formatOld := wire.ProjectFormatOld(root)
+	// devco:D-754: a client repo that still holds row files (set up as an
+	// own project before an org named it a client repo) gets lore's rules
+	// in the clone's own attributes file, as a teammate's clone does: lore
+	// changes none of its tracked files (clientwiring.go), install steps
+	// included. Asked last: it may resolve the org.
+	client := wire.HoldsLoreData(root) && !private && !formatOld && clientRepoHere(ctx, s.h.cfg.ClientRepo)
 	switch {
 	case !wire.HoldsLoreData(root):
 		// no row files here (a client repo): the rules would only change
@@ -445,11 +451,12 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		// D-500: the row files are never committed, so the rules would
 		// only change the team's .gitattributes for nothing
 	case formatOld:
-	case mode != wireInstall && !wire.TrackedWiringHere(ctx, root):
+	case client || (mode != wireInstall && !wire.TrackedWiringHere(ctx, root)):
 		// A-1: a teammate's clone of a migrated project: the tracked
 		// block comes with the migrator's commit; until it is there the
 		// same rules apply from the clone's own attributes file, so the
 		// git pull that brings it finds no uncommitted .gitattributes.
+		// A client repo's tracked block only ever comes from its owners.
 		if err := repoWriteRefused(s.top, localAttrs); err != nil {
 			s.warn("git wiring: " + err.Error()) // D-502: this file only; the hooks below still wire
 			break
@@ -566,6 +573,20 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if formatOld {
 		return // no stamp: the first command after lore migrate run adds the tracked rules
 	}
+	if client {
+		// devco:D-754: a rule of the client's .gitignore hiding row files
+		// is said, never rewritten
+		if still, err := stillIgnoredData(ctx, root, false); err != nil {
+			s.warn("git wiring: " + err.Error())
+			return
+		} else if len(still) > 0 {
+			s.warn(clientIgnoredNote + strings.Join(still, "\n  "))
+		}
+		if skipped == "" {
+			writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, fpBin, rel, paths)
+		}
+		return
+	}
 	switch changed, still, err := EnsureDataNotIgnored(ctx, root); {
 	case err != nil:
 		s.warn("git wiring: " + err.Error())
@@ -602,11 +623,18 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 		}
 	}
 	data := wire.HoldsLoreData(root)
+	// devco:D-754: a client repo's rules go to the clone's own attributes
+	// file and its .gitignore is never rewritten (clientwiring.go)
+	client := data && !wire.ProjectFormatOld(root) && clientRepoHere(ctx, s.h.cfg.ClientRepo)
 	if attrs := filepath.Join(root, gitAttributesFile); data && dataDirExists(root) {
 		// the rules only matter for row files: a repo whose rows live in a
 		// store (a converted Mode B repo) is not told
 		if stale, err := fileBlockStale(attrs, gitBlockMarker, gitAttributeLines); err == nil && stale && !attributesHeldLocally(localAttrs) {
-			missing = append(missing, "lore's merge rules in "+attrs+" (then commit "+gitAttributesFile+")")
+			if client {
+				missing = append(missing, "lore's merge rules in "+localAttrs+" (this clone's own file: lore changes none of a client repo's tracked files)")
+			} else {
+				missing = append(missing, "lore's merge rules in "+attrs+" (then commit "+gitAttributesFile+")")
+			}
 		}
 	}
 	var stale []string
@@ -647,6 +675,10 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 			shown, more := still, ""
 			if len(still) > maxIgnoredShown {
 				shown, more = still[:maxIgnoredShown], "\n  and "+strconv.Itoa(len(still)-maxIgnoredShown)+" more"
+			}
+			if client {
+				s.cmdNotice(ctx, clientIgnoredNote+strings.Join(shown, "\n  ")+more)
+				break
 			}
 			s.cmdNotice(ctx, "git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed); a read leaves "+gitignoreName+" as it is: `lore doctor --fix` re-includes "+dataRel+" (then commit "+gitignoreName+"):\n  "+strings.Join(shown, "\n  ")+more)
 		}

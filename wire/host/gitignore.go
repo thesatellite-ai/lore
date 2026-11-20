@@ -54,12 +54,17 @@ const gitignoreMode = 0o644
 
 // GitignoreHook appends the missing GitignoreLines once per process, on
 // the first operation that is not read-only. workDir is the folder the
-// command runs in.
-func GitignoreHook(workDir string) Hook {
+// command runs in. It knows no client repo; GitignoreHookFor does.
+func GitignoreHook(workDir string) Hook { return GitignoreHookFor(workDir, nil) }
+
+// GitignoreHookFor is GitignoreHook that asks client whether the repo is a
+// client repo of an org (clientwiring.go): there lore's lines go to the
+// clone's .git/info/exclude and lore fix rewires no tracked file.
+func GitignoreHookFor(workDir string, client ClientRepoFunc) Hook {
 	var once sync.Once
 	var wrote []string // tracked files Before wrote (devco N-5: lore fix names them)
 	return Hook{Name: HookGitignore, Around: func(ctx context.Context, run *Run, next Next) (op.Result, error) {
-		hw := &wire.HostWiring{Rewire: rewireTracked}
+		hw := &wire.HostWiring{Rewire: func(ctx context.Context, root string) []string { return rewireTracked(ctx, root, client) }}
 		hw.Note(wrote...)
 		return next(wire.WithHostWiring(ctx, hw))
 	}, Before: func(ctx context.Context, run *Run) error {
@@ -92,12 +97,14 @@ func GitignoreHook(workDir string) Hook {
 			// keeps them local so their git pull of the migrator's
 			// commit never meets the same lines uncommitted.
 			install := run.Entry != nil && runWireMode(run) == wireInstall
-			if why, local := excludeReason(ctx, root, onlyData, install); local {
+			if why, local := excludeReason(ctx, root, onlyData, install, client); local {
 				// A repo that holds no lore data (a client repo linked to
 				// a store folder; plain files sweep 3.8) never gets a
 				// tracked file changed, by any command, doctor --fix
 				// included: lore's local files go to .git/info/exclude.
 				// A migration edits no tracked file but .lore/data (M-6).
+				// devco:D-754: nor does any command in a client repo that
+				// still holds row files from before it was one.
 				if added, _ := wire.EnsureLocalExclude(ctx, root); len(added) > 0 {
 					announceExclude(os.Stderr, root, added, why)
 				}
@@ -275,6 +282,9 @@ const (
 	excludeFormatOld
 	// excludeMigration: the command is a migration (M-6).
 	excludeMigration
+	// excludeClient: a client repo of an org that still holds row files
+	// (devco:D-754): lore changes none of its tracked files.
+	excludeClient
 	// excludeTeammate: a migrated project whose tracked lines come from
 	// the migrator's clone (A-1, wire.TrackedWiringHere).
 	excludeTeammate
@@ -283,8 +293,9 @@ const (
 // excludeReason reports whether a write in root keeps the .gitignore lines
 // local, and why. onlyData is a migration's run; install is an install
 // step (doctor --fix, lore fix), which a teammate's clone also lets write
-// the tracked file.
-func excludeReason(ctx context.Context, root string, onlyData, install bool) (excludeWhy, bool) {
+// the tracked file. client is asked last (it may resolve the org): a client
+// repo keeps the lines local even for an install step (devco:D-754).
+func excludeReason(ctx context.Context, root string, onlyData, install bool, client ClientRepoFunc) (excludeWhy, bool) {
 	switch {
 	case !wire.HoldsLoreData(root):
 		return excludeNoData, true
@@ -294,6 +305,8 @@ func excludeReason(ctx context.Context, root string, onlyData, install bool) (ex
 		return excludeFormatOld, true
 	case !install && !wire.TrackedWiringHere(ctx, root):
 		return excludeTeammate, true
+	case clientRepoHere(ctx, client):
+		return excludeClient, true
 	}
 	return 0, false
 }
@@ -311,6 +324,8 @@ func announceExclude(w io.Writer, root string, added []string, why excludeWhy) {
 		reason = filepath.Base(root) + " is on the lore 0.1.17 format, so lore changes none of its tracked files until lore migrate run"
 	case excludeMigration:
 		reason = "a migration changes no tracked file but .lore/data: " + reason
+	case excludeClient:
+		reason = clientExcludeReason
 	case excludeTeammate:
 		// devco:M-3: the migration commit carries only .lore/data, so the
 		// note never says it brings these lines; the migrating clone's next
@@ -327,9 +342,10 @@ func announceExclude(w io.Writer, root string, added []string, why excludeWhy) {
 // changed. lore fix calls it (wire.HostWiring.Rewire) right after its
 // migrate step raised the project's format, so the run that migrated also
 // leaves the wiring for the same commit (devco N-5). A repo with no lore
-// data, or one still on the 0.1.17 format, gets nothing.
-func rewireTracked(ctx context.Context, root string) []string {
-	if !wire.HoldsLoreData(root) || wire.ProjectFormatOld(root) || os.Getenv(EnvSyncGit) == envOff {
+// data, one still on the 0.1.17 format, or a client repo (client,
+// devco:D-754) gets nothing.
+func rewireTracked(ctx context.Context, root string, client ClientRepoFunc) []string {
+	if !wire.HoldsLoreData(root) || wire.ProjectFormatOld(root) || os.Getenv(EnvSyncGit) == envOff || clientRepoHere(ctx, client) {
 		return nil
 	}
 	var out []string

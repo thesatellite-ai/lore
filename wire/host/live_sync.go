@@ -206,7 +206,8 @@ func (l liveSync) refuseIgnoredData(ctx context.Context) error {
 	if root == "" {
 		return nil
 	}
-	still, err := stillIgnoredData(ctx, root, os.Getenv(EnvSyncGit) != envOff)
+	// devco:D-754: a client repo's .gitignore is checked, never rewritten
+	still, err := stillIgnoredData(ctx, root, os.Getenv(EnvSyncGit) != envOff && !clientRepoHere(ctx, l.h.cfg.ClientRepo))
 	if err != nil {
 		return err
 	}

@@ -38,7 +38,9 @@ func changedWiring(paths []string, before map[string][sha256.Size]byte, hooksDir
 			continue
 		}
 		switch {
-		case filepath.Base(p) == gitAttributesFile:
+		case filepath.Base(p) == gitAttributesFile || filepath.Base(p) == filepath.Base(localAttributesPath):
+			// the tracked file or the clone's own .git/info/attributes
+			// (A-1, devco:D-754): never "merge drivers in .git/info/attributes"
 			out = append(out, "lore's merge rules in "+p)
 		case filepath.Dir(p) == filepath.Clean(hooksDir):
 			hooks = append(hooks, filepath.Base(p))
