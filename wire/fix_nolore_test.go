@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -103,4 +104,45 @@ func treeHash(t *testing.T, dir string) map[string]string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// TestDoctorFixNoLoreSaysNotSetUp (devco H-7): lore doctor --fix in a git
+// repo with no .lore folder reported "FAILED migrate … E_NOT_A_STORE" and
+// said the rows were still in the lore 0.1.17 format and to run lore fix
+// again (there are no rows; a rerun never helped). Now the migrate step is
+// skipped saying lore isn't set up here, the repo steps are skipped, no
+// step fails and none names the 0.1.17 format.
+func TestDoctorFixNoLoreSaysNotSetUp(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	gitInitIn(t, repo)
+	before := treeHash(t, repo)
+	a, err := New(Options{RepoDir: repo, Home: t.TempDir(), FlagActor: "human:pat@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = a.Close() })
+	r, err := opsdoctor.Run(WithNoCreate(context.Background()), a, opsdoctor.RunIn{Fix: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sameTree(t, "lore doctor --fix", repo, before)
+	seen := map[string]opsdoctor.FixStep{}
+	for _, s := range r.Steps {
+		seen[s.Step] = s
+		if s.Failed || strings.Contains(s.Result, "0.1.17") {
+			t.Errorf("step %s in a repo with no .lore: failed=%v %q", s.Step, s.Failed, s.Result)
+		}
+	}
+	if mig := seen[opsdoctor.StepMigrate]; !strings.HasPrefix(mig.Result, "skipped: lore isn't set up in ") || mig.Changed {
+		t.Errorf("migrate step %+v; want skipped, lore isn't set up here", mig)
+	}
+	for _, name := range []string{opsdoctor.StepScopes, opsdoctor.StepRender, opsdoctor.StepAgentHooks} {
+		if st := seen[name]; st.Result != skippedNoLoreFolder {
+			t.Errorf("%s step %q; want %q", name, st.Result, skippedNoLoreFolder)
+		}
+	}
+	if st, ok := seen[opsdoctor.StepDoctorFix]; !ok || st.Result == opsdoctor.ResultSkippedMigrateFailed {
+		t.Errorf("doctor fixes step %+v; want it run (the machine's repairs), not skipped for a failed migrate", st)
+	}
 }

@@ -88,7 +88,14 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 			return a.fixFormatOldSteps(ctx, top, dry)
 		}
 	}
-	mig := a.fixMigrate(ctx, top, dry, true)
+	mig, noLore := a.fixMigrateStep(ctx, top, dry, true)
+	if noLore {
+		// devco H-7: a git repo lore was never set up in (no .lore folder,
+		// no link a read could open) has no rows, so nothing to migrate,
+		// scope, render or hook; its steps say so instead of a FAILED
+		// migrate and "rows still in the lore 0.1.17 format"
+		return a.withOutsideClones(ctx, dry, a.fixNoLoreSteps(ctx, top, dry, mig))
+	}
 	if mig.Changed && !mig.Failed && !dry {
 		a.stampMigratedIdentity(ctx)
 	}
@@ -213,6 +220,54 @@ const renderSkippedMigrateFailed = "skipped: the migrate step failed, so this pr
 // fixMigrate is the migrate step: run when the repo has v1 rows, an
 // interrupted migration or a v0.1.17 shared-database pointer.
 func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) opsdoctor.FixStep {
+	st, _ := a.fixMigrateStep(ctx, top, dry, teamLock)
+	return st
+}
+
+// skippedNoLoreHereF is the migrate step's result in a git repo lore
+// isn't set up in (%s: the repo); the hint is lore fix's own (FP-7).
+const skippedNoLoreHereF = "skipped: lore isn't set up in %s (no .lore folder), so it has no rows to fix and lore creates nothing there; lore init sets this repo up"
+
+// skippedNoLoreFolder is the result of the repo steps after the migrate
+// step found no .lore folder (devco H-7).
+const skippedNoLoreFolder = "skipped: this repo has no .lore folder, so lore leaves its files as they are"
+
+// noLoreRefusal reports whether err, the open's answer in the repo at top,
+// is its refusal of a git repo with no .lore folder (never set up, or the
+// folder deleted or out of this checkout): not a failed migration, since
+// there are no rows. A linked repo with no .lore folder opens and never
+// reaches here.
+func (a *App) noLoreRefusal(ctx context.Context, err error) bool {
+	return errs.Has(err, errs.NotAStore) && a.gitRepoWithoutLore(ctx)
+}
+
+// noLoreStepResult is the migrate step's result for the refusal err of a
+// repo with no .lore folder: lore fix's own words for one never set up,
+// else the refusal itself (a deleted .lore folder and the git command that
+// brings it back, a checkout from before lore was added).
+func noLoreStepResult(ctx context.Context, top string, err error) string {
+	if beforeLoreErr(ctx, top) == nil {
+		return fmt.Sprintf(skippedNoLoreHereF, top)
+	}
+	return "skipped: " + withHint(err)
+}
+
+// fixNoLoreSteps are lore fix's steps in a git repo with no .lore folder
+// (devco H-7): mig (skipped, naming why) and the repo steps skipped; the
+// machine's old clones are still cleaned, as everywhere.
+func (a *App) fixNoLoreSteps(ctx context.Context, top string, dry bool, mig opsdoctor.FixStep) []opsdoctor.FixStep {
+	return []opsdoctor.FixStep{
+		mig,
+		{Step: opsdoctor.StepScopes, Where: top, Result: skippedNoLoreFolder},
+		{Step: opsdoctor.StepRender, Where: filepath.Join(top, filepath.FromSlash(opsrender.DefaultOut)), Result: skippedNoLoreFolder},
+		{Step: opsdoctor.StepAgentHooks, Where: top, Result: skippedNoLoreFolder},
+		a.fixOldClones(ctx, dry),
+	}
+}
+
+// fixMigrateStep is fixMigrate; noLore is true when the repo has no .lore
+// folder for the open to read (the step is then skipped, never failed).
+func (a *App) fixMigrateStep(ctx context.Context, top string, dry, teamLock bool) (opsdoctor.FixStep, bool) {
 	st := opsdoctor.FixStep{Step: opsdoctor.StepMigrate, Where: filepath.Join(top, rowfs.LoreDir, rowfs.DataDir), Result: opsdoctor.ResultCurrent}
 	// owner item 46: a migration lock a running (or another machine's)
 	// lore holds fails the step now, not after Status opened and synced
@@ -221,19 +276,23 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 	if err := migrateLockBlocked(top); err != nil {
 		if dryNeedsStores(dry, err) {
 			st.Result = dryStoresLine(err)
-			return st
+			return st, false
 		}
 		st.Failed, st.Result = true, withHint(err)
-		return st
+		return st, false
 	}
 	status, err := a.Status(ctx)
+	if err != nil && a.noLoreRefusal(ctx, err) {
+		st.Result = noLoreStepResult(ctx, top, err)
+		return st, true
+	}
 	if err != nil {
 		if dryNeedsStores(dry, err) {
 			st.Result = dryStoresLine(err)
-			return st
+			return st, false
 		}
 		st.Failed, st.Result = true, err.Error()
-		return st
+		return st, false
 	}
 	_, modeB := FindModeBPointer(top)
 	// personal rows left in a 0.1.17 folder of the local personal store
@@ -243,7 +302,7 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 		orphans = mc.flattenedLocalPersonal(ctx, a.opts.Home, a.opts.rowfsOptions()...) != ""
 	}
 	if len(status.Pending) == 0 && !modeB && !orphans && !strings.HasPrefix(status.Journal, "interrupted") && len(a.v017Stores(ctx)) == 0 {
-		return st
+		return st, false
 	}
 	via := migrateViaFirstSave
 	if teamLock {
@@ -287,18 +346,18 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 		// the rows on disk.
 		st.Changed, st.Result = true, "would migrate (the real run fetches the stores first; this dry run reached no remote, so it could not check this repo's store links)"
 		st.Detail = append(st.Detail, status.Pending...)
-		return st
+		return st, false
 	}
 	if err != nil {
 		if dryNeedsStores(dry, err) {
 			st.Result = dryStoresLine(err)
-			return st
+			return st, false
 		}
 		st.Failed, st.Result = true, err.Error()
 		if errs.Has(err, errs.MigrateLocked) {
 			st.Result = withHint(err) // what it waits for, or how to clear it
 		}
-		return st
+		return st, false
 	}
 	// owner item C2: the commit line is the step's Next (lore fix prints it
 	// last), the full row list its Rows (--json); the text names a count
@@ -316,7 +375,7 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 			st.Detail = append(st.Detail, l)
 		}
 	}
-	return st
+	return st, false
 }
 
 // withHint is err's text and, for a typed error with one, "; " and its
