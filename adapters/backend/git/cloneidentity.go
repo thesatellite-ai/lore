@@ -156,33 +156,59 @@ func (b *Backend) ensureCloneIdentity(ctx context.Context, remote string) error 
 	if b.cfg.cloneIdentity == nil {
 		return nil
 	}
-	cur, err := localConfig(ctx, b.git, b.work, ConfigUserEmail)
+	id, set, err := ensureIdentityAt(ctx, b.git, b.work, func() CloneIdentity { return b.cfg.cloneIdentity(ctx, remote) })
+	if set {
+		b.identitySet = id
+	}
+	return err
+}
+
+// EnsureCloneIdentity gives the store clone at dir the identity id by the
+// same rule as a Backend's open (see the file comment): a clone with no
+// repo-local user.email, or still the one lore wrote while id changed,
+// gets id in its .git/config; a person's own user.email stays. The org
+// layer (adapters/orgcfg commitStore) calls it before every commit it
+// makes, so a clone it made for a link, lore-org.yaml or an added store's
+// marker carries the same git user as one the backend made (devco:D-782:
+// the clone `lore org store add` made had the person's global email).
+// set reports whether it wrote; id.Was is then the email it replaced.
+func EnsureCloneIdentity(ctx context.Context, dir string, id CloneIdentity) (CloneIdentity, bool, error) {
+	bin, err := lookGit(DefaultBinary)
 	if err != nil {
-		return err
+		return CloneIdentity{}, false, err
+	}
+	return ensureIdentityAt(ctx, runner{bin: bin}, dir, func() CloneIdentity { return id })
+}
+
+// ensureIdentityAt is the one clone identity rule over r: want is asked
+// only when the clone's identity is lore's to write.
+func ensureIdentityAt(ctx context.Context, r runner, dir string, want func() CloneIdentity) (CloneIdentity, bool, error) {
+	cur, err := localConfig(ctx, r, dir, ConfigUserEmail)
+	if err != nil {
+		return CloneIdentity{}, false, err
 	}
 	was := ""
 	if cur != "" {
-		rec, rerr := recordedIdentity(b.work)
+		rec, rerr := recordedIdentity(dir)
 		if rerr != nil || rec == "" || !strings.EqualFold(rec, cur) {
-			return rerr // the person's own identity for this clone stays
+			return CloneIdentity{}, false, rerr // the person's own identity for this clone stays
 		}
 		was = cur
 	}
-	id := b.cfg.cloneIdentity(ctx, remote)
+	id := want()
 	id.Name, id.Email = strings.TrimSpace(id.Name), strings.TrimSpace(id.Email)
 	if !validSignature(id.Signature) {
-		return nil
+		return CloneIdentity{}, false, nil
 	}
 	if was != "" {
-		name, nerr := localConfig(ctx, b.git, b.work, ConfigUserName)
+		name, nerr := localConfig(ctx, r, dir, ConfigUserName)
 		if nerr != nil || (strings.EqualFold(was, id.Email) && name == id.Name) {
-			return nerr // what lore wrote is still right
+			return CloneIdentity{}, false, nerr // what lore wrote is still right
 		}
 	}
-	if err := setLocalIdentity(ctx, b.git, b.work, id.Signature); err != nil {
-		return err
+	if err := setLocalIdentity(ctx, r, dir, id.Signature); err != nil {
+		return CloneIdentity{}, false, err
 	}
 	id.Was = was
-	b.identitySet = id
-	return nil
+	return id, true, nil
 }
