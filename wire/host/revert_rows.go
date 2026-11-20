@@ -113,10 +113,7 @@ func (h *liveHost) afterRevert(ctx context.Context) {
 			continue
 		}
 		full := filepath.Join(top, filepath.FromSlash(p))
-		if mkerr := os.MkdirAll(filepath.Dir(full), 0o755); mkerr != nil {
-			continue
-		}
-		if werr := os.WriteFile(full, b, 0o644); werr != nil {
+		if werr := rowfs.WriteShared(full, b); werr != nil { // the work tree's modes, group access in a group's checkout (D-785)
 			continue
 		}
 		back = append(back, p)

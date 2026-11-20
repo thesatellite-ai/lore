@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/fspath"
@@ -275,8 +276,14 @@ func (s *treeSnapshot) restore(ctx context.Context) []string {
 				undone = append(undone, p)
 			}
 		case rerr == nil && string(cur) == string(st.body):
-		default:
-			if os.MkdirAll(filepath.Dir(full), 0o755) == nil && os.WriteFile(full, st.body, 0o644) == nil {
+		case errors.Is(rerr, fs.ErrNotExist):
+			// lore removed the person's changed file: it comes back as a
+			// write makes it, group read/write in a group's checkout (D-785)
+			if rowfs.WriteShared(full, st.body) == nil {
+				undone = append(undone, p)
+			}
+		default: // it exists: rewritten in place, its mode kept
+			if os.WriteFile(full, st.body, 0o644) == nil {
 				undone = append(undone, p)
 			}
 		}

@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 )
 
 // mkdirKeepsSetgid reports whether a new folder copies its parent's setgid
@@ -165,4 +167,49 @@ func TestSharedWriteInGroupWritableFolder(t *testing.T) {
 	if ri, _ := os.Stat(row); ri.Mode().Perm()&0o020 != 0 {
 		t.Errorf("row in a private folder widened to %v under umask 022", ri.Mode())
 	}
+}
+
+// TestMkdirModesConcurrentWidens pins D-785: Apply writes a batch's rows on
+// parallel goroutines, and in a group's checkout under umask 022 a row
+// written into a folder a sibling goroutine had just created (but not yet
+// widened) came out -rw-r--r-- in a -rwxr-xr-x table folder. The first
+// writer is held right after its mkdir, before it widens; the second
+// writer, into another new table under the same new folder, must still end
+// group read/write. Not parallel: it sets the process umask and the hook.
+func TestMkdirModesConcurrentWidens(t *testing.T) {
+	old := syscall.Umask(0o022)
+	t.Cleanup(func() { syscall.Umask(old) })
+	top := t.TempDir()
+	if err := os.Chmod(top, 0o770); err != nil {
+		t.Fatal(err)
+	}
+	held, release := make(chan struct{}), make(chan struct{})
+	var first1 atomic.Bool // only the first writer waits (sync.Once would hold the second too)
+	afterMkdirHook = func(string) {
+		if first1.CompareAndSwap(false, true) {
+			close(held)
+			<-release
+		}
+	}
+	t.Cleanup(func() { afterMkdirHook = nil })
+	first := filepath.Join(top, "data", "actors", "act_1.json")
+	second := filepath.Join(top, "data", "projects", "prj_1.json")
+	errFirst, errSecond := make(chan error, 1), make(chan error, 1)
+	go func() { errFirst <- writeAtomic(first, []byte("{}\n"), sharedModes) }()
+	<-held // data/ and data/actors/ exist, not yet widened
+	go func() { errSecond <- writeAtomic(second, []byte("{}\n"), sharedModes) }()
+	select { // the old code finished here with the wrong modes; now it waits
+	case err := <-errSecond:
+		errSecond <- err
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if err := <-errFirst; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errSecond; err != nil {
+		t.Fatal(err)
+	}
+	assertSharedWrite(t, top, first, false)
+	assertSharedWrite(t, top, second, false)
 }

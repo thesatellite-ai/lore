@@ -239,7 +239,17 @@ func (r *Root) WriteFile(rel string, b []byte) error {
 // folder of a group's shared checkout is 2770/2775 on Linux (0770/0775 on
 // macOS, where the group comes from the parent without setgid), never
 // 2700/0700 (I-11, D-390).
+//
+// The whole of it runs under mkdirMu (devco D-785): Apply writes a batch's
+// rows on parallel goroutines, and a write into a folder another goroutine
+// had just created, but not yet widened, read that folder as not shared, so
+// its new table folder and row came out -rwxr-xr-x / -rw-r--r-- in a
+// group's checkout (only under load: a fresh .lore/data whose first batch
+// spans several tables). Under the lock a folder that exists has its final
+// mode, so a goroutine that finds it reads the same answer as its creator.
 func mkdirModes(dir string, m fileModes) error {
+	mkdirMu.Lock()
+	defer mkdirMu.Unlock()
 	var made []string
 	for cur := dir; ; cur = filepath.Dir(cur) {
 		if _, err := os.Lstat(cur); err == nil || !errors.Is(err, fs.ErrNotExist) {
@@ -252,6 +262,9 @@ func mkdirModes(dir string, m fileModes) error {
 	}
 	if err := os.MkdirAll(dir, m.dir); err != nil {
 		return err
+	}
+	if afterMkdirHook != nil && len(made) > 0 {
+		afterMkdirHook(dir)
 	}
 	if emulateBSDMkdir {
 		if err := clearSetgid(made); err != nil {
@@ -273,6 +286,16 @@ func mkdirModes(dir string, m fileModes) error {
 // where mkdir copies the bit and hid the D-390 bug (devco D-416). Only a
 // non-parallel test sets it; product code never does.
 var emulateBSDMkdir bool
+
+// mkdirMu makes mkdirModes one step per process: see mkdirModes (D-785).
+var mkdirMu sync.Mutex
+
+// afterMkdirHook, when set, runs inside mkdirModes after it created folders
+// and before it widened them. Why: TestMkdirModesConcurrentWidens holds a
+// writer in that window to prove a second writer cannot read the new
+// folder's mode before it is final (D-785). Only a non-parallel test sets
+// it; product code never does.
+var afterMkdirHook func(dir string)
 
 // clearSetgid removes the setgid bit from each folder of dirs.
 func clearSetgid(dirs []string) error {
@@ -298,6 +321,14 @@ func clearSetgid(dirs []string) error {
 // the chain and every row came out -rw-r--r--). An existing dir is left
 // as it is.
 func MkdirShared(dir string) error { return mkdirModes(dir, sharedModes) }
+
+// WriteShared writes a committed work-tree file (a row of a repo's .lore/)
+// atomically with a checkout's modes, group read/write added in a folder a
+// group shares, and its missing folders the same way. Callers that put a
+// row file back outside a store write (the undo of a refused commit, a
+// row a git revert deleted) use it so the file comes back as a write made
+// it, never -rw-r--r-- in a group's checkout (D-785).
+func WriteShared(full string, b []byte) error { return writeAtomic(full, b, sharedModes) }
 
 // groupWiden adds bits (group read/write) to path when the write meant
 // group access (want holds group read: a shared work-tree mode, never an
