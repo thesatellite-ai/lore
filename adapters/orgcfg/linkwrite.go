@@ -454,7 +454,7 @@ func (g *GitLinks) pickLinkStore(ctx context.Context, plan orgresolve.LinkPlan) 
 		// D-726: a store this login may not read is skipped like the
 		// link reader skips it (it cannot hold a folder this person
 		// links to); only the store --store names refuses, with the cause
-		_, _, refused := noAccessAt(dir)
+		refused := gitbackend.NoAccessSkips(dir) // D-741: a clone with a copy is fetched again
 		var ferr error
 		if !refused {
 			ferr = fetchLocked(ctx, g.Route, dir, g.now())

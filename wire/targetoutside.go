@@ -19,6 +19,7 @@ package wire
 
 import (
 	"context"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -587,6 +588,11 @@ type rowLookup struct {
 	id     string
 	gone   *goneRow
 	looked []string
+	// skipped names each store the scans could not look in (no access at
+	// its last fetch, or unreadable), so "in no store" never hides one
+	// (devco D-741: a refused fetch's record hid two reachable stores and
+	// the refusal named only the other org's folders)
+	skipped []string
 	// livePath is the live row file found (a trashed row is live), ""
 	// when none was
 	livePath string
@@ -647,6 +653,16 @@ func (a *App) rowLookupOutside(ctx context.Context, in op.Input) (attach.Store, 
 // folder holding only a tombstone of id is no holder (look records it,
 // with every folder looked in).
 func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string, look *rowLookup) (attach.Store, bool) {
+	for _, label := range scan.NoAccess {
+		if note := label + " (no access)"; !slices.Contains(look.skipped, note) {
+			look.skipped = append(look.skipped, note)
+		}
+	}
+	for _, label := range slices.Sorted(maps.Keys(scan.Unread)) {
+		if note := label + " (could not read it)"; !slices.Contains(look.skipped, note) {
+			look.skipped = append(look.skipped, note)
+		}
+	}
 	for _, f := range scan.Folders {
 		if f.Dir == "" {
 			continue
@@ -728,7 +744,7 @@ func (l *rowLookup) answer(to string) error {
 	case len(l.looked) == 0:
 		return nil
 	case storedRowID(l.id):
-		return noStoreHoldsErr(l.id, l.looked)
+		return noStoreHoldsErr(l.id, l.looked, l.skipped)
 	}
 	return nil
 }

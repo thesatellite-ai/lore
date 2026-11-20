@@ -63,3 +63,52 @@ func TestFirstOpenNoAccessRecord(t *testing.T) {
 		})
 	}
 }
+
+// TestFetchRemovesNoAccessRecord (devco D-741): a no-access record left
+// by one refused fetch (another run's credentials) is removed by the
+// backend's next fetch that works, not only by the org link reader's:
+// sync, push and open reach the store every day, and the record kept
+// every read by id skipping it. A clone with a copy is never skipped for
+// a record; one never fetched is.
+func TestFetchRemovesNoAccessRecord(t *testing.T) {
+	ctx := context.Background()
+	b := clone(t, newRemote(t, true))
+	write := func() {
+		t.Helper()
+		if err := os.MkdirAll(StateDirOf(b.work), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(NoAccessPath(b.work), []byte("missing 2026-01-02T03:04:05Z\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write()
+	syncOK(t, b)
+	if NoAccessRecorded(b.work) {
+		t.Fatal("a sync that reached the store kept the no-access record")
+	}
+	write()
+	if NoAccessSkips(b.work) {
+		t.Error("a clone with a copy is skipped for its no-access record")
+	}
+	if err := b.fetch(ctx, b.work); err != nil {
+		t.Fatal(err)
+	}
+	if NoAccessRecorded(b.work) {
+		t.Error("a fetch that worked kept the no-access record")
+	}
+	// a clone never fetched: the record skips it
+	never := filepath.Join(t.TempDir(), "never")
+	if err := PrepareClone(ctx, never, "git@github.com:octo-work/lore-vault.git", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(StateDirOf(never), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(NoAccessPath(never), []byte("denied 2026-01-02T03:04:05Z\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !NoAccessSkips(never) {
+		t.Error("a never-fetched clone with a record is not skipped")
+	}
+}
