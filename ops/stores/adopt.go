@@ -105,6 +105,10 @@ type AdoptOut struct {
 	// actor of the same identity (stable key): "act_A (human:x) → act_B".
 	// The mapped row is not written; the adopted rows name act_B.
 	Actors []string `json:"actors,omitempty"`
+	// Refs names each ref field an adopted row held as a name, not an id
+	// (devco D-766: a v0.1.17 task with tasklist_id "Backlog"), and what
+	// it holds now: that row's id, or nothing.
+	Refs []string `json:"refs,omitempty"`
 	// Removed counts the row files --remove-source deleted from the repo.
 	Removed int `json:"removed,omitempty"`
 	// LiveRemoved counts the adopted rows --remove-source took off the
@@ -344,6 +348,9 @@ func (o AdoptOut) Text() string {
 	}
 	for _, l := range o.Actors {
 		b.WriteString("  actor " + l + " (the same person; references rewritten)\n")
+	}
+	for _, l := range o.Refs {
+		b.WriteString("  warning: " + l + "\n")
 	}
 	if o.Relinked > 0 {
 		b.WriteString("  " + plural(o.Relinked, "--supersedes link") + " written by lore 0.1.16 or older moved onto the row each replaces\n")

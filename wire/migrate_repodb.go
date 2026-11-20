@@ -89,7 +89,7 @@ func (a *App) repoDBRows(ctx context.Context) (repoDB, error) {
 		return repoDB{}, err
 	}
 	out.project = got.ProjectID
-	changes, err := modeBChanges(got)
+	changes, err := modeBChanges(ctx, got)
 	if err != nil {
 		return repoDB{}, errs.Prefix("migrate: "+v017LoreDB, err)
 	}

@@ -144,7 +144,7 @@ func (a *App) MigrateModeB(ctx context.Context, dryRun bool) ([]string, int, err
 	if err != nil {
 		return nil, 0, err
 	}
-	changes, err := modeBChanges(exp)
+	changes, err := modeBChanges(ctx, exp)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -185,7 +185,7 @@ func (a *App) MigrateModeB(ctx context.Context, dryRun bool) ([]string, int, err
 // them), applies the per-table format steps of RewriteV1 and the tag links,
 // and encodes each as a `_v: 2` row (store.FromRow). Every change expects
 // the row to be absent.
-func modeBChanges(exp ModeBExport) ([]store.Change, error) {
+func modeBChanges(ctx context.Context, exp ModeBExport) ([]store.Change, error) {
 	reg, err := builtinRegistry()
 	if err != nil {
 		return nil, err
@@ -205,6 +205,16 @@ func modeBChanges(exp ModeBExport) ([]store.Change, error) {
 		if _, dup := rows[k]; !dup {
 			order = append(order, k)
 		}
+		rows[k] = &r
+	}
+	// a ref holding a name, not an id (D-766): its row's id, or cleared
+	all := make([]row.Row, 0, len(order))
+	for _, k := range order {
+		all = append(all, *rows[k])
+	}
+	names := engine.NewNameRefIndex(all)
+	for _, k := range order {
+		r := resolveNameRefs(ctx, reg, names, *rows[k])
 		rows[k] = &r
 	}
 	merged, _ := mergeTagLinks(reg, exp.TagLinks, func(t row.Table, id ids.AnyID) []string {

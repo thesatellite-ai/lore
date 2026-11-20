@@ -85430,6 +85430,12 @@
                     "pushed": {
                       "type": "boolean"
                     },
+                    "refs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "relinked": {
                       "type": "integer"
                     },
