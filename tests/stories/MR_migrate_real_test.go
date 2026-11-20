@@ -25,6 +25,11 @@ package stories
 //   - devco:D-759: the own repo committed 0.1.17's LORE.md and never had
 //     a LORE.full.md; the migration commit lore prints carries the full
 //     file the pre-commit refresh writes, so git status is clean after it.
+//   - devco:D-781: the client repo gets no file from lore in that commit
+//     (D-754): the new full file stays out of it and out of git status.
+//     The tools repo used to share the shop's 0.1.17 project id and had no
+//     own: pattern, so it resolved as a client repo too and the D-759 check
+//     ran in a client repo; it now has its own id and an own: pattern.
 //   - devco:D-707: the run also moves the org's lore-org.yaml defaults into
 //     a policy row of the org store; it lists the store commits it made
 //     (store, commit, what) and says `lore sync` sends them, and the org
@@ -99,6 +104,21 @@ func mrOrgFileWithDefaults(t testing.TB, s *Story, store *teamharness.Remote) {
 		t.Fatalf("the org store has no lore-org.yaml: %s", s.Git(dir, "ls-files"))
 	}
 	appendFile(t, p, mrOrgDefaults)
+	// D-781: the tools repo is the org's own (an own: pattern), the shop
+	// matches none and stays a client repo (fail closed)
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	own := "own:\n    - " + mrToolsSlug + "\n"
+	if strings.Contains(string(b), "\nown:\n") {
+		b = []byte(strings.Replace(string(b), "\nown:\n", "\n"+own, 1))
+	} else {
+		b = append(b, own...)
+	}
+	if err = os.WriteFile(p, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	s.Git(dir, "-c", "user.name=Org Setup", "-c", "user.email=setup@example.test", "commit", "-qam", "org defaults as lore 0.1.17 kept them")
 	s.Git(dir, "push", "-q", "origin", "HEAD")
 }
@@ -110,7 +130,10 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 	store := s.Remote(mrStoreSlug)
 	app := s.Seed(s.Remote(mrAppSlug), func(dir string) { PlainRepo(t, dir) })
 	shop := s.Seed(s.Remote(mrShopSlug), func(dir string) { V017Repo(t, dir, "legacy-shop", SmallShape) })
-	tools := s.Seed(s.Remote(mrToolsSlug), func(dir string) { V017Repo(t, dir, "tools", SmallShape) })
+	tools := s.Seed(s.Remote(mrToolsSlug), func(dir string) {
+		p := V017Repo(t, dir, "tools", SmallShape)
+		mrReID(t, dir, p.ID, v017ID("prj", 2)) // its own project, not the shop's
+	})
 	m := s.Persona(mrAdmin.Name, mrAdmin.Email).Laptop()
 	journeys.GitHubLogin(s.T, s.World, m, mrAdmin.Login)
 	var platform, sc, tc *teamharness.Clone
@@ -142,7 +165,7 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 		// the shop's remote matches no own pattern of the org: a client repo
 		// (fail closed); the tools repo is the org's own
 		m.LoreIn(sc, "whoami").OK(t).Says(t, "client repo")
-		m.LoreIn(tc, "whoami").OK(t).Says(t, "own repo")
+		m.LoreIn(tc, "whoami").OK(t).Says(t, "own repo  (no client guards)").Never(t, "client repo")
 		// D-708: a dry run writes nothing, ever, and nothing of the repo or
 		// home moved; D-742: no command but install-action and doctor --fix
 		// moves the workflow pin, so the run names that command instead
@@ -185,6 +208,15 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 		mr.Says(t, "org_defaults_to_policy", "by "+mrAdmin.Name+", ", "the store commits above are local: lore sync sends them")
 		if got := strings.TrimSpace(sc.TryGit("config", "--get", "lore.clientrepo").Stdout); got != "true" {
 			t.Errorf("lore.clientrepo = %q: the commit's leak check did not class the shop as a client repo (the case under test)", got)
+		}
+		// D-781: the client's commit carries no file lore added (the hook's
+		// refresh wrote a LORE.full.md the shop never had), and the tree is
+		// clean after it
+		if strings.Contains(sc.Git("show", "--name-only", "--format=", "HEAD"), ".lore/LORE.full.md") || strings.Contains(r.Stderr, "(and added ") {
+			t.Errorf("lore's hook added .lore/LORE.full.md to a client repo's migration commit:\n%s", r)
+		}
+		if st := sc.Status(); st != "" {
+			t.Errorf("git status after the client repo's migration commit is not clean:\n%s\n%s", st, r)
 		}
 	})
 
@@ -249,4 +281,32 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 			t.Error("lore sync did not send the org store commits of the migration")
 		}
 	})
+}
+
+// mrReID gives the lore 0.1.17 project V017Repo wrote in dir the id to
+// instead of from: every row file naming it, and the project's own row
+// file. V017Repo writes the same project id into every repo, and two repos
+// of one org with one project id resolve as the same (linked) project.
+func mrReID(t *testing.T, dir, from, to string) {
+	t.Helper()
+	data := filepath.Join(dir, ".lore", "data")
+	err := filepath.WalkDir(data, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		if err = os.WriteFile(p, []byte(strings.ReplaceAll(string(b), from, to)), 0o644); err != nil {
+			return err
+		}
+		if strings.TrimSuffix(d.Name(), ".json") == from {
+			return os.Rename(p, filepath.Join(filepath.Dir(p), to+".json"))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
