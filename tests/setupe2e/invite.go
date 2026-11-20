@@ -11,7 +11,7 @@ package setupe2e
 //	  ├─ lore setup apply <InviteHub> --step <each admin step> --answers <the plan's values>
 //	  │    (team: org InviteOrg, the store above; folders: ~/hubwork/** so the
 //	  │     member's own folders never overlap; not the default)
-//	  └─ lore team invite <email> --setup <InviteHub> ─▶ the "lore setup join <line>" it prints
+//	  └─ lore team invite --email <email> --setup <InviteHub> ─▶ the "lore setup join <line>" it prints
 //
 // It runs after Start (the fake GitHub API is up) with the server's env,
 // from HOME, outside any repo: starting a team needs none (the org entry

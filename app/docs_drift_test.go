@@ -430,8 +430,11 @@ func checkInvocation(rootCmd *cobra.Command, code string) string {
 	// shown with every value under its flag (`lore task show --id tsk_…`);
 	// its positional form is a quiet alias that no doc, skill or example
 	// may teach. Host commands (lore help <cmd>) keep their own arguments,
-	// unless marked named (lore edit --id <id>, cli.MarkNamed).
-	if v := positionalValue(positional); !notation && v != "" && cli.Named(cmd) && !cmd.HasSubCommands() {
+	// unless marked named (lore edit --id <id>, cli.MarkNamed). An operation
+	// that also has subcommands (lore team invite, with team invite list
+	// under it) is held to it too (H-27): only a bare group, whose word is
+	// a subcommand name, is not.
+	if v := positionalValue(positional); !notation && v != "" && cli.Named(cmd) && !bareGroup(cmd) {
 		return "`" + cmd.CommandPath() + "` given the positional value " + v + ": write it with its flag (" + namedHint(cmd) + ")"
 	}
 	abbreviated := strings.Contains(code, placeholderUnicode) || strings.Contains(code, placeholderEllipsis)
@@ -662,6 +665,16 @@ func TestTranscriptOutputIsNotACommand(t *testing.T) {
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("invocations = %q, want %q", got, want)
 	}
+}
+
+// bareGroup reports whether cmd only groups subcommands: a word after it
+// names one of them, never a value. An operation command that also has
+// subcommands (lore team invite) carries its flags annotation and is not
+// one (H-27: its own --help example gave the email by position and the
+// guard skipped it because the command had subcommands).
+func bareGroup(cmd *cobra.Command) bool {
+	_, op := cmd.Annotations[cli.AnnotationArgFlags]
+	return cmd.HasSubCommands() && !op
 }
 
 // forwardTarget returns the command a shortcut forwards to (shortcuts.go):

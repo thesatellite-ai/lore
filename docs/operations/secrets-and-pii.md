@@ -247,7 +247,7 @@ lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
 ✓ removed sal_…6c38; the finding is reported again on the next scan
 $ lore secrets allow list | grep -c sal_
 1
-$ lore secrets allow mem_3b62…e913 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
+$ lore secrets allow --row-id mem_3b62…e913 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_f147…5139.json
 ✓ github-pat: mem_…e913.body marked not a secret (sal_…5139)
 ```

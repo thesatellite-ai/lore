@@ -335,7 +335,7 @@ If an admin added you ([Adding your staff](members.md)), run `lore setup join --
 <!-- example: guided-setup#invite-and-join -->
 ```console
 # tomas, in agency/site
-$ lore team invite mira@agency.example
+$ lore team invite --email mira@agency.example
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)

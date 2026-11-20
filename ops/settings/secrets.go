@@ -144,7 +144,7 @@ func (m MatchHashArg) MarshalText() ([]byte, error) { return []byte(m), nil }
 
 // allowFileHint is the next step of `secrets allow <not a row id>`: a
 // finding in an ordinary repo file is allowed by its path.
-const allowFileHint = "for a finding in a repo file: lore secrets allow --file <path> --rule <rule> --match-hash <sha256:… fingerprint> --reason \"<why>\""
+const allowFileHint = "for a finding in a repo file: lore secrets allow --file <path> --rule <rule> --match-hash <sha256:…> --reason \"<why>\""
 
 // fileAllowField is the field a file entry stores. An entry also names the
 // project row as row_id: releases before --file read every entry as a row
@@ -193,7 +193,7 @@ func (o ops) allowFile(ctx context.Context, in AllowIn) (RowOut, error) {
 			return RowOut{}, err
 		}
 	case strings.TrimSpace(string(in.MatchHash)) == "":
-		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow --file: give --match-hash <sha256:… fingerprint> (the refused commit prints it)")
+		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow --file: give --match-hash <sha256:…> (the refused commit prints it)")
 	}
 	// devco D-736: a linked repo's .lore/data holds no rows, so the entry
 	// and the project it names come from the folder its link names (the
