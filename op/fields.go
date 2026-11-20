@@ -281,7 +281,11 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 	if name == "" {
 		panic(tagError{where + ": json tag has no name"})
 	}
-	f := FieldInfo{Name: name, Arg: NoArg, Desc: sf.Tag.Get(tagDesc)}
+	desc, ok := sharedDesc(sf.Tag.Get(tagDesc))
+	if !ok {
+		panic(tagError{where + ": desc tag " + sf.Tag.Get(tagDesc) + " names no shared text (op/shareddesc.go)"})
+	}
+	f := FieldInfo{Name: name, Arg: NoArg, Desc: desc}
 	ft := sf.Type
 	if n, ok := reflect.Zero(ft).Interface().(nullable); ok {
 		if dir == dirInput {

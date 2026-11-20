@@ -41,7 +41,7 @@ type AddIn struct {
 	Task  string `json:"task,omitempty" flag:"task" desc:"the task it is about (its mission is recorded too)"`
 	Body  string `json:"body,omitempty" flag:"body" desc:"the handoff text" ui:"widget=markdown"`
 	Text  string `json:"text,omitempty" arg:"0" rest:"true" argof:"body" desc:"the handoff text, instead of --body"`
-	Store string `json:"store,omitempty" flag:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	Store string `json:"store,omitempty" flag:"store" desc:"shared:write-to"`
 	// Project is the project the handoff belongs to.
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 }

@@ -52,7 +52,7 @@ type AddIn struct {
 	Kind string `json:"kind,omitempty" flag:"kind" desc:"core | retrieved | episodic | procedural | archival (default retrieved)"`
 	// Source is source_kind; empty means manual.
 	Source string `json:"source,omitempty" flag:"source" desc:"source_kind: manual | learn-from | agent-proposal | plugin | imported (default manual)"`
-	To     string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To     string `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 	// Repo scopes the memory to one repo of the project (mount name or
 	// rep_ id); empty is the project-wide ("master") scope.
 	Repo string `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id; default project-wide)"`

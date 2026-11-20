@@ -910,7 +910,7 @@ Flags:
       --template string          apply this task template (its name or ttp_ id); the title comes from the template
       --timebox duration         time box, e.g. 60m (active lease time summed across holders)
       --title string             the task title (several words are joined; omitted with --template)
-      --to string                store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo) (also --store)
+      --to string                where the row is written: a name from .lore/stores.yaml, me, <store>/<folder>, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo (also --store)
       --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
@@ -1186,7 +1186,7 @@ Flags:
       --starts-at string         when the mission's work starts (YYYY-MM-DD or a date phrase)
       --target string            target completion date (YYYY-MM-DD or a date phrase: eom, next fri, in 2w, …)
       --title string             the mission title (several words are joined) (required)
-      --to string                store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo) (also --store)
+      --to string                where the row is written: a name from .lore/stores.yaml, me, <store>/<folder>, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo (also --store)
       --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
@@ -1562,7 +1562,7 @@ Flags:
       --reason string            why the detected text is not a secret (with --not-a-secret)
       --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
       --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
-      --store string             store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)
+      --store string             where the row is written: a name from .lore/stores.yaml, me, <store>/<folder>, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo
       --task string              the task it is about (its mission is recorded too)
       --to string                deprecated alias of --for
       --yes                      answer yes to the confirmation without a terminal

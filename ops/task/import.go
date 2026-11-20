@@ -120,7 +120,7 @@ type ImportIn struct {
 	// MapStatus renames the file's status values (TASK 19.1, G-TASK-3).
 	MapStatus []string `json:"map_status,omitempty" flag:"map-status" desc:"rename status values: <file value>=<status>[,…], e.g. 'In Review=in_progress' (statuses: todo in_progress done cancelled blocked)"`
 	DryRun    bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be created; write nothing"`
-	To        string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To        string   `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 }
 
 // ImportRow is one task an import created (or would create).

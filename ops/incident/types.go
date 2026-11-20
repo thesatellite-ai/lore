@@ -38,7 +38,7 @@ type AddIn struct {
 	Body    string `json:"body,omitempty" flag:"body" desc:"body" ui:"widget=markdown"`
 	Text    string `json:"text,omitempty" arg:"0" argof:"body" desc:"the body, instead of --body"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"shared:write-to"`
 	// Ref / Relation: knowledge_refs pointers (RES 3.11, RQ7, OQ22).
 	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`

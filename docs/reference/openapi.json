@@ -4752,7 +4752,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -7132,7 +7132,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -10869,7 +10869,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -13496,7 +13496,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -15157,7 +15157,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -18810,7 +18810,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -20339,7 +20339,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "task": {
                     "type": "string",
@@ -22209,7 +22209,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -25034,7 +25034,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -31063,7 +31063,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "validated_by": {
                     "type": "string",
@@ -39087,7 +39087,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -44357,7 +44357,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -47486,7 +47486,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -49192,7 +49192,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -54054,7 +54054,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -56129,7 +56129,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -69004,7 +69004,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -82617,7 +82617,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -88340,7 +88340,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -99641,7 +99641,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -102376,7 +102376,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -104287,7 +104287,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -111173,7 +111173,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -115017,7 +115017,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -119911,7 +119911,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
@@ -121413,7 +121413,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
+                    "description": "where the row is written: a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo (this repo's .lore/data); default: the store folder this repo is linked to (where its reads come from), else the repo"
                   },
                   "yes": {
                     "type": "boolean",
