@@ -458,11 +458,17 @@ func (a *App) folderProjectFirst(ctx context.Context, st *state, target store.So
 // <store>/<folder>` command names (devco D-718): its natural id from the
 // folder's _meta.json, so every noun resolves "this project" (the row's
 // project_id, a tag or parent looked up by name) in the folder the row
-// goes to, not in the repo the command runs in. As inside a store folder
-// (folderProject), a write records the folder's project row when it has
-// none yet (task add's default list names it before the task does); a
-// read never creates one. ok is false when the command names no folder or
-// a store root, and the caller falls back to the repo's project.
+// goes to, not in the repo the command runs in. ok is false when the
+// command names no folder or a store root, and the caller falls back to
+// the repo's project.
+//
+// It never writes, on a read or a write (devco:D-740): the folder's
+// project row, when the folder has none yet, is staged in the same batch
+// as the row that names it (Create -> folderProjectFirst), or made after
+// the command succeeded (ensureFolderProject). Before, a write committed
+// the row here on its own ("lore: project add prj_…") before the role
+// check judged the write, so a member's refused `rule add --to
+// <org>/<another team's folder>` left that commit in their store clone.
 func (a *App) targetFolderProject(ctx context.Context) (ids.ID[ids.Project], bool, error) {
 	nf, ok := ctx.Value(newFolderKey{}).(newFolder)
 	if !ok || nf.target == "" {
@@ -475,12 +481,6 @@ func (a *App) targetFolderProject(ctx context.Context) (ids.ID[ids.Project], boo
 	pid, err := folderProjectIDOf(ctx, st, nf.target)
 	if err != nil || pid.IsZero() {
 		return ids.ID[ids.Project]{}, false, nil
-	}
-	if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
-		return pid, true, nil
-	}
-	if _, err := a.rosterProject(ctx, st, nf.target, nf.folder); err != nil {
-		return ids.ID[ids.Project]{}, false, fmt.Errorf("folder project of %s: %w", nf.target, err)
 	}
 	return pid, true, nil
 }
