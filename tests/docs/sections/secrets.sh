@@ -60,7 +60,7 @@ on alice work/website "lore secrets allow list"
 local sal; sal=$(grep -o 'sal_[0-9a-f]\{32\}' <<<"$LAST_OUT" | tail -1)
 on alice work/website "lore secrets allow rm --id $sal --yes"
 on alice work/website "lore secrets allow list | grep -c sal_"
-on alice work/website "lore secrets allow $fx --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'"
+on alice work/website "lore secrets allow --row-id $fx --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'"
 
 note "rules"
 on alice work/website "lore secrets rules"

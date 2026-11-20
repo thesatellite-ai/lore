@@ -376,3 +376,36 @@ func valueLike(problem, span string) bool {
 	}
 	return false
 }
+
+// TestOperationGroupPositionalChecked: an operation that also has
+// subcommands (lore team invite with team invite list under it, lore
+// secrets allow with secrets allow list) is held to named values like any
+// other operation, while a word after a bare group still names a
+// subcommand (H-27: checkInvocation skipped every command with
+// subcommands, so team invite's own --help example gave the email by
+// position and no guard saw it).
+func TestOperationGroupPositionalChecked(t *testing.T) {
+	root := driftRoot(t)
+	for _, code := range []string{
+		"lore team invite tomas@agency.example --github tomas-dev --role dev --project acme-hub",
+		"lore secrets allow mem_3b62…e913 --rule github-pat --reason 'fixture'",
+	} {
+		if p := checkInvocation(root, code); !strings.Contains(p, "positional value") {
+			t.Errorf("%s: want a positional-value problem, got %q", code, p)
+		}
+	}
+	for _, code := range []string{
+		"lore team invite --email tomas@agency.example --github tomas-dev --role dev --project acme-hub",
+		"lore secrets allow --row-id mem_3b62…e913 --rule github-pat --reason 'fixture'",
+		"lore team invite list",
+		"lore team invite revoke --ref ana@agency.example",
+	} {
+		if p := checkInvocation(root, code); p != "" {
+			t.Errorf("%s: want no problem, got %q", code, p)
+		}
+	}
+	// A bare group: the word names a subcommand (here none), never a value.
+	if p := checkInvocation(root, "lore team nosuchverb"); strings.Contains(p, "positional value") {
+		t.Errorf("a word after a bare group read as a value: %q", p)
+	}
+}

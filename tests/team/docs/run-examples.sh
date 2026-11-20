@@ -1265,13 +1265,13 @@ setups:
 Y
 
   note "invite"
-  on tomas work/acme-hub "lore team invite mira@agency.example --role dev,reviewer --project acme-hub"
-  on tomas work/acme-hub "lore team invite ana@agency.example --type contractor --expires 30d"
+  on tomas work/acme-hub "lore team invite --email mira@agency.example --role dev,reviewer --project acme-hub"
+  on tomas work/acme-hub "lore team invite --email ana@agency.example --type contractor --expires 30d"
 
   note "invite refusals"
-  on! tomas work/acme-hub "lore team invite mira@agency.example"
-  on! tomas work/acme-hub "lore team invite bo@agency.example --role dev"
-  on! tomas work/acme-hub "lore --setup personal team invite bo@agency.example"
+  on! tomas work/acme-hub "lore team invite --email mira@agency.example"
+  on! tomas work/acme-hub "lore team invite --email bo@agency.example --role dev"
+  on! tomas work/acme-hub "lore --setup personal team invite --email bo@agency.example"
 
   note "list"
   on tomas work/acme-hub "lore team invite list"
@@ -1476,7 +1476,7 @@ Y
 
   note "invite and join"
   quiet tomas work/agency/site "lore actor register"
-  on tomas work/agency/site "lore team invite mira@agency.example"
+  on tomas work/agency/site "lore team invite --email mira@agency.example"
   # The line holds the random invite id: Mira's command reads it from $INVITE, so the
   # transcript stays the same on every run.
   local invite
