@@ -7,8 +7,9 @@ package journeys
 //     .gitattributes block. git applied the later line, so row files went
 //     CRLF; lore "set up" its rules by adding a blank line, doctor said
 //     nothing and render dirtied the pointer file. Now doctor names the
-//     line, the next write moves lore's block to the end (row files LF
-//     again) and render leaves the pointer file alone.
+//     line, a write keeps lore's rules in .git/info/attributes (row files
+//     LF again, no tracked file changed: devco:D-753), lore fix moves
+//     lore's block to the end and render leaves the pointer file alone.
 //   - devco:Q-3: a row committed on a detached HEAD: show's hint said a
 //     force-push dropped it and "the author's clone may still have it";
 //     now it names the detached HEAD and `git branch` to keep it.
@@ -56,12 +57,16 @@ func TestJourneyTeamCRLFAttributes(t *testing.T) {
 		}
 	})
 
-	w.Step("day1/doctor-names-it-a-write-moves-the-block", func() {
+	w.Step("day1/doctor-names-it-lore-fix-moves-the-block", func() {
 		lore("doctor").Says(t, "* text=auto eol=crlf", "comes after lore's block", "lore fix")
 		lore("memory", "add", "--body", "After the team rule", "--no-live").OK(t)
 		if eol := c.Git("check-attr", "eol", "--", ".lore/data/_meta.json"); !strings.HasSuffix(eol, "lf") {
 			t.Fatalf("after a write lore's eol=lf still does not apply: %s", eol)
 		}
+		if st := c.Git("status", "--porcelain", "--", ".gitattributes"); st != "" {
+			t.Fatalf("a plain write edited the tracked .gitattributes (devco:D-753):\n%s", st)
+		}
+		lore("fix").OK(t)
 		lore("doctor").Never(t, "comes after lore's block")
 		c.CommitAll("note and attributes")
 		lore("render").OK(t)

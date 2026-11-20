@@ -7,8 +7,9 @@ package journeys
 // 0.1.18-dev build last wrote, with a cell stored as a BLOB: lore migrate
 // run upgrades it (it failed with a bare E_INTERNAL). Ada commits the
 // migration and pushes. Ben pulls, and his first write's .gitignore note
-// says what the migration commit holds (it claimed the commit brings the
-// lines). Ben's clone has no repo id (the old data had no repos row): a
+// says a write changes no tracked file outside .lore/ and names lore
+// doctor --fix (it once claimed the migration commit brings the lines,
+// then that the migrator's next write adds them; devco:D-753). Ben's clone has no repo id (the old data had no repos row): a
 // dir-scoped rule and decision mint the id every clone agrees on (they
 // were refused with a `lore init` hint, and lore init said nothing to do).
 
@@ -70,8 +71,8 @@ func TestJourneyMigrateTeammateScope(t *testing.T) {
 	w.Step("day2/teammate-first-write-names-what-the-commit-holds", func() {
 		cb = ben.Clone(remote, "dock")
 		ben.LoreIn(cb, "task", "add", "--title", "Dock keyboard pass").OK(t).
-			Says(t, "migration commit holds only .lore/data", "`lore doctor --fix` adds them to .gitignore here instead; commit it").
-			Never(t, "whose commit brings")
+			Says(t, "changes no tracked file outside .lore/", "`lore doctor --fix` adds them to", ".gitignore for you to commit").
+			Never(t, "whose commit brings", "next lore write adds")
 	})
 
 	w.Step("day2/dir-scoped-writes-mint-the-repo-id", func() {

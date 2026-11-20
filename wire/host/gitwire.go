@@ -100,7 +100,9 @@ func mergeDriverConfig(bin string) [][2]string {
 func mergeDriverBinary() string { return reposync.RunningDriverBinary() }
 
 // wireMode is how far a command may change merge driver config the clone
-// already holds. The .gitattributes and hook blocks are the same in both.
+// already holds. The hook blocks are the same in both; the tracked
+// .gitattributes block and the .gitignore re-include are an install step's
+// only (devco:D-753: a plain write changes no tracked file outside .lore/).
 //
 // DECISION (mergedriver batch): an ordinary command (a check, a list, a
 // write) only fills a missing key and repairs a lore driver whose absolute
@@ -374,8 +376,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		paths = append(paths, filepath.Join(dir, n))
 	}
 	sort.Strings(names)
-	// A-1: the clone's own attributes file is wired too (a teammate's
-	// clone of a migrated project keeps lore's rules there).
+	// A-1, devco:D-753: the clone's own attributes file is wired too (a
+	// plain write keeps lore's rules there until an install step writes
+	// the tracked block).
 	localAttrs, err := s.localAttributes(ctx)
 	if err != nil {
 		s.warn("git wiring: " + err.Error())
@@ -451,12 +454,15 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		// D-500: the row files are never committed, so the rules would
 		// only change the team's .gitattributes for nothing
 	case formatOld:
-	case client || (mode != wireInstall && !wire.TrackedWiringHere(ctx, root)):
-		// A-1: a teammate's clone of a migrated project: the tracked
-		// block comes with the migrator's commit; until it is there the
-		// same rules apply from the clone's own attributes file, so the
-		// git pull that brings it finds no uncommitted .gitattributes.
-		// A client repo's tracked block only ever comes from its owners.
+	case client || mode != wireInstall:
+		// devco:D-753 (A-1 widened): a plain write changes no tracked
+		// file outside .lore/, in the migrator's clone too; while the
+		// tracked block lacks lore's rules they apply from the clone's
+		// own attributes file, so the git pull that brings them finds no
+		// uncommitted .gitattributes. lore init, lore doctor --fix and
+		// lore fix (wireInstall) write the tracked block, except in a
+		// client repo, whose tracked block only ever comes from its
+		// owners (devco:D-754).
 		if err := repoWriteRefused(s.top, localAttrs); err != nil {
 			s.warn("git wiring: " + err.Error()) // D-502: this file only; the hooks below still wire
 			break
@@ -587,6 +593,23 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		}
 		return
 	}
+	if mode != wireInstall {
+		// devco:D-753: re-including the row files edits the tracked
+		// .gitignore, which only an install step does; a plain write warns
+		// like a read and names the step (`lore sync` refuses meanwhile).
+		switch still, err := stillIgnoredData(ctx, root, false); {
+		case err != nil:
+			s.warn("git wiring: " + err.Error())
+			return
+		case len(still) > 0:
+			s.warn(ignoredDataByWrite(still))
+		}
+		if skipped != "" {
+			return // not wired in full: the next write looks again
+		}
+		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, fpBin, rel, paths)
+		return
+	}
 	switch changed, still, err := EnsureDataNotIgnored(ctx, root); {
 	case err != nil:
 		s.warn("git wiring: " + err.Error())
@@ -615,6 +638,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 		return
 	}
 	var missing []string
+	attrsStep := ""
 	for _, kv := range mergeDriverConfig(bin) {
 		cur, gerr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--local", "--get", kv[0]}})
 		if driverConfigAction(wireAuto, kv[0], kv[1], string(cur), gerr == nil) {
@@ -630,10 +654,13 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 		// the rules only matter for row files: a repo whose rows live in a
 		// store (a converted Mode B repo) is not told
 		if stale, err := fileBlockStale(attrs, gitBlockMarker, gitAttributeLines); err == nil && stale && !attributesHeldLocally(localAttrs) {
+			// devco:D-753: a sync or a write keeps them in the clone's own
+			// attributes file; only an install step writes the tracked one,
+			// and never in a client repo (devco:D-754)
 			if client {
 				missing = append(missing, "lore's merge rules in "+localAttrs+" (this clone's own file: lore changes none of a client repo's tracked files)")
 			} else {
-				missing = append(missing, "lore's merge rules in "+attrs+" (then commit "+gitAttributesFile+")")
+				attrsStep = "`lore doctor --fix` adds lore's merge rules to " + attrs + " (then commit " + gitAttributesFile + ")"
 			}
 		}
 	}
@@ -660,6 +687,9 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 	}
 	if len(missing) > 0 {
 		steps = append(steps, "`lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
+	}
+	if attrsStep != "" {
+		steps = append(steps, attrsStep)
 	}
 	if tracked != "" {
 		steps = append(steps, tracked)
@@ -946,4 +976,15 @@ func (s *liveSession) sayPrivate(ctx context.Context, root, stamp, fp string) {
 	}
 	s.cmdNotice(ctx, wire.PrivateProjectNotice(root, loreDirIgnoreRule(ctx, root)))
 	wire.MarkReadNotice(s.h.cfg.Home, stamp+privateNoticeSuffix, fp)
+}
+
+// ignoredDataByWrite is the warning a plain write gives when git ignores
+// row files (devco:D-753): the write leaves .gitignore as it is and names
+// the install step that re-includes them, at most maxIgnoredShown paths.
+func ignoredDataByWrite(still []string) string {
+	shown, more := still, ""
+	if len(still) > maxIgnoredShown {
+		shown, more = still[:maxIgnoredShown], "\n  and "+strconv.Itoa(len(still)-maxIgnoredShown)+" more"
+	}
+	return "git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed); a lore write changes no tracked file outside .lore/: `lore doctor --fix` re-includes " + dataRel + " (then commit " + gitignoreName + "):\n  " + strings.Join(shown, "\n  ") + more
 }

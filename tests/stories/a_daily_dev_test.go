@@ -401,11 +401,23 @@ func TestStoryABranches(t *testing.T) {
 		rule = aID(t, at.lore(aCTO, at.svc, "rule", "add", "--body", "every handler takes a context first").OK(t), "rul")
 		mem = aID(t, at.lore(aCTO, at.svc, "memory", "add", "--body", "the session cache holds 5 minutes").OK(t), "mem")
 		at.lore(aCTO, at.svc, "render").OK(t)
+		// devco:D-753: the cto's plain writes after the migration change
+		// no tracked file outside .lore/ (H-12: the migrator's next note
+		// rewrote .gitignore and .gitattributes); lore doctor --fix, which
+		// the migration names, writes them for the cto to commit.
+		if st := svc.Git("status", "--porcelain", "--", ".gitignore", ".gitattributes"); st != "" {
+			t.Errorf("the cto's plain writes after the migration edited tracked files outside .lore/:\n%s", st)
+		}
+		at.lore(aCTO, at.svc, "doctor", "--fix")
+		if st := svc.Git("status", "--porcelain", "--", ".gitattributes"); st == "" {
+			t.Error("lore doctor --fix after the migration left lore's merge rules out of .gitattributes")
+		}
 		aPush(svc, "lore: notes")
 	})
 	s.Step("week3/teammate-pulls-the-notes", func() {
 		// A-1: the cto's commit carries lore's .gitignore and
-		// .gitattributes lines; Dana's plain git pull takes it.
+		// .gitattributes lines (from lore doctor --fix); Dana's plain git
+		// pull takes it.
 		if r := devSvc.TryGit("pull", "-q", "--no-rebase", "origin", "main"); r.Code != 0 {
 			t.Fatalf("Dana's git pull of the cto's notes commit aborts: %s", r)
 		}
