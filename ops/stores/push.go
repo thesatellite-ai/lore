@@ -225,13 +225,15 @@ func pusher(m Manager, cmd string) (Pusher, error) {
 	return p, nil
 }
 
-// CheckSettings parses and checks store.set's words (exported for tests):
-// E_INVALID_INPUT naming the word and the keys.
-func CheckSettings(words []string) ([]storepush.Assignment, error) {
+// CheckSettings parses and checks store.set's words for store (exported
+// for tests): E_INVALID_INPUT naming the word and the keys. The example in
+// the hint names the store the person gave, so it runs as printed for
+// them (a machine with no store "me" got an example that failed, D-760).
+func CheckSettings(store string, words []string) ([]storepush.Assignment, error) {
 	set, err := storepush.ParseAssignments(words)
 	if err != nil {
 		return nil, errs.New(errs.InvalidInput, "store set: "+err.Error()).
-			WithHint("e.g. lore store set me push=batch push_every=10m compact=on compact_after=30d")
+			WithHint("e.g. lore store set --store " + hintStore(store) + " --settings push=batch --settings push_every=10m --settings compact=on --settings compact_after=30d")
 	}
 	s := storepush.Default()
 	for _, a := range set {
@@ -241,6 +243,18 @@ func CheckSettings(words []string) ([]storepush.Assignment, error) {
 		}
 	}
 	return set, nil
+}
+
+// hintStore is store as a hint example prints it: the name the person
+// gave when it is one shell word, else "me" (the personal store).
+func hintStore(store string) string {
+	store = strings.TrimSpace(store)
+	if store == "" || strings.ContainsFunc(store, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("._-:/@~+", r))
+	}) {
+		return "me"
+	}
+	return store
 }
 
 // compactQuestion is what store.compact asks.
@@ -264,7 +278,7 @@ func pushOps(m Manager) []op.Entry {
 			if err != nil {
 				return PushView{}, err
 			}
-			set, err := CheckSettings(in.Settings)
+			set, err := CheckSettings(in.Store, in.Settings)
 			if err != nil {
 				return PushView{}, err
 			}

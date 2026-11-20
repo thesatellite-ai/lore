@@ -35,7 +35,7 @@ func (o ops) invite(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInvit
 	email, err := teamprofile.Normalize(schema.ContactKindEmail, in.Email)
 	if err != nil {
 		return setup.TeamInviteOut{}, errs.Wrap(errs.InvalidInput, "email "+work.Quote(in.Email)+" is not an address", err).
-			WithHint("lore team invite tomas@agency.example")
+			WithHint("give the address, e.g. lore team invite --email tomas@agency.example")
 	}
 	periodType := strings.TrimSpace(in.Type)
 	if periodType == "" {
