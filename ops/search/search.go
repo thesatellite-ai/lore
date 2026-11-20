@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -246,6 +247,9 @@ type Hit struct {
 type Result struct {
 	Hits          []Hit
 	MatchedTables int
+	// More is true when more rows match than Hits lists: a kind held more
+	// than PerTable hits, or the merge held more than Limit (devco D-767).
+	More bool
 }
 
 // TableStatus is one table of search.status: the rows of the table in the
@@ -279,8 +283,8 @@ type Env interface {
 type RunIn struct {
 	Query           string   `json:"query" arg:"0" rest:"true" desc:"full-text query (several words without quotes are one query): plain words or a question (\"how do we deploy orbit\": words like how, do, we are skipped, word forms match, rows holding most words first), or FTS5 syntax that every hit must match: \"exact phrase\", prefix*, AND / OR / NOT, -word leaves out rows holding word (a '-' inside a word like well-known is no negation); key:value matches metadata, field:value resource fields. Chinese, Japanese and Korean words are found inside a sentence (no spaces needed); emoji are found too (👍 also finds 👍🏽)"`
 	Tables          []string `json:"tables,omitempty" flag:"tables" desc:"restrict to these entity types (e.g. memory,rule,decision; repeatable)"`
-	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max total hits after merge (default 20)"`
-	PerTable        int      `json:"per_table,omitempty" flag:"per-table" min:"1" desc:"per-entity top-K before merge (default 10)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max total hits after merge (default 20); a cut list ends with a note and --json says \"more\": true"`
+	PerTable        int      `json:"per_table,omitempty" flag:"per-table" min:"1" desc:"per-entity top-K before merge (default 10, or --limit when --limit is given)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
 	IncludeDeleted  bool     `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also list matching rows in the trash, after the live hits"`
 	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"search every repo (ignore --repo)"`
@@ -307,6 +311,10 @@ type RunData struct {
 	// now come from the stores the core attaches, as hits with a _source
 	// (P3-MISC-1), so it is always empty; the key stays for scripts.
 	External []Hit `json:"external"`
+	// More says the hits are cut: more rows match than are listed (devco
+	// D-767). "Found 10 hits" over fifty matching notes read as the whole
+	// answer; --limit lists more.
+	More bool `json:"more,omitempty" desc:"more rows match than are listed; raise --limit to list more"`
 }
 
 // RunOut is the output of search.run: the v0.1.17 --json envelope.
@@ -317,6 +325,8 @@ type RunOut struct {
 	Data          RunData `json:"data"`
 	// matched is the number of tables with a hit, for the header line.
 	matched int
+	// limit is the --limit the search ran with, for the cut note.
+	limit int
 }
 
 // StatusIn is the input of search.status.
@@ -411,11 +421,16 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if err != nil {
 		return RunOut{}, err
 	}
+	if in.PerTable <= 0 {
+		// D-767: --limit 50 alone means up to 50 hits; the per-kind cut
+		// of 10 kept a search over fifty notes at 10 whatever --limit said
+		in.PerTable = DefaultPerTable
+		if in.Limit > 0 {
+			in.PerTable = in.Limit
+		}
+	}
 	if in.Limit <= 0 {
 		in.Limit = DefaultLimit
-	}
-	if in.PerTable <= 0 {
-		in.PerTable = DefaultPerTable
 	}
 	res, err := env.GlobalSearch(ctx, Request{
 		Query: in.Query, Targets: targets, Limit: in.Limit, PerTable: in.PerTable,
@@ -446,8 +461,8 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	}
 	return RunOut{
 		SchemaVersion: SchemaVersion, Kind: KindGlobal, Count: len(hits),
-		Data:    RunData{Query: in.Query, Count: len(hits), Hits: hits, External: []Hit{}},
-		matched: res.MatchedTables,
+		Data:    RunData{Query: in.Query, Count: len(hits), Hits: hits, External: []Hit{}, More: res.More},
+		matched: res.MatchedTables, limit: in.Limit,
 	}, nil
 }
 
@@ -475,7 +490,11 @@ func (o RunOut) Text() string {
 		seen[h.EntityTable] = true
 	}
 	types := max(o.matched, len(seen))
-	fmt.Fprintf(&b, "Found %d %s for %q across %d %s:\n\n", n, plural(n, "hit", "hits"), o.Data.Query,
+	lead := "Found"
+	if o.Data.More {
+		lead = "Showing the best" // D-767: not every match; the note at the end says how to list more
+	}
+	fmt.Fprintf(&b, "%s %d %s for %q across %d %s:\n\n", lead, n, plural(n, "hit", "hits"), o.Data.Query,
 		types, plural(types, "entity type", "entity types"))
 	if o.Data.Hits[0].Partial {
 		// D-435: hits are best first, so a partial first hit means no row
@@ -500,6 +519,9 @@ func (o RunOut) Text() string {
 		if h.Text != "" {
 			b.WriteString(fullText(h.Text))
 		}
+	}
+	if o.Data.More {
+		b.WriteString(morehits.Note(n, o.limit))
 	}
 	return b.String()
 }

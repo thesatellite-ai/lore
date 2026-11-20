@@ -321,8 +321,9 @@ lore search --query "how do we deploy orbit"     # a plain question works
 
 **Flags:**
 - `--tables <a,b,c>` restrict to specific entities (memory, rule, decision, …)
-- `--limit N` total hits after merge (default 20)
-- `--per-table N` per-entity top-K before merge (default 10)
+- `--limit N` total hits after merge (default 20); alone it raises `--per-table` too
+- `--per-table N` per-entity top-K before merge (default 10, or `--limit` when given)
+- a cut list starts `Showing the best N hits`, ends with `note: more rows match than the N listed …; add --limit M to list more`, and `--json` has `"more": true`
 - `--include-archived` include soft-deleted rows
 - `--repo / --all-repos / --master-only` scope flags
 - `--json` envelope output
