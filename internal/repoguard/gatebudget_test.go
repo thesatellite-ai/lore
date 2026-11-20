@@ -168,6 +168,31 @@ func overBudget(sels []gateSelector, suiteTests map[string][]string, times map[s
 	return out
 }
 
+// unmeasuredSteps lists every step on a measured suite where more than
+// half of the tests it runs have no row (a part made of a single
+// unmeasured test included). The suite mean stands in for one new test,
+// not for a whole part: the persona parts (journey-teamlead and the
+// rest) were never measured, so the guard counted journey-teamlead's 15
+// tests at the mean, about 1m53s, while it really took 367 s (devco
+// D-783). Such a step is measured with its own go test -json run before
+// its estimate means anything.
+func unmeasuredSteps(sels []gateSelector, suiteTests map[string][]string, times map[string]map[string]testTime) []string {
+	var out []string
+	for _, sel := range sels {
+		tt, ok := times[sel.dir]
+		if !ok {
+			continue
+		}
+		e := estimate(sel, suiteTests[sel.dir], tt)
+		if e.tests == 0 || e.unmeasured*2 <= e.tests {
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s: %d of its %d tests of %s have no measured time, so its estimate (%s) is the suite's mean, not the part: measure it (go test -json with the part's -run, then tests/lib/test-times.sh %s <file>)",
+			e.step, e.unmeasured, e.tests, sel.dir, e.wall, sel.dir))
+	}
+	return out
+}
+
 // TestGateStepsFitTheirTimeout is the D-779 guard on the real Taskfile
 // and the measured table.
 func TestGateStepsFitTheirTimeout(t *testing.T) {
@@ -203,6 +228,9 @@ func TestGateStepsFitTheirTimeout(t *testing.T) {
 			e := estimate(sel, suiteTests[sel.dir], tt)
 			t.Logf("%-18s %3d tests  about %-6s of %s at -parallel %d", e.step, e.tests, e.wall, e.timeout, sel.parallel)
 		}
+	}
+	for _, msg := range unmeasuredSteps(sels, suiteTests, times) {
+		t.Errorf("%s (devco D-783)", msg)
 	}
 	for _, msg := range overBudget(sels, suiteTests, times) {
 		t.Errorf("%s. Split the part (a test:<suite>:<part> task with its own -run, a GATE_STEPS line, its pattern in the catch-all's -skip) or raise its PARALLEL; never the timeout alone (devco D-779)", msg)
@@ -275,6 +303,40 @@ tasks:
 `)
 	if got := overBudget(gateSelectors(t, split), suite, all); len(got) != 0 {
 		t.Fatalf("the same tests over two parts fit: %v", got)
+	}
+
+	// A part whose tests mostly have no row is flagged as unmeasured,
+	// even when the suite mean makes it look small (devco D-783: the
+	// persona parts counted at the mean); one new test in a measured part
+	// is not.
+	persona := []byte(`vars:
+  GATE_STEPS: |
+    journey-teamlead  3  test:journeys:teamlead PARALLEL=2
+    journey-rest      3  test:journeys:rest PARALLEL=3
+tasks:
+  test:journeys:part:
+    cmds:
+      - "go test -tags journeys -count=1 -parallel {{.PARALLEL | default 16}} -timeout $({{.TEST_TIME}} 15m) {{.FILTER}} ./tests/journeys/"
+  test:journeys:teamlead:
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: teamlead, FILTER: "-run '^TestJourneyTeamLead'"}
+  test:journeys:rest:
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: rest, FILTER: "-skip '^Test(Frame|JourneyTeamLead)'"}
+`)
+	personaTests := append(slices.Clone(tests), "TestJourneyTeamLeadA", "TestJourneyTeamLeadB", "TestJourneyTeamLeadC")
+	personaSuite := map[string][]string{"tests/journeys": personaTests}
+	got = unmeasuredSteps(gateSelectors(t, persona), personaSuite, all)
+	if len(got) != 1 || !strings.HasPrefix(got[0], "journey-teamlead: 3 of its 3 tests") {
+		t.Fatalf("a part with no measured test must be flagged, the catch-all with one new test not: %v", got)
+	}
+	for _, n := range []string{"TestJourneyTeamLeadA", "TestJourneyTeamLeadB"} {
+		times[n] = testTime{secs: 120, parallel: false}
+	}
+	if got := unmeasuredSteps(gateSelectors(t, persona), personaSuite, all); len(got) != 0 {
+		t.Fatalf("2 of 3 measured is enough: %v", got)
 	}
 
 	// The default of {{.PARALLEL | default N}} stands in when the step
