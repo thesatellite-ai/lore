@@ -297,9 +297,11 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if title == "" {
 		return AddOut{}, errs.New(errs.InvalidInput, "task add: the title is empty").WithHint(`lore task add --title "<title>"`)
 	}
-	project, err := work.Project(ctx, o.env, Noun, in.Project)
-	if err != nil {
-		return AddOut{}, err
+	project := in.placeProject
+	if project.IsZero() {
+		if project, err = work.Project(ctx, o.env, Noun, in.Project); err != nil {
+			return AddOut{}, err
+		}
 	}
 	// TASK 6.5: a sub-task inherits from its parent before the defaults.
 	var par *addParent
