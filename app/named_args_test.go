@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -194,7 +195,7 @@ func joinsVerb(root *cobra.Command, line string) bool {
 	if len(spans) == 0 {
 		return false
 	}
-	toks := docTokens(spans[len(spans)-1])[1:] // drop "lore"
+	toks := docTokens(spans[len(spans)-1].code)[1:] // drop "lore"
 	cmd := root
 	for _, tok := range toks {
 		next := findSub(cmd, tok)
@@ -209,17 +210,17 @@ func joinsVerb(root *cobra.Command, line string) bool {
 // printedProblems checks the `lore …` commands of one printed line: how
 // many it found, and each problem with the command it is about.
 func printedProblems(root *cobra.Command, line string) (int, []string) {
-	quoted := strings.Contains(line, "`")
 	spans := commandSpans(line)
 	var out []string
-	for _, span := range spans {
+	for _, sp := range spans {
+		span := sp.code
 		if _, ok := printedAllowed[span]; ok {
 			continue
 		}
 		if f := equalsValue(span); f != "" {
 			out = append(out, "gives "+f+" with =: write it "+spaced(f)+"\n    "+span)
 		}
-		if p := checkInvocation(root, span); p != "" && strings.Contains(p, "positional value") && (quoted || valueLike(p)) {
+		if p := checkInvocation(root, span); p != "" && strings.Contains(p, "positional value") && (sp.quoted || valueLike(p, span)) {
 			out = append(out, p+"\n    "+span)
 		}
 	}
@@ -232,27 +233,43 @@ var printedAllowed = map[string]string{
 	`lore rule add --severity=must "<X>" --body="<Y>"`: "ops/skill/compile.go: the FORBIDDEN PATTERN an agent must never emit",
 }
 
-// commandSpans are the `lore …` commands in one line of a Go string: the
-// backtick spans when it has any (a hint quoting a command), else the
-// command starting the line.
-func commandSpans(line string) []string {
-	var parts []string
-	if strings.Contains(line, "`") {
-		for _, m := range inlineCode.FindAllStringSubmatch(line, -1) {
-			parts = append(parts, m[1])
-		}
-	} else {
-		parts = []string{line}
+// printedSpan is one `lore …` command found in a Go string; quoted when
+// it sat in backticks (a command in full, always checked).
+type printedSpan struct {
+	code   string
+	quoted bool
+}
+
+// commandSpans are the `lore …` commands in one line of a Go string, in
+// line order: each backtick span (a hint quoting a command) and every
+// command in the prose around them. H-15 (D-760): the prose outside the
+// backticks was skipped once a line held any, so "e.g. lore store adopt
+// team/client_north (`lore store folder list` …)" taught a positional
+// unseen. A lone backtick (a span cut across literals) ends the command
+// there.
+func commandSpans(line string) []printedSpan {
+	type part struct {
+		text   string
+		quoted bool
 	}
-	var out []string
-	for _, s := range parts {
-		s = foldSubstitutions(s)
+	var parts []part
+	prose := func(text string) { parts = append(parts, part{strings.ReplaceAll(text, "`", " ; "), false}) }
+	at := 0
+	for _, m := range inlineCode.FindAllStringSubmatchIndex(line, -1) {
+		prose(line[at:m[0]])
+		parts = append(parts, part{line[m[2]:m[3]], true})
+		at = m[1]
+	}
+	prose(line[at:])
+	var out []printedSpan
+	for _, p := range parts {
+		s := foldSubstitutions(p.text)
 		for _, loc := range printedStart.FindAllStringIndex(s, -1) {
 			code := s[loc[0]+strings.Index(s[loc[0]:], binaryName):]
 			if end := commandEnd.FindStringIndex(code[len(binaryName):]); end != nil {
 				code = code[:len(binaryName)+end[0]]
 			}
-			out = append(out, strings.TrimSpace(proseEnd(code)))
+			out = append(out, printedSpan{strings.TrimSpace(proseEnd(code)), p.quoted})
 		}
 	}
 	return out
@@ -326,16 +343,36 @@ func proseEnd(code string) string {
 // brings it back", "lore fix --all: …").
 var proseValue = regexp.MustCompile(`^(--[a-z-]+:|[a-z]+[,.;:)]?)$`)
 
-// valueLike reports whether the positional a checkInvocation problem names
-// looks like a value a person would type (an id, a placeholder, a quoted
-// text, a path, a key=value): in a plain sentence only those are findings.
-// A backtick span is a command in full and is always checked.
-func valueLike(problem string) bool {
+// valueLike reports whether a positional in span looks like a value a
+// person would type (an id, a placeholder, a quoted text, a path, a
+// key=value): in a plain sentence only those are findings. It looks at
+// the positional the problem names, then for a key=value among the words
+// after it up to the first flag. H-15 (D-760): "lore store set me
+// push=batch …" was read as prose because only its first positional
+// ("me", an English word) was looked at. A backtick span is a command in
+// full and is always checked.
+func valueLike(problem, span string) bool {
 	const marker = "given the positional value "
 	i := strings.Index(problem, marker)
 	if i < 0 {
 		return false
 	}
 	v, _, _ := strings.Cut(problem[i+len(marker):], ": write it with its flag")
-	return !proseValue.MatchString(v) && v != "%q"
+	if !proseValue.MatchString(v) && v != "%q" {
+		return true
+	}
+	toks := docTokens(span)
+	at := slices.Index(toks, v)
+	if at < 0 {
+		return false
+	}
+	for _, w := range toks[at+1:] {
+		if strings.HasPrefix(w, "--") {
+			break
+		}
+		if strings.Contains(w, "=") {
+			return true
+		}
+	}
+	return false
 }

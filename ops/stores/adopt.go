@@ -166,7 +166,7 @@ func SplitTarget(verb, target string) (string, string, error) {
 	i := strings.LastIndex(target, "/")
 	if target == "" || i == len(target)-1 || i == 0 {
 		return "", "", errs.New(errs.InvalidInput, verb+": "+quote(target)+" names no folder; give <store>/<folder> or a folder of the org").
-			WithHint("e.g. lore store adopt team/client_north (`lore store folder list` shows the folders)")
+			WithHint("e.g. `lore store adopt --target team/client_north --dry-run` (`lore store folder list` shows the folders)")
 	}
 	if i < 0 {
 		return "", target, nil
