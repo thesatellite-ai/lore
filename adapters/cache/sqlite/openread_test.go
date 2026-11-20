@@ -76,8 +76,8 @@ func TestOpenStampsInternalDDL(t *testing.T) {
 	if err := c.db.QueryRowContext(f.ctx, "PRAGMA application_id").Scan(&app); err != nil {
 		t.Fatal(err)
 	}
-	if int32(app) != ddlStamp {
-		t.Fatalf("application_id = %d, want the DDL stamp %d", app, ddlStamp)
+	if int32(app) != ddlStamp() {
+		t.Fatalf("application_id = %d, want the DDL stamp %d", app, ddlStamp())
 	}
 	if _, err := c.db.ExecContext(f.ctx, "PRAGMA application_id = 0"); err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestOpenStampsInternalDDL(t *testing.T) {
 	if err := c.db.QueryRowContext(f.ctx, "PRAGMA application_id").Scan(&app); err != nil {
 		t.Fatal(err)
 	}
-	if int32(app) != ddlStamp {
+	if int32(app) != ddlStamp() {
 		t.Fatalf("an unstamped file was not stamped on open: application_id = %d", app)
 	}
 }

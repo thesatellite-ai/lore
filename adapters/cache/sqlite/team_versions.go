@@ -62,7 +62,7 @@ func (c *Cache) TeamVersions(ctx context.Context) ([]TeamVersion, error) {
 	if err := c.usable(); err != nil {
 		return nil, err
 	}
-	return QueryTeamVersions(ctx, c.db)
+	return teamVersionsMemoized(ctx, c.db) // team_versions_memo.go: unchanged rows are not parsed again
 }
 
 // QueryTeamVersions runs the team versions read on any handle of a cache

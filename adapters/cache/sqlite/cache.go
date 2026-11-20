@@ -252,8 +252,8 @@ func (c *Cache) init(ctx context.Context) error {
 		if err := tx.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app); err != nil {
 			return dbErr("read layout stamp", err)
 		}
-		if int32(app) != ddlStamp { // stamped once per DDL change, like user_version (B1-16)
-			if _, err := tx.ExecContext(ctx, qStampDDL); err != nil {
+		if int32(app) != ddlStamp() { // stamped once per DDL change, like user_version (B1-16)
+			if _, err := tx.ExecContext(ctx, qStampDDL()); err != nil {
 				return dbErr("stamp layout", err)
 			}
 		}
