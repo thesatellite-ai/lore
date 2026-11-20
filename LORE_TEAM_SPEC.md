@@ -951,7 +951,7 @@ project: lore-tools   # the internal project folder, optional
 This marks client/website as a CLIENT repo of agency: internal notes default to agency/notes client/,
 and the leak guards turn on for everyone in agency. Continue? [y/N] y
 ✓ client/website (prj_01a1…, github.com/client/website) linked to agency/notes client/ (created; pushed)
-  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
+  no tracked file of this repo was written; the leak guard hooks (commit-msg, pre-push) are in this clone's git hooks
 ```
 
 **Contract.**

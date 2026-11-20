@@ -6,21 +6,21 @@ This marks github.com/client2/api as a CLIENT repo of agency: internal notes def
 and the leak guards turn on for everyone in agency.
   link: project prj_7a670ae8548ed05bf57ad29ad0759504 at github.com/client2/api → github.com/agency/notes@main:client2/ (default=false)
 ✓ github.com/client2/api (prj_7a670ae8548ed05bf57ad29ad0759504) linked to github.com/agency/notes client2/ (created; committed in the local clone; `lore sync` sends it)
-  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
+  no tracked file of this repo was written; the leak guard hooks (commit-msg, pre-push) are in this clone's git hooks
 alice (work/app)$ lore org link --org agency --project client2 --yes
 lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/app/.git/config; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 This marks github.com/client2/app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_2ad3618e878ebbf527d34d446ef4f891 at github.com/client2/app → github.com/agency/notes@main:client2/ (default=false)
 ✓ github.com/client2/app (prj_2ad3618e878ebbf527d34d446ef4f891) linked to github.com/agency/notes client2/ (committed in the local clone; `lore sync` sends it)
-  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
+  no tracked file of this repo was written; the leak guard hooks (commit-msg, pre-push) are in this clone's git hooks
 alice (work/infra)$ lore org link --org agency --project client2 --yes
 lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 This marks github.com/client2/infra as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_162df51b7f78b785c97c26b41ea89666 at github.com/client2/infra → github.com/agency/notes@main:client2/ (default=false)
 ✓ github.com/client2/infra (prj_162df51b7f78b785c97c26b41ea89666) linked to github.com/agency/notes client2/ (committed in the local clone; `lore sync` sends it)
-  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
+  no tracked file of this repo was written; the leak guard hooks (commit-msg, pre-push) are in this clone's git hooks
 alice (work/api)$ lore actor register
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_54fe984c9b495744c0217776765a28f2.json (store agency/org)

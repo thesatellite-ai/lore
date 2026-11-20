@@ -65,7 +65,7 @@ This marks github.com/client/website as a CLIENT repo of agency: internal notes 
 and the leak guards turn on for everyone in agency.
   link: project prj_162d…9666 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
 ✓ github.com/client/website (prj_162d…9666) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
-  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
+  no tracked file of this repo was written; the leak guard hooks (commit-msg, pre-push) are in this clone's git hooks
 $ git status --short
 $ lore actor register
 lore: committed locally to store agency/org; lore sync sends it
@@ -181,7 +181,7 @@ $ git status --short
 ```
 <!-- /example -->
 
-If someone pastes internal text into a file of the client's repo, the commit is blocked. The check runs from the clone's commit-msg hook: a client repo with no `.lore/` (linked by its remote only) gets lore's block when `lore org link` runs in that clone, and nothing else of lore's (no `.lore/`, merge driver or other hooks). In a teammate's clone that has not run the link, `lore whoami` says `guards OFF in this clone` and names the command; running the same `lore org link` there installs it (the store side is already so):
+If someone pastes internal text into a file of the client's repo, the commit is blocked. The check runs from the clone's commit-msg hook, and again from its pre-push hook for a commit made with `--no-verify`: a client repo with no `.lore/` (linked by its remote only) gets lore's two blocks in `.git/hooks` when `lore org link` runs in that clone, and nothing else of lore's (no `.lore/`, merge driver or other hooks); a hooks folder committed with the repo is never written, and `lore doctor` prints the lines to add there instead. In a teammate's clone that has not run the link, `lore whoami` says `guards OFF in this clone` and names the command; running the same `lore org link` there installs it (the store side is already so):
 
 <!-- example: agency#leak-blocked only=1,2 -->
 ```console

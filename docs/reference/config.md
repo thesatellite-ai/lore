@@ -165,7 +165,7 @@ This marks github.com/client/website as a CLIENT repo of agency: internal notes 
 and the leak guards turn on for everyone in agency.
   link: project prj_d431…313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
 ✓ github.com/client/website (prj_d431…313a) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
-  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
+  no tracked file of this repo was written; the leak guard hooks (commit-msg, pre-push) are in this clone's git hooks
 ```
 <!-- /example -->
 

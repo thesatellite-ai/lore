@@ -24,9 +24,19 @@ const guardsOnText = "guards on"
 // project block and the client repo guard alike).
 const leakCheckHookLine = "check leaks --staged --commit-msg"
 
+// pushCheckHookLine is in every pre-push block lore writes (the ride-along
+// block of a project and the client repo guard alike, D-730).
+const pushCheckHookLine = "sync hook pre-push"
+
 // commitGuardInstalled reports whether the commit-msg hook git runs for
 // the clone at dir holds lore's leak check and is executable.
 func commitGuardInstalled(ctx context.Context, dir string) bool {
+	return hookHolds(ctx, dir, "commit-msg", leakCheckHookLine)
+}
+
+// hookHolds reports whether the hook named hook that git runs for the
+// clone at dir is executable and holds line.
+func hookHolds(ctx context.Context, dir, hook, line string) bool {
 	out, err := gitRun{dir: dir, args: []string{"rev-parse", "--path-format=absolute", "--git-path", "hooks"}}.output(ctx)
 	if err != nil {
 		return false
@@ -40,19 +50,35 @@ func commitGuardInstalled(ctx context.Context, dir string) bool {
 			hooks = p
 		}
 	}
-	p := filepath.Join(hooks, "commit-msg")
+	p := filepath.Join(hooks, hook)
 	info, err := os.Stat(p)
 	if err != nil || info.Mode().Perm()&0o111 == 0 {
 		return false
 	}
 	b, err := os.ReadFile(filepath.Clean(p))
-	return err == nil && strings.Contains(string(b), leakCheckHookLine)
+	return err == nil && strings.Contains(string(b), line)
 }
+
+// guardsCommitsOnlyText replaces "guards on" in a client repo with no
+// .lore/ whose clone holds lore's commit-msg block but no pre-push block
+// (linked before D-730): a --no-verify commit leaves unchecked there.
+const guardsCommitsOnlyText = "guards on for commits only: no lore pre-push hook, pushes are not checked for internal notes; `lore doctor --fix` here installs it"
 
 // guardsOffRepoLine rewrites whoami's repo line when it claims the guards
 // in a git clone whose commit-msg hook does not run lore's check.
 func guardsOffRepoLine(ctx context.Context, s *orgcfg.Situation, lines []string) []string {
-	if s == nil || s.NotGitRepo || s.Result.Role != orgresolve.RoleClient || commitGuardInstalled(ctx, s.Dir) {
+	if s == nil || s.NotGitRepo || s.Result.Role != orgresolve.RoleClient {
+		return lines
+	}
+	if commitGuardInstalled(ctx, s.Dir) {
+		if loreFolderAt(gitTop(ctx, s.Dir)) || hookHolds(ctx, s.Dir, "pre-push", pushCheckHookLine) {
+			return lines
+		}
+		for i, l := range lines {
+			if strings.Contains(l, guardsOnText) && strings.Contains(strings.TrimSpace(l), "repo") {
+				lines[i] = strings.Replace(l, guardsOnText, guardsCommitsOnlyText, 1)
+			}
+		}
 		return lines
 	}
 	fix := "lore fix here installs it"

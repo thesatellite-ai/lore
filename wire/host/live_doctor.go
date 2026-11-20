@@ -57,10 +57,6 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 			return base, err
 		}
 	}
-	s, folder, err := liveSync{h: d.h}.here(ctx)
-	if err != nil || s == nil {
-		return base, nil // not a lore project in a git repo: no live rows to report
-	}
 	warn := func(msg string) {
 		base.Warnings = append(base.Warnings, liveDoctorPrefix+msg)
 		if base.Status == opsdoctor.StatusHealthy {
@@ -68,6 +64,13 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		}
 	}
 	note := func(msg string) { base.Notes = append(base.Notes, liveDoctorPrefix+msg) }
+	s, folder, err := liveSync{h: d.h}.here(ctx)
+	if err != nil || s == nil {
+		// not a lore project in a git repo: no live rows to report; a
+		// client repo with no .lore/ still has its leak guard (D-730)
+		d.h.doctorClientGuard(ctx, fix, warn, note)
+		return base, nil
+	}
 	if s.ref.Remote != nil {
 		// plain doctor reads: it looks at the refspec and adds none
 		// (owner bug 6); --fix adds it

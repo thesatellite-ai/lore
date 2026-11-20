@@ -212,18 +212,23 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 			t.Errorf("org link --dry-run changed the client repo:\nbefore %s\nafter  %s", plain, after)
 		}
 		lee.LoreIn(hub, "org", "link", tlOrg, "--project", "client_a", "--store", two.SSHURL(), "--yes").OK(t).Says(t, "no tracked file of this repo was written")
-		// devco J-11: the link installs only the commit leak check in
-		// .git/hooks (no tracked file, no ignore); from here on nothing
-		// lore runs in the repo changes it
+		// devco J-11, D-730: the link installs only the leak checks in
+		// .git/hooks (commit-msg and pre-push; no tracked file, no
+		// ignore); from here on nothing lore runs in the repo changes it
 		guard, err := os.ReadFile(filepath.Join(hub.Dir, ".git", "hooks", "commit-msg"))
 		if err != nil {
 			t.Errorf("org link left the client repo without the commit leak check: %v", err)
 		}
+		push, err := os.ReadFile(filepath.Join(hub.Dir, ".git", "hooks", "pre-push"))
+		if err != nil {
+			t.Errorf("org link left the client repo without the push leak check: %v", err)
+		}
 		hubBefore = jRepoSnapshot(t, hub.Dir)
-		// the snapshot minus that one hook must be the plain repo's: same
+		// the snapshot minus those two hooks must be the plain repo's: same
 		// tree, same ignores, every other hook untouched
-		if without := strings.Replace(hubBefore, "hook:commit-msg="+string(guard)+";", "", 1); without != plain {
-			t.Errorf("org link changed the client repo beyond the commit-msg hook:\nbefore %s\nafter  %s", plain, hubBefore)
+		without := strings.Replace(hubBefore, "hook:commit-msg="+string(guard)+";", "", 1)
+		if without = strings.Replace(without, "hook:pre-push="+string(push)+";", "", 1); without != plain {
+			t.Errorf("org link changed the client repo beyond the commit-msg and pre-push hooks:\nbefore %s\nafter  %s", plain, hubBefore)
 		}
 		lee.LoreIn(hub, "task", "add", jManyTaskTitle).OK(t).Says(t, "client_a")
 		lee.LoreIn(hub, "sync").OK(t) // C5: the link and the task reach the store with Lee's sync
