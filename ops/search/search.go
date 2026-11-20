@@ -258,13 +258,16 @@ type TableStatus struct {
 // Env is what the search operations need; *wire.App implements it.
 //
 // Invariant: GlobalSearch only reads (the caches and the engine's rows);
-// RebuildSearch rebuilds every attached store's cache from its row files
+// RebuildSearch rebuilds the attached stores' caches from their row files
 // and changes no row.
 type Env interface {
 	GlobalSearch(ctx context.Context, r Request) (Result, error)
 	SearchStatus(ctx context.Context, targets []Target) ([]TableStatus, error)
-	// RebuildSearch returns the names of the stores whose cache it rebuilt.
-	RebuildSearch(ctx context.Context) ([]string, error)
+	// RebuildSearch rebuilds the cache of every attached store, or only of
+	// the store (and its folders) only names when it is not "" (an
+	// unattached name is E_NOT_FOUND), and returns the names of the stores
+	// whose cache it rebuilt.
+	RebuildSearch(ctx context.Context, only string) ([]string, error)
 }
 
 // RunIn is the input of search.run.
@@ -332,6 +335,11 @@ type RebuildIn struct {
 	// store, so every table is rebuilt (P3-MISC-1); an unknown name is
 	// still refused.
 	Kind string `json:"kind,omitempty" flag:"kind" desc:"v0.1.17: rebuild only this entity; the core rebuilds every table of each store's cache (an unknown name is refused)"`
+	// Store names the one store to rebuild, as search --store does; it
+	// also lets the rebuild run outside a repo, on the store it names
+	// (owner P-5, devco D-763: from the home folder the rebuild had no
+	// store flag, so a personal store's cache could not be rebuilt there).
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"rebuild only this store's cache (a name from .lore/stores.yaml, me, <store>/<folder>, or repo; default every attached store); works from any folder"`
 }
 
 // RebuildOut is the output of search.rebuild.
@@ -364,7 +372,10 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRebuild, Summary: "Rebuild the search index: every attached store's cache, from its row files",
 			Permission: op.PermRead, Access: op.AccessRead, RESTNoun: restNoun, Errors: readErrs,
-			Examples: []op.Example{{Title: "reindex", CLI: "lore search rebuild", Want: "rebuilt"}},
+			Examples: []op.Example{
+				{Title: "reindex", CLI: "lore search rebuild", Want: "rebuilt"},
+				{Title: "reindex one store, from any folder", CLI: "lore search rebuild --store me/notes", Want: "rebuilt"},
+			},
 		}, func(ctx context.Context, in RebuildIn) (RebuildOut, error) { return rebuild(ctx, env, in) }),
 	}
 }
@@ -658,7 +669,8 @@ func (o StatusOut) Text() string {
 	return b.String()
 }
 
-// rebuild validates --kind and asks env to rebuild every store's cache.
+// rebuild validates --kind and asks env to rebuild every store's cache,
+// or only --store's.
 func rebuild(ctx context.Context, env Env, in RebuildIn) (RebuildOut, error) {
 	if in.Kind != "" {
 		if _, err := TargetsFor([]string{in.Kind}); err != nil {
@@ -666,7 +678,7 @@ func rebuild(ctx context.Context, env Env, in RebuildIn) (RebuildOut, error) {
 				WithHint("run `lore search status` to see the list")
 		}
 	}
-	stores, err := env.RebuildSearch(ctx)
+	stores, err := env.RebuildSearch(ctx, strings.TrimSpace(in.Store))
 	if err != nil {
 		return RebuildOut{}, err
 	}

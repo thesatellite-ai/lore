@@ -35,6 +35,7 @@
 - A member's machine never clones the admins-only stores.
 - Every note names the store it wrote to.
 - Every plain read in a folder of a store clone (and its org folder) lists that folder's rows for the admin and for a member, with and without a personal store; a personal store never answers alone there.
+- After a hand `git reset --hard` of the personal store's clone to an older commit, sql from the home folder (`--store me/<folder>`) and in the clone folder no longer lists the rows the reset dropped (the folder's cache is rebuilt when HEAD no longer follows from its cursor), and `lore search rebuild --store me/<folder>` runs from the home folder (devco D-763, `TestStoryOPersonalResetRebuilds`).
 - Findings another branch fixes are logged as waiting with their id until the fix lands (`oWaiting`).
 
 ## Findings it guards

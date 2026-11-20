@@ -14,11 +14,15 @@ import (
 // outside lore (a git pull, a hand edit, another process) reach search and
 // render. Returns the number of rows applied.
 func (e *Engine) Refresh(ctx context.Context, source store.Source) (int, error) {
-	if _, err := e.attached(source); err != nil {
+	a, err := e.attached(source)
+	if err != nil {
 		return 0, err
 	}
 	cur, err := e.cache.Cursor(ctx, source)
 	if err != nil {
+		return 0, err
+	}
+	if cur, err = e.dropLostCursor(ctx, source, a.Backend, cur); err != nil {
 		return 0, err
 	}
 	rows, next, err := e.readRows(ctx, source, cur) // purged ids reach the cache as tombstones
@@ -34,6 +38,36 @@ func (e *Engine) Refresh(ctx context.Context, source store.Source) (int, error) 
 		return 0, err
 	}
 	return len(rows), nil
+}
+
+// dropLostCursor empties source's cache when its backend says cur no
+// longer describes a past state of its rows (store.CursorChecker: a store
+// clone reset by hand behind the cache), and returns the zero cursor so
+// the refresh refills it from every row file; any other cursor is
+// returned as is. Without it the cache kept the rows the reset dropped
+// (owner P-5, devco D-763).
+func (e *Engine) dropLostCursor(ctx context.Context, source store.Source, b store.Backend, cur store.Cursor) (store.Cursor, error) {
+	if cur == "" {
+		return cur, nil
+	}
+	for b != nil {
+		if c, ok := b.(store.CursorChecker); ok {
+			lost, err := c.CursorLost(ctx, cur)
+			if err != nil || !lost {
+				return cur, err
+			}
+			if err := e.cache.Rebuild(ctx, source); err != nil {
+				return cur, err
+			}
+			return "", nil
+		}
+		u, ok := b.(unwrapper)
+		if !ok {
+			break
+		}
+		b = u.Unwrap()
+	}
+	return cur, nil
 }
 
 // Sync exchanges source's changes with its remote (Backend.Sync), then

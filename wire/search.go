@@ -883,12 +883,17 @@ func (a *App) SearchStatus(ctx context.Context, targets []opssearch.Target) ([]o
 	return out, nil
 }
 
-// RebuildSearch implements opssearch.Env: every attached store's cache is
-// emptied (Cache.Rebuild clears its rows, refs and cursor) and refilled
-// from its row files (Engine.Refresh from the zero cursor). Rows are never
-// touched: the files are the truth (STORE_SERVER_SPEC 3).
-func (a *App) RebuildSearch(ctx context.Context) ([]string, error) {
+// RebuildSearch implements opssearch.Env: every attached store's cache (or
+// only the store only names and its folders, checked as search --store
+// is) is emptied (Cache.Rebuild clears its rows, refs and cursor) and
+// refilled from its row files (Engine.Refresh from the zero cursor). Rows
+// are never touched: the files are the truth (STORE_SERVER_SPEC 3).
+func (a *App) RebuildSearch(ctx context.Context, only string) ([]string, error) {
 	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	want, err := opsmemory.SearchStore(a, "search rebuild", only)
 	if err != nil {
 		return nil, err
 	}
@@ -897,6 +902,9 @@ func (a *App) RebuildSearch(ctx context.Context) ([]string, error) {
 	st.caches.mu.Unlock()
 	names := make([]string, 0, len(order))
 	for _, s := range order {
+		if !opsmemory.FromStore(want, s) {
+			continue
+		}
 		if err := st.caches.Rebuild(ctx, s); err != nil {
 			return nil, err
 		}

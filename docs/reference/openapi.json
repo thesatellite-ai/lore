@@ -72150,6 +72150,10 @@
                   "kind": {
                     "type": "string",
                     "description": "v0.1.17: rebuild only this entity; the core rebuilds every table of each store's cache (an unknown name is refused)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "rebuild only this store's cache (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e, or repo; default every attached store); works from any folder"
                   }
                 },
                 "additionalProperties": false
