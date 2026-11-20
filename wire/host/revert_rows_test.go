@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -26,6 +27,18 @@ func TestRevertKeepsRowsItDeleted(t *testing.T) {
 	}
 	if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(rwDecision)), 0o755); err != nil {
 		t.Fatal(err)
+	}
+	// a group's checkout under umask 022 (D-785): the row put back is
+	// group read/write, as every lore write there
+	old := syscall.Umask(0o022)
+	t.Cleanup(func() { syscall.Umask(old) })
+	for d := filepath.Dir(rwDecision); ; d = filepath.Dir(d) {
+		if err := os.Chmod(filepath.Join(dir, d), 0o770); err != nil {
+			t.Fatal(err)
+		}
+		if d == "." {
+			break
+		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, rwDecision), []byte(`{"title":"Popout keeps one window"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -59,6 +72,9 @@ func TestRevertKeepsRowsItDeleted(t *testing.T) {
 	h.afterRevert(ctx)
 	if b, rerr := os.ReadFile(filepath.Join(dir, rwDecision)); rerr != nil || !strings.Contains(string(b), "Popout keeps one window") {
 		t.Fatalf("row not back in the work tree: %v %q", rerr, b)
+	}
+	if fi, serr := os.Stat(filepath.Join(dir, rwDecision)); serr != nil || fi.Mode().Perm()&0o060 != 0o060 {
+		t.Fatalf("row put back in a group's checkout without group read/write: %v %v", fi.Mode(), serr)
 	}
 	if s := out.String(); !strings.Contains(s, "this revert deleted 1 lore row") || !strings.Contains(s, "dec_01a1d7fbb3657caeace7f01670d7e598") || !strings.Contains(s, "git add "+rwDecision) {
 		t.Fatalf("notice: %q", s)
