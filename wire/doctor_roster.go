@@ -58,6 +58,7 @@ func (a *App) DoctorActorRoster(ctx context.Context, fix bool) ([]DoctorFinding,
 		return nil, err
 	}
 	name := a.teamActorNamer(ctx)
+	linked := a.repoLinkedTop(ctx) != ""
 	var out []DoctorFinding
 	for _, rc := range st.caches.rosterCaches() {
 		tvs, terr := rc.cache.TeamVersions(ctx)
@@ -77,6 +78,9 @@ func (a *App) DoctorActorRoster(ctx context.Context, fix bool) ([]DoctorFinding,
 			held, herr := rosterHolds(ctx, st, rc.src, id)
 			if herr != nil {
 				return nil, herr
+			}
+			if !held && linked && rc.src == store.SourceRepo {
+				held = actorHeldOutsideRepo(ctx, st, id) // devco:D-736
 			}
 			if !held {
 				missing = append(missing, tv.Actor)
@@ -143,6 +147,25 @@ func rosterHolds(ctx context.Context, st *state, src store.Source, id ids.ID[ids
 		return actorHeldBySibling(ctx, st, src, want)
 	}
 	return false, err
+}
+
+// actorHeldOutsideRepo reports whether a store other than the repo (and
+// the machine store) holds actor id (devco:D-736). A repo linked to a
+// store folder keeps no actor rows of its own: its rows' created_by and
+// updated_by name actors the org's stores hold, and refs resolve across
+// the attached stores (as D-486 lets a folder name its sibling's row), so
+// actor_roster must not ask --fix to write the actor back into the repo
+// that lore doctor --fix just cleaned.
+func actorHeldOutsideRepo(ctx context.Context, st *state, id ids.ID[ids.Actor]) bool {
+	for _, src := range st.eng.Stores() {
+		if src == store.SourceRepo || src == store.SourceMachine {
+			continue
+		}
+		if got, r, err := st.eng.Get(ctx, engine.Ref{Store: src, Table: schema.TableActors, ID: id.Any()}); err == nil && got == src && !r.Deleted {
+			return true
+		}
+	}
+	return false
 }
 
 var _ opsmigrate.ActorRecorder = (*App)(nil)

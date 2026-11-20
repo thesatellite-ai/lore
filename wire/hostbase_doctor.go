@@ -134,6 +134,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	if err := a.doctorSupersedes(ctx, fix, warn, note, fail, fixed); err != nil { // hostbase_doctor_supersede.go
 		return opsdoctor.Base{}, err
 	}
+	a.doctorLinkedRows(ctx, fix, warn, fixed) // hostbase_doctor_linkrows.go: rows a linked repo with no notes left does not need (D-736)
 	return b, nil
 }
 
