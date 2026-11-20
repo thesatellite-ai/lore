@@ -62,4 +62,42 @@ func TestStoryONoUntrackedFiles(t *testing.T) {
 			t.Fatalf("lore wrote .claude/settings.json without the team's opt-in (%v)", err)
 		}
 	})
+
+	// The team commits lore's blocks, but post-checkout, post-merge and
+	// post-rewrite land without the exec bit (100644): a sync, a write or
+	// doctor --fix in another clone chmodded them, and git showed all three
+	// modified (mode 100644 -> 100755).
+	posts := []string{"post-checkout", "post-merge", "post-rewrite"}
+	s.Step("D-732/post-hooks-committed-without-the-exec-bit-stay-as-committed", func() {
+		ada.Lore(gc.Dir, "fix", "--tracked-hooks", "--yes").OK(t)
+		gc.Git("add", "-A", ".githooks")
+		for _, h := range posts {
+			gc.Git("update-index", "--chmod=-x", ".githooks/"+h)
+		}
+		gc.TryGit("commit", "-q", "--no-verify", "-m", "lore's hook blocks").OK(t)
+		gc.TryGit("push", "-q", "--no-verify", "origin", "HEAD").OK(t)
+
+		oc := ada.CloneTo(gated, ada.OrgDir("gated-second"))
+		oc.Git("config", "core.hooksPath", ".githooks")
+		committed := map[string]string{}
+		for _, h := range posts {
+			b, err := os.ReadFile(filepath.Join(oc.Dir, ".githooks", h))
+			if err != nil || !strings.Contains(string(b), "# >>> lore-sync") {
+				t.Fatalf("the committed %s holds no lore block: %q %v", h, b, err)
+			}
+			committed[h] = string(b)
+		}
+		ada.Lore(oc.Dir, "sync")
+		ada.Lore(oc.Dir, "memory", "add", "--body", "a note from the second clone").OK(t)
+		ada.Lore(oc.Dir, "doctor", "--fix")
+		if st := oc.Git("status", "--porcelain", "--untracked-files=all", "--", ".githooks"); st != "" {
+			t.Fatalf("lore changed the committed .githooks in another clone:\n%s\n%s", st, oc.Git("diff", "--", ".githooks"))
+		}
+		for _, h := range posts {
+			if b, err := os.ReadFile(filepath.Join(oc.Dir, ".githooks", h)); err != nil || string(b) != committed[h] {
+				t.Fatalf("lore rewrote the committed %s: %q %v", h, b, err)
+			}
+		}
+		ada.Lore(oc.Dir, "doctor").Says(t, "post-checkout, post-merge, post-rewrite", "`lore fix --tracked-hooks`")
+	})
 }
