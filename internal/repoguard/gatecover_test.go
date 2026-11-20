@@ -48,6 +48,11 @@ type gateSelector struct {
 	// (gatebudget_test.go, devco D-779) reads both.
 	parallel int
 	timeout  time.Duration
+	// cores is the step's share of the gate's load budget (the second
+	// column of its GATE_STEPS line, 0: none given): the gate starts the
+	// step for that many cores, so on a full gate that is about all the
+	// parallel it gets, whatever its -parallel says (devco D-784).
+	cores int
 }
 
 // selects reports whether go test runs the top-level test name.
@@ -104,6 +109,7 @@ func gateSelectors(t *testing.T, raw []byte) []gateSelector {
 		if len(f) < 3 || strings.HasPrefix(f[0], "#") {
 			continue
 		}
+		cores, _ := strconv.Atoi(f[1])
 		stepVars := map[string]string{}
 		for _, tok := range f[3:] {
 			if m := stepVarToken.FindStringSubmatch(tok); m != nil {
@@ -154,7 +160,7 @@ func gateSelectors(t *testing.T, raw []byte) []gateSelector {
 				if m == nil {
 					continue // a unit run (./..., a package list): test-all's
 				}
-				s := gateSelector{step: f[0], dir: m[1], tags: map[string]bool{}}
+				s := gateSelector{step: f[0], dir: m[1], tags: map[string]bool{}, cores: cores}
 				if tm := goTestTags.FindStringSubmatch(cmd); tm != nil {
 					for _, tag := range strings.FieldsFunc(tm[1]+tm[2]+tm[3], func(r rune) bool { return r == ' ' || r == ',' }) {
 						s.tags[tag] = true

@@ -14,17 +14,28 @@ package repoguard
 // measured suite, the guard estimates the step's wall time the way go test
 // schedules it (the serial tests one after another, then the parallel ones
 // -parallel at a time, never shorter than the longest of them) and fails
-// when that is over 70 % of the step's -timeout. A test with no row counts
+// when that is over 70 % of the step's -timeout. The parallel counted is
+// the one the step really gets: its -parallel, but never more than the
+// cores its GATE_STEPS line asks of the load budget. The stories catch-all
+// ran at -parallel 8 on a 4-core share; counted at 8 it looked like 6m38s
+// (44 %), and it took 866 s of its 900 in the gate (devco D-784): on a
+// full gate the other steps hold every other core, so tests past the
+// step's share wait for a core instead of running beside each other.
+// Counted that way it was 9m44s, still under 70 %: the table's times come
+// from a quieter machine than a full gate, so each suite's count is also
+// multiplied by its gate slowdown (gateSlowdown), how much slower than
+// counted its parts really ran in a full gate. A test with no row counts
 // as its suite's mean, so a new test is in the sum the day it is added;
 // re-measure (test-times.sh) when many are new. The fix for a failure is
 // to split the part (another test:<suite>:<part> task with its own -run,
 // its GATE_STEPS line, and its pattern in the catch-all's -skip) or to
-// raise its PARALLEL when its tests allow it, never to raise the timeout
-// alone. The limit is before the machine factor (tests/lib/testtime.sh),
+// raise its PARALLEL and the cores of its GATE_STEPS line together when
+// its tests allow it, never to raise the timeout alone. The limit is before the machine factor (tests/lib/testtime.sh),
 // which every part keeps.
 
 import (
 	"bufio"
+	"bytes"
 	"cmp"
 	"fmt"
 	"os"
@@ -40,6 +51,20 @@ import (
 // fill: the rest is room for a slower day (the gate's load swings from 60
 // to over 150 on the gate server, and every step slows with it).
 const budgetShare = 0.70
+
+// gateSlowdown is, per measured suite, how much slower than the guard's
+// count its gate parts really ran in a full gate: the step's wall in the
+// gate's timings (tmp/check/timings.tsv, or the ✓ lines of its log) over
+// the step's estimate (go test -v -run TestGateStepsFitTheirTimeout ./internal/repoguard/
+// prints it), the worst part of the suite, rounded up. A suite not listed
+// counts at 1. Raise it when a gate shows a part slower than counted;
+// lower it only after re-measuring the suite (tests/lib/test-times.sh).
+// Measured in the gate of dev 64ce92d8 (devco D-784): the stories
+// catch-all took 866 s against 584 s counted (1.48); the journey parts
+// took 0.6 to 0.8 of their count (journey-rest-ah 255 s of 433 s,
+// journey-rest-in 239 s of 381 s, journey-teamlead 226 s of 276 s), so
+// they stay at 1.
+var gateSlowdown = map[string]float64{"tests/stories": 1.5}
 
 // measuredSuites must have rows in the table: the two suites whose gate
 // parts outgrew their limit (D-779). A suite with rows is checked whether
@@ -93,9 +118,10 @@ type stepEstimate struct {
 
 // estimate adds up the tests sel runs, as go test schedules them: every
 // serial top-level test first, one after another, then the parallel ones
-// at most sel.parallel at a time (a perfect packing, but never shorter
-// than the longest one). tests are the suite's test names.
-func estimate(sel gateSelector, tests []string, times map[string]testTime) stepEstimate {
+// at most effectiveParallel(sel) at a time (a perfect packing, but never
+// shorter than the longest one), times slow, the suite's gate slowdown (1
+// when it has none). tests are the suite's test names.
+func estimate(sel gateSelector, tests []string, times map[string]testTime, slow float64) stepEstimate {
 	var mean float64
 	for _, tt := range times {
 		mean += tt.secs
@@ -103,10 +129,7 @@ func estimate(sel gateSelector, tests []string, times map[string]testTime) stepE
 	if len(times) > 0 {
 		mean /= float64(len(times))
 	}
-	par := sel.parallel
-	if par <= 0 {
-		par = 1 // no -parallel given: count it at its slowest
-	}
+	par := effectiveParallel(sel)
 	e := stepEstimate{step: sel.step, timeout: sel.timeout}
 	var serial, parSum, parMax float64
 	type named struct {
@@ -132,7 +155,7 @@ func estimate(sel gateSelector, tests []string, times map[string]testTime) stepE
 			serial += tt.secs
 		}
 	}
-	secs := serial + max(parMax, parSum/float64(par))
+	secs := (serial + max(parMax, parSum/float64(par))) * max(slow, 1)
 	e.wall = time.Duration(secs * float64(time.Second)).Round(time.Second)
 	slices.SortFunc(run, func(a, b named) int { return cmp.Compare(b.secs, a.secs) })
 	for _, r := range run[:min(5, len(run))] {
@@ -141,16 +164,27 @@ func estimate(sel gateSelector, tests []string, times map[string]testTime) stepE
 	return e
 }
 
+// effectiveParallel is how many of sel's tests run side by side on a full
+// gate: its -parallel, capped at the cores its GATE_STEPS line asks for
+// (devco D-784), and 1 when it gives no -parallel (counted at its slowest).
+func effectiveParallel(sel gateSelector) int {
+	par := sel.parallel
+	if sel.cores > 0 && sel.cores < par {
+		par = sel.cores
+	}
+	return max(par, 1)
+}
+
 // overBudget lists every step on a measured suite whose estimate is over
 // budgetShare of its timeout, or that has no -timeout to hold it to.
-func overBudget(sels []gateSelector, suiteTests map[string][]string, times map[string]map[string]testTime) []string {
+func overBudget(sels []gateSelector, suiteTests map[string][]string, times map[string]map[string]testTime, slow map[string]float64) []string {
 	var out []string
 	for _, sel := range sels {
 		tt, ok := times[sel.dir]
 		if !ok {
 			continue
 		}
-		e := estimate(sel, suiteTests[sel.dir], tt)
+		e := estimate(sel, suiteTests[sel.dir], tt, slow[sel.dir])
 		if e.tests == 0 {
 			continue
 		}
@@ -162,8 +196,8 @@ func overBudget(sels []gateSelector, suiteTests map[string][]string, times map[s
 		if e.wall <= limit {
 			continue
 		}
-		out = append(out, fmt.Sprintf("%s: %d tests of %s (%d not measured, counted at the suite's mean) need about %s at -parallel %d, over %.0f%% of its %s -timeout (%s); longest: %s",
-			e.step, e.tests, sel.dir, e.unmeasured, e.wall, sel.parallel, budgetShare*100, e.timeout, limit.Round(time.Second), strings.Join(e.longest, ", ")))
+		out = append(out, fmt.Sprintf("%s: %d tests of %s (%d not measured, counted at the suite's mean) need about %s at -parallel %d (%d cores, gate slowdown %.2g), over %.0f%% of its %s -timeout (%s); longest: %s",
+			e.step, e.tests, sel.dir, e.unmeasured, e.wall, sel.parallel, sel.cores, max(slow[sel.dir], 1), budgetShare*100, e.timeout, limit.Round(time.Second), strings.Join(e.longest, ", ")))
 	}
 	return out
 }
@@ -183,7 +217,7 @@ func unmeasuredSteps(sels []gateSelector, suiteTests map[string][]string, times 
 		if !ok {
 			continue
 		}
-		e := estimate(sel, suiteTests[sel.dir], tt)
+		e := estimate(sel, suiteTests[sel.dir], tt, 1)
 		if e.tests == 0 || e.unmeasured*2 <= e.tests {
 			continue
 		}
@@ -225,15 +259,15 @@ func TestGateStepsFitTheirTimeout(t *testing.T) {
 	// read when re-balancing the parts.
 	for _, sel := range sels {
 		if tt, ok := times[sel.dir]; ok {
-			e := estimate(sel, suiteTests[sel.dir], tt)
-			t.Logf("%-18s %3d tests  about %-6s of %s at -parallel %d", e.step, e.tests, e.wall, e.timeout, sel.parallel)
+			e := estimate(sel, suiteTests[sel.dir], tt, gateSlowdown[sel.dir])
+			t.Logf("%-18s %3d tests  about %-6s of %s at -parallel %d on %d cores", e.step, e.tests, e.wall, e.timeout, sel.parallel, sel.cores)
 		}
 	}
 	for _, msg := range unmeasuredSteps(sels, suiteTests, times) {
 		t.Errorf("%s (devco D-783)", msg)
 	}
-	for _, msg := range overBudget(sels, suiteTests, times) {
-		t.Errorf("%s. Split the part (a test:<suite>:<part> task with its own -run, a GATE_STEPS line, its pattern in the catch-all's -skip) or raise its PARALLEL; never the timeout alone (devco D-779)", msg)
+	for _, msg := range overBudget(sels, suiteTests, times, gateSlowdown) {
+		t.Errorf("%s. Split the part (a test:<suite>:<part> task with its own -run, a GATE_STEPS line, its pattern in the catch-all's -skip) or raise its PARALLEL with its cores; never the timeout alone (devco D-779)", msg)
 	}
 }
 
@@ -271,16 +305,16 @@ tasks:
 	}
 	// 21 tests x 61 s at -parallel 2 = 640 s, over 70 % of 900 s (630 s);
 	// the 20 measured ones alone (610 s) fit, so the unmeasured test tips it.
-	got := overBudget(sels, suite, all)
+	got := overBudget(sels, suite, all, nil)
 	if len(got) != 1 || !strings.Contains(got[0], "journey-rest") || !strings.Contains(got[0], "1 not measured") {
 		t.Fatalf("an over-full part must be flagged naming the unmeasured test: %v", got)
 	}
 	times["TestJourneyNew"] = testTime{secs: 1, parallel: true}
-	if got := overBudget(sels, suite, all); len(got) != 0 {
+	if got := overBudget(sels, suite, all, nil); len(got) != 0 {
 		t.Fatalf("(20 x 61 s + 1 s) / 2 = 611 s fits 630 s: %v", got)
 	}
 	times["TestJourneyNew"] = testTime{secs: 120, parallel: false}
-	if got := overBudget(sels, suite, all); len(got) != 1 {
+	if got := overBudget(sels, suite, all, nil); len(got) != 1 {
 		t.Fatalf("a serial test adds its whole time (120 + 610 s): %v", got)
 	}
 
@@ -301,7 +335,7 @@ tasks:
       - task: test:journeys:part
         vars: {PART: rest, FILTER: "-skip '^Test(Frame|JourneyCase0)'"}
 `)
-	if got := overBudget(gateSelectors(t, split), suite, all); len(got) != 0 {
+	if got := overBudget(gateSelectors(t, split), suite, all, nil); len(got) != 0 {
 		t.Fatalf("the same tests over two parts fit: %v", got)
 	}
 
@@ -337,6 +371,33 @@ tasks:
 	}
 	if got := unmeasuredSteps(gateSelectors(t, persona), personaSuite, all); len(got) != 0 {
 		t.Fatalf("2 of 3 measured is enough: %v", got)
+	}
+
+	// A step counts at the cores of its GATE_STEPS line when they are
+	// fewer than its -parallel (devco D-784): the stories catch-all at
+	// -parallel 8 on 4 cores. 20 tests x 61 s fit at -parallel 2 on 2
+	// cores (610 s) but not at -parallel 8 on 1 core (1220 s), which the
+	// old count (-parallel only) let through at 153 s.
+	times["TestJourneyNew"] = testTime{secs: 1, parallel: true}
+	narrow := bytes.Replace(one, []byte("journey-rest  2  test:journeys:rest PARALLEL=2"), []byte("journey-rest  1  test:journeys:rest PARALLEL=8"), 1)
+	if sels := gateSelectors(t, narrow); len(sels) != 1 || sels[0].cores != 1 || sels[0].parallel != 8 {
+		t.Fatalf("the step line's cores and PARALLEL must be read: %+v", sels)
+	}
+	if got := overBudget(gateSelectors(t, narrow), suite, all, nil); len(got) != 1 || !strings.Contains(got[0], "-parallel 8 (1 cores,") {
+		t.Fatalf("a part with -parallel 8 on 1 core runs its tests one at a time and must be flagged: %v", got)
+	}
+	if got := overBudget(gateSelectors(t, one), suite, all, nil); len(got) != 0 {
+		t.Fatalf("-parallel 2 on 2 cores (611 s) fits 630 s: %v", got)
+	}
+	// The suite's gate slowdown multiplies the count: the same 611 s at
+	// 1.5 (a suite whose parts ran half again slower in a full gate than
+	// counted, as the stories did in devco D-784) is 917 s, over 630 s.
+	slow := map[string]float64{"tests/journeys": 1.5}
+	if got := overBudget(gateSelectors(t, one), suite, all, slow); len(got) != 1 || !strings.Contains(got[0], "gate slowdown 1.5") {
+		t.Fatalf("a suite's gate slowdown must count: %v", got)
+	}
+	if got := overBudget(gateSelectors(t, split), suite, all, slow); len(got) != 0 {
+		t.Fatalf("split over two parts, each part fits even at 1.5: %v", got)
 	}
 
 	// The default of {{.PARALLEL | default N}} stands in when the step
