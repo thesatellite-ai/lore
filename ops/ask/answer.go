@@ -672,9 +672,13 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 	o.Rows = slices.DeleteFunc(o.Rows, func(r Row) bool { return !kept[Ranked{KindRow, r.ID}] })
 }
 
+// NoAnswer is the line an answer that holds nothing prints.
+const NoAnswer = "(no answer)"
+
 // Text is the answer as an agent reads it: the question, the items in
 // reading order (resources, open tasks, rows in full, grouped where they
 // follow each other), then the ids it cites.
+
 func (o Out) Text() string {
 	var b strings.Builder
 	body := o.body()
@@ -692,7 +696,10 @@ func (o Out) Text() string {
 	}
 	b.WriteString(body)
 	if len(o.Ranked)+len(o.Applies) == 0 {
-		b.WriteString("nothing in the store answers it; try other words, or lore search --query \"<words>\"\n")
+		// devco D-821: the empty line every empty read prints; the
+		// composition root adds what was searched and what to try under
+		// it (wire/emptysearch.go), as for every search
+		b.WriteString(NoAnswer + "\n")
 	}
 	if o.Left > 0 {
 		fmt.Fprintf(&b, "\n%s left out to stay under %d characters; --max-chars %d prints more\n", plural.Count(o.Left, "more item"), o.maxChars, o.maxChars*2)
