@@ -92,7 +92,7 @@ func (a *App) DoctorStoreAccessFix(ctx context.Context, fix bool) ([]DoctorFindi
 			out = append(out, f)
 		}
 	}
-	return out, nil
+	return append(out, a.unknownLinkFindings(ctx)...), nil // linkunknown.go (devco:D-860)
 }
 
 // accessTargets are the configured org stores (config.yaml orgs, copied

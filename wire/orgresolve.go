@@ -293,6 +293,9 @@ func (r *OrgResolution) Apply(o *Options) {
 	if o.RepoLinkTarget == nil {
 		o.RepoLinkTarget = r.LinkTarget
 	}
+	if o.RepoUnknownLinks == nil {
+		o.RepoUnknownLinks = r.UnknownLinks
+	}
 	if o.ClientRepo == nil {
 		o.ClientRepo = r.ClientRepo
 	}
@@ -366,6 +369,26 @@ func (r *OrgResolution) LinkedByRemote(ctx context.Context) string {
 		return ""
 	}
 	return s.LinkedByRemote
+}
+
+// UnknownLinks is Options.RepoUnknownLinks: the folders only a store copy
+// older than link_index.max_age links this repo to by its remote, as
+// "<org entry>/<folder>" (devco:D-860); nil when the situation cannot be
+// read (the read's own error says why).
+func (r *OrgResolution) UnknownLinks(ctx context.Context) []UnknownLink {
+	s, err := r.Situation(ctx)
+	if err != nil || s == nil {
+		return nil
+	}
+	out := make([]UnknownLink, 0, len(s.UnknownLinks))
+	for _, l := range s.UnknownLinks {
+		name := l.Entry
+		if f := strings.Trim(l.Folder, "/"); f != "" {
+			name += targetSep + f
+		}
+		out = append(out, UnknownLink{Store: name, Since: l.Since, MaxAge: l.MaxAge})
+	}
+	return out
 }
 
 // LinkTarget is Options.RepoLinkTarget: "<store short name>/<folder>" of

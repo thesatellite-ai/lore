@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
@@ -132,6 +133,25 @@ type Situation struct {
 	// the store is unreachable (orgresolve.LinkResult.Old): reads attach
 	// the folders they name, nothing else uses them (W-15).
 	OldLinks []orgresolve.Link
+	// UnknownLinks are the links of a store copy too old to decide by
+	// (older than link_index.max_age while the store is unreachable) that
+	// name this repo by its remote when it holds no project id of its own
+	// (devco D-860, hunt H-128). Such a repo is then not linked at all, so
+	// its folder is not read (fail closed, as for client guards), and
+	// every read that lists what it searched names these folders as "link
+	// unknown, not searched" instead of answering as if they were empty.
+	UnknownLinks []UnknownLink
+}
+
+// UnknownLink is one link a read could not use because the only copy of
+// its store is older than link_index.max_age and the store did not answer.
+type UnknownLink struct {
+	orgresolve.Link
+	// Since is the copy's last fetch that reached the store (zero: never
+	// fetched on this machine): the machine is offline since then.
+	Since time.Time
+	// MaxAge is link_index.max_age, past which a copy decides no link.
+	MaxAge time.Duration
 }
 
 // ConfigPath is ~/.lore/config.yaml under home.
@@ -547,6 +567,10 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 						s.ProjectID, s.LinkedByRemote = pid, key
 						break remotes
 					}
+					// D-860: a link only a too-old copy holds does not link
+					// the repo (fail closed), but it is kept so reads say
+					// the folder was not searched and why
+					s.UnknownLinks = appendUnknown(s.UnknownLinks, in.Home, cfg.LinkIndexMaxAge(), got.Old)
 				}
 			}
 		}
@@ -564,6 +588,9 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 				links = &fresh
 				byRemote(links)
 			}
+		}
+		if s.ProjectID != "" {
+			s.UnknownLinks = nil // another remote (or the forced fetch) linked the repo
 		}
 	}
 	linkRemotes := s.Remotes
@@ -701,4 +728,20 @@ func ResolveError(err error) error {
 		e = e.WithHint(oe.Hint)
 	}
 	return e
+}
+
+// appendUnknown adds to out the links of old (a too-old copy's links for
+// one remote) not in it yet, each with its copy's last good fetch and the
+// max age it is past (devco D-860).
+func appendUnknown(out []UnknownLink, home string, maxAge time.Duration, old []orgresolve.Link) []UnknownLink {
+	for _, l := range old {
+		if slices.ContainsFunc(out, func(u UnknownLink) bool {
+			return u.Entry == l.Entry && u.StoreURL == l.StoreURL && u.Folder == l.Folder
+		}) {
+			continue
+		}
+		dir, _ := cloneDir(home, l.StoreURL)
+		out = append(out, UnknownLink{Link: l, Since: lastFetch(dir), MaxAge: maxAge})
+	}
+	return out
 }
