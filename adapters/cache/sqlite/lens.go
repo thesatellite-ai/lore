@@ -99,6 +99,12 @@ type LensOptions struct {
 	// queries written before). A source missing here is labelled by its
 	// name.
 	Places map[string]string
+	// Only, when set, names the one source whose rows the views read
+	// (devco D-799: `lore sql --store repo`). The other sources stay
+	// attached only for what they define: the kinds a res_<kind> arm of
+	// Only's resources needs (lens_kindarms.go) and the sensitive fields
+	// the mask hides; no view reads their rows. "" reads every source.
+	Only string
 }
 
 // LensHit is where ResolveID found an id.
@@ -141,6 +147,8 @@ type Lens struct {
 	now time.Time
 	// places is LensOptions.Places (the `place` column, D-568).
 	places map[string]string
+	// only is LensOptions.Only (lens_only.go, D-799).
+	only string
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -199,7 +207,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places, only: o.Only}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -310,6 +318,7 @@ func (l *Lens) setup(ctx context.Context) error {
 		}
 		l.hidden = l.hiddenNames()
 	}
+	l.keepOnly(tables)
 	names := make([]string, 0, len(tables))
 	for n := range tables {
 		names = append(names, n)

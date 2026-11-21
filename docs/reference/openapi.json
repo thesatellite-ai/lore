@@ -84607,7 +84607,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "read this store instead of the repo's: \u003corg\u003e (every folder, each a source \u003cstore\u003e/\u003cfolder\u003e) or \u003cstore\u003e/\u003cfolder\u003e; works from any folder"
+                    "description": "read this store alone: \u003corg\u003e (every folder, each a source \u003cstore\u003e/\u003cfolder\u003e), \u003cstore\u003e/\u003cfolder\u003e, a store's name, or repo (the repo's own rows); works from any folder"
                   },
                   "timeout": {
                     "type": "integer",
