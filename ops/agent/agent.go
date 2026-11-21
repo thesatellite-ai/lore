@@ -8,6 +8,8 @@
 //	       2026-11-11; an agent with no person behind it is refused by the roster)
 //	    ─▶ Roster.ActorRegister(kind agent, L, @h) ─▶ a fresh session id
 //	    ─▶ "✓ <id> agent L (owner …) registered in …; LORE_ACTOR=… LORE_SESSION=…"
+//	       inside a coding tool (ToolHost): "  <tool> runs each command in a new shell, … start every
+//	       lore command of this agent with LORE_ACTOR=agent:L LORE_SESSION=s-…"
 //	       "export LORE_ACTOR=agent:L LORE_SESSION=s-…"   (the line `eval "$(… | tail -1)"` runs)
 //	agent.start --tool T [--session S] [--model M] [--hook-stdin]
 //	    ─▶ Host.RecordHook ─▶ never fails, prints nothing on success,
@@ -84,6 +86,16 @@ type Host interface {
 	RecordHook(ctx context.Context, in HookIn)
 }
 
+// ToolHost is the optional Host upgrade naming the coding tool this
+// process runs under. Why (devco:D-850): a coding tool runs every command
+// in a new shell, so the printed `export` never reaches the agent's next
+// command and that command is credited to "<owner> via <tool>"; inside a
+// tool agent.start says so and prints the prefix that works there.
+type ToolHost interface {
+	// CallerTool is the detected coding tool's slug ("" for none).
+	CallerTool(ctx context.Context) string
+}
+
 // Env is what agent.start needs; *wire.App implements it. The --label
 // mode also needs the opsinfra.Roster upgrade.
 type Env interface {
@@ -111,6 +123,9 @@ type StartOut struct {
 	Where   string `json:"where,omitempty"`
 	Actor   string `json:"lore_actor,omitempty"`
 	Session string `json:"lore_session,omitempty"`
+	// Tool is the coding tool the caller runs under ("" for none), for the
+	// text only (the JSON output is unchanged).
+	Tool string `json:"-"`
 }
 
 // Text implements op.Texter: v0.1.17's two lines, the last one the export
@@ -123,9 +138,16 @@ func (o StartOut) Text() string {
 	if o.Where != "" {
 		where = "registered in the roster of " + o.Where
 	}
-	return fmt.Sprintf("%s %s agent %s (owner %s) %s; %s=%s %s=%s\nexport %s=%s %s=%s\n",
+	inTool := ""
+	if o.Tool != "" {
+		// devco:D-850: the export below stays the last line (eval scripts
+		// take it with tail -1); inside a tool it reaches no later command
+		inTool = fmt.Sprintf("  %s runs each command in a new shell, so the export below does not reach its next command: start every lore command of this agent with %s=%s %s=%s (without it the command is yours, via %s)\n",
+			o.Tool, EnvActor, o.Actor, EnvSession, o.Session, o.Tool)
+	}
+	return fmt.Sprintf("%s %s agent %s (owner %s) %s; %s=%s %s=%s\n%sexport %s=%s %s=%s\n",
 		successMark, o.ID, o.Label, o.Owner, where, EnvActor, o.Actor, EnvSession, o.Session,
-		EnvActor, o.Actor, EnvSession, o.Session)
+		inTool, EnvActor, o.Actor, EnvSession, o.Session)
 }
 
 // Ops returns the agent operation bound to env, for op.NewRegistry.
@@ -195,7 +217,11 @@ func Start(ctx context.Context, env Env, in StartIn) (StartOut, error) {
 	if err != nil {
 		return StartOut{}, errs.Wrap(errs.Internal, "make a session id", err)
 	}
-	return StartOut{ID: reg.ID, Label: in.Label, Owner: owner, Where: reg.Where, Actor: agentKeyPrefix + in.Label, Session: session}, nil
+	out := StartOut{ID: reg.ID, Label: in.Label, Owner: owner, Where: reg.Where, Actor: agentKeyPrefix + in.Label, Session: session}
+	if th, ok := h.(ToolHost); ok {
+		out.Tool = th.CallerTool(ctx)
+	}
+	return out, nil
 }
 
 // newSessionID is a fresh LORE_SESSION value.

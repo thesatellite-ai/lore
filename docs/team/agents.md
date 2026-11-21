@@ -61,7 +61,7 @@ A team that wants some of this left to people opts in by policy: `lore policy se
 
 | Moment | Command | Why |
 |---|---|---|
-| session starts | `lore agent start --label agent-backend --owner @alice`, then export `LORE_ACTOR` and `LORE_SESSION` | you become your own actor on the org's roster; claims record your session |
+| session starts | `lore agent start --label agent-backend --owner @alice`, then export `LORE_ACTOR` and `LORE_SESSION` (inside a coding tool, which runs each command in a new shell, put both in front of every lore command instead: `lore agent start` prints that prefix there) | you become your own actor on the org's roster; claims record your session. A set `LORE_ACTOR` always names who writes, even inside a coding tool's session (the detected tool is still shown by `lore whoami`); a command without it is yours, via the tool |
 | before choosing work | `lore inbox`, `lore search --query "<topic>"` | handoffs and facts other agents saved change what you should do |
 | seeing what is next | `lore task next --mission <id> --repo <name>` | shows the next ready task and why it is next; writes nothing |
 | taking work | `lore task next --claim --mission <id> --repo <name> --push` | resume-first, respects dependencies, gates, priority and races; `--push` sends the claim to the remote teammates read (a code repo's remote or a linked store's), and lore refuses a claim there without it (`LORE_PUSH_CLAIMS=1` in the agent's environment gives that go-ahead for every claim) |
