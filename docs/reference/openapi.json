@@ -31516,6 +31516,42 @@
                     "carried_meta": {
                       "type": "integer"
                     },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
+                    },
                     "existing": {
                       "type": "boolean"
                     },
@@ -32263,6 +32299,42 @@
                     "carried_meta": {
                       "type": "integer"
                     },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
+                    },
                     "existing": {
                       "type": "boolean"
                     },
@@ -32449,6 +32521,42 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
                     },
                     "existing": {
                       "type": "boolean"
@@ -33007,6 +33115,42 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
                     },
                     "existing": {
                       "type": "boolean"
@@ -33618,6 +33762,42 @@
                     "carried_meta": {
                       "type": "integer"
                     },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
+                    },
                     "existing": {
                       "type": "boolean"
                     },
@@ -33814,6 +33994,42 @@
                     "carried_meta": {
                       "type": "integer"
                     },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
+                    },
                     "existing": {
                       "type": "boolean"
                     },
@@ -33996,6 +34212,42 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
                     },
                     "existing": {
                       "type": "boolean"
@@ -34193,6 +34445,42 @@
                     "carried_meta": {
                       "type": "integer"
                     },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
+                    },
                     "existing": {
                       "type": "boolean"
                     },
@@ -34375,6 +34663,42 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
                     },
                     "existing": {
                       "type": "boolean"

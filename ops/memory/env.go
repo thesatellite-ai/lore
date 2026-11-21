@@ -19,6 +19,7 @@ package memory
 
 import (
 	"context"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"slices"
 	"strconv"
 	"strings"
@@ -74,6 +75,15 @@ type IDCreator interface {
 // answers memory.move with E_UNSUPPORTED instead of pretending.
 type Mover interface {
 	Move(ctx context.Context, ref engine.Ref, to store.Source) (engine.Written, error)
+}
+
+// NearDuplicateFinder is the optional Env upgrade (wire.App, the one
+// opsrow uses) that lists a moved memory repeating a live memory --to
+// already holds (devco D-854: `lore move --from` and store adopt listed
+// them, memory move did not). Without it nothing is listed; the move is
+// the same.
+type NearDuplicateFinder interface {
+	MoveNearDuplicates(ctx context.Context, moving []row.Row, to store.Source) ([]opsstores.NearDuplicate, error)
 }
 
 // ColumnSearcher is the optional Env upgrade a `search --column` needs:

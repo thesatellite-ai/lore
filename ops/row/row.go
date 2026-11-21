@@ -307,12 +307,17 @@ type MoveOut struct {
 	From   string     `json:"from,omitempty"`
 	Rows   []MovedRow `json:"rows,omitempty"`
 	DryRun bool       `json:"dry_run,omitempty"`
-	// Duplicates are the rows a bulk move brings that repeat a row --to
-	// already holds (devco D-724, the shape of store.adopt's): listed,
-	// both kept, never merged; the dry run lists them too.
+	// Duplicates are the rows a move brings that repeat a row --to
+	// already holds (devco D-724, the shape of store.adopt's; the one-row
+	// move too since D-854, with its --with-children sub-tasks): listed,
+	// both kept, never merged; the bulk dry run lists them too.
 	Duplicates []opsstores.NearDuplicate `json:"duplicates,omitempty"`
 	// next is the bulk move's printed next step (the run of a dry run).
 	next string
+	// place is the one-row move's full --to (a linked folder as
+	// <store>/<folder>), the --store its printed near-duplicate commands
+	// read.
+	place string
 	// setup is the " --setup <name>" the printed commands carry ("" none).
 	setup string
 }
@@ -332,6 +337,15 @@ func (o MoveOut) Text() string {
 	}
 	for _, w := range o.Warnings {
 		b.WriteString("  warning: " + w + "\n")
+	}
+	// D-854: the pairs as the bulk move prints them (the moved row's bare
+	// id names one live row once moved)
+	place := o.place
+	if place == "" {
+		place = o.To
+	}
+	for _, l := range (opsstores.NearDupPrint{Place: place, Suffix: o.setup}).Lines(o.Duplicates) {
+		b.WriteString(l + "\n")
 	}
 	return b.String()
 }
@@ -872,9 +886,15 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 	// and the --setup given, so the admin's line moves this row anywhere
 	place := profilestore.PlaceTo(ctx, o.env, store.Source(to))
 	line := "lore row move --id " + id.String() + " --to " + place + setupFlag(ctx)
+	var dups []opsstores.NearDuplicate
 	if src, r, gerr := o.env.Get(ctx, engine.Ref{ID: id}); gerr == nil && !r.Deleted {
 		if err = profilestore.RequireAdminForRows(ctx, o.env, []profilestore.Placed{{Source: src, Row: r}},
 			"move", line, ""); err != nil {
+			return MoveOut{}, err
+		}
+		// D-854: the bulk move's near-duplicate check, read before the
+		// move (after it the row is in --to, one copy)
+		if dups, err = o.oneNearDuplicates(ctx, r, store.Source(to), in.WithChildren); err != nil {
 			return MoveOut{}, err
 		}
 	}
@@ -883,7 +903,7 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 	if err != nil {
 		return MoveOut{}, err
 	}
-	out := MoveOut{ID: id.String(), Table: string(w.Row.Table), To: to}
+	out := MoveOut{ID: id.String(), Table: string(w.Row.Table), To: to, Duplicates: dups, place: place, setup: setupFlag(ctx)}
 	for _, c := range w.Also { // --with-children: the sub-tasks moved with it
 		out.Children = append(out.Children, c.Row.ID.String())
 	}
