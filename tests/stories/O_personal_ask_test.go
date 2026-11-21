@@ -366,4 +366,25 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-833] the call whose server died should run one-shot, the log says:\n%s", b)
 		}
 	})
+	s.Step("personal-store/sql-reads-the-tables-it-names", func() {
+		// D-837: lore sql builds views only for the tables a statement
+		// names; the answer is the full lens's (a 'sqlite_full' literal
+		// forces one), a derived view, a schema listing or a pragma still
+		// sees every table, and a name in any case or as <table>_all reads
+		sql := func(q, want string) {
+			r := ada.Lore(ada.Home, "sql", "--store", "me", "--query", q)
+			r.OK(t)
+			full := ada.Lore(ada.Home, "sql", "--store", "me", "--query", "SELECT * FROM ("+q+") WHERE 'sqlite_full' <> ''")
+			full.OK(t)
+			if !strings.Contains(r.Out(), want) || r.Out() != full.Out() {
+				t.Errorf("[O D-837] lore sql %q misses %q or differs from the full lens:\n%s\nfull lens:\n%s", q, want, r, full)
+			}
+		}
+		sql("SELECT body FROM MEMORIES_ALL WHERE body LIKE '%postgres over mongodb%'", "we chose postgres over mongodb")
+		sql("SELECT name FROM resources_all WHERE name = 'robert-kim'", "robert-kim")
+		sql("SELECT name, kind FROM res__all WHERE name = 'orbit'", "project")
+		sql("SELECT name FROM sqlite_temp_master WHERE name = 'decisions_all'", "decisions_all")
+		sql("SELECT name FROM pragma_table_info('tasks') WHERE name = 'title'", "title")
+		sql("SELECT t.title FROM tasks_all t, \"resources_all\" r WHERE r.name = 'robert-kim' AND t.title LIKE '%price list%'", "send the price list")
+	})
 }
