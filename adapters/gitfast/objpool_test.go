@@ -79,3 +79,57 @@ func TestObjectStoresKeptAcrossSessions(t *testing.T) {
 	}
 	answer(s5, "without sharing")
 }
+
+// TestKeptObjectStoreBoundedByBytes (devco:D-845): a kept store counted
+// its decoded objects (200k), not their bytes, so one store could hold
+// hundreds of MB in the read server. It counts the bytes it decodes and
+// is dropped (a fresh one opened) once they pass objPoolMaxBytes. Not
+// parallel: the pool is process state.
+func TestKeptObjectStoreBoundedByBytes(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	work, _, _ := fixture(t)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("HOME", t.TempDir())
+	blob := gitT(t, work, "rev-parse", "HEAD~3:org/tasks/t1.json")
+	stop := ShareObjectStores()
+	defer stop()
+	storeOf := func() *objectStore {
+		t.Helper()
+		s := New()
+		defer s.Close()
+		r := s.repoFor(work)
+		if r == nil {
+			t.Fatal("no repository read")
+		}
+		objs, err := r.objects()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return objs
+	}
+	kept := storeOf()
+	o, err := kept.read(blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept.mu.Lock()
+	counted := kept.bytes
+	kept.mu.Unlock()
+	if counted < len(o.data) || len(o.data) == 0 {
+		t.Fatalf("the kept store counts %d bytes after decoding a %d-byte object", counted, len(o.data))
+	}
+	kept.mu.Lock()
+	kept.bytes = objPoolMaxBytes // at the bound: still kept
+	kept.mu.Unlock()
+	if storeOf() != kept {
+		t.Fatal("a store at its byte bound was dropped")
+	}
+	kept.mu.Lock()
+	kept.bytes = objPoolMaxBytes + 1 // one more decoded byte
+	kept.mu.Unlock()
+	if fresh := storeOf(); fresh == kept {
+		t.Fatalf("a store holding %d decoded bytes (bound %d) was kept", kept.bytes, objPoolMaxBytes)
+	}
+}

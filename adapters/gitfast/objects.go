@@ -51,6 +51,9 @@ type objectStore struct {
 	packs []*pack // loaded lazily, reloaded when a lookup misses
 	seen  map[string]bool
 	cache map[string]object
+	// bytes is the content bytes held in cache (a kept store is dropped
+	// past objPoolMaxBytes, objpool.go)
+	bytes int
 	// trees indexes parsed trees by id (treeIndex); nil for one that
 	// does not parse
 	trees map[string]map[string]treeEntry
@@ -118,6 +121,7 @@ func (s *objectStore) readLocked(id string, depth int) (object, error) {
 		return object{}, err
 	}
 	s.cache[id] = o
+	s.bytes += len(o.data)
 	return o, nil
 }
 

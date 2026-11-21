@@ -22,11 +22,18 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 )
 
+// gitMemoMaxBytes bounds the answer bytes runs keeps: every commit makes
+// new immutable reads, so a long-lived process (the local read server,
+// devco:D-845) would otherwise keep every answer it ever read. Past it the
+// memo starts over (an import of a few hundred rows stays far below it).
+const gitMemoMaxBytes = 8 << 20
+
 // gitMemo holds the memoised answers of this process.
 var gitMemo = struct {
-	mu   sync.Mutex
-	runs map[string]string  // immutable read argv -> stdout
-	tips map[string]tipMemo // dir NUL branch -> tip
+	mu    sync.Mutex
+	runs  map[string]string  // immutable read argv -> stdout
+	bytes int                // key and answer bytes held in runs
+	tips  map[string]tipMemo // dir NUL branch -> tip
 }{runs: map[string]string{}, tips: map[string]tipMemo{}}
 
 // tipMemo is a branch tip with the ref-file fingerprint it was read under.
@@ -79,7 +86,16 @@ func memoRun(args []string) (string, bool) {
 func keepRun(args []string, out string) {
 	gitMemo.mu.Lock()
 	defer gitMemo.mu.Unlock()
-	gitMemo.runs[memoKey(args)] = out
+	key := memoKey(args)
+	if _, ok := gitMemo.runs[key]; ok {
+		return
+	}
+	if gitMemo.bytes+len(key)+len(out) > gitMemoMaxBytes {
+		clear(gitMemo.runs)
+		gitMemo.bytes = 0
+	}
+	gitMemo.runs[key] = out
+	gitMemo.bytes += len(key) + len(out)
 }
 
 // refFingerprint is what branch's two refs (local and tracking) hold in
