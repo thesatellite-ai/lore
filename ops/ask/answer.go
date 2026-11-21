@@ -43,6 +43,21 @@ type textRow struct {
 	Day string
 	// Refs are the resources the row's text references (row_refs).
 	Refs []string
+	// words is the word set of Title and Body (tokens), built once per
+	// row. Why: an everything-about answer scored a row, then tested it
+	// against each topic, splitting the same text into words up to six
+	// times, ~5 ms of a warm served "where does X work now" (devco
+	// D-847).
+	words map[string]bool
+}
+
+// tokens is the word set of r's title and body (tokensOf), built on the
+// first call and kept on r.
+func (r *textRow) tokens() map[string]bool {
+	if r.words == nil {
+		r.words = tokensOf(r.Title + "\n" + r.Body)
+	}
+	return r.words
 }
 
 // data is everything one ask reads.
@@ -494,9 +509,8 @@ func hasWord(toks map[string]bool, w string) bool {
 // for a topic in its title or first line; a feed row and a replaced row
 // rank lower. ok false when it does not answer at all.
 func score(q question, ms []match, r *textRow) (scored, bool) {
-	text := r.Title + "\n" + r.Body
-	toks := tokensOf(text)
-	first := tokensOf(r.Title + "\n" + firstLine(r.Body))
+	toks := r.tokens()
+	var first map[string]bool // the title and first line's words, built at the first topic hit
 	s := scored{row: r}
 	if len(ms) > 0 {
 		if !subjectOf(r, toks, ms) {
@@ -509,6 +523,9 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 			if hasWord(toks, w) {
 				s.score += 4
 				s.matched = append(s.matched, t.name)
+				if first == nil {
+					first = tokensOf(r.Title + "\n" + firstLine(r.Body))
+				}
 				if hasWord(first, w) {
 					s.score++
 				}
@@ -694,7 +711,7 @@ func topicPicks(all []scored, taken map[string]bool) []scored {
 
 // holdsTopic reports whether row r holds a row word of topic t.
 func holdsTopic(r *textRow, t topic) bool {
-	toks := tokensOf(r.Title + "\n" + r.Body)
+	toks := r.tokens()
 	for _, w := range t.row {
 		if hasWord(toks, w) {
 			return true
@@ -711,7 +728,7 @@ func windowRows(q question, ms []match, rows []textRow) []Row {
 	var withDay, written, imported []*textRow
 	for i := range rows {
 		r := &rows[i]
-		if len(ms) > 0 && !subjectOf(r, tokensOf(r.Title+"\n"+r.Body), ms) {
+		if len(ms) > 0 && !subjectOf(r, r.tokens(), ms) {
 			continue
 		}
 		if r.Day != "" {
