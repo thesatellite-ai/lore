@@ -23,25 +23,55 @@ package git
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
-// authorityFile is the replay's file in the clone's git folder.
+// authorityFile is the replay's file in the git folder of a clone lore owns.
 const authorityFile = "lore-authority.gob"
 
+// AuthorityCacheDir is the folder under the lore home's cache/ that holds
+// the replay of each clone lore does not own (a person's own clone, one
+// lore may not write). Why exported: the home layout names it.
+const AuthorityCacheDir = "authority"
+
+// homeCacheDir is the cache root under the lore home.
+const homeCacheDir = "cache"
+
+// authorityExt ends a replay file under AuthorityCacheDir.
+const authorityExt = ".gob"
+
+// authorityDirMode is the mode of the AuthorityCacheDir folders (owner
+// only: the replay holds the store's roster).
+const authorityDirMode = 0o700
+
+// authorityHashLen is how many bytes of the clone path's hash name its
+// file under AuthorityCacheDir.
+const authorityHashLen = 8
+
 // authorityFormat is the layout of authorityFile: bump it when
-// savedAuthority changes shape.
-const authorityFormat = 1
+// savedAuthority changes shape (2: the clone path, devco:D-812).
+const authorityFormat = 2
+
+// authorityFiles maps a clone folder to the replay file its open chose
+// (authorityFileFor), so a Backend made without an open uses the same
+// file, never one in a clone lore does not own.
+var authorityFiles sync.Map // clean clone path → file path ("" = none)
 
 // savedAuthority is an authority as authorityFile holds it (gob encodes
 // exported fields only, so each part has an exported twin here).
 type savedAuthority struct {
-	Format   int
-	Binary   string
+	Format int
+	Binary string
+	// Clone is the clone folder the replay is of: a file under the lore
+	// home is used for that clone only
+	Clone    string
 	Head     string
 	OrgHead  string
 	Orgless  bool
@@ -94,14 +124,64 @@ var binaryStamp = sync.OnceValue(func() string {
 	return fmt.Sprintf("%s|%d|%d", exe, st.Size(), st.ModTime().UnixNano())
 })
 
-// authorityPath is authorityFile of the clone ("" when its git folder is
-// not a plain .git directory).
-func (b *Backend) authorityPath() string {
-	gd, ok := plainGitDir(b.work)
+// authorityFileFor is where the replay of the clone at dir is kept: its
+// git folder when lore owns the clone (outside false), else a file under
+// the lore home's cache ("" when home is not known, or dir's git folder is
+// not a plain .git directory: nothing is kept then). Why: a read must
+// never write into a clone a person owns (devco:D-812).
+func authorityFileFor(dir, home string, outside bool) string {
+	gd, ok := plainGitDir(dir)
 	if !ok {
 		return ""
 	}
-	return filepath.Join(gd, authorityFile)
+	if !outside {
+		return filepath.Join(gd, authorityFile)
+	}
+	if home == "" {
+		return ""
+	}
+	top := filepath.Dir(gd)
+	sum := sha256.Sum256([]byte(top))
+	return filepath.Join(home, homeCacheDir, AuthorityCacheDir, filepath.Base(top)+"-"+hex.EncodeToString(sum[:authorityHashLen])+authorityExt)
+}
+
+// keepAuthorityAt records file as the replay file of b's clone (an open's
+// choice, authorityFileFor).
+func (b *Backend) keepAuthorityAt(file string) {
+	b.authorityAt = file
+	authorityFiles.Store(filepath.Clean(b.work), file)
+}
+
+// authorityPath is the replay file of b's clone: the one its open chose,
+// else the one an open of the same clone chose in this process ("" =
+// none: the replay stays in memory).
+func (b *Backend) authorityPath() string {
+	if b.authorityAt != "" {
+		return b.authorityAt
+	}
+	if p, ok := authorityFiles.Load(filepath.Clean(b.work)); ok {
+		if s, ok := p.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// heldSeenPath is the heldSeenFile of the folder named folder, kept where
+// the replay is (authorityPath): in the git folder of a clone lore owns,
+// else beside the clone's replay file in the lore home ("" = none, the
+// holds are served again). Why: like the replay, a read never writes it
+// into a clone a person owns (devco:D-812).
+func (b *Backend) heldSeenPath(folder string) string {
+	p := b.authorityPath()
+	switch {
+	case p == "":
+		return ""
+	case filepath.Base(p) == authorityFile:
+		return filepath.Join(filepath.Dir(p), heldSeenFile+folder)
+	default:
+		return strings.TrimSuffix(p, authorityExt) + "." + heldSeenFile + folder
+	}
 }
 
 // loadAuthority is the replay authorityFile holds, nil when there is none
@@ -116,7 +196,7 @@ func (b *Backend) loadAuthority() *authority {
 		return nil
 	}
 	var s savedAuthority
-	if gob.NewDecoder(bytes.NewReader(raw)).Decode(&s) != nil || s.Format != authorityFormat || s.Binary != bin || s.Head == "" {
+	if gob.NewDecoder(bytes.NewReader(raw)).Decode(&s) != nil || s.Format != authorityFormat || s.Binary != bin || s.Head == "" || s.Clone != filepath.Clean(b.work) {
 		return nil
 	}
 	return s.authority()
@@ -183,6 +263,10 @@ func (b *Backend) saveAuthority(a *authority) {
 	}
 	s, ok := a.saved(bin)
 	if !ok {
+		return
+	}
+	s.Clone = filepath.Clean(b.work)
+	if os.MkdirAll(filepath.Dir(p), authorityDirMode) != nil {
 		return
 	}
 	var buf bytes.Buffer

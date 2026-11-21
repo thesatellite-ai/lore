@@ -87,6 +87,8 @@ var homeLayout = []homeEntry{
 	{Pattern: "cache", Dir: true, What: "rebuildable caches: everything here is made again from the row files when deleted", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/**/*.corrupt-*", What: whatCorruptBak, ByHand: "safe to delete"},
 	{Pattern: "cache/" + machineCacheFile + "*", What: "the cache of state/machine.db, arranged for search", ByHand: byHandRebuilt, Readme: true},
+	// devco:D-812: the roster replay of a clone lore does not own
+	{Pattern: "cache/" + gitbackend.AuthorityCacheDir, Dir: true, Collapse: true, What: "the store history check of each store clone lore does not own (your own clone set with `lore store use`, a clone lore may not write), one file per clone (<folder>-<hash of its path>.gob), so a read never writes into that clone; lore's own clones keep it in their .git folder (lore-authority.gob)", ByHand: "safe to delete: the next command checks the store history again and writes it back", Readme: true},
 	// B4-7: 0.1.17 mirrored each store folder's checkout here
 	// (stores/<host>/<owner>/<repo>/<branch>/<folder>/.lore/…); a store id
 	// never holds a dot, a host does

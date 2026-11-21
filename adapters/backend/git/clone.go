@@ -181,6 +181,9 @@ func OpenClone(ctx context.Context, remote, dir, folder string, o store.OpenOpti
 	if err = releaseKeep(err, lock); err != nil {
 		return nil, err
 	}
+	// chosen once the clone exists (a first open just made it): a person's
+	// own clone keeps its replay in the lore home (devco:D-812)
+	b.keepAuthorityAt(authorityFileFor(dir, o.Home, cfg.own))
 	if b.root, err = rowfs.Open(dir, append(lockOpts, rowfs.WithClock(cfg.now))...); err != nil {
 		return nil, err
 	}
@@ -231,6 +234,7 @@ const rowfsLockMode = 0o600
 // folder left the read-only lock file inside it as it was.
 func openCloneReadOnly(ctx context.Context, cfg config, bin, remote, dir, folder string, o store.OpenOptions, lockOpts []rowfs.Option, denied error) (*Backend, error) {
 	b := &Backend{cfg: cfg, git: runner{bin: bin, owned: true}, mode: modeClone, readOnly: true, unwritable: true, work: dir}
+	b.keepAuthorityAt(authorityFileFor(dir, o.Home, true)) // lore may not write this clone (devco:D-812)
 	b.git.remote = remote
 	b.readOnlyErr = unwritableErr(dir, o.Home, denied)
 	b.handPending, b.identityRemote = true, remote // set up by the first write lore may make

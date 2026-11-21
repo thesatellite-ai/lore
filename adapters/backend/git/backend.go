@@ -69,6 +69,11 @@ type Backend struct {
 	branch     string        // clone mode: the store branch
 	marker     rowfs.Marker  // clone mode: lore-store.yaml at open (zero on an empty store)
 
+	// authorityAt is the file the roster replay is kept in, chosen at open
+	// (authorityFileFor: never inside a clone lore does not own); ""
+	// looks up the choice of an open of the same clone (authorityPath).
+	authorityAt string
+
 	// beforePush, when set (tests only), runs before each push attempt so a
 	// test can push from another clone and make this one lose the race.
 	beforePush func(attempt int)

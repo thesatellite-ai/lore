@@ -1372,8 +1372,9 @@ func (b *Backend) CommitsBy(ctx context.Context, emails []string) ([]AuthoredCom
 	return list, nil
 }
 
-// heldSeenFile is where a folder's last re-served hold set is kept (in
-// the clone's git dir), so heldRecheck re-serves only when it changes.
+// heldSeenFile is where a folder's last re-served hold set is kept (next
+// to the replay file, heldSeenPath), so heldRecheck re-serves only when it
+// changes.
 const heldSeenFile = "lore-held-seen-"
 
 // heldRecheck lists, for an incremental read, the held and credited
@@ -1406,11 +1407,10 @@ func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, ch
 	}
 	sort.Strings(keys)
 	sig := strings.Join(keys, "\n")
-	gd := b.gitDirOf(ctx, b.work)
-	if gd == "" {
+	seen := b.heldSeenPath(strings.NewReplacer("/", "_", ".", "_root").Replace(b.folder.Name()))
+	if seen == "" {
 		return nil, nil
 	}
-	seen := filepath.Join(gd, heldSeenFile+strings.NewReplacer("/", "_", ".", "_root").Replace(b.folder.Name()))
 	if old, err := os.ReadFile(seen); (err == nil && string(old) == sig) || (err != nil && sig == "") {
 		return nil, nil
 	}
@@ -1447,7 +1447,9 @@ func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, ch
 			names[head+":"+p] = p // a cache that took the stated writer gets the committer
 		}
 	}
-	_ = os.WriteFile(seen, []byte(sig), 0o600) // best effort: the worst case is serving the holds again
+	if os.MkdirAll(filepath.Dir(seen), authorityDirMode) == nil {
+		_ = os.WriteFile(seen, []byte(sig), 0o600) // best effort: the worst case is serving the holds again
+	}
 	return names, tombs
 }
 
