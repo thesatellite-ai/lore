@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -122,6 +123,7 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 	allows.entries = append(allows.entries, a.linkedAllows(ctx)...)
 	_, isGit, inStore := rowfs.StoreTop(root)
 	inStore = inStore && isGit
+	saves := a.secretsAllowSaves(ctx)
 	paths := make([]string, 0, len(docs))
 	for p := range docs {
 		paths = append(paths, p)
@@ -154,6 +156,12 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 			case isCommitMessageDoc(p):
 				k.message = true
 				lines = append(lines, "      fix: "+messageFix(where))
+			case l != "" && !saves && !isRowDocPath(p, inStore):
+				// devco D-870: lore is not set up here, so `lore secrets
+				// allow` refuses (E_NOT_A_STORE); the repo's .gitleaksignore,
+				// which this check reads from the index, is the way
+				k.file, k.ignoreFile = true, true
+				lines = append(lines, "      not a secret? "+gitleaksIgnoreLine(p, h))
 			case l != "":
 				k.file = true
 				lines = append(lines, "      not a secret? "+l)
@@ -174,7 +182,24 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 // findingKinds is what a refusal's findings were, for its hint: in a
 // commit message, in a file, and whether some file finding got no ready
 // allow line of its own.
-type findingKinds struct{ message, file, unnamed bool }
+// ignoreFile: lore is not set up in the repo, so the file findings name a
+// .gitleaksignore line, not a `lore secrets allow` command.
+type findingKinds struct{ message, file, unnamed, ignoreFile bool }
+
+// gitleaksIgnoreLine is the next step of a file finding in a repo lore is
+// not set up in: the staged-form fingerprint this check honours.
+func gitleaksIgnoreLine(p string, h leakcheck.SecretHit) string {
+	return "add this line to the repo's " + gitleaksIgnoreFile + " and stage it: " + p + ":" + h.Rule + ":" + strconv.Itoa(h.Line)
+}
+
+// secretsAllowSaves reports whether `lore secrets allow` can save an entry
+// for this repo: false in a repo lore is not set up in (no .lore folder,
+// no link), where it refuses with E_NOT_A_STORE, so a refusal there must
+// not print it as the next step (devco D-870).
+func (a *App) secretsAllowSaves(ctx context.Context) bool {
+	_, err := a.state(ctx)
+	return errs.CodeOf(err) != errs.NotAStore
+}
 
 // messageFix is the next step of a finding in a commit message: a message
 // has no row id, field or path an allow entry can name, so the fix is
@@ -229,8 +254,14 @@ func leakHint(where string, inStore bool, k findingKinds) string {
 	if where == LeakWherePush {
 		again, storeAgain = "commit it, then push again", "push again"
 	}
+	if k.ignoreFile {
+		vault = "store the value in your vault and reference it (${secret:…}, or a placeholder such as ${DB_PASSWORD}); if a finding is not a secret, add the .gitleaksignore line printed under it and stage .gitleaksignore (lore is not set up in this repo, so lore secrets allow cannot save an entry here)"
+	}
 	if k.message {
 		vault += "; for a finding in a commit message, follow the `fix:` line under it"
+	}
+	if k.ignoreFile {
+		return vault + ", " + again + " (no --no-verify needed)"
 	}
 	if inStore {
 		return vault + " (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then " + storeAgain + " (no --no-verify needed)"

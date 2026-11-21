@@ -709,7 +709,7 @@ Flags:
 ### `lore check leaks`
 
 <!-- help: check leaks -->
-Check staged files and the commit message (hooks), or the tree structure (--ci), for internal or personal content
+Check staged files and the commit message (hooks), the tree structure (--ci) or the whole history (--history), for internal or personal content
 
 ```text
 Usage:
@@ -726,15 +726,18 @@ Examples:
   lore check leaks --as-client
   # every stored row with today's secret rules
   lore check leaks --rows
+  # every commit of the repo's history
+  lore check leaks --history
 
 Flags:
       --as-client           check the whole repo as the client would see it (before a hand-over)
       --ci                  CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal. CI cannot read your private store: a not-a-secret allow kept in a store folder (where a linked repo saves them) is not seen here; the commit and pre-push hooks on each member's machine enforce it, and a committed .lore/data/secret_allows entry or .gitleaksignore line is seen
       --commit-msg string   also check this commit message file (the commit-msg hook's $1)
       --explain             print the rule, the source and the matched words of each finding
+      --history             scan every file version and commit message reachable from HEAD for secrets (each version read once), naming the commit that added each one; with --since, only the commits after that one
       --json                print the result (or the error) as JSON
       --rows                re-scan every stored row of every attached store with today's secret rules
-      --since string        with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits
+      --since string        with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits. With --history: check only the commits after this one
       --staged              check the staged files (default unless --commit-msg is given alone)
 ```
 <!-- /help -->
