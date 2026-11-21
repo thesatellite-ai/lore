@@ -1,6 +1,6 @@
 # Recall gate: lore beats grep (G-1)
 
-A permanent benchmark that asks one personal store 50 questions and asks the same 50 of a curated markdown tree with rg/grep + cat. Lore has to win on every question: one call, a fast answer, a correct answer, and less text to read. It exists because "lore ties grep" is not good enough to be worth using; the gate keeps the win from slipping back.
+A permanent benchmark that asks one personal store 70 questions (50 normal, 20 harder) and asks the same 70 of a curated markdown tree with rg/grep + cat. Accuracy comes first (owner 2026-11-21): the answer must be in the top 3 of what lore returns, the first item right, no stale fact, little noise. Then lore has to win on every question: one call, a fast answer, and less text to read. It exists because "lore ties grep" is not good enough to be worth using; the gate keeps the win from slipping back.
 
 ## Run it
 
@@ -8,7 +8,7 @@ A permanent benchmark that asks one personal store 50 questions and asks the sam
 task bench:recall
 ```
 
-That builds `tmp/bin/lore-bench` from `./cmd/lore` (`CGO_ENABLED=0`, a release-shaped binary: no test tags), generates the data, runs both arms, writes the report to `tmp/bench/recall.md`, prints the summary line, and fails (non-zero exit) listing every missed bar. A full run takes a few minutes; most of it is lore's calls (two per question) and loading the store.
+That builds `tmp/bin/lore-bench` from `./cmd/lore` (`CGO_ENABLED=0`, a release-shaped binary: no test tags), generates the data, runs both arms, writes the report to `tmp/bench/recall.md`, prints the summary line, and fails (non-zero exit) listing every missed bar. A full run takes a few minutes; most of it is lore's calls (three per question: cold, warm, and the `--json` call the accuracy grade reads) and loading the store.
 
 Extra `go test` flags go after `--`, e.g. `task bench:recall -- -timeout 90m`. To run without task:
 
@@ -17,7 +17,7 @@ CGO_ENABLED=0 go build -o tmp/bin/lore-bench ./cmd/lore
 LORE_BENCH_BIN=$PWD/tmp/bin/lore-bench go test -tags bench -count=1 -run '^TestBenchRecall$' -timeout 60m -v ./tests/bench/recall/
 ```
 
-The plain `go test ./tests/bench/recall/` (part of `go test ./...`) runs only the unit tests of the bench's own parts: the data set's shape and determinism, 50 questions of the right types, that the grep arm answers every question from the tree (so a lore miss is lore's, not the bench's), grading, and the bar checks. It needs no lore binary.
+The plain `go test ./tests/bench/recall/` (part of `go test ./...`) runs only the unit tests of the bench's own parts: the data set's shape and determinism, 70 questions of the right types (each with a subject, and an accuracy bar it can reach), that the grep arm answers every question from the tree (so a lore miss is lore's, not the bench's), grading (text and accuracy), and the bar checks (accuracy first). It needs no lore binary.
 
 ## Settings (environment)
 
@@ -46,9 +46,9 @@ The grep arm's tree holds the same facts the way a tidy person keeps notes: `peo
 
 ## The questions
 
-50 questions in `questions.go`: five each of the six types the owner asks every day (who is X; project status; decision and why; what do I owe / who owes me; what happened on day D / in week W; everything about X) and four each of five harder types (paraphrase: the question's words are not the row's; a typo in a name; a relative date against the pinned now; a role or a nickname instead of the name; a fact that changed over time).
+70 questions in `questions.go`. The normal set is 50 of the six types the owner asks every day: who is X (9), project status (9), decision and why (8), what do I owe / who owes me (8), what happened on day D / in week W (8), everything about X (8); the first five of each type are the ones earlier reports asked. The harder set is 20: four each of five harder types (paraphrase: the question's words are not the row's; a typo in a name; a relative date against the pinned now; a role or a nickname instead of the name; a fact that changed over time).
 
-Each question lists its required facts and its forbidden facts. Grading (`Grade`) is the same for both arms: correct means every required fact is in the output and no forbidden fact is, unless the question's current value is in the output too (an output that shows the change tells the reader which value is current); a partial answer is wrong. Matching ignores case.
+Each question lists its required facts, its forbidden (stale or done) facts, its subject (the person, project or days it is about) and, when the answer takes more than three items (every task owed to someone, every day of a week), how many. Grading (`Grade`) is the same for both arms: correct means every required fact is in the output and no forbidden fact is, unless the question's current value is in the output too (an output that shows the change tells the reader which value is current); a partial answer is wrong. Matching ignores case.
 
 The lore arm makes exactly one lore call per question, from the home folder: `lore ask --store me --query "<question as written>"` for every type (gate G-3, set per type in the `loreArm` table at the top of `questions.go`).
 
@@ -58,20 +58,31 @@ The grep arm runs the commands a careful agent would run, one by one with bash i
 
 Per question: lore calls (always 1), the cold wall time (the first call after the store changed: before each question one feed row arrives from the side clone, as a sync brings it), the warm wall time (the same call again), the characters lore printed (stdout + stderr of the warm call), correctness; for grep its calls, wall time, characters and correctness. The first read after loading the store (every folder's cache built from nothing) is timed and logged but is not a question.
 
-The run passes when every bar holds (the raised bar of 2026-11-21):
+Accuracy, first (owner 2026-11-21: retrieval accuracy comes before speed). A third run of the same call with `--json` gives the structured answer; the bench reads it as one ranked list (resources, then tasks, then rows, the order lore prints them) and grades the top of it (`GradeAccuracy` in `accuracy.go`):
 
-- every question: 1 lore call, warm under 50 ms, cold under 300 ms, lore's answer correct (50/50, the 20 harder ones included);
+- recall@3: every required fact in the first 3 items (the first N when the answer takes N > 3 items); 100% of questions on both sets;
+- top-1: the first item holds a required fact and is not stale; at least 90% of all questions;
+- stale: an item in the top 3 that presents a forbidden fact as its answer without the current value (a resource field's former value is history, not the answer; a done task is stale); 0 questions;
+- noise: an item in the top 3 that holds no required fact and does not name the subject; at most 1 per question.
+
+The grep arm is graded the same way where it applies to a pile of text: present (every required fact in its output) and stale.
+
+The run passes when every accuracy bar and every bar below holds (the raised bar of 2026-11-21):
+
+- every question: 1 lore call, warm under 50 ms, cold under 300 ms, lore's answer correct (70/70, the 20 harder ones included);
 - total characters lore printed fewer than grep's;
 - lore correct on at least as many questions as grep;
 - typed answers (who is X: resources; what I owe: tasks) at least 10x lighter than grep's.
 
 ## The report
 
-`tmp/bench/recall.md`: the run (now, seed, rows, lore version, grep tool, load time), the summary line, PASS or every missed bar, a table per question type (correct, calls, warm and cold max, characters and the lore/grep character ratio), and a table per question (the lore call, its times and characters, what it missed, the grep arm's calls and characters). The summary line is the one the coordinator copies into `GATE PASS lore beats grep: <line>`:
+`tmp/bench/recall.md`: the run (now, seed, rows, lore version, grep tool, load time), the summary line, PASS or every missed bar (accuracy bars first), the accuracy table (per type and per set: recall@3, top-1, stale, noise, grep present and stale), then the speed and size table per question type (correct, calls, warm and cold max, characters and the lore/grep character ratio), and a table per question (the lore call, recall@3, top-1, stale and noise, its times and characters, what it missed, the grep arm's calls and characters). The summary line is the one the coordinator copies into `GATE PASS lore beats grep: <line>`:
 
 ```
-calls L/G, warm p50/max ms, cold max ms, chars L/G, correct L/G of 50, harder L/20
+recall@3 R/70, top-1 T/70, stale S, noise X, calls L/G, warm p50/max ms, cold max ms, chars L/G, correct L/G of 70, harder L/20
 ```
+
+stale counts the questions with a stale fact in the top 3, noise the questions with more than one irrelevant item there.
 
 ## Not in the gate yet
 

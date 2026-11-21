@@ -67,6 +67,14 @@ type Question struct {
 	// is how a reader tells the change (see Grade).
 	Forbidden []string
 	Current   string
+	// Subject names what the question is about (a person, a project, a
+	// day): an answer item that names it is relevant even without a
+	// required fact (the accuracy bar's noise check).
+	Subject []string
+	// Need is how many answer items the answer takes when it is more than
+	// one per fact cannot fit in the top 3 (every task owed, every day of a
+	// week): recall then reads the top Need items (see TopK).
+	Need int
 	// Lore is the lore arm's one call (arguments after `lore`); Grep is the
 	// grep arm's commands, run one by one with bash in the tree's root.
 	Lore []string
@@ -157,7 +165,7 @@ func (ds *Dataset) eventsBetween(from, to time.Time) []string {
 	return out
 }
 
-// Questions builds the 50 questions over ds; useRG picks the grep arm's
+// Questions builds the 70 questions over ds (50 normal, 20 harder); useRG picks the grep arm's
 // tool (rg, or grep where rg is not installed).
 func (ds *Dataset) Questions(useRG bool) []Question {
 	g := grepCmd{rg: useRG}
@@ -168,7 +176,7 @@ func (ds *Dataset) Questions(useRG bool) []Question {
 		qs = append(qs, q)
 	}
 	who := func(t Type, text, spelled string, p Person, grep []string) {
-		q := Question{Type: t, Text: text, Ask: Ask{Name: spelled}, Required: []string{p.Name, p.Role, p.Company}, Grep: grep}
+		q := Question{Type: t, Text: text, Ask: Ask{Name: spelled}, Required: []string{p.Name, p.Role, p.Company}, Subject: []string{p.Name}, Grep: grep}
 		if p.Former != "" {
 			q.Forbidden, q.Current = []string{p.Former}, p.Company
 		}
@@ -176,55 +184,68 @@ func (ds *Dataset) Questions(useRG bool) []Question {
 	}
 	status := func(t Type, text string, p Project, grep []string) {
 		s := ds.status[p.Name]
-		addQ(Question{Type: t, Text: text, Required: []string{s[len(s)-1]}, Grep: grep})
+		addQ(Question{Type: t, Text: text, Required: []string{s[len(s)-1]}, Subject: []string{p.Name}, Grep: grep})
 	}
 	decision := func(t Type, text string, p Project) {
 		d := ds.decision[p.Name]
-		addQ(Question{Type: t, Text: text, Required: []string{d[0], d[1]}, Grep: []string{g.lines(p.Name, "decisions.md")}})
+		addQ(Question{Type: t, Text: text, Required: []string{d[0], d[1]}, Subject: []string{p.Name}, Grep: []string{g.lines(p.Name, "decisions.md")}})
 	}
 	owe := func(t Type, text string, by, to, spelledBy, spelledTo string, grep []string) {
-		addQ(Question{Type: t, Text: text, Ask: Ask{OwedBy: spelledBy, OwedTo: spelledTo}, Required: ds.tasksOf(by, to, false), Forbidden: ds.tasksOf(by, to, true), Grep: grep})
+		req := ds.tasksOf(by, to, false)
+		subject := by
+		if by == Me {
+			subject = to
+		}
+		addQ(Question{Type: t, Text: text, Ask: Ask{OwedBy: spelledBy, OwedTo: spelledTo}, Required: req, Forbidden: ds.tasksOf(by, to, true), Subject: []string{subject}, Need: len(req), Grep: grep})
 	}
 	journal := func(t Type, text string, from, to time.Time, since, until string) {
-		addQ(Question{Type: t, Text: text, Ask: Ask{Since: since, Until: until}, Required: ds.eventsBetween(from, to), Grep: []string{cat(journalFiles(from, to)...)}})
+		req := ds.eventsBetween(from, to)
+		var days []string
+		for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+			days = append(days, day(d))
+		}
+		addQ(Question{Type: t, Text: text, Ask: Ask{Since: since, Until: until}, Required: req, Subject: days, Need: len(req), Grep: []string{cat(journalFiles(from, to)...)}})
 	}
 
-	// 1. who is X (5)
-	for _, i := range []int{2, 9, 14, 21, 33} {
+	// The normal set: 50 questions of the six types (owner 2026-11-21:
+	// "50/50 on the normal set"), the first five of each type kept as they
+	// were so earlier reports compare.
+	// 1. who is X (9)
+	for _, i := range []int{2, 9, 14, 21, 33, 5, 12, 27, 36} {
 		p := ds.People[i]
 		who(TypeWho, "who is "+p.Name, p.Name, p, []string{g.files(p.Name, "."), cat("people/" + p.Name + ".md")})
 	}
-	// 2. project status (5)
-	for _, i := range []int{3, 8, 15, 22, 30} {
+	// 2. project status (9)
+	for _, i := range []int{3, 8, 15, 22, 30, 9, 19, 25, 33} {
 		p := ds.Projects[i]
 		status(TypeStatus, "what is the status of "+p.Name, p, []string{g.files(p.Name, "."), cat("projects/" + p.Name + ".md")})
 	}
-	// 3. decision and why (5)
-	for _, i := range []int{1, 10, 17, 26, 34} {
+	// 3. decision and why (8)
+	for _, i := range []int{1, 10, 17, 26, 34, 4, 21, 31} {
 		p := ds.Projects[i]
 		decision(TypeDecision, "what did we decide for "+p.Name+" and why", p)
 	}
-	// 4. what I owe / who owes me (5)
-	for _, i := range []int{3, 6, 18} {
+	// 4. what I owe / who owes me (8)
+	for _, i := range []int{3, 6, 18, 26, 13} {
 		p := ds.People[i]
 		owe(TypeOwe, "what do I owe "+p.Name, Me, p.Name, "", p.Name, []string{g.openTasks("owed to " + p.Name)})
 	}
-	for _, i := range []int{20, 23} {
+	for _, i := range []int{20, 23, 29} {
 		p := ds.People[i]
 		owe(TypeOwe, "what does "+p.Name+" owe me", p.Name, Me, p.Name, "", []string{g.openTasks("owed by " + p.Name)})
 	}
-	// 5. day D / week W (5)
-	for _, d := range []int{9, 40, 123} {
+	// 5. day D / week W (8)
+	for _, d := range []int{9, 40, 123, 25, 77} {
 		j := ds.journalOn(d)
 		journal(TypeDay, "what happened on "+day(j.Day), j.Day, j.Day, day(j.Day), day(j.Day))
 	}
-	for _, back := range []int{3, 10} {
+	for _, back := range []int{3, 10, 6} {
 		mon := monday(ds.Now).AddDate(0, 0, -7*back)
 		sun := mon.AddDate(0, 0, 6)
 		journal(TypeDay, "what happened in the week of "+day(mon), mon, sun, day(mon), day(sun))
 	}
-	// 6. everything about X (5)
-	for _, i := range []int{4, 11, 18, 25, 37} {
+	// 6. everything about X (8)
+	for _, i := range []int{4, 11, 18, 25, 37, 7, 29, 39} {
 		p := ds.People[i]
 		req := []string{p.Role, p.Company}
 		if m := ds.meetings[p.Name]; m != "" {
@@ -236,7 +257,7 @@ func (ds *Dataset) Questions(useRG bool) []Question {
 		if ts := append(ds.tasksOf(Me, p.Name, false), ds.tasksOf(p.Name, Me, false)...); len(ts) > 0 {
 			req = append(req, ts[0])
 		}
-		addQ(Question{Type: TypeAbout, Text: "everything about " + p.Name, Ask: Ask{Name: p.Name}, Required: req, Grep: []string{g.lines(p.Name, "."), cat("people/" + p.Name + ".md")}})
+		addQ(Question{Type: TypeAbout, Text: "everything about " + p.Name, Ask: Ask{Name: p.Name}, Required: req, Subject: []string{p.Name}, Need: len(req), Grep: []string{g.lines(p.Name, "."), cat("people/" + p.Name + ".md")}})
 	}
 
 	// harder 1. paraphrase (4): the question's words are not the row's
@@ -244,10 +265,10 @@ func (ds *Dataset) Questions(useRG bool) []Question {
 	decision(TypeParaphrase, "what was the reasoning behind "+falcon.Name+"'s pick", falcon)
 	status(TypeParaphrase, "how far along is "+meadow.Name+" these days", meadow, []string{g.files(meadow.Name, "."), cat("projects/" + meadow.Name + ".md")})
 	b := ds.budgets[garnet.Name]
-	addQ(Question{Type: TypeParaphrase, Text: "how much money can " + garnet.Name + " spend now", Required: []string{fmt.Sprintf("%dk", b[1])}, Forbidden: []string{fmt.Sprintf("is %dk", b[0])}, Current: fmt.Sprintf("%dk", b[1]),
+	addQ(Question{Type: TypeParaphrase, Text: "how much money can " + garnet.Name + " spend now", Required: []string{fmt.Sprintf("%dk", b[1])}, Forbidden: []string{fmt.Sprintf("is %dk", b[0])}, Current: fmt.Sprintf("%dk", b[1]), Subject: []string{garnet.Name},
 		Grep: []string{g.files(garnet.Name, "."), cat("projects/" + garnet.Name + ".md")}})
 	cfo := ds.person("hugo-berg")
-	addQ(Question{Type: TypeParaphrase, Text: "who handles the money at " + cfo.Company, Required: []string{cfo.Name, cfo.Role},
+	addQ(Question{Type: TypeParaphrase, Text: "who handles the money at " + cfo.Company, Required: []string{cfo.Name, cfo.Role}, Subject: []string{cfo.Company},
 		Grep: []string{g.files(cfo.Company, "people"), cat(peopleAt(ds, cfo.Company)...)}})
 
 	// harder 2. typo in a name (4)
@@ -272,26 +293,26 @@ func (ds *Dataset) Questions(useRG bool) []Question {
 
 	// harder 4. a role or a nickname instead of the name (4)
 	bobby := ds.person("robert-kim")
-	addQ(Question{Type: TypeNickname, Text: "who is Bobby", Required: []string{bobby.Name, bobby.Role, bobby.Company}, Grep: []string{g.files("bobby", "people"), cat("people/" + bobby.Name + ".md")}})
+	addQ(Question{Type: TypeNickname, Text: "who is Bobby", Required: []string{bobby.Name, bobby.Role, bobby.Company}, Subject: []string{bobby.Name}, Grep: []string{g.files("bobby", "people"), cat("people/" + bobby.Name + ".md")}})
 	fred := ds.person("farid-haddad")
-	addQ(Question{Type: TypeNickname, Text: "what do I owe Fred", Required: ds.tasksOf(Me, fred.Name, false), Forbidden: ds.tasksOf(Me, fred.Name, true),
+	addQ(Question{Type: TypeNickname, Text: "what do I owe Fred", Required: ds.tasksOf(Me, fred.Name, false), Forbidden: ds.tasksOf(Me, fred.Name, true), Subject: []string{fred.Name}, Need: len(ds.tasksOf(Me, fred.Name, false)),
 		Grep: []string{g.files("fred", "people"), cat("people/" + fred.Name + ".md"), g.openTasks("owed to " + fred.Name)}})
-	addQ(Question{Type: TypeNickname, Text: "who is the CFO", Required: []string{cfo.Name, cfo.Company}, Grep: []string{g.files("cfo", "people"), cat("people/" + cfo.Name + ".md")}})
+	addQ(Question{Type: TypeNickname, Text: "who is the CFO", Required: []string{cfo.Name, cfo.Company}, Subject: []string{cfo.Name}, Grep: []string{g.files("cfo", "people"), cat("people/" + cfo.Name + ".md")}})
 	lawyer := ds.person("mara-petrov")
-	addQ(Question{Type: TypeNickname, Text: "who is our lawyer", Required: []string{lawyer.Name, lawyer.Company}, Grep: []string{g.files("lawyer", "people"), cat("people/" + lawyer.Name + ".md")}})
+	addQ(Question{Type: TypeNickname, Text: "who is our lawyer", Required: []string{lawyer.Name, lawyer.Company}, Subject: []string{lawyer.Name}, Grep: []string{g.files("lawyer", "people"), cat("people/" + lawyer.Name + ".md")}})
 
 	// harder 5. a fact that changed: the newest value wins and the answer
 	// says it changed (4)
 	orbit := ds.Projects[0]
 	ob := ds.budgets[orbit.Name]
 	changedTo := fmt.Sprintf("moved to %dk (was %dk)", ob[1], ob[0])
-	addQ(Question{Type: TypeChanged, Text: "what is the budget for " + orbit.Name + " now", Required: []string{changedTo}, Forbidden: []string{fmt.Sprintf("is %dk", ob[0])}, Current: changedTo,
+	addQ(Question{Type: TypeChanged, Text: "what is the budget for " + orbit.Name + " now", Required: []string{changedTo}, Forbidden: []string{fmt.Sprintf("is %dk", ob[0])}, Current: changedTo, Subject: []string{orbit.Name},
 		Grep: []string{g.files(orbit.Name, "projects"), cat("projects/" + orbit.Name + ".md")}})
-	addQ(Question{Type: TypeChanged, Text: "where does alice-ng work now", Required: []string{alice.Company, alice.Former}, Forbidden: []string{"company: " + alice.Former}, Current: alice.Company,
+	addQ(Question{Type: TypeChanged, Text: "where does alice-ng work now", Required: []string{alice.Company, alice.Former}, Forbidden: []string{"company: " + alice.Former}, Current: alice.Company, Subject: []string{alice.Name},
 		Grep: []string{g.files(alice.Name, "people"), cat("people/" + alice.Name + ".md")}})
 	for _, f := range ds.lifeFacts[:2] {
 		now := fmt.Sprintf("changed to %s (was %s)", f[2], f[1])
-		addQ(Question{Type: TypeChanged, Text: "what are my " + f[0] + " now", Required: []string{now}, Forbidden: []string{fmt.Sprintf("%s: %s.", f[0], f[1])}, Current: now,
+		addQ(Question{Type: TypeChanged, Text: "what are my " + f[0] + " now", Required: []string{now}, Forbidden: []string{fmt.Sprintf("%s: %s.", f[0], f[1])}, Current: now, Subject: []string{f[0]},
 			Grep: []string{g.lines(f[0], "life.md")}})
 	}
 	return qs

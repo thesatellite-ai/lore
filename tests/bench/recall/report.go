@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// The bars of the recall gate (the raised bar of 2026-11-21).
+// The speed and size bars of the recall gate (the raised bar of 2026-11-21);
+// the accuracy bars, checked first, are in accuracy.go.
 const (
 	BarWarm      = 50 * time.Millisecond  // every warm lore call under this
 	BarCold      = 300 * time.Millisecond // every cold lore call under this
@@ -24,6 +25,11 @@ type LoreRun struct {
 	Correct bool
 	Missing []string
 	Exit    int
+	// Acc is the accuracy grade of the same call with --json (the ranked
+	// answer items); AccErr says why there is none (the call failed or
+	// its JSON did not read), which fails every accuracy bar.
+	Acc    Accuracy
+	AccErr string
 }
 
 // GrepRun is the grep arm's result for one question.
@@ -33,6 +39,11 @@ type GrepRun struct {
 	Chars   int
 	Correct bool
 	Missing []string
+	// Present and Stale: the accuracy bar as it applies to grep's pile of
+	// text (every required fact in it; a forbidden fact without the
+	// current value).
+	Present bool
+	Stale   []string
 }
 
 // Result is one question asked of both arms.
@@ -51,6 +62,11 @@ type Summary struct {
 	LoreCorrect, GrepCorrect int
 	Harder, HarderOf         int
 	Questions                int
+	// accuracy (lore ask --json): questions with the answer in the top 3,
+	// with the first item right, with a stale fact in the top 3, with more
+	// than one irrelevant item in the top 3; grep present and stale.
+	Recall, Top1, Stale, Noisy int
+	GrepPresent, GrepStale     int
 }
 
 // Summarize totals results.
@@ -72,6 +88,25 @@ func Summarize(rs []Result) Summary {
 		if r.Grep.Correct {
 			s.GrepCorrect++
 		}
+		a := r.Lore.Acc
+		if a.Recall {
+			s.Recall++
+		}
+		if a.Top1 {
+			s.Top1++
+		}
+		if len(a.Stale) > 0 {
+			s.Stale++
+		}
+		if a.Noise > BarNoiseTop {
+			s.Noisy++
+		}
+		if r.Grep.Present {
+			s.GrepPresent++
+		}
+		if len(r.Grep.Stale) > 0 {
+			s.GrepStale++
+		}
 		if r.Q.Type.Harder() {
 			s.HarderOf++
 			if r.Lore.Correct {
@@ -86,11 +121,12 @@ func Summarize(rs []Result) Summary {
 	return s
 }
 
-// Line is the summary line: `calls L/G, warm p50/max ms, cold max ms,
-// chars L/G, correct L/G, harder L/20`.
+// Line is the summary line, accuracy first: `recall@3 R/N, top-1 T/N,
+// stale S, noise X, calls L/G, warm p50/max ms, cold max ms, chars L/G,
+// correct L/G of N, harder L/20`.
 func (s Summary) Line() string {
-	return fmt.Sprintf("calls %d/%d, warm p50/max %d/%d ms, cold max %d ms, chars %d/%d, correct %d/%d of %d, harder %d/%d",
-		s.LoreCalls, s.GrepCalls, s.WarmP50.Milliseconds(), s.WarmMax.Milliseconds(), s.ColdMax.Milliseconds(),
+	return fmt.Sprintf("recall@3 %d/%d, top-1 %d/%d, stale %d, noise %d, calls %d/%d, warm p50/max %d/%d ms, cold max %d ms, chars %d/%d, correct %d/%d of %d, harder %d/%d",
+		s.Recall, s.Questions, s.Top1, s.Questions, s.Stale, s.Noisy, s.LoreCalls, s.GrepCalls, s.WarmP50.Milliseconds(), s.WarmMax.Milliseconds(), s.ColdMax.Milliseconds(),
 		s.LoreChars, s.GrepChars, s.LoreCorrect, s.GrepCorrect, s.Questions, s.Harder, s.HarderOf)
 }
 
@@ -100,6 +136,9 @@ type typeTotals struct {
 	loreChars, grepChars int
 	loreCalls, grepCalls int
 	warmMax, coldMax     time.Duration
+	// accuracy, as in Summary
+	recall, top1, stale, noisy int
+	grepPresent, grepStale     int
 }
 
 // byType totals results per question type.
@@ -124,13 +163,74 @@ func byType(rs []Result) map[Type]*typeTotals {
 		if r.Grep.Correct {
 			t.grepOK++
 		}
+		a := r.Lore.Acc
+		t.recall += b2i(a.Recall)
+		t.top1 += b2i(a.Top1)
+		t.stale += b2i(len(a.Stale) > 0)
+		t.noisy += b2i(a.Noise > BarNoiseTop)
+		t.grepPresent += b2i(r.Grep.Present)
+		t.grepStale += b2i(len(r.Grep.Stale) > 0)
 	}
 	return m
 }
 
-// Misses lists every bar the run misses, one line each; empty = pass.
-func Misses(rs []Result) []string {
+// b2i counts a bool.
+func b2i(ok bool) int {
+	if ok {
+		return 1
+	}
+	return 0
+}
+
+// AccuracyMisses lists every accuracy bar the run misses, one line each:
+// per question recall@3, stale and noise, then top-1 over all questions.
+func AccuracyMisses(rs []Result) []string {
 	var out []string
+	for _, r := range rs {
+		id := r.Q.ID + " (" + string(r.Q.Type) + ")"
+		a := r.Lore.Acc
+		if r.Lore.AccErr != "" {
+			out = append(out, fmt.Sprintf("%s: no graded answer: %s", id, r.Lore.AccErr))
+			continue
+		}
+		if !a.Recall {
+			out = append(out, fmt.Sprintf("%s: recall@3 miss, the bar is 100%%: %s", id, strings.Join(cut(notIn(a.Missing), 3), "; ")))
+		}
+		if len(a.Stale) > 0 {
+			out = append(out, fmt.Sprintf("%s: stale fact in the top %d, the bar is 0: %s", id, r.Q.TopK(), strings.Join(cut(a.Stale, 2), "; ")))
+		}
+		if a.Noise > BarNoiseTop {
+			out = append(out, fmt.Sprintf("%s: %d irrelevant items in the top %d, the bar is <= %d", id, a.Noise, BarTopK, BarNoiseTop))
+		}
+	}
+	s := Summarize(rs)
+	if s.Questions > 0 && s.Top1*100 < BarTop1Pct*s.Questions {
+		var wrong []string
+		for _, r := range rs {
+			if !r.Lore.Acc.Top1 {
+				wrong = append(wrong, r.Q.ID)
+			}
+		}
+		out = append(out, fmt.Sprintf("top-1: %d/%d right (%d%%), the bar is >= %d%%; wrong: %s", s.Top1, s.Questions, s.Top1*100/s.Questions, BarTop1Pct, strings.Join(wrong, " ")))
+	}
+	return out
+}
+
+// notIn keeps the recall lines of an accuracy's Missing.
+func notIn(xs []string) []string {
+	var out []string
+	for _, x := range xs {
+		if strings.HasPrefix(x, "not in top") {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+// Misses lists every bar the run misses, one line each, the accuracy bars
+// first; empty = pass.
+func Misses(rs []Result) []string {
+	out := AccuracyMisses(rs)
 	for _, r := range rs {
 		id := r.Q.ID + " (" + string(r.Q.Type) + ")"
 		if r.Lore.Calls != BarCalls {
@@ -203,8 +303,32 @@ func Report(info RunInfo, rs []Result) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("## Per question type\n\n| type | n | correct lore/grep | calls lore/grep | warm max ms | cold max ms | chars lore/grep | ratio lore/grep |\n|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("## Accuracy (lore ask --json, first)\n\n")
+	fmt.Fprintf(&b, "Bars: recall@3 100%% (top max(3, items the answer needs)), top-1 >= %d%% overall, 0 stale facts, <= %d irrelevant in the top 3. Grep: present = every fact in its output, stale = an old fact without the current one.\n\n", BarTop1Pct, BarNoiseTop)
+	b.WriteString("| type | n | recall@3 | top-1 | stale | noise > 1 | grep present | grep stale |\n|---|---|---|---|---|---|---|---|\n")
 	m := byType(rs)
+	for _, set := range []struct {
+		name   string
+		harder bool
+	}{{"normal", false}, {"harder", true}} {
+		var tot typeTotals
+		for _, t := range Types() {
+			tt, ok := m[t]
+			if !ok || t.Harder() != set.harder {
+				continue
+			}
+			fmt.Fprintf(&b, "| %s | %d | %d/%d | %d/%d | %d | %d | %d/%d | %d |\n", t, tt.n, tt.recall, tt.n, tt.top1, tt.n, tt.stale, tt.noisy, tt.grepPresent, tt.n, tt.grepStale)
+			tot.n += tt.n
+			tot.recall += tt.recall
+			tot.top1 += tt.top1
+			tot.stale += tt.stale
+			tot.noisy += tt.noisy
+			tot.grepPresent += tt.grepPresent
+			tot.grepStale += tt.grepStale
+		}
+		fmt.Fprintf(&b, "| **%s set** | %d | %d/%d | %d/%d | %d | %d | %d/%d | %d |\n", set.name, tot.n, tot.recall, tot.n, tot.top1, tot.n, tot.stale, tot.noisy, tot.grepPresent, tot.n, tot.grepStale)
+	}
+	b.WriteString("\n## Speed and size per question type\n\n| type | n | correct lore/grep | calls lore/grep | warm max ms | cold max ms | chars lore/grep | ratio lore/grep |\n|---|---|---|---|---|---|---|---|\n")
 	for _, t := range Types() {
 		tt, ok := m[t]
 		if !ok {
@@ -216,9 +340,14 @@ func Report(info RunInfo, rs []Result) string {
 		}
 		fmt.Fprintf(&b, "| %s | %d | %d/%d | %d/%d | %d | %d | %d/%d | %.2f |\n", t, tt.n, tt.loreOK, tt.grepOK, tt.loreCalls, tt.grepCalls, tt.warmMax.Milliseconds(), tt.coldMax.Milliseconds(), tt.loreChars, tt.grepChars, ratio)
 	}
-	b.WriteString("\n## Per question\n\n| id | type | question | lore call | lore ok | warm ms | cold ms | lore chars | grep calls | grep chars | grep ok | lore misses |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Per question\n\n| id | type | question | lore call | recall@3 | top-1 | stale | noise | lore ok | warm ms | cold ms | lore chars | grep calls | grep chars | grep ok | lore misses |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range rs {
-		fmt.Fprintf(&b, "| %s | %s | %s | `lore %s` | %s | %d | %d | %d | %d | %d | %s | %s |\n", r.Q.ID, r.Q.Type, cell(r.Q.Text), cell(strings.Join(r.Q.Lore, " ")), yes(r.Lore.Correct), r.Lore.Warm.Milliseconds(), r.Lore.Cold.Milliseconds(), r.Lore.Chars, r.Grep.Calls, r.Grep.Chars, yes(r.Grep.Correct), cell(strings.Join(cut(r.Lore.Missing, 2), "; ")))
+		a := r.Lore.Acc
+		misses := append(slices.Clone(a.Missing), r.Lore.Missing...)
+		if r.Lore.AccErr != "" {
+			misses = append([]string{r.Lore.AccErr}, misses...)
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | `lore %s` | %s | %s | %d | %d | %s | %d | %d | %d | %d | %d | %s | %s |\n", r.Q.ID, r.Q.Type, cell(r.Q.Text), cell(strings.Join(r.Q.Lore, " ")), yes(a.Recall), yes(a.Top1), len(a.Stale), a.Noise, yes(r.Lore.Correct), r.Lore.Warm.Milliseconds(), r.Lore.Cold.Milliseconds(), r.Lore.Chars, r.Grep.Calls, r.Grep.Chars, yes(r.Grep.Correct), cell(strings.Join(cut(misses, 3), "; ")))
 	}
 	return b.String()
 }
