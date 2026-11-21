@@ -159,16 +159,17 @@ ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
 (exit 20)
 alice (work/blog)$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-Upgraded 1 row
-  mode-b: rules/rul_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/work/stores/blog)
-  mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
+Upgraded 2 rows
+  mode-b: projects/prj_f147dd95f1aaf742dd4f5214843a5139 → store shared, folder blog (~/work/stores/blog)
+  mode-b: rules/rul_2537f9b2f7de77bfe5ca958860216bbb → store shared, folder blog (~/work/stores/blog)
+  mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog at its folder blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 alice (work/blog)$ lore rule list
 lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-rul_2537f9b2f7de77bfe5ca958860216bbb [must/always] Posts go out on Tuesdays [shared]
+rul_2537f9b2f7de77bfe5ca958860216bbb [must/always] Posts go out on Tuesdays [shared/blog]
 
 ### lore home
 alice (work/docs)$ cat .lore/lore.yaml
@@ -180,16 +181,17 @@ ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by
 (exit 27)
 alice (work/docs)$ LORE_V017_HOME=~/shared-dbs lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-Upgraded 1 row
-  mode-b: rules/rul_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/shared-dbs/stores/blog)
-  mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
+Upgraded 2 rows
+  mode-b: projects/prj_f147dd95f1aaf742dd4f5214843a5139 → store shared, folder blog (~/shared-dbs/stores/blog)
+  mode-b: rules/rul_2537f9b2f7de77bfe5ca958860216bbb → store shared, folder blog (~/shared-dbs/stores/blog)
+  mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog at its folder blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 alice (work/docs)$ lore rule list
 lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/docs/.git/config; hook blocks in ~/work/docs/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-rul_2537f9b2f7de77bfe5ca958860216bbb [must/always] Posts go out on Tuesdays [shared]
+rul_2537f9b2f7de77bfe5ca958860216bbb [must/always] Posts go out on Tuesdays [shared/blog]
 alice$ ls ~/shared-dbs ~/shared-dbs/stores
 ~/shared-dbs:
 client-docs.db

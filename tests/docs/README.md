@@ -20,7 +20,7 @@ LORE_BIN=/path/to/lore python3 tests/docs/paste.py --check  # fail if a page is 
 python3 tests/docs/paste.py --check --examples-only        # example blocks only, no binary
 ```
 
-Never edit a pasted block by hand: change the section file, re-run it and paste. The next paste undoes a hand edit, so `go test ./...` runs `paste.py --check --examples-only` for both runners (`internal/repoguard` `TestDocsExampleBlocksMatchTranscripts`, devco:D-843) and fails when an example block differs from its transcript; it leaves the help blocks alone, so it needs no lore binary.
+Never edit a pasted block by hand: change the section file, re-run it and paste. The next paste undoes a hand edit, so `go test ./...` runs `paste.py --check --examples-only` for both runners (`internal/repoguard` `TestDocsExampleBlocksMatchTranscripts`, devco:D-843) and fails when an example block differs from its transcript; it leaves the help blocks alone, so it needs no lore binary. A change to what a command prints still needs its sections re-run: `TestDocsModeBExamplesShowProjectFolder` (same package, devco:D-863) fails when a page or transcript shows the retired shared-database `lore fix` steps (rows into the store root, the store attached whole).
 
 A page marks a block with `<!-- example: <section>#<heading> -->` and `<!-- /example -->`, where the heading is a section's `note` text with dashes for spaces. Options: `only=1,3`, `lines=6`, `keep=REGEX`. `<!-- help: <command> -->` pastes a command's `--help`, and `<!-- errors -->` the error code table.
 
