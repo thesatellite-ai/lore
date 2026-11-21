@@ -35,6 +35,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/logic/clock"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -464,7 +465,12 @@ func livePlace(dir string) (top, folder string) {
 
 // liveProjectRoot is the nearest folder holding .lore/ from dir up to the repo
 // top level ("" when none, and inside a lore store's checkout, which is
-// never a code repo: STORE layout 1.5).
+// never a code repo: STORE layout 1.5). Two .lore folders are no project
+// (devco:D-876, the walk orgcfg.ProjectRoot does): the lore home's own
+// (~/.lore, or LORE_HOME: the read server's run/ in it made every plain
+// folder under the person's home look like a project), and one with no git
+// work tree around it (lore asked git questions where git has no repository
+// and failed with E_INTERNAL "not a git repository").
 func liveProjectRoot(dir string) string {
 	if _, _, inStore := rowfs.StoreTop(dir); inStore {
 		return ""
@@ -473,17 +479,50 @@ func liveProjectRoot(dir string) string {
 	if err != nil {
 		return ""
 	}
+	home := loreHomeInfo()
+	found := ""
 	for d := abs; ; d = filepath.Dir(d) {
-		if entries, err := os.ReadDir(filepath.Join(d, ".lore")); err == nil && len(entries) > 0 {
-			return d // an empty .lore/ is no project: only an earlier lore run left it (D-20)
+		if found == "" && isProjectLoreDir(filepath.Join(d, ".lore"), home) {
+			found = d
 		}
 		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
-			return ""
+			return found // the work tree top: the project found below it, or none
 		}
 		if filepath.Dir(d) == d {
-			return ""
+			return "" // no git work tree around dir: no project
 		}
 	}
+}
+
+// isProjectLoreDir reports whether lore is a project's .lore folder: a
+// folder with something in it (an empty .lore/ is no project: only an
+// earlier lore run left it, D-20) that is not the lore home (home, nil
+// when it cannot be read).
+func isProjectLoreDir(lore string, home os.FileInfo) bool {
+	entries, err := os.ReadDir(lore)
+	if err != nil || len(entries) == 0 {
+		return false
+	}
+	if home == nil {
+		return true
+	}
+	fi, err := os.Stat(lore)
+	return err != nil || !os.SameFile(fi, home)
+}
+
+// loreHomeInfo is the lore home folder of this process (LORE_HOME, else
+// ~/.lore) as os.Stat gives it, compared with os.SameFile so a symlinked
+// or differently spelled home still matches; nil when it does not exist.
+func loreHomeInfo() os.FileInfo {
+	h, err := lorehome.Resolve()
+	if err != nil {
+		return nil
+	}
+	fi, err := os.Stat(h.Dir)
+	if err != nil {
+		return nil
+	}
+	return fi
 }
 
 // liveSkip are operations that never touch the live ref (v0.1.17
