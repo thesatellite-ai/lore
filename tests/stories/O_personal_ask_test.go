@@ -359,6 +359,23 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		if r := ask("what is the status of orbit"); !strings.Contains(r.Out(), "60 users on the paid plan") {
 			t.Errorf("[O D-833] the served ask after a write misses it (a stale lens was reused):\n%s", r)
 		}
+		// devco:D-842 (bug hunt H-99): the server keeps the resources and
+		// open tasks every ask reads until a file changes; a new person, a
+		// changed field and a new owed task show in the next served ask.
+		ask("who is robert-kim") // kept by the server
+		ada.Lore(ada.Home, "resource", "add", "--kind", "person", "--name", "nora-quill", "--set", "role=accountant", "--to", to, "--yes").OK(t)
+		ada.Lore(ada.Home, "resource", "edit", "--id", "robert-kim", "--set", "role=art-director", "--store", to, "--yes").OK(t)
+		ada.Lore(ada.Home, "task", "add", "--title", "pay nora-quill the audit fee", "--meta", "owed_by=me", "--meta", "owed_to=nora-quill", "--to", to, "--yes").OK(t)
+		for q, want := range map[string]string{"who is nora-quill": "accountant", "who is robert-kim": "art-director", "what do I owe nora-quill": "pay nora-quill the audit fee"} {
+			r := ask(q)
+			ada.SetEnv("LORE_READ_SERVER", "0")
+			one := ask(q)
+			ada.SetEnv("LORE_READ_SERVER", "1")
+			if !strings.Contains(r.Out(), want) {
+				t.Errorf("[O D-842] the served ask %q after a write misses %q (a kept answer outlived its rows):\n%s", q, want, r)
+			}
+			same(q+" after a write", r, one)
+		}
 		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "1")
 		_ = os.Remove(log)
 		same("a server gone mid-command", ask(qs[1]), oneShot[qs[1]])

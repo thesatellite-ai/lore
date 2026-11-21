@@ -178,6 +178,9 @@ type Lens struct {
 	// ATTACH (lenspool.go, D-833: the read server only).
 	poolKey string
 	files   []pooledFile
+	// kept holds QueryKept answers of a pooled lens, by statement; it lives
+	// and dies with the lens, which any change to an attached file rebuilds.
+	kept map[string]Result
 }
 
 // attachedName is the schema name of the i-th source. Store names are

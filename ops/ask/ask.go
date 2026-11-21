@@ -298,6 +298,12 @@ FROM row_meta_all m WHERE m.entity_table = 'tasks' AND m.item_idx >= 0 AND m.key
 UNION ALL SELECT 'ref', kr.src_id, '', kr.relation, kr.dst_id, '', '', '', ''
 FROM knowledge_refs_all kr WHERE kr.src_table = 'tasks' AND kr.dst_table = 'resources'`
 
+// FileOnly reports whether statement's answer depends only on the cache
+// files the lens reads (no clock, no per-call input), so a long-lived
+// process may keep it until a file changes (devco:D-842: the read server
+// keeps typedSQL's answer, read by every question, across calls).
+func FileOnly(statement string) bool { return statement == typedSQL }
+
 // loadTyped reads the resources and the open tasks.
 func loadTyped(ctx context.Context, run Query) ([]resourceRow, []taskRow, error) {
 	res, err := run(ctx, typedSQL)

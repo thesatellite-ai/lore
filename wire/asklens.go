@@ -23,7 +23,11 @@ func (a *App) AskLens(ctx context.Context, repoOnly bool, fn func(q opsask.Query
 			return err
 		}
 		ferr := fn(func(ctx context.Context, q string) (opssql.Result, error) {
-			res, qerr := l.QueryTimeout(ctx, q, opssql.DefaultTimeout)
+			query := l.QueryTimeout
+			if opsask.FileOnly(q) {
+				query = l.QueryKept // kept by a pooled lens until a file changes (D-842)
+			}
+			res, qerr := query(ctx, q, opssql.DefaultTimeout)
 			if qerr != nil {
 				return opssql.Result{}, qerr
 			}

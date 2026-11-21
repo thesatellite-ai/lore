@@ -32,6 +32,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/thesatellite-ai/lore/model/value"
 )
 
 // lensPoolMax is how many idle lenses the pool keeps (one per store set
@@ -209,4 +212,47 @@ func (l *Lens) release() bool {
 		_ = evict.closeConn()
 	}
 	return true
+}
+
+// QueryKept is QueryTimeout for a statement whose answer depends only on
+// the attached files: no clock, no per-command input, no lore_expand. A
+// pooled lens (the read server, devco:D-842) keeps the answer and hands
+// it out again until the lens goes, and any commit to an attached file or
+// a file replaced on disk makes takePooled build a new lens, so a kept
+// answer never outlives the rows it was read from. Why: every lore ask
+// reads the same resources-and-open-tasks statement, whose compile over
+// the per-file views and run cost ~10 ms of each warm served call. A lens
+// that is not pooled (every one-shot command) runs it every time.
+//
+// The answer is a copy: a caller may change its slices without changing
+// what the next caller gets.
+func (l *Lens) QueryKept(ctx context.Context, query string, timeout time.Duration) (Result, error) {
+	l.mu.Lock()
+	res, ok := l.kept[query]
+	pooled := l.poolKey != "" && !l.closed
+	l.mu.Unlock()
+	if ok && pooled {
+		return copyResult(res), nil
+	}
+	res, err := l.QueryTimeout(ctx, query, timeout)
+	if err != nil || !pooled {
+		return res, err
+	}
+	l.mu.Lock()
+	if l.kept == nil {
+		l.kept = map[string]Result{}
+	}
+	l.kept[query] = copyResult(res)
+	l.mu.Unlock()
+	return res, nil
+}
+
+// copyResult copies r's column list and every row slice (the values are
+// immutable).
+func copyResult(r Result) Result {
+	out := Result{Columns: slices.Clone(r.Columns), Rows: make([][]value.Value, len(r.Rows))}
+	for i, row := range r.Rows {
+		out.Rows[i] = slices.Clone(row)
+	}
+	return out
 }
