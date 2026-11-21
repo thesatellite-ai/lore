@@ -111,6 +111,9 @@ type tableSQL struct {
 	// search takes (match, limit) and returns (id, rank, snippet or NULL
 	// for a row over snippetMaxChars, FTS rowid).
 	search string
+	// searchBare is search without the snippet column (devco:D-808): a
+	// word's own search only counts which rows hold the word.
+	searchBare string
 	// big-row snippets (I-6, bigRowSnippet): bigText[i] takes an FTS rowid
 	// and returns the row's FTS field i; snipCreate makes the
 	// connection's temp FTS table (same columns and tokenizer), snipClear
@@ -417,6 +420,8 @@ func (p *plan) addFTS() error {
 	}
 	small := "(" + strings.Join(lens, " + ") + ") <= " + strconv.Itoa(snippetMaxChars)
 	p.sql.search = `SELECT "` + colID + `", ` + rank + ", CASE WHEN " + small + " THEN " + snip(fq) + " END, rowid FROM " + fq +
+		" WHERE " + fq + " MATCH ? ORDER BY " + rank + " LIMIT ?"
+	p.sql.searchBare = `SELECT "` + colID + `", ` + rank + ", NULL, rowid FROM " + fq +
 		" WHERE " + fq + " MATCH ? ORDER BY " + rank + " LIMIT ?"
 	p.sql.bigText = make([]string, len(fcols))
 	for i, fc := range fcols {

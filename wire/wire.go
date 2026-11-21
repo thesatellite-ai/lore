@@ -37,6 +37,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
@@ -385,6 +386,10 @@ type WriteQuery struct {
 type App struct {
 	opts Options
 	reg  *op.Registry
+
+	// lensOpens counts lensFor calls (devco:D-808: a search names its
+	// resource hits' kinds without opening the SQL lens; tests read it).
+	lensOpens atomic.Int64
 
 	// watchPlaces (ServeAsPerson): each request checks whether a store
 	// moved since the state opened (servestale.go); placeFiles/placesAt

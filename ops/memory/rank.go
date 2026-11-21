@@ -35,6 +35,18 @@ type MatchFunc func(ctx context.Context, match string, limit int) ([]Hit, error)
 // or a refusal after both, is returned as is (E_INVALID_INPUT with the
 // reason, D-475). Shared by `lore search` (wire) and SearchFields.
 func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) ([]Hit, map[ids.AnyID]int, searchrank.Words, error) {
+	return MatchCounting(ctx, match, nil, w, limit)
+}
+
+// MatchCounting is Match with bare, a MatchFunc that returns the same
+// hits without snippets (nil: none), for each topic word's own search.
+// Why (devco:D-808): those searches only count which rows hold a word,
+// yet each built a snippet for up to limit rows. When the any-word
+// search was not cut at limit, every row a word finds is already a hit,
+// so the word's search runs bare; should it find a row that is not (a
+// word's search the any-word one does not cover), it runs again with
+// snippets, so the hits and counts are Match's exactly.
+func MatchCounting(ctx context.Context, match, bare MatchFunc, w searchrank.Words, limit int) ([]Hit, map[ids.AnyID]int, searchrank.Words, error) {
 	hits, err := match(ctx, w.FTS, limit)
 	if errs.Has(err, errs.InvalidInput) {
 		if plain, ok := w.Plain(); ok {
@@ -58,8 +70,11 @@ func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) 
 	for _, h := range hits {
 		found[h.ID] = true
 	}
+	if len(hits) >= limit {
+		bare = nil // the any-word search was cut: a word can find rows past it
+	}
 	for _, term := range w.Terms {
-		th, terr := match(ctx, w.TermFTS(term), limit)
+		th, terr := termHits(ctx, match, bare, w.TermFTS(term), limit, found)
 		if errs.Has(terr, errs.InvalidInput) {
 			continue // a word FTS5 cannot read on its own counts nowhere
 		}
@@ -75,6 +90,24 @@ func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) 
 		}
 	}
 	return hits, matched, w, nil
+}
+
+// termHits is one topic word's search: bare when it is set and finds no
+// row outside found, else match (see MatchCounting).
+func termHits(ctx context.Context, match, bare MatchFunc, q string, limit int, found map[ids.AnyID]bool) ([]Hit, error) {
+	if bare == nil {
+		return match(ctx, q, limit)
+	}
+	th, err := bare(ctx, q, limit)
+	if err != nil {
+		return th, err
+	}
+	for _, h := range th {
+		if !found[h.ID] {
+			return match(ctx, q, limit)
+		}
+	}
+	return th, nil
 }
 
 // Held is how many of w's words a row holds: its count from Match, or

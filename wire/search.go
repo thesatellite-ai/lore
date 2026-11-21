@@ -278,8 +278,12 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 	// search (the index's stemming and segmentation, so a word counts
 	// exactly where the any-word search found it); a row only a word's
 	// search finds (the filled-in text of row_expanded) is a hit too.
-	hits, matched, w, err := opsmemory.Match(ctx, func(ctx context.Context, m string, n int) ([]opsmemory.Hit, error) {
+	// devco:D-808: each word's own search runs without snippets
+	// (MatchCounting) when the any-word search holds every row it finds.
+	hits, matched, w, err := opsmemory.MatchCounting(ctx, func(ctx context.Context, m string, n int) ([]opsmemory.Hit, error) {
 		return a.Search(ctx, t.Table, m, n)
+	}, func(ctx context.Context, m string, n int) ([]opsmemory.Hit, error) {
+		return a.SearchBare(ctx, t.Table, m, n)
 	}, w, searchFetch)
 	if err != nil {
 		// a refused query keeps the cache's message (the query and FTS5's
