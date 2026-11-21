@@ -639,6 +639,18 @@ tasks:
       - CGO_ENABLED=0 go build -tags loretest -o {{.JOURNEYS_BIN}} ./cmd/lore
       - "JOURNEYS_LORE={{.JOURNEYS_BIN}} go test -tags journeys -count=1 -parallel {{.PARALLEL | default 16}} -timeout $({{.TEST_TIME}} 15m) {{.FILTER}} ./tests/journeys/"
 
+  # The recall gate "lore beats grep" (G-1, devco D-789): 50 questions asked of a seeded ~6,000-row
+  # personal store with one lore call each and of the same facts as a markdown tree with rg/grep + cat;
+  # writes tmp/bench/recall.md and fails listing every missed bar. Report-only for now: not a gate
+  # step until it passes (tests/bench/recall/README.md).
+  bench:recall:
+    desc: "Recall gate: lore beats grep (tests/bench/recall, tag bench): 50 questions on a seeded ~6,000-row personal store, one lore call each vs rg/grep + cat over the same facts as markdown; report tmp/bench/recall.md, non-zero exit naming every missed bar (warm < 50 ms, cold < 300 ms, 1 call, all correct, fewer chars, typed answers >= 10x lighter). Settings: tests/bench/recall/README.md. Extra go test flags after --"
+    vars:
+      BENCH_BIN: "{{.BIN_DIR}}/lore-bench"
+    cmds:
+      - CGO_ENABLED=0 go build -o {{.BENCH_BIN}} ./cmd/lore
+      - "LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^TestBenchRecall$' -timeout 60m -v {{.CLI_ARGS}} ./tests/bench/recall/"
+
   test:stories:
     desc: "Replayable user stories (tests/stories, tags stories+journeys): every scenario track lore was tried against (bug hunt J1-J4, dev company A-I) replayed end to end on the real binary over generated repo shapes (5.5k-row 0.1.17 repo, monorepo, docs-only, Unicode/CRLF, worktrees, shallow clones, two machines), checking the owner's standing rules; tests/stories/REGRESSIONS.md maps every fixed finding to the test that guards it. Stories run in parallel (PARALLEL); full gate only, not check:fast. Extra go test flags after --"
     vars:

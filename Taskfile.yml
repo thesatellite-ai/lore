@@ -32,6 +32,11 @@ tasks:
     cmds:
       - task: lore:check:after-land
 
+  bench:recall:
+    desc: alias → lore:bench:recall — the recall gate "lore beats grep" (report tmp/bench/recall.md)
+    cmds:
+      - task: lore:bench:recall
+
   upgrade:
     desc: update every Go dependency of the root module
     cmds:
