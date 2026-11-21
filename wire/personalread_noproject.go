@@ -30,6 +30,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/op"
+	opsask "github.com/thesatellite-ai/lore/ops/ask"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 )
 
@@ -49,7 +50,7 @@ var personalReadVerbs = map[string]bool{"list": true, "show": true, "search": tr
 // personalReadOp reports whether name is a knowledge read served from the
 // personal store in a repo with no lore project.
 func personalReadOp(name string) bool {
-	if name == opssearch.OpRun {
+	if name == opssearch.OpRun || name == opsask.OpRun {
 		return true
 	}
 	noun, verb, ok := strings.Cut(name, ".")

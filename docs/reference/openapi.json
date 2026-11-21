@@ -5900,6 +5900,345 @@
         }
       }
     },
+    "/v1/ask/run": {
+      "post": {
+        "operationId": "ask.run",
+        "summary": "Answer a question in one call: the resources it names, their open tasks and the best rows in full, capped",
+        "tags": [
+          "ask"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "max_chars": {
+                    "type": "integer",
+                    "description": "cap the answer at this many characters (default 4000); what is left out is counted at the end"
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "the question, in your own words: who is alice-ng, what is the status of orbit, what did we decide for orbit and why, what do I owe alice-ng, what does alice-ng owe me, what happened yesterday / last week / on 2026-11-02, everything about alice-ng (a typo, a nickname or a role finds the resource too)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store alone instead of every attached one: \u003corg\u003e (every folder), \u003cstore\u003e/\u003cfolder\u003e, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder"
+                  },
+                  "top": {
+                    "type": "integer",
+                    "description": "how many best rows to print in full (default 3); a date question prints every row of its dates"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cited": {
+                      "type": "array",
+                      "description": "the id of every resource, task and row in the answer",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "left": {
+                      "type": "integer",
+                      "description": "how many items were left out to stay under --max-chars"
+                    },
+                    "personal_unread": {
+                      "type": "string",
+                      "description": "on an empty answer of a read that named no store: the folders of your personal store it did not read and the --store me that reads them (absent otherwise)"
+                    },
+                    "query": {
+                      "type": "string",
+                      "description": "the question as asked"
+                    },
+                    "resources": {
+                      "type": "array",
+                      "description": "the resources the question names (person, project, company …), each with its fields and the resources that link to it",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fields": {
+                            "type": "array",
+                            "description": "its field values (sensitive ones masked)",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "changed_at": {
+                                  "type": "string",
+                                  "description": "the day the value changed (YYYY-MM-DD)"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                },
+                                "was": {
+                                  "type": "string",
+                                  "description": "the value before the newest change"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "value"
+                              ]
+                            }
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "description": "its kind (person, project, company …)"
+                          },
+                          "linked": {
+                            "type": "array",
+                            "description": "the resources whose fields name it (the people of a company, the projects a person owns)",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "fields": {
+                                  "type": "array",
+                                  "description": "its other field values, as name value",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "via": {
+                                  "type": "string",
+                                  "description": "the field that names it"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "kind",
+                                "name",
+                                "via"
+                              ]
+                            }
+                          },
+                          "match": {
+                            "type": "string",
+                            "description": "how the question named it: name, typo (a name a letter or two off) or field (a nickname, a role)"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "place": {
+                            "type": "string",
+                            "description": "where it is stored (\u003cstore\u003e/\u003cfolder\u003e)"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "name",
+                          "place",
+                          "match",
+                          "fields",
+                          "linked"
+                        ]
+                      }
+                    },
+                    "routed": {
+                      "type": "string",
+                      "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "description": "the rows that answer it, in full: the best ones newest first, or every row of the dates it names, oldest first",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string",
+                            "description": "the day it is about (its day metadata, valid_at, else when written)"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "matched": {
+                            "type": "array",
+                            "description": "the topics and words of the question it holds",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "note": {
+                            "type": "string",
+                            "description": "newest: it replaces \u003cid\u003e from \u003cday\u003e, when an older row says the same thing"
+                          },
+                          "place": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "place",
+                          "body",
+                          "matched"
+                        ]
+                      }
+                    },
+                    "tasks": {
+                      "type": "array",
+                      "description": "the open tasks that answer it: for what do I owe X / what does X owe me every open one owed that way, else the open tasks of the resources it names",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "owed_by": {
+                            "type": "string"
+                          },
+                          "owed_to": {
+                            "type": "string"
+                          },
+                          "place": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "status",
+                          "place"
+                        ]
+                      }
+                    },
+                    "when": {
+                      "type": "string",
+                      "description": "the dates the question names, as read (2026-11-19 (yesterday))"
+                    }
+                  },
+                  "required": [
+                    "query",
+                    "resources",
+                    "tasks",
+                    "rows",
+                    "cited"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CANCELLED, E_DB_NOT_FOUND, E_SQL_TIMEOUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/audits/log": {
       "post": {
         "operationId": "audit.log",

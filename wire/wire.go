@@ -55,6 +55,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	opsagent "github.com/thesatellite-ai/lore/ops/agent"
 	opsarchitecturenote "github.com/thesatellite-ai/lore/ops/architecturenote"
+	opsask "github.com/thesatellite-ai/lore/ops/ask"
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opsbatch "github.com/thesatellite-ai/lore/ops/batch"
 	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
@@ -629,6 +630,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsexternalsource.Ops(a)...)
 	entries = append(entries, opsreminder.Ops(a)...)
 	entries = append(entries, opssql.Ops(a)...)
+	// devco D-807 (gate G-3): lore ask, one call that answers a question.
+	entries = append(entries, opsask.Ops(a)...)
 	// CLI 2.7 / 2.13, PROV 9.1: lore show|move <any id> (lore row show|move).
 	entries = append(entries, opsrow.Ops(a)...)
 	// D2/D3 plain files: lore row path|markdown|edit (lore path, lore open, lore edit).

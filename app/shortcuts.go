@@ -27,6 +27,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	opsask "github.com/thesatellite-ai/lore/ops/ask"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
@@ -91,6 +92,7 @@ func mountShortcuts(root *cobra.Command) {
 	defaultVerb(root, opsselfupgrade.Noun, opsselfupgrade.RunVerb) // CLI_REFERENCE 3.5 (P3-UPG-1)
 	defaultVerb(root, opsfix.Noun, opsfix.RunVerb)                 // lore fix (D-ak, D-al)
 	defaultVerb(root, opssearch.Noun, searchRunVerb)               // CLI_REFERENCE 2.5 (P3-MISC-1)
+	defaultVerb(root, opsask.Noun, opsask.RunVerb)                 // lore ask --query "…" (devco D-807)
 	defaultVerb(root, "why-context", "show")                       // CLI_REFERENCE 2.14 (P3-MISC-3)
 	defaultVerb(root, "setup", "run")                              // CLI_REFERENCE 2.14, 3.18 (P3-MISC-4)
 	defaultVerb(root, opscoord.NounInbox, opscoord.InboxVerb)      // bare `lore inbox` (CLI_REFERENCE 2.11, P3-COORD-1)

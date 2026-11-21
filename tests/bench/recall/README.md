@@ -50,7 +50,7 @@ The grep arm's tree holds the same facts the way a tidy person keeps notes: `peo
 
 Each question lists its required facts and its forbidden facts. Grading (`Grade`) is the same for both arms: correct means every required fact is in the output and no forbidden fact is, unless the question's current value is in the output too (an output that shows the change tells the reader which value is current); a partial answer is wrong. Matching ignores case.
 
-The lore arm makes exactly one lore call per question, from the home folder: the call an agent makes today, chosen per question type in the `loreArm` table at the top of `questions.go` (`lore resource show`, `lore search --full`, `lore task list --meta`, `lore memory list --since --until`). When `lore ask` lands (G-3), switch a type to it there, in one line.
+The lore arm makes exactly one lore call per question, from the home folder: `lore ask --store me --query "<question as written>"` for every type (gate G-3, set per type in the `loreArm` table at the top of `questions.go`).
 
 The grep arm runs the commands a careful agent would run, one by one with bash in the tree's root, and counts each as a call: find the files that name the subject, then read the right one; `rg -n` on the one file that holds the answer type; `cat` the journal files of the day or week (the agent works out the date itself). It uses `rg` when it is installed and `grep` with the same meaning when it is not; the report says which.
 

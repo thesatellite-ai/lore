@@ -537,7 +537,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 
 1. **Read the core.** It is already in your context through the pointer file; obey its must rules and hotfixes.
 2. **Before you touch a path, run `lore context --for-file <path>`.** It prints the rules, hotfixes and notes that apply to that file and its folders, including the ones the core shows as one line. For a task: `lore context --for-task <tsk_id>`; for a topic from the core's index: `lore context --topic <topic>` (`--topics` lists them).
-3. **For everything else, `lore search --query "<keywords>"`** before a substantive answer (directive step 5). Cite hits by id (`per dec_<id>, …`).
+3. **For everything else, `lore ask --query "<the question>"`** before a substantive answer (directive step 5): THE recall command. One call answers from every store you read (`--store me` for every folder of your personal store): the resources the question names (by name, a name with a typo, a nickname or a role), with fields that changed and when; their open tasks (`what do I owe alice-ng`, `what does alice-ng owe me`); the rows of the dates it names (`what happened yesterday`, `last week`, `two Fridays ago`, `on 2026-11-02`); else the best three rows in full, newest first, the newest of a changed fact marked. The answer stays under `--max-chars` (default 4000) and ends with the ids it cites. `lore search --query "<keywords>"` lists every row holding some words. Cite hits by id (`per dec_<id>, …`).
 
 With `lore setup --agent-hooks`, Claude Code, Codex and Gemini CLI run step 2 for you on each file the tool reads or edits; run it yourself anyway when a hook is not installed.
 
