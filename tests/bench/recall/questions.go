@@ -43,7 +43,9 @@ func (t Type) Harder() bool {
 // those answers must stay >= 10x lighter than grep's (gate G-4).
 func (t Type) Typed() bool { return t == TypeWho || t == TypeOwe }
 
-// Ask is what a question is about, the input of the lore arm's table.
+// Ask is what a question is about as the question spells it: the facts a
+// typed call would take (before gate G-3 the lore arm called resource
+// show, task list --meta and memory list --since with them).
 type Ask struct {
 	Name   string // a resource name as the question spells it (typos kept)
 	Since  string // a date or date phrase
@@ -71,45 +73,26 @@ type Question struct {
 	Grep []string
 }
 
-// loreArm is the lore arm's call per question type: the call an agent
-// makes today. Gate G-3 switches a type to `lore ask --query <text>` here,
-// in one line.
+// loreArm is the lore arm's call per question type: since gate G-3
+// (devco D-807) every type asks `lore ask --query <text>`, the one call an
+// agent makes for any question.
 var loreArm = map[Type]func(q Question) []string{
-	TypeWho:      func(q Question) []string { return []string{"resource", "show", "--store", "me", "--id", q.Ask.Name} },
-	TypeStatus:   searchFull,
-	TypeDecision: searchFull,
-	TypeOwe:      taskList,
-	TypeDay:      journalRange,
-	TypeAbout: func(q Question) []string {
-		return []string{"search", "--store", "me", "--query", q.Ask.Name, "--full", "--limit", "50"}
-	},
-	TypeParaphrase: searchFull,
-	TypeTypo:       searchFull,
-	TypeRelative:   journalRange,
-	TypeNickname:   searchFull,
-	TypeChanged:    searchFull,
+	TypeWho:        askQ,
+	TypeStatus:     askQ,
+	TypeDecision:   askQ,
+	TypeOwe:        askQ,
+	TypeDay:        askQ,
+	TypeAbout:      askQ,
+	TypeParaphrase: askQ,
+	TypeTypo:       askQ,
+	TypeRelative:   askQ,
+	TypeNickname:   askQ,
+	TypeChanged:    askQ,
 }
 
-// searchFull asks the question's words of every folder, whole bodies.
-func searchFull(q Question) []string {
-	return []string{"search", "--store", "me", "--query", q.Text, "--full"}
-}
-
-// taskList lists the open tasks owed by or to someone.
-func taskList(q Question) []string {
-	args := []string{"task", "list", "--store", "me"}
-	if q.Ask.OwedBy != "" {
-		args = append(args, "--meta", "owed_by="+q.Ask.OwedBy)
-	}
-	if q.Ask.OwedTo != "" {
-		args = append(args, "--meta", "owed_to="+q.Ask.OwedTo)
-	}
-	return args
-}
-
-// journalRange lists the journal entries of a day or a range.
-func journalRange(q Question) []string {
-	return []string{"memory", "list", "--store", "me/" + FolderJournal, "--since", q.Ask.Since, "--until", q.Ask.Until}
+// askQ asks the question as written, of every folder of the store.
+func askQ(q Question) []string {
+	return []string{"ask", "--store", "me", "--query", q.Text}
 }
 
 // grepCmd builds the grep arm's commands with rg when it is installed,

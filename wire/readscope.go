@@ -23,6 +23,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/op"
+	opsask "github.com/thesatellite-ai/lore/ops/ask"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 )
 
@@ -38,7 +39,7 @@ func listRead(spec op.Spec) bool {
 	if !spec.OnlyReads() || !rowRead(spec.Name) {
 		return false
 	}
-	if spec.Name == opssearch.OpRun {
+	if spec.Name == opssearch.OpRun || spec.Name == opsask.OpRun {
 		return true
 	}
 	for _, s := range listReadSuffixes {

@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	opsask "github.com/thesatellite-ai/lore/ops/ask"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
 )
@@ -82,7 +83,7 @@ func personalUnreadSpec(spec op.Spec, takesStore bool) bool {
 		return false
 	}
 	switch spec.Name {
-	case opssearch.OpRun, opssql.OpRun:
+	case opssearch.OpRun, opssql.OpRun, opsask.OpRun:
 		return true
 	}
 	noun, verb, ok := strings.Cut(spec.Name, ".")

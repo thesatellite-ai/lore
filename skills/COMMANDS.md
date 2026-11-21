@@ -301,6 +301,19 @@ lore comment search --query "<query>"
 
 `task search` eager-loads tasklist + mission + plan. Other entities load their per-schema relations (e.g. handoff loads from_actor + to_actor).
 
+## Ask a question (one call, the recall command)
+
+```bash
+lore ask --query "who is alice-ng"                         # the resource, its fields (a changed one says when and what it was), what links to it
+lore ask --store me --query "what do I owe alice-ng"       # open tasks owed by me to alice-ng (and "what does alice-ng owe me")
+lore ask --store me --query "what happened last week"      # the journal rows of those days, oldest first
+lore ask --query "what did we decide for orbit and why"    # the best 3 rows in full, newest first
+lore ask --query "everything about alise-ng" --json        # a typo, a nickname or a role finds the resource too
+lore ask --query "status of orbit" --max-chars 8000 --top 5
+```
+
+The answer is capped at `--max-chars` (default 4000) and ends with `cited:` and the id of every resource, task and row in it.
+
 ## Global search (cross-entity, one call)
 
 ```bash
