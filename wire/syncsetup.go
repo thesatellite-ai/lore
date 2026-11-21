@@ -86,6 +86,13 @@ func bareLines(ctx context.Context, dir string) []string {
 // not need a repo.
 func (a *App) setupSyncStatus(ctx context.Context) (opssync.StatusOut, error) {
 	out := opssync.StatusOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindStatus, Lines: append([]string{setupStatusLine}, bareLines(ctx, a.opts.RepoDir)...)}
+	if stores, err := a.setupStores(ctx); err == nil {
+		// D-877: sync.status listed for people only refuses an agent here
+		// as in a code repo (directpolicy.go)
+		if err = a.directStoresPolicy(ctx, stores); err != nil {
+			return out, err
+		}
+	}
 	a.syncStoreStates(ctx, &out)
 	if len(out.Data.Stores) == 0 {
 		out.Lines = append(out.Lines, "no stores: this folder is in no setup with a team or personal store (`lore setup list`)")
@@ -176,6 +183,11 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 				stores[i].Name = store.Source(n)
 			}
 		}
+	}
+	// D-877: an agent's sync is refused before any store syncs when the
+	// policy of one of them lists sync.run for people only (directpolicy.go)
+	if err := a.directStoresPolicy(ctx, stores); err != nil {
+		return out, err
 	}
 	out.Lines = bareLines(ctx, a.opts.RepoDir)
 	if out.Data.Pass != opssync.PassStore && !insideWorkTree(ctx, a.opts.RepoDir) {

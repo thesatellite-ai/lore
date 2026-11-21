@@ -83,6 +83,19 @@ func personOnly(pol policy.Set, spec op.Spec, in op.Input, c op.Caller) error {
 	return e
 }
 
+// PersonOnly is Run's agents.person_only check for a caller that runs an
+// operation with no Run around it: wire's direct paths (the roster verbs,
+// task next, heartbeat and hold on an org store, actor merge and sync from
+// the setup) invoke the operation themselves and open their own store.
+//
+// Why (devco D-877, bug hunt H-136): those paths never reached Run, so the
+// policy was never read for them and an agent ran a command the org listed
+// for people only. wire applies this to the policy of each store the
+// command opens (directpolicy.go); Run keeps calling personOnly itself.
+func PersonOnly(pol policy.Set, spec op.Spec, in op.Input, c op.Caller) error {
+	return personOnly(pol, spec, in, c)
+}
+
 // inputSets reports whether the input field named flag is set: a bool
 // field that is true, or a text field that is not empty.
 func inputSets(in op.Input, flag string) bool {

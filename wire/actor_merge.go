@@ -276,7 +276,11 @@ func (a *App) mergeActorInOrgStores(ctx context.Context, in opsinfra.ActorMergeI
 		if err != nil {
 			continue // an org store this machine cannot open: the next one
 		}
-		st, err := x.state(ctx)
+		// the lookup reads each org store without the direct path's
+		// policy check, so another org's agents.person_only neither
+		// refuses nor hides as "not this store" (D-877); the store
+		// holding both actors is checked below
+		st, err := x.state(withoutDirectCall(ctx))
 		if err != nil {
 			_ = x.Close() // not this store
 			continue
@@ -285,6 +289,10 @@ func (a *App) mergeActorInOrgStores(ctx context.Context, in opsinfra.ActorMergeI
 		if err != nil || len(f) == 0 || len(t) == 0 {
 			_ = x.Close() // not this store
 			continue
+		}
+		if err = directPolicy(ctx, st); err != nil {
+			_ = x.Close()
+			return opsinfra.ActorMergeOut{}, true, err
 		}
 		in.To = ""
 		out, merr := x.MergeActor(ctx, in)

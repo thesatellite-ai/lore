@@ -784,6 +784,9 @@ func (a *App) state(ctx context.Context) (*state, error) {
 			return nil, err
 		}
 	}
+	if err = directPolicy(ctx, st); err != nil { // D-877: a direct path's agents.person_only
+		return nil, err
+	}
 	return st, nil
 }
 
@@ -798,6 +801,9 @@ func (a *App) rowState(ctx context.Context) (*state, error) {
 	st, _, err := a.openState(withoutCacheRefresh(ctx), true)
 	if err != nil {
 		return st, a.refineNoProject(ctx, err)
+	}
+	if err = directPolicy(ctx, st); err != nil { // D-877: a direct path's agents.person_only
+		return nil, err
 	}
 	return st, nil
 }
@@ -1151,6 +1157,10 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// run the host's sync pass, which would record as accepted the very
 	// changes audit verify looks for.
 	if hostRunOp(e.Spec().Name) {
+		// D-877: agents.person_only of the store the verb opens (the
+		// roster's org folder, the repo's own roster), armed before
+		// prepareRoster opens one (directpolicy.go)
+		ctx = a.directContext(ctx, e, d, c)
 		if profilestore.IsDirect(e.Spec().Name) {
 			// TEAM_PROFILES 3.4: the profile ops read --yes (op.Confirmed)
 			// and the caller (TS-4) without the engine around them.
@@ -1162,7 +1172,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 				return op.Result{}, err
 			}
 		}
-		return runDirect(ctx, e, d)
+		return runDirect(ctx, e, d) // armed above (directContext)
 	}
 	// ONB 3.3 / BUGFIX-18: a --setup or LORE_SETUP naming no enabled setup
 	// is refused on reads too, before anything opens.
@@ -1181,7 +1191,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// org store holding both actors (or the one --store names) and opens
 	// it alone; the repo open here would refuse with E_NOT_A_STORE
 	if e.Spec().Name == opsinfra.OpActorMerge && !insideWorkTree(ctx, a.opts.RepoDir) {
-		return runDirect(op.WithConfirmed(ctx, c.Yes), e, d)
+		return a.runDirectAs(op.WithConfirmed(ctx, c.Yes), e, d, c)
 	}
 	// task next over an org store with no code repo (--store, or --setup
 	// from home) opens that store itself, per store (coord_store_queue.go,
@@ -1189,7 +1199,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// hold claim / release on an org store (--store, or no code repo here)
 	// opens that store itself too (coord_store_hold.go, devco:D-672)
 	if (!inCodeRepo(ctx, a.opts.RepoDir) && a.storeQueueRun(ctx, e, d)) || a.storeHeartbeatRun(ctx, e, d) || a.holdStoreRun(ctx, e, d) {
-		return runDirect(ctx, e, d)
+		return a.runDirectAs(ctx, e, d, c)
 	}
 	// a write naming its store (--to acme/org) outside any repo runs on
 	// that store alone (targetoutside.go)
@@ -1210,13 +1220,13 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// `lore sync` with no code repo here syncs every store of the setup,
 	// or the store checkout it runs in, each on its own App (syncsetup.go)
 	if e.Spec().Name == opssync.OpRun && a.opts.Sync != nil && a.setupSyncHere(ctx) {
-		return runDirect(ctx, e, d)
+		return a.runDirectAs(ctx, e, d, c)
 	}
 	// `lore sync status` there reads the same stores (H-10: it refused
 	// E_NOT_A_STORE from ~ while `lore sync` worked); a store checkout
 	// keeps the repo path, which already answers there
 	if e.Spec().Name == opssync.OpStatus && a.opts.Sync != nil && a.setupStatusHere(ctx) {
-		return runDirect(ctx, e, d)
+		return a.runDirectAs(ctx, e, d, c)
 	}
 	// AGENT_IDENTITY 8.2 (#7): the CLI caller carries the detected agent, so
 	// agents.person_only fires on the CLI too, not only for REST callers
@@ -1245,7 +1255,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	}
 	if opsstores.IsStoreOp(e.Spec().Name) {
 		if a.personalInitOutsideRepo(ctx, e, d) { // G-CORE-7: no repo needed
-			return runDirect(ctx, e, d)
+			return a.runDirectAs(ctx, e, d, c)
 		}
 		if err := a.refuseStoresFileOutsideRepo(ctx, e.Spec().Name); err != nil {
 			return op.Result{}, err
