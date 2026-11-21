@@ -347,6 +347,10 @@ func (a *App) Begin(ctx context.Context, offline bool) (opsmigrate.Begun, error)
 	}
 	if pointer, modeB := FindModeBPointer(top); modeB {
 		j.ModeBPointer = modeBDir + "/" + filepath.Base(pointer)
+	} else if plan, heal := modeBHealNeeded(top); heal {
+		// devco D-855: healing an older conversion moves rows inside the
+		// shared store, which has no undo either
+		j.ModeBPointer = modeBDir + "/" + strings.TrimSuffix(filepath.Base(plan.pointer), ModeBMigratedSuffix)
 	}
 	if err := writeJournal(path, j); err != nil {
 		return opsmigrate.Begun{}, err

@@ -18,7 +18,7 @@ import (
 // defaults.client_repos.task is the agency store). It satisfies
 // ops/task's optional defaultTargeter upgrade structurally.
 func (a *App) DefaultTargetOf(ctx context.Context, table row.Table) (store.Source, error) {
-	if a.opts.DefaultTarget == nil {
+	if a.opts.DefaultTarget == nil && !a.convertedModeBRepo(ctx) {
 		return "", nil
 	}
 	st, err := a.state(ctx)
@@ -42,8 +42,20 @@ func (a *App) DefaultTargetOf(ctx context.Context, table row.Table) (store.Sourc
 // clone now resolves its store's org, and F14 then sent the write to the
 // org's linked project, which a store clone has none of ("no internal
 // project is linked to this repo").
+//
+// devco D-855: a repo converted from the retired shared-database mode has
+// its project in the "shared" store's folder (migrate_modeb.go), so a
+// write with no --to goes there, as it went into the shared lore.db
+// before (convertedModeBHome); before, it went to the repo store, which
+// holds no project, and failed "this repository has no lore project".
 func (a *App) routedDefault(ctx context.Context, q WriteQuery) (store.Source, error) {
 	if inStore(a.opts.RepoDir) {
+		return store.SourceRepo, nil
+	}
+	if home, ok := a.convertedModeBHome(ctx); ok {
+		return home, nil
+	}
+	if a.opts.DefaultTarget == nil {
 		return store.SourceRepo, nil
 	}
 	return a.opts.DefaultTarget(ctx, q)

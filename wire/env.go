@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -53,7 +55,7 @@ func (a *App) createFrame(ctx context.Context, target store.Source, table row.Ta
 	if err != nil {
 		return nil, "", err
 	}
-	if target == "" && a.opts.DefaultTarget != nil {
+	if target == "" && (a.opts.DefaultTarget != nil || a.convertedModeBRepo(ctx)) {
 		to, derr := a.routedDefault(ctx, q)
 		if derr != nil {
 			return nil, "", derr
@@ -480,7 +482,97 @@ func (a *App) projectInAStore(ctx context.Context, eng *engine.Engine) (ids.ID[i
 			return pid, true
 		}
 	}
+	// devco D-855: a converted repo whose rows a person moved into a folder
+	// of the converted store and attached: that folder's project
+	if len(want) > 0 {
+		if src, ok := convertedModeBFolder(top); ok {
+			if st, serr := a.state(ctx); serr == nil && st.byName[src] != nil {
+				if pid, perr := a.folderProject(ctx, st, src); perr == nil && !pid.IsZero() {
+					return pid, true
+				}
+			}
+		}
+	}
 	return ids.ID[ids.Project]{}, false
+}
+
+// convertedModeBRepo reports whether the repo this command runs in was
+// converted from the retired shared-database mode (it keeps the pointer
+// as .lore/lore.yaml.migrated); a cheap file test, before any store opens.
+func (a *App) convertedModeBRepo(ctx context.Context) bool {
+	if inStore(a.opts.RepoDir) {
+		return false
+	}
+	top, err := a.knownRepoTop(ctx)
+	if err != nil {
+		return false
+	}
+	_, ok := convertedModeBProjectID(top)
+	return ok
+}
+
+// convertedModeBHome is the attached store a converted shared-database
+// repo's project lives in (devco D-855): the store holding the project
+// row its kept pointer names, when the repo store holds no project of its
+// own (a repo that ran lore init since keeps writing to itself). ok is
+// false for every other repo. A write with no --to lands there
+// (routedDefault), as Project() finds the project there
+// (projectInAStore).
+func (a *App) convertedModeBHome(ctx context.Context) (store.Source, bool) {
+	if !a.convertedModeBRepo(ctx) {
+		return "", false
+	}
+	top, err := a.knownRepoTop(ctx)
+	if err != nil {
+		return "", false
+	}
+	text, _ := convertedModeBProjectID(top)
+	pid, err := ids.Parse[ids.Project](text)
+	if err != nil {
+		return "", false
+	}
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return "", false
+	}
+	own, err := eng.List(ctx, store.SourceRepo, schema.TableProjects)
+	if err != nil {
+		return "", false
+	}
+	for _, r := range own {
+		if !r.Deleted {
+			return "", false
+		}
+	}
+	src, r, err := eng.Get(ctx, engine.Ref{Table: schema.TableProjects, ID: pid.Any()})
+	if err == nil && !r.Deleted && src != store.SourceRepo && src != "" {
+		return src, true
+	}
+	return convertedModeBFolder(top)
+}
+
+// convertedModeBFolder is the one stores.yaml entry of a converted repo
+// that attaches a folder of the converted store (<db dir>/stores/<name>):
+// the folder a person linked by hand after an older conversion left the
+// rows in the store's root (store folder add, then move --to
+// shared/<folder>), whose project is the folder's own, not the kept
+// pointer's. ok is false when there is none or more than one.
+func convertedModeBFolder(top string) (store.Source, bool) {
+	cfg, err := readStoresFile(top)
+	if err != nil {
+		return "", false
+	}
+	var found []store.Source
+	for _, s := range cfg.Stores {
+		dir := fileuri.LocalPath(s.URL)
+		if s.Folder != "" && dir != "" && filepath.Base(filepath.Dir(dir)) == modeBStoresDir {
+			found = append(found, s.Name)
+		}
+	}
+	if len(found) != 1 {
+		return "", false
+	}
+	return found[0], true
 }
 
 // guard asks Options.GuardRepoWrite about a create in the repo store.

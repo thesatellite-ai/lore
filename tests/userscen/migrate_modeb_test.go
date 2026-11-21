@@ -123,11 +123,11 @@ func TestMigrateModeBConvert(t *testing.T) {
 	}
 
 	dry := th.DecodeJSON[migRunOut](t, alice.Lore(dir, "migrate", "run", "--dry-run", "--json"))
-	if !dry.DryRun || dry.Count != 2 {
-		t.Fatalf("dry run: %+v, want 2 rows", dry)
+	if !dry.DryRun || dry.Count != 3 {
+		t.Fatalf("dry run: %+v, want 3 rows (the project's own and its 2 notes)", dry)
 	}
 	steps := strings.Join(dry.Steps, "\n")
-	for _, want := range []string{"mode-b: rules/rul_", "mode-b: memories/mem_", "→ store shared", "mode-b: .lore/stores.yaml: add store shared file://", "mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)"} {
+	for _, want := range []string{"mode-b: rules/rul_", "mode-b: memories/mem_", "mode-b: projects/prj_", "→ store shared, folder infra", "mode-b: .lore/stores.yaml: add store shared file://", "mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)"} {
 		if !strings.Contains(steps, want) {
 			t.Errorf("dry run steps do not say %q:\n%s", want, steps)
 		}
@@ -137,8 +137,8 @@ func TestMigrateModeBConvert(t *testing.T) {
 	}
 
 	out := th.DecodeJSON[migRunOut](t, alice.Lore(dir, "migrate", "run", "--json"))
-	if out.Count != 2 || !slices.Equal(out.Steps, dry.Steps) {
-		t.Fatalf("run: %+v, want the dry run's 2 rows and steps %q", out, dry.Steps)
+	if out.Count != 3 || !slices.Equal(out.Steps, dry.Steps) {
+		t.Fatalf("run: %+v, want the dry run's 3 rows and steps %q", out, dry.Steps)
 	}
 	if migExists(filepath.Join(dir, migModeBPointer)) || !migExists(filepath.Join(dir, migModeBPointer+".migrated")) {
 		t.Fatal("the pointer was not kept as lore.yaml.migrated")
@@ -146,8 +146,11 @@ func TestMigrateModeBConvert(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(dir, ".lore", "stores.yaml")); err != nil || !strings.Contains(string(b), "name: shared") {
 		t.Fatalf("stores.yaml: %v\n%s", err, b)
 	}
-	alice.Lore(dir, "rule", "list").OK(t).Says(t, migModeBRule, "[shared]")
-	alice.Lore(dir, "memory", "list").OK(t).Says(t, migModeBMemory, "[shared]")
+	alice.Lore(dir, "rule", "list").OK(t).Says(t, migModeBRule, "[shared/infra]")
+	alice.Lore(dir, "memory", "list").OK(t).Says(t, migModeBMemory, "[shared/infra]")
+	// devco D-855: a plain add lands in the project folder (it failed
+	// "this repository has no lore project")
+	alice.Lore(dir, "memory", "add", "--body", "new note").OK(t).Says(t, "[shared/infra]")
 	again := th.DecodeJSON[migRunOut](t, alice.Lore(dir, "migrate", "run", "--json"))
 	if again.Count != 0 || len(again.Steps) != 0 {
 		t.Fatalf("second run: %+v, want nothing", again)
@@ -171,6 +174,6 @@ func TestMigrateModeBDotDotPath(t *testing.T) {
 		t.Fatal("a refused run changed files")
 	}
 	alice.SetEnv("LORE_ALLOW_DB_PATH_OUTSIDE", "1")
-	alice.Lore(dir, "migrate", "run").OK(t).Says(t, "Upgraded 2 rows")
+	alice.Lore(dir, "migrate", "run").OK(t).Says(t, "Upgraded 3 rows")
 	alice.Lore(dir, "rule", "list").OK(t).Says(t, migModeBRule)
 }

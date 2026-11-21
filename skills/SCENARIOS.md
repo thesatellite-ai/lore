@@ -374,6 +374,7 @@ Every command stops with `E_UNSUPPORTED` and names `lore migrate run` (0.1.18 re
 lore migrate run --dry-run    # lists the rows that move into a folder store beside the shared DB
 lore migrate run              # converts; the pointer is kept as .lore/lore.yaml.migrated
 ```
+The notes and the project land in the project's folder of that store and the repo is linked to it: a plain `lore memory add` / `lore render` works afterwards, no `lore init`. A repo an older lore converted (every plain add said "this repository has no lore project") is repaired by `lore fix`.
 
 ---
 

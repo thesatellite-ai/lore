@@ -327,11 +327,13 @@ func TestV017ModeBMigrateRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := migrateOut(t, raw); got.Count != 4 {
-		t.Fatalf("run: %+v, want 4 rows", got)
+	if got := migrateOut(t, raw); got.Count != 5 {
+		t.Fatalf("run: %+v, want 5 rows (4 and the project's own)", got)
 	}
-	data := filepath.Join(shared, modeBStoresDir, "infra", rowfs.StoreDataDir)
-	for _, c := range []struct{ table, id string }{{"memories", v17MemA}, {"tags", v17Tag}, {"tasks", v17TaskA}, {"comments", v17CmtA}} {
+	// devco D-855: the rows land in the project's folder, never the
+	// store's root, and the folder carries the project's own row and id
+	data := filepath.Join(shared, modeBStoresDir, "infra", "infra")
+	for _, c := range []struct{ table, id string }{{"projects", v17ProjA}, {"memories", v17MemA}, {"tags", v17Tag}, {"tasks", v17TaskA}, {"comments", v17CmtA}} {
 		f := rowFile(t, filepath.Join(data, c.table, c.id+".json"))
 		if string(f["_v"]) != "2" || len(f["_hlc"]) == 0 {
 			t.Fatalf("%s/%s is not a _v 2 row: %v", c.table, c.id, f)
@@ -370,5 +372,171 @@ func TestStandaloneOptionsReadModeB(t *testing.T) {
 	o := StandaloneOptions(t.TempDir(), t.TempDir(), "", "test")
 	if _, ok := o.ModeB.(V017ModeB); !ok {
 		t.Fatalf("StandaloneOptions ModeB = %T, want V017ModeB", o.ModeB)
+	}
+}
+
+// TestV017ModeBConvertedRepoWrites (devco D-855): after the conversion the
+// repo is linked to its project folder: the folder's _meta.json names the
+// v0.1.17 project, stores.yaml attaches "shared" at that folder, and a
+// plain add (no --to) lands in the folder. Before, the rows sat in the
+// store's root with no project row and every plain add failed E_NOT_FOUND
+// "this repository has no lore project".
+func TestV017ModeBConvertedRepoWrites(t *testing.T) {
+	t.Parallel()
+	repo, shared, _ := v017ModeBRepo(t, "lore.yaml", "db_path: SHARED/lore.db\nproject_id: "+v17ProjA+"\n")
+	app := v017App(t, repo, t.TempDir())
+	if _, err := run(t, app, opsmigrate.OpRun, `{}`, false); err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(shared, modeBStoresDir, "infra", "infra")
+	if m := rowFile(t, filepath.Join(folder, rowfs.MetaFileName)); string(m["project_id"]) != `"`+v17ProjA+`"` {
+		t.Fatalf("folder _meta.json = %v, want project %s", m, v17ProjA)
+	}
+	cfg, err := readStoresFile(repo)
+	if err != nil || len(cfg.Stores) != 1 || cfg.Stores[0].Folder != "infra" {
+		t.Fatalf("stores.yaml = %+v %v, want shared attached at folder infra", cfg, err)
+	}
+	v017AddLands(t, v017App(t, repo, app.opts.Home), folder)
+}
+
+// TestV017ModeBHealOldConversion (devco D-855): a repo an older lore
+// converted (rows in the store's root folder, no project row, "shared"
+// attached whole) is healed by the next migrate run: the root's rows move
+// into the project folder (keeping an edit made after the conversion),
+// the project row comes from the shared lore.db, the entry gets the
+// folder, and a plain add then works; a second run changes nothing.
+func TestV017ModeBHealOldConversion(t *testing.T) {
+	t.Parallel()
+	repo, shared, pointer := v017ModeBRepo(t, "lore.yaml", "db_path: SHARED/lore.db\nproject_id: "+v17ProjA+"\n")
+	home := t.TempDir()
+	if _, err := run(t, v017App(t, repo, home), opsmigrate.OpRun, `{}`, false); err != nil {
+		t.Fatal(err)
+	}
+	// rebuild the shape the older conversion left
+	storeDir := filepath.Join(shared, modeBStoresDir, "infra")
+	folder := filepath.Join(storeDir, "infra")
+	root := filepath.Join(storeDir, rowfs.StoreDataDir)
+	if err := os.RemoveAll(filepath.Join(folder, "projects")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(folder, rowfs.MetaFileName)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(folder, root); err != nil {
+		t.Fatal(err)
+	}
+	edited := filepath.Join(root, "memories", v17MemA+".json")
+	b, err := os.ReadFile(edited)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const mark = "edited after the old conversion"
+	changed := strings.Replace(string(b), `"body": "`, `"body": "`+mark+` `, 1)
+	if changed == string(b) {
+		t.Fatalf("no body to edit in %s", b)
+	}
+	if err := os.WriteFile(edited, []byte(changed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".lore", "stores.yaml"), []byte("stores:\n    - name: shared\n      url: "+fileuri.URL(storeDir, "")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(pointer + ModeBMigratedSuffix); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := modeBHealNeeded(repo); !ok {
+		t.Fatal("the old conversion's shape is not seen as needing the heal")
+	}
+	raw, err := run(t, v017App(t, repo, home), opsmigrate.OpRun, `{}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := migrateOut(t, raw); got.Count != 5 {
+		t.Fatalf("heal: %+v, want 4 rows moved and the project row written", got)
+	}
+	if _, err := os.Stat(filepath.Join(folder, "projects", v17ProjA+".json")); err != nil {
+		t.Fatalf("the project row is not in the folder: %v", err)
+	}
+	if f, err := os.ReadFile(filepath.Join(folder, "memories", v17MemA+".json")); err != nil || !strings.Contains(string(f), mark) {
+		t.Fatalf("the edited memory did not move as it was: %s %v", f, err)
+	}
+	if left := modeBRootRowFiles(storeDir); len(left) != 0 {
+		t.Fatalf("rows left in the store's root: %v", left)
+	}
+	if _, ok := modeBHealNeeded(repo); ok {
+		t.Fatal("the healed repo still needs the heal")
+	}
+	v017AddLands(t, v017App(t, repo, home), folder)
+	again, err := run(t, v017App(t, repo, home), opsmigrate.OpRun, `{}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := migrateOut(t, again); got.Count != 0 {
+		t.Fatalf("second run after the heal: %+v, want nothing", got)
+	}
+}
+
+// v017App opens an App with the standalone exporter in repo.
+func v017App(t *testing.T, repo, home string) *App {
+	t.Helper()
+	actor, err := ids.Parse[ids.Actor](testActor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := New(Options{RepoDir: repo, Home: home, Actor: actor, ModeB: V017ModeB{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() }) // test teardown
+	return app
+}
+
+// v017AddLands runs a plain memory add (no --to) and checks it lands as a
+// row file in folder.
+func v017AddLands(t *testing.T, app *App, folder string) {
+	t.Helper()
+	out, err := run(t, app, opsmemory.OpAdd, `{"body":"written after the conversion"}`, false)
+	if err != nil {
+		t.Fatalf("plain memory add in the converted repo: %v", err)
+	}
+	if _, serr := os.Stat(filepath.Join(folder, "memories", idOf(t, out)+".json")); serr != nil {
+		t.Fatalf("the plain add did not land in the project folder: %v", serr)
+	}
+}
+
+// TestV017ModeBHandLinkedFolder (devco D-855): after an older conversion a
+// person made a folder of the converted store themselves (`store folder
+// add`, its own project id), moved the rows there (`move --to
+// shared/<folder>`), and kept "shared" attached whole. lore fix leaves
+// that shape as it is (no heal: nothing is moved or relabelled), and the
+// repo's project is that folder's, so a plain add lands there.
+func TestV017ModeBHandLinkedFolder(t *testing.T) {
+	t.Parallel()
+	repo, shared, _ := v017ModeBRepo(t, "lore.yaml", "db_path: SHARED/lore.db\nproject_id: "+v17ProjA+"\n")
+	home := t.TempDir()
+	if _, err := run(t, v017App(t, repo, home), opsmigrate.OpRun, `{}`, false); err != nil {
+		t.Fatal(err)
+	}
+	storeDir := filepath.Join(shared, modeBStoresDir, "infra")
+	notes := filepath.Join(storeDir, "notes")
+	if err := os.RemoveAll(filepath.Join(storeDir, "infra", "projects")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(storeDir, "infra", rowfs.MetaFileName)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(storeDir, "infra"), notes); err != nil {
+		t.Fatal(err)
+	}
+	url := fileuri.URL(storeDir, "")
+	if err := os.WriteFile(filepath.Join(repo, ".lore", "stores.yaml"), []byte("stores:\n    - name: shared\n      url: "+url+"\n    - name: shared/notes\n      url: "+url+"\n      folder: notes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := modeBHealNeeded(repo); ok {
+		t.Fatal("a folder the person linked themselves must not be healed")
+	}
+	v017AddLands(t, v017App(t, repo, home), notes)
+	if pid, err := v017App(t, repo, home).Project(background()); err != nil || pid.IsZero() {
+		t.Fatalf("the repo's project: %q %v, want the folder's", pid, err)
 	}
 }
