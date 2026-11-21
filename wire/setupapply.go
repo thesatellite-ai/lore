@@ -12,6 +12,7 @@ package wire
 //	ApplyPersonalStore ─▶ store.init me <url> when no personal store yet, else setups[].personal_store
 //	                      (+ push batch|manual ─▶ config.yaml personal.push, setupapply_push.go)
 //	ApplyTools / ApplySecrets / ApplyFolders ─▶ setups[].tools / .secrets.backend / .folders + default
+//	                   (tools also installs the lore skill each chosen tool lacks, setupapply_skill.go)
 //	ApplyNone (this_folder, summary) ─▶ nothing
 //	ApplyJoin / ApplyTeam ─▶ ops/team ApplyJoin / ApplyAdmin (org.import / org.create + roster rows), then setups[]
 //	                         (team + push batch|manual ─▶ the team store's lore-store.yaml, after setups[])
@@ -73,7 +74,13 @@ func (ap setupApplier) Apply(ctx context.Context, req opssetup.ApplyRequest) (op
 	switch req.Apply {
 	case onboard.ApplyNone:
 		return opssetup.ApplyResult{Wrote: []string{}, Setup: e}, nil
-	case onboard.ApplySetupEntry, onboard.ApplyTools, onboard.ApplySecrets, onboard.ApplyFolders:
+	case onboard.ApplyTools:
+		res, err := ap.putEntry(withStepAnswers(e, req.Apply, req.Answers), req.DryRun)
+		if err != nil {
+			return res, err
+		}
+		return ap.installToolSkills(ctx, res, req.Answers, req.DryRun), nil
+	case onboard.ApplySetupEntry, onboard.ApplySecrets, onboard.ApplyFolders:
 		return ap.putEntry(withStepAnswers(e, req.Apply, req.Answers), req.DryRun)
 	case onboard.ApplyIdentity:
 		return ap.applyIdentity(ctx, e, req)
