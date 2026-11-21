@@ -70,7 +70,7 @@ type ResRenameIn struct {
 	// --store <org>[/<folder>] (devco D-586): where the resource is, so
 	// the write runs from any folder, as resource list reads.
 	op.StoreFlag
-	Old string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
+	Old string `json:"id" arg:"0" flag:"id" alias:"name" desc:"the resource (name or res_ id)"`
 	New string `json:"new_name" arg:"1" desc:"the new name (the kind's name format)"`
 	// RewriteRows rewrites the ref label of every resource that refs this
 	// one now, in one batch (PASS3-A-3); without it each label refreshes
@@ -83,7 +83,7 @@ type ResMergeIn struct {
 	// --store <org>[/<folder>] (devco D-586): where the resource is, so
 	// the write runs from any folder, as resource list reads.
 	op.StoreFlag
-	Name   string `json:"id" arg:"0" desc:"the duplicate to fold away (name or res_ id)"`
+	Name   string `json:"id" arg:"0" flag:"id" alias:"name" desc:"the duplicate to fold away (name or res_ id)"`
 	Into   string `json:"into" flag:"into" desc:"the resource that survives (same kind)"`
 	DryRun bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would change; write nothing"`
 }

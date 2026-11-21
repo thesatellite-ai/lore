@@ -488,6 +488,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | User says | Run |
 |---|---|
 | "what do we know about X?" | `lore memory search --query "X" --json` |
+| "everything about a person, project or company" | `lore resource show --kind person --name alice-ng --with-refs` — the resource plus every row that references it, body in full, newest first, from every folder of the store (`--max-refs` caps it) |
 | "find any rule/task/decision about X" | `lore <kind> search "X" --json` — works on every entity (memory, rule, decision, hotfix, pattern, playbook, prompt, architecturenote, behaviour, cookbookrecipe, incident, suggestion, tastepref, snapshot, handoff, mission, task, tasklist, plan, workflow, workspace, techdoc, comment) |
 | "search across all task fields" | `lore task search --query "auth*"` — FTS5 BM25 across title + body; relations eager-loaded in JSON |
 | "wildcard / phrase / boolean search" | FTS5 syntax: `auth*` (prefix), `"connection pool"` (phrase), `redis OR cache`, `auth NOT login` |

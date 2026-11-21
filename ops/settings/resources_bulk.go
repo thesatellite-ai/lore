@@ -45,7 +45,7 @@ type ResCheckIn struct {
 	// check runs from any folder as resource list reads; in a folder it
 	// keeps to that folder's resources.
 	op.StoreFlag
-	Name string `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
+	Name string `json:"id,omitempty" arg:"0" flag:"id" alias:"name" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
 	Note string `json:"note,omitempty" flag:"note" desc:"what was checked (kept until the next check)"`
 	BulkWhere
 }
