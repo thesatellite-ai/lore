@@ -293,6 +293,9 @@ type ResOut struct {
 	ReferencedTotal int       `json:"referenced_total,omitempty"`
 	// withRefs marks a --with-refs show, so Text says "none" too.
 	withRefs bool
+	// feedLast marks a --with-refs list holding rows a feed imported,
+	// listed after the rows people wrote (devco D-822).
+	feedLast bool
 }
 
 // Text implements op.Texter.

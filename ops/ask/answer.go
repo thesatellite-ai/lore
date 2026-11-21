@@ -9,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/logic/plural"
+	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -153,11 +154,48 @@ func build(q question, d data, top, maxChars int) Out {
 	default:
 		out.Rows, lead = topRows(q, ms, d.rows, top)
 	}
+	names := nameIndex(d.resources)
+	for i := range out.Rows {
+		r := &out.Rows[i]
+		r.readTitle, r.readBody = readable(r.Title, names), readable(r.Body, names)
+	}
+	if leadOf(q, identity, &out) == leadAbout {
+		out.lead = lead
+	}
 	out.cap(out.rank(q, identity, lead), maxChars)
 	for _, r := range out.Ranked {
 		out.Cited = append(out.Cited, r.ID)
 	}
 	return out
+}
+
+// nameIndex maps every way a ${res:…} reference names a resource of rs
+// (its id, its name or an alias, each also as <kind>/<name>), in lower
+// case, to the resource's name.
+func nameIndex(rs []resourceRow) map[string]string {
+	out := make(map[string]string, 3*len(rs))
+	for i := range rs {
+		r := &rs[i]
+		out[strings.ToLower(r.ID)] = r.Name
+		for _, n := range r.names() {
+			out[n] = r.Name
+			out[strings.ToLower(r.Kind)+"/"+n] = r.Name
+		}
+	}
+	return out
+}
+
+// readable is text with each ${res:…} reference that names a resource of
+// names replaced by the resource's name; any other reference stays as
+// written (refs.Readable).
+func readable(text string, names map[string]string) string {
+	return refs.Readable(text, func(r refs.Ref) (string, bool) {
+		if r.Scheme != refs.SchemeRes {
+			return "", false
+		}
+		n, ok := names[strings.ToLower(r.Target)]
+		return n, ok
+	})
 }
 
 // answerFirst is which list leads an answer.
@@ -752,11 +790,16 @@ func (o Out) body() string {
 			}
 			b.WriteString(tsk[it.ID].text())
 		case KindRow:
-			if first {
-				b.WriteString(o.rowsHeader(rowRuns, runs))
+			compact := n < o.lead
+			if first || n == o.lead && o.lead > 0 {
+				b.WriteString(o.rowsHeader(rowRuns, runs, compact))
 				rowRuns++
 			}
-			b.WriteString(rows[it.ID].text(n))
+			if compact {
+				b.WriteString(rows[it.ID].line())
+			} else {
+				b.WriteString(rows[it.ID].text(n - o.lead))
+			}
 			n++
 		}
 	}
@@ -772,17 +815,19 @@ func (o Out) header() string {
 	return h
 }
 
-// rowsHeader heads the run'th of runs runs of rows (0 the first): two
-// runs are an everything-about answer's newest row of each folder, then
-// the other rows after its open tasks.
-func (o Out) rowsHeader(run, runs int) string {
+// rowsHeader heads the run'th of runs runs of rows (0 the first), or the
+// first row after an everything-about answer's newest rows: those newest
+// rows (compact) one line each, then the other rows after its open tasks.
+func (o Out) rowsHeader(run, runs int, compact bool) string {
 	switch {
 	case o.When != "":
 		return "\nrows dated " + o.When + ", oldest first:\n"
-	case runs > 1 && run == 0:
-		return "\nnewest row of each folder, in full:\n"
-	case run > 0:
+	case compact:
+		return "\nnewest row of each folder, one line each:\n"
+	case run > 0 || o.lead > 0:
 		return "\nmore rows, in full:\n"
+	case runs > 1:
+		return "\nnewest row of each folder, in full:\n"
 	}
 	return "\nbest rows, in full:\n"
 }
@@ -826,7 +871,7 @@ func (t Task) text() string {
 	return s + "\n"
 }
 
-// text is one row in full.
+// text is one row in full, numbered i+1, its references read as names.
 func (r Row) text(i int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n%d. %s  %s %s  (%s)", i+1, r.At, r.Table, r.ID, r.Place)
@@ -837,11 +882,49 @@ func (r Row) text(i int) string {
 		b.WriteString("  [" + r.History + "]")
 	}
 	b.WriteString("\n")
-	if r.Title != "" && r.Title != r.Body {
-		b.WriteString("   " + r.Title + "\n")
+	title, body := r.readable()
+	if title != "" && title != body {
+		b.WriteString("   " + title + "\n")
 	}
-	for _, line := range strings.Split(strings.TrimRight(r.Body, "\n"), "\n") {
+	for _, line := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
 		b.WriteString(strings.TrimRight("   "+line, " ") + "\n")
 	}
 	return b.String()
+}
+
+// line is one row as an everything-about answer's newest rows print it:
+// its day, its folder and its text (title, then the body's first line) on
+// one line, the body's other lines indented under it, then its id. Why:
+// a small model summarising "everything about X" keeps a one-line fact
+// whole and drops the sentence around a name in a block of text (devco
+// D-822: "watched the match after lunch" was lost from "Saw X about Y").
+func (r Row) line() string {
+	title, body := r.readable()
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+	head := strings.TrimSpace(lines[0])
+	if title != "" && title != body {
+		head = title + ": " + head
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "  - %s (%s): %s", r.At, r.Place, head)
+	for _, l := range lines[1:] {
+		if l = strings.TrimSpace(l); l != "" {
+			b.WriteString("\n      " + l)
+		}
+	}
+	fmt.Fprintf(&b, "  [%s %s]", r.Table, r.ID)
+	if r.Note != "" {
+		b.WriteString("  " + r.Note)
+	}
+	if r.History != "" {
+		b.WriteString("  [" + r.History + "]")
+	}
+	return b.String() + "\n"
+}
+
+// readable is r's title and body as the text answer prints them: the
+// stored text with its resource references read as names when build
+// filled them, else the stored text.
+func (r Row) readable() (string, string) {
+	return cmp.Or(r.readTitle, r.Title), cmp.Or(r.readBody, r.Body)
 }

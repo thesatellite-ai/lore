@@ -66618,7 +66618,7 @@
                           },
                           "fields": {
                             "type": "array",
-                            "description": "the text fields holding the reference (${res:…} or the res_ id)",
+                            "description": "the text fields holding the reference (${res:…}, the res_ id, or its name or an alias as a word)",
                             "items": {
                               "type": "string"
                             }

@@ -258,7 +258,7 @@ func TestRankedAnswerFirst(t *testing.T) {
 		}
 	}
 	_, text := ask(t, "everything about alice-ng")
-	for _, h := range []string{"newest row of each folder, in full:", "open tasks (1):", "more rows, in full:"} {
+	for _, h := range []string{"newest row of each folder, one line each:", "open tasks (1):", "more rows, in full:"} {
 		if !strings.Contains(text, h) {
 			t.Errorf("everything about: no %q in\n%s", h, text)
 		}
@@ -401,5 +401,50 @@ func TestAliasMatch(t *testing.T) {
 	}
 	if ms := matchResources(parseQuestion("who is the cto", now), d.resources); len(ms) != 0 && ms[0].how != MatchField {
 		t.Errorf("cto matched %s by %s", ms[0].res.Name, ms[0].how)
+	}
+}
+
+// TestAboutLeadLines (devco D-822, bug hunt H-81): a small model
+// summarising "everything about liam-walsh" dropped "watched the match
+// after lunch" from "Journal …: watched the match after lunch. Saw
+// ${res:person/liam-walsh} about ${res:project/indigo}." The newest row of
+// each folder now prints as one line with its day and folder, a reference
+// read as the resource's name; --json keeps the stored text.
+func TestAboutLeadLines(t *testing.T) {
+	o, text := ask(t, "everything about alice-ng")
+	for _, want := range []string{
+		"  - 2026-11-20 (me/journal): Journal 2026-11-20: ran along the river. Saw alice-ng about lumen.  [memories mem_j1120]\n",
+		"  - 2026-11-08 (me/work): Met alice-ng about lumen (2026-11-08): talked about the office move round 7.  [memories mem_m1]\n",
+		"\n1. 2026-11-19  memories mem_j1119  (me/journal)\n   Journal 2026-11-19: baked sourdough. Saw alice-ng about lumen.\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("everything about: no %q in\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "${res:") {
+		t.Errorf("everything about: a reference printed as markup\n%s", text)
+	}
+	if o.lead != 2 || o.Rows[0].Body != "Journal 2026-11-20: ran along the river. Saw ${res:person/alice-ng} about ${res:project/lumen}." {
+		t.Errorf("lead %d, first row body %q: want 2 lead rows and the stored text in --json", o.lead, o.Rows[0].Body)
+	}
+	// another question keeps its rows in full, references read as names too
+	_, text = ask(t, "what happened on 2026-11-20")
+	if strings.Contains(text, "  - 2026-11-20 (") || !strings.Contains(text, "ran along the river. Saw alice-ng about lumen.") {
+		t.Errorf("date question: want the row in full with names\n%s", text)
+	}
+}
+
+// TestReadableUnknownRef: a reference to a resource the ask did not read
+// stays as written, never a guess.
+func TestReadableUnknownRef(t *testing.T) {
+	names := nameIndex(fixture(t).resources)
+	for in, want := range map[string]string{
+		"Saw ${res:person/alice-ng} and ${res:ALICE-NG}":                   "Saw alice-ng and alice-ng",
+		"Saw ${res:res_robert} at ${res:host/hub_prod/ip}":                 "Saw robert-kim at ${res:host/hub_prod/ip}",
+		"call ${res:company/acme-co}, key ${secret:gopass://a/b} ${var:x}": "call acme-co, key ${secret:gopass://a/b} ${var:x}",
+	} {
+		if got := readable(in, names); got != want {
+			t.Errorf("readable(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

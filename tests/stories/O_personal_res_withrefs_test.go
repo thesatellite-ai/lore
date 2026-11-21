@@ -90,4 +90,23 @@ func TestStoryOPersonalResWithRefs(t *testing.T) {
 			}
 		}
 	})
+	// devco D-822 (bug hunt H-81): a meeting note names the person in
+	// plain words, without ${res:…}; lore ask found it, --with-refs left
+	// it out, and an agent answering everything about her missed her last
+	// meeting. A daily feed naming her (imported) comes after what the
+	// owner wrote, so it does not bury that meeting.
+	s.Step("personal-store/show-with-refs-plain-name", func() {
+		ada.Lore(ada.Home, "memory", "add", "--body", "Met alice-ng about fjord: talked about the pricing page round 202.", "--at", "2022-06-01", "--to", to, "--yes").OK(t)
+		ada.Lore(ada.Home, "memory", "add", "--body", "Feed slack: alice-ng sent 3 emails about orbit.", "--at", "2023-01-01", "--source", "imported", "--to", to, "--yes").OK(t)
+		r := ada.Lore(ada.Home, "resource", "show", "--kind", "person", "--name", "alice-ng", "--with-refs", "--store", "me")
+		r.OK(t)
+		out := r.Out()
+		met, task, feed := strings.Index(out, "pricing page round 202"), strings.Index(out, "send the orbit budget to alice"), strings.Index(out, "sent 3 emails")
+		if met < 0 || feed < 0 || !(task < met && met < feed) || !strings.Contains(out, "referenced by 6 rows, newest first, the rows a feed imported after the rest:") {
+			t.Errorf("[O D-822] --with-refs: want the plain-name meeting after the task (newest first) and the feed row last:\n%s", r)
+		}
+		if strings.Contains(out, "runs orbit") {
+			t.Errorf("[O D-822] bob-ray's note is listed under alice-ng:\n%s", r)
+		}
+	})
 }
