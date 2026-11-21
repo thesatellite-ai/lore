@@ -245,6 +245,11 @@ func TestTrapPromptsBlind(t *testing.T) {
 		if a.Prompt != tk.Trap.Prompt || strings.Join(a.Tools, ",") != "Bash,Read,Edit,Write,Glob,Grep" {
 			t.Errorf("%s %s: prompt %q tools %v", tk.Trap.Task, a.Arm, a.Prompt, a.Tools)
 		}
+		// devco D-835: both arms run with their checkout's own settings,
+		// so the hooks lore setup --agent-hooks put in the lore checkout fire
+		if !a.Checkout {
+			t.Errorf("%s %s: runs bare, so the checkout's hooks never fire", tk.Trap.Task, a.Arm)
+		}
 		switch a.Arm {
 		case ArmLore:
 			if a.Dir != "/l" || a.PathPrefix != "/b" || !strings.Contains(a.System, "THE-SKILL") {

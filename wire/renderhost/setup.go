@@ -5,6 +5,7 @@
 //	setup.run (ops/setup) ─► setupHost.PlanAgentHooks
 //	  ├─ plan: every toolprofile built-in, in its order (TOOL NEUTRAL)
 //	  │    ├─ confirmed hook + its config folder exists → add / remove / already
+//	  │    ├─ confirmed hook, folder missing, tool in context.targets → add (creates the folder)
 //	  │    ├─ confirmed hook, folder missing          → "not set up here"
 //	  │    └─ no confirmed hook                       → nothing to install
 //	  ├─ (the operation prints, stops on --dry-run, asks: ops/setup)
@@ -91,7 +92,13 @@ func (s *SetupHost) PlanAgentHooks(ctx context.Context, remove, promptSearch boo
 			}
 		}
 	}
-	plans, err := planAgentHooks(ctx, root, remove, promptSearch, s.sharedHooks(ctx))
+	// devco D-835: a tool the repo names in context.targets (lore init
+	// --target claude_code) is set up here even before its folder exists
+	targets, _, err := s.h.coreContextTargets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	plans, err := planAgentHooks(ctx, root, remove, promptSearch, s.sharedHooks(ctx), targets...)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +353,11 @@ func agentHooksRoot(ctx context.Context) (string, error) {
 }
 
 // planAgentHooks lists what --agent-hooks would do per built-in profile.
-func planAgentHooks(ctx context.Context, root string, remove, promptSearch, shared bool) ([]hookPlan, error) {
+// targets are the repo's context.targets: a tool named there is set up
+// here even when its config folder does not exist yet (devco D-835: lore
+// init --target claude_code in a repo with no .claude/ left the agent
+// without the pre-edit context hook that shows a file's hotfixes).
+func planAgentHooks(ctx context.Context, root string, remove, promptSearch, shared bool, targets ...string) ([]hookPlan, error) {
 	var out []hookPlan
 	for _, prof := range toolprofile.Builtins() {
 		h, ok := toolprofile.SessionHookFor(prof.Name)
@@ -364,7 +375,7 @@ func planAgentHooks(ctx context.Context, root string, remove, promptSearch, shar
 			hooks = append(hooks, end)
 		}
 		for _, hk := range append(hooks, toolprofile.ContextHooksFor(prof.Name, promptSearch)...) {
-			p, err := planOneHook(ctx, root, prof.Name, hk.In(shared), remove, shared)
+			p, err := planOneHook(ctx, root, prof.Name, hk.In(shared), remove, shared, slices.Contains(targets, prof.Name))
 			if err != nil {
 				return nil, err
 			}
@@ -374,10 +385,11 @@ func planAgentHooks(ctx context.Context, root string, remove, promptSearch, shar
 	return out, nil
 }
 
-// planOneHook plans one hook of one tool.
-func planOneHook(ctx context.Context, root, tool string, h toolprofile.SessionHook, remove, shared bool) (hookPlan, error) {
+// planOneHook plans one hook of one tool; targeted says the repo names
+// the tool in context.targets, so a missing config folder is created.
+func planOneHook(ctx context.Context, root, tool string, h toolprofile.SessionHook, remove, shared, targeted bool) (hookPlan, error) {
 	path := filepath.Join(root, filepath.FromSlash(h.ConfigFile))
-	if _, err := os.Stat(filepath.Dir(path)); err != nil {
+	if _, err := os.Stat(filepath.Dir(path)); err != nil && (remove || !targeted) {
 		return hookPlan{tool: tool, file: h.ConfigFile, note: "not set up here (" + filepath.ToSlash(filepath.Dir(h.ConfigFile)) + "/ missing)"}, nil
 	}
 	has, err := hookInstalled(path, h)
@@ -721,4 +733,34 @@ func (h *Host) CoreSchema(ctx context.Context, quiet bool) ([]string, error) {
 		return nil, nil
 	}
 	return []string{h.decor.muted(setupLineIndex), h.decor.check() + " " + setupLineDone}, nil
+}
+
+// agentHooksNextF is init's line when a tool it wired has hooks lore can
+// install that are not in yet (tools, the command).
+const agentHooksNextF = "the session and pre-edit context hooks of %s are not installed (they put the rules and hotfixes of a file in front of the agent before it edits it); install them with: %s\n"
+
+// agentHooksCmd installs the hooks with no prompt.
+const agentHooksCmd = "lore setup --agent-hooks --yes"
+
+// MissingAgentHooks lists the tools among names whose session or context
+// hooks --agent-hooks would add in the git work tree at root (devco
+// D-835): lore init names them, so the person who wires a repo for a tool
+// learns the hooks exist. Nothing in a client repo (setup refuses there).
+func (h *Host) MissingAgentHooks(ctx context.Context, root string, names []string) []string {
+	if h.app != nil {
+		if client, err := h.app.ClientRepo(ctx); err == nil && client {
+			return nil
+		}
+	}
+	plans, err := planAgentHooks(ctx, root, false, false, (&SetupHost{h: h}).sharedHooks(ctx), names...)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, p := range plans {
+		if p.change && slices.Contains(names, p.tool) && !slices.Contains(out, p.tool) {
+			out = append(out, p.tool)
+		}
+	}
+	return out
 }

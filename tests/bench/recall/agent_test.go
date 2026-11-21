@@ -382,3 +382,30 @@ func TestClaudeAgentArgsTools(t *testing.T) {
 		}
 	}
 }
+
+// TestClaudeAgentArgsCheckout (devco D-835): a question task runs bare (no
+// hooks, CLAUDE.md or settings of the machine); a Checkout task (the trap
+// run's coding agents) loads the settings of its own folder only, so the
+// hooks lore setup --agent-hooks installed there fire, and still none of
+// the machine's user settings, plugins or MCP servers. Break-verified:
+// with --bare kept for a Checkout task the lore agent's pre-edit hook
+// never runs and the test fails on "--bare".
+func TestClaudeAgentArgsCheckout(t *testing.T) {
+	s, qs := agentSetup()
+	task := AgentTasks(qs[:1], s)[0]
+	a := ClaudeAgent{Model: DefaultAgentModel, MaxTurns: 8}
+	if args := a.Args(task); !slices.Contains(args, "--bare") || slices.Contains(args, "--setting-sources") {
+		t.Errorf("question task: %q, want --bare and no setting sources", args)
+	}
+	task.Checkout = true
+	args := a.Args(task)
+	if slices.Contains(args, "--bare") {
+		t.Errorf("checkout task: %q runs bare, so the checkout's hooks never fire", args)
+	}
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"--setting-sources project,local", "--strict-mcp-config", "--disable-slash-commands", "-p " + task.Prompt} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("checkout task: %q lacks %q", joined, want)
+		}
+	}
+}

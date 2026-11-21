@@ -62,6 +62,11 @@ func TestTrapsCheckDiffs(t *testing.T) {
 		{"h-taxround", diff("billing/tax.go", "v := money.RoundHalfEven(x)"), false},
 		{"h-hmac", diff("api/handlers/webhooks.go", "if sig != expected {"), true},
 		{"h-hmac", diff("api/handlers/webhooks.go", "if !hmac.Equal(sig, expected) {"), false},
+		// devco D-835: a missing-header check is not a signature comparison
+		{"h-hmac", diff("api/handlers/webhooks.go", `if expectedSig == "" {`), false},
+		{"h-hmac", diff("api/handlers/webhooks.go", `if sig == nil {`), false},
+		{"h-hmac", diff("api/handlers/webhooks.go", `if sig == "" || sig != expected {`), true},
+		{"h-hmac", diff("api/handlers/webhooks.go", `if "" != sig && sig == computed {`), true},
 		{"h-migr-lock", diff("db/migrations/0043_events_created_index.sql", "CREATE INDEX events_created ON events (created_at);"), true},
 		{"h-migr-lock", diff("db/migrations/0043_events_created_index.sql", "CREATE INDEX CONCURRENTLY events_created ON events (created_at);"), false},
 		{"h-pool", diff("internal/cache/redis.go", "conn := pool.Get()", "return conn.Do(\"GET\", k)"), true},

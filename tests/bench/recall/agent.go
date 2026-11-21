@@ -76,6 +76,12 @@ type AgentTask struct {
 	// trap run) adds Read, Edit and Write; every tool named here is also
 	// allowed without a prompt (--allowedTools), the deny rules still win.
 	Tools []string
+	// Checkout runs the CLI with the settings of the folder it starts in
+	// (its hooks and CLAUDE.md, what lore init and lore setup
+	// --agent-hooks installed there) instead of bare; the machine's user
+	// settings, plugins and MCP servers stay out either way (devco D-835:
+	// a bare run never fired lore's pre-edit context hook).
+	Checkout bool
 }
 
 // Tokens is what one agent run consumed, summed over every model turn.
@@ -328,7 +334,8 @@ func firstWord(stage string) string {
 }
 
 // ClaudeAgent runs a Claude Code compatible CLI in print mode: bare (no
-// hooks, memory, CLAUDE.md discovery or skills of the machine), the Bash
+// hooks, memory, CLAUDE.md discovery or skills of the machine; a
+// Checkout task loads its folder's own settings only), the Bash
 // tool only, the arm's deny rules, stream-json events read for the
 // commands, the answer and the token counts.
 type ClaudeAgent struct {
@@ -344,9 +351,14 @@ func (c ClaudeAgent) Args(task AgentTask) []string {
 	if len(task.Tools) > 0 {
 		tools = strings.Join(task.Tools, ",")
 	}
-	args := []string{"-p", task.Prompt, "--bare", "--disable-slash-commands", "--no-session-persistence",
+	isolate := []string{"--bare"}
+	if task.Checkout {
+		isolate = []string{"--setting-sources", "project,local", "--strict-mcp-config"}
+	}
+	args := append([]string{"-p", task.Prompt}, isolate...)
+	args = append(args, "--disable-slash-commands", "--no-session-persistence",
 		"--tools", tools, "--model", c.Model, "--max-turns", fmt.Sprint(c.MaxTurns),
-		"--output-format", "stream-json", "--verbose", "--append-system-prompt", task.System}
+		"--output-format", "stream-json", "--verbose", "--append-system-prompt", task.System)
 	if len(task.Tools) > 0 {
 		args = append(args, "--allowedTools", tools)
 	}
