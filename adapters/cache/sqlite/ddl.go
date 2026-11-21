@@ -160,6 +160,15 @@ func affinity(k value.Kind) (string, error) {
 
 // planFor builds the DDL of def. view is the stable view name of a kind
 // table ("" for built-ins).
+// kindFillVersion is part of every res_<kind> table's fingerprint: bump it
+// when the rows a kind table is filled with change, so a cache filled by
+// older code refills its kind tables on the next open (cheaper than a
+// layoutVersion bump, which rebuilds the whole file). 1: a refill keeps
+// only the resources of the table's own kind (devco:D-794: before, a
+// refill after a field add, a migrate or an adopt copied every resource of
+// the store into every kind table).
+const kindFillVersion = 1
+
 func planFor(def schema.TableDef, view string) (plan, error) {
 	if def.Name == schema.TableResources && len(def.FTS) == 0 {
 		def = resourceFTSDef(def)
@@ -256,7 +265,11 @@ func planFor(def schema.TableDef, view string) (plan, error) {
 			sensitive = append(sensitive, f.Name)
 		}
 	}
-	sum := sha256.Sum256([]byte("layout " + strconv.Itoa(layoutVersion) + "\n" + strings.Join(p.create, ";\n") + "\nsensitive " + strings.Join(sensitive, ",")))
+	stamp := "layout " + strconv.Itoa(layoutVersion) + "\n" + strings.Join(p.create, ";\n") + "\nsensitive " + strings.Join(sensitive, ",")
+	if !def.Kind.IsZero() {
+		stamp += "\nkindfill " + strconv.Itoa(kindFillVersion)
+	}
+	sum := sha256.Sum256([]byte(stamp))
 	p.fingerprint = hex.EncodeToString(sum[:])
 	return p, nil
 }
