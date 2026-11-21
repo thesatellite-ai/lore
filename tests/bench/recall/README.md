@@ -122,3 +122,5 @@ The data, `LORE_BENCH_NOW`, `LORE_BENCH_SEED`, `LORE_BENCH_DIR` and `LORE_BENCH_
 ## Not in the gate yet
 
 The bench is report-only until it passes: it is not in `task check` or the release script. When it passes, add `task bench:recall` (or its `go test -tags bench` line) to the gate steps.
+
+The repo README's "Why lore over notes files" section quotes this gate's numbers (accuracy first, then calls, characters and time, and the bars it still misses); whoever lands the first passing run copies that run's numbers into it in the same commit (`TestReadmeQuotesRecallGate` keeps the section and its rerun command in place).

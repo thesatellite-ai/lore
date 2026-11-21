@@ -89,6 +89,22 @@ Most agent memory tools bolt a vector database (a search engine that matches by 
 
 If you want a hosted, embeddings-based agent memory, plenty of those exist. If you want **deterministic, private, structured project memory that lands in the file your agent already trusts** — that's lore.
 
+### Why lore over notes files
+
+A folder of tidy markdown notes plus `grep` and `cat` is the honest alternative, so lore measures itself against exactly that. The recall gate ([tests/bench/recall](tests/bench/recall/README.md)) builds one synthetic personal store of about 6,200 rows (40 people, 36 projects, 700 notes, 500 journal days, 4,800 feed events, 110 owed tasks), writes the same facts as a markdown tree, and asks both 70 questions: who is X, project status, a decision and why, what I owe / who owes me, what happened on a day or in a week, everything about X, plus 20 harder ones (paraphrase, a typo in a name, "two Fridays ago", a nickname or role, a fact that changed). lore answers each with one `lore ask --query "who is alice-ng"` style call; the notes side runs the `grep`/`cat` steps a careful agent would. Numbers from the newest run (2026-11-21, dev branch):
+
+| | lore | notes + grep |
+|---|---|---|
+| answers right | 70/70 (harder set 20/20) | 70/70 |
+| right answer in the top 3 / first | 70/70 / 70/70, 0 stale facts | (one pile of text) |
+| calls | 70 (one per question) | 114 |
+| characters read | 48,190 | 139,274 (2.9x more) |
+| everything about a person or project | 10,603 chars | 108,300 chars (10x more) |
+| who is X | 2,340 chars | 6,680 chars (2.9x more) |
+| time per call | warm p50 180 ms, max 467 ms; cold max 807 ms (on a loaded shared box) | — |
+
+Where the gate still misses its own bar (so it does not block releases yet): warm calls under 50 ms and cold calls under 300 ms; "who is X" at least 10x lighter than grep; "what I owe" (3,654 vs 1,209 chars), decisions and day/week questions still print more than grep's single matching lines. Rerun it yourself with `task bench:recall` (report in `tmp/bench/recall.md`).
+
 ## Install
 
 > **lore needs two pieces, both required:**
