@@ -194,7 +194,7 @@ func (a *App) cloneFolderScan(ctx context.Context, sc storeCheckout) orgFolderSc
 	}
 	base := string(root.Name)
 	scan.Searched = append(scan.Searched, base)
-	own, err := storeFolders(ctx, sc.top)
+	own, err := storeFolders(ctx, sc.top, folderOf(ctx))
 	if err != nil {
 		scan.Unread[base] = err
 	}

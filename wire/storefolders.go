@@ -307,7 +307,7 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 		if err != nil {
 			return opsstores.FolderListOut{}, errs.Prefix(verb+": store "+s.label, err)
 		}
-		rows, err := storeFolders(ctx, dir)
+		rows, err := storeFolders(ctx, dir, folderAll)
 		if err != nil {
 			return opsstores.FolderListOut{}, errs.Prefix(verb+": store "+s.label, err)
 		}
@@ -395,9 +395,25 @@ func placeKey(raw, branch string) string {
 	return k + "#" + branch
 }
 
+// folderDetail is what storeFolders reads of each folder beyond its name
+// and project id.
+type folderDetail uint8
+
+const (
+	// folderIDs reads the name and project id only: what every read's
+	// scope and id lookup needs (devco:D-797: counting a 5,000-row folder
+	// and a `git log` per folder ran on every command)
+	folderIDs folderDetail = iota
+	// folderCounts adds the row count (project list)
+	folderCounts
+	// folderAll adds the row count and who created it, when (store folder list)
+	folderAll
+)
+
 // storeFolders lists the folders of the store at dir (rowfs.StoreFolders:
-// every folder holding a _meta.json, the root excepted), sorted by name.
-func storeFolders(ctx context.Context, dir string) ([]opsstores.FolderRow, error) {
+// every folder holding a _meta.json, the root excepted), sorted by name,
+// with the display fields detail asks for.
+func storeFolders(ctx context.Context, dir string, detail folderDetail) ([]opsstores.FolderRow, error) {
 	isGit := false
 	if fi, err := os.Stat(filepath.Join(dir, gitDirName)); err == nil {
 		isGit = fi.IsDir() || fi.Mode().IsRegular() // a worktree's .git is a file
@@ -408,7 +424,7 @@ func storeFolders(ctx context.Context, dir string) ([]opsstores.FolderRow, error
 	}
 	out := make([]opsstores.FolderRow, 0, len(names))
 	for _, name := range names {
-		row, ok, rerr := folderRow(ctx, dir, name, isGit)
+		row, ok, rerr := folderRow(ctx, dir, name, isGit, detail)
 		if rerr != nil {
 			return nil, errs.Wrap(errs.Internal, "read the store's folders", rerr)
 		}
@@ -421,7 +437,7 @@ func storeFolders(ctx context.Context, dir string) ([]opsstores.FolderRow, error
 
 // folderRow reads one folder rel of the store at dir; ok is false when it
 // is no folder of the store (no _meta.json).
-func folderRow(ctx context.Context, dir, rel string, isGit bool) (opsstores.FolderRow, bool, error) {
+func folderRow(ctx context.Context, dir, rel string, isGit bool, detail folderDetail) (opsstores.FolderRow, bool, error) {
 	clean, err := rowfs.CleanFolder(rel)
 	if err != nil {
 		return opsstores.FolderRow{}, false, nil // not a name lore makes: not listed
@@ -441,9 +457,11 @@ func folderRow(ctx context.Context, dir, rel string, isGit bool) (opsstores.Fold
 	if err != nil {
 		return opsstores.FolderRow{}, false, err
 	}
-	n, _ := f.RowFileCount() // display only: an unreadable folder counts nothing
-	row := opsstores.FolderRow{Folder: clean, ID: id.String(), Rows: n}
-	if isGit {
+	row := opsstores.FolderRow{Folder: clean, ID: id.String()}
+	if detail >= folderCounts {
+		row.Rows, _ = f.RowFileCount() // display only: an unreadable folder counts nothing
+	}
+	if isGit && detail >= folderAll {
 		row.CreatedBy, row.CreatedAt = firstCommit(ctx, dir, f.Layout().StorePath(clean, rowfs.MetaFileName))
 	}
 	return row, true, nil

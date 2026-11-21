@@ -59,9 +59,13 @@ package git
 // the stated writer, with that roster as it is now.
 //
 // Cost: one `git log` of the whole history and one `git cat-file
-// --batch` of every row version, per clone, per new HEAD, cached in
-// memory for the process. A store with a long history pays it on the
-// first read of each command after a sync.
+// --batch` of every row version, once per clone; the result is kept in
+// memory for the process and on disk in the clone's git folder
+// (authoritydisk.go), keyed by HEAD, the org roster's HEAD and the lore
+// binary. A later process at the same HEAD reads it back; a HEAD that
+// moved on by plain commits (a write, a fast-forward pull) replays only
+// the new commits; a merge, a rewrite or a new org roster replays it all
+// (devco:D-797: a 5,000-row folder paid 0.3 s on every command).
 //
 // While the roster has no admin yet (a personal store, or an org's first
 // commits) every change is accepted. Git authorship can be forged by
@@ -83,6 +87,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
@@ -489,6 +494,7 @@ type fileChange struct {
 // replayCommit is one non-merge commit of the replay.
 type replayCommit struct {
 	id      string
+	parents []string // its parents' commit ids (linearCommitsAfter)
 	author  string
 	changes []fileChange
 	// merge marks a merge commit: changes are then only the files whose
@@ -511,6 +517,11 @@ type authority struct {
 	// (AdminAt): one source of "admin at a commit" for the roster check
 	// here and the org file check of adapters/orgcfg
 	admins map[string]*adminSet
+	// accepted (path ─▶ last accepted blob, "" = absent) and snap (the
+	// admins after head) are where the replay stopped: a replay of the
+	// commits after head goes on from them (replayOver)
+	accepted map[string]string
+	snap     *adminSet
 }
 
 // credit is one row version read with its commit's author credited as
@@ -598,16 +609,23 @@ func (b *Backend) authorityOf(ctx context.Context, head string) (*authority, err
 	authorityCache.Lock()
 	a := authorityCache.byWork[b.work]
 	authorityCache.Unlock()
-	if a != nil && a.head == head && a.orgHead == b.rosterHead(ctx) {
+	orgHead := b.rosterHead(ctx)
+	if a != nil && a.head == head && a.orgHead == orgHead {
 		return a, nil
 	}
-	commits, err := b.replayCommits(ctx, head)
+	a, err := b.replayFromDisk(ctx, head, orgHead)
 	if err != nil {
 		return nil, err
 	}
-	a, err = b.replay(ctx, head, commits)
-	if err != nil {
-		return nil, err
+	if a == nil {
+		commits, err := b.replayCommits(ctx, head)
+		if err != nil {
+			return nil, err
+		}
+		if a, err = b.replay(ctx, head, commits); err != nil {
+			return nil, err
+		}
+		b.saveAuthority(a)
 	}
 	authorityCache.Lock()
 	authorityCache.byWork[b.work] = a
@@ -615,14 +633,60 @@ func (b *Backend) authorityOf(ctx context.Context, head string) (*authority, err
 	return a, nil
 }
 
+// replayFromDisk is the replay at head from the one kept on disk
+// (loadAuthority): as is when it was made at head, or carried on over the
+// commits after it when head only added plain commits on top
+// (linearCommitsAfter); nil when neither (a full replay is due).
+func (b *Backend) replayFromDisk(ctx context.Context, head, orgHead string) (*authority, error) {
+	a := b.loadAuthority()
+	if a == nil || a.orgHead != orgHead {
+		return nil, nil
+	}
+	if a.head == head {
+		return a, nil
+	}
+	commits, ok := b.linearCommitsAfter(ctx, a.head, head)
+	if !ok {
+		return nil, nil
+	}
+	if err := b.replayOver(ctx, a, commits); err != nil {
+		return nil, err
+	}
+	a.head = head
+	b.saveAuthority(a)
+	return a, nil
+}
+
+// linearCommitsAfter lists the commits from (exclusive) to to, oldest first,
+// when they are one line of plain commits on top of from: each has one
+// parent, the one before it (from for the first). Only then is replaying
+// them after from's replay the same as replaying to's whole history (git
+// lists every commit of from's history first). ok is false otherwise (a
+// merge, a rewrite, from not under to, a git failure).
+func (b *Backend) linearCommitsAfter(ctx context.Context, from, to string) ([]replayCommit, bool) {
+	commits, err := b.replayCommits(ctx, from+".."+to)
+	if err != nil || len(commits) == 0 || commits[len(commits)-1].id != to {
+		return nil, false
+	}
+	prev := from
+	for _, c := range commits {
+		if len(c.parents) != 1 || c.parents[0] != prev {
+			return nil, false
+		}
+		prev = c.id
+	}
+	return commits, true
+}
+
 // commitMark starts each commit's record in replayCommits' log output.
 const commitMark = "\x01"
 
-// replayCommits lists head's non-merge commits oldest first with the
-// files each changed (blob ids on both sides).
-func (b *Backend) replayCommits(ctx context.Context, head string) ([]replayCommit, error) {
+// replayCommits lists the commits of rev (head, or a from..to range)
+// oldest first with their parents and the files each changed (blob ids
+// on both sides).
+func (b *Backend) replayCommits(ctx context.Context, rev string) ([]replayCommit, error) {
 	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"log", "--reverse", "--topo-order", "-c", "--no-renames",
-		"--raw", "--no-abbrev", "-z", "--format=" + "%x01%H%x00%ae%x00", head, "--"}})
+		"--raw", "--no-abbrev", "-z", "--format=" + "%x01%H%x00%P%x00%ae%x00", rev, "--"}})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "git: read the store's history for the roster check", err)
 	}
@@ -631,12 +695,12 @@ func (b *Backend) replayCommits(ctx context.Context, head string) ([]replayCommi
 		if rec == "" {
 			continue
 		}
-		parts := strings.SplitN(rec, "\x00", 3)
-		if len(parts) < 3 {
+		parts := strings.SplitN(rec, "\x00", 4)
+		if len(parts) < 4 {
 			continue
 		}
-		c := replayCommit{id: parts[0], author: strings.ToLower(parts[1])}
-		fields := strings.Split(strings.TrimLeft(parts[2], "\x00\n"), "\x00")
+		c := replayCommit{id: parts[0], parents: strings.Fields(parts[1]), author: strings.ToLower(parts[2])}
+		fields := strings.Split(strings.TrimLeft(parts[3], "\x00\n"), "\x00")
 		for i := 0; i+1 < len(fields); i += 2 {
 			// ":<modes…> <blobs…> <status>": one colon per parent, then
 			// parents+1 modes and parents+1 blobs (the last is the result)
@@ -656,6 +720,35 @@ func (b *Backend) replayCommits(ctx context.Context, head string) ([]replayCommi
 
 // replay walks commits and decides each one.
 func (b *Backend) replay(ctx context.Context, head string, commits []replayCommit) (*authority, error) {
+	st := newRosterState()
+	orgHead := ""
+	if src := b.rosterSource(); src != nil {
+		// a store with no org folder: its org's roster, as it is now
+		base, h, serr := src(ctx)
+		if serr != nil {
+			return nil, serr
+		}
+		if base != nil {
+			st, orgHead = base.forOrgless(), h
+		}
+	}
+	a := &authority{head: head, orgHead: orgHead, state: st, admins: map[string]*adminSet{}, held: map[string]HeldChange{}, trusted: map[string]string{}, refused: map[string]bool{}, credited: map[string]credit{},
+		accepted: map[string]string{}, snap: st.adminSnapshot()}
+	if err := b.replayOver(ctx, a, commits); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// replayedCommits counts the commits replayOver decided in this process:
+// the tests' proof that a read at a known HEAD replays nothing and one
+// after a plain commit replays that commit only (devco:D-797).
+var replayedCommits atomic.Int64
+
+// replayOver decides commits, the commits right after where a's replay
+// stopped, and carries a's state on over them.
+func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replayCommit) error {
+	replayedCommits.Add(int64(len(commits)))
 	// read every roster blob once, up front
 	var names []string
 	seen := map[string]bool{}
@@ -669,7 +762,7 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 	}
 	raws, err := b.readBlobs(ctx, names)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	parsed := make(map[string]rosterDoc, len(raws))
 	for sha, raw := range raws {
@@ -684,21 +777,7 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 		d, ok := parsed[sha]
 		return d, ok
 	}
-	st := newRosterState()
-	orgHead := ""
-	if src := b.rosterSource(); src != nil {
-		// a store with no org folder: its org's roster, as it is now
-		base, h, serr := src(ctx)
-		if serr != nil {
-			return nil, serr
-		}
-		if base != nil {
-			st, orgHead = base.forOrgless(), h
-		}
-	}
-	a := &authority{head: head, orgHead: orgHead, state: st, admins: map[string]*adminSet{}, held: map[string]HeldChange{}, trusted: map[string]string{}, refused: map[string]bool{}, credited: map[string]credit{}}
-	accepted := map[string]string{} // path ─▶ last accepted blob ("" = absent)
-	snap := st.adminSnapshot()
+	st, accepted, snap := a.state, a.accepted, a.snap
 	for _, c := range commits {
 		rosterMoved := false
 		reason := ""
@@ -762,7 +841,8 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 		}
 		a.admins[c.id] = snap
 	}
-	return a, nil
+	a.snap = snap
+	return nil
 }
 
 // refusal is why commit c has no authority over what it changes ("" =

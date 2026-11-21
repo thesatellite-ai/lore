@@ -52,7 +52,8 @@ type orgFolder struct {
 	Branch string
 	// Dir is the store's local checkout the folder was read from.
 	Dir string
-	// Rows counts the folder's row files (display only).
+	// Rows counts the folder's row files (display only; 0 unless the scan
+	// ran under withFolderCounts).
 	Rows int
 }
 
@@ -115,7 +116,7 @@ func (a *App) foldersOf(ctx context.Context, entries []opsstores.Entry) orgFolde
 			scan.Unread[label] = derr
 			continue
 		}
-		rows, ferr := storeFolders(ctx, dir)
+		rows, ferr := storeFolders(ctx, dir, folderOf(ctx))
 		if ferr != nil {
 			scan.Unread[label] = ferr
 			continue
@@ -257,7 +258,7 @@ var _ opsinfra.OrgFolderLister = (*App)(nil)
 // store it lives in. A store that cannot be read is left out; project list
 // names it in a note.
 func (a *App) OrgFolderProjects(ctx context.Context) ([]opsinfra.FolderProject, []string, error) {
-	scan := a.orgFolders(ctx)
+	scan := a.orgFolders(withFolderCounts(ctx))
 	out := make([]opsinfra.FolderProject, 0, len(scan.Folders))
 	for _, f := range scan.Folders {
 		out = append(out, opsinfra.FolderProject{ID: f.ID.String(), Name: f.Folder, Rows: f.Rows,
@@ -271,4 +272,23 @@ func (a *App) OrgFolderProjects(ctx context.Context) ([]opsinfra.FolderProject, 
 		notes = append(notes, label+": no access, skipped (ask an admin of the org for read access to it, then run `lore sync`)")
 	}
 	return out, notes, nil
+}
+
+// folderCountsKey marks a ctx whose folder scans count each folder's rows.
+type folderCountsKey struct{}
+
+// withFolderCounts is ctx whose folder scans (orgFolders, foldersOf,
+// cloneFolderScan) count each folder's rows: only a listing shows the
+// count, and counting reads every row file name of the folder
+// (devco:D-797).
+func withFolderCounts(ctx context.Context) context.Context {
+	return context.WithValue(ctx, folderCountsKey{}, true)
+}
+
+// folderOf is the storeFolders detail a scan under ctx reads.
+func folderOf(ctx context.Context) folderDetail {
+	if on, _ := ctx.Value(folderCountsKey{}).(bool); on {
+		return folderCounts
+	}
+	return folderIDs
 }
