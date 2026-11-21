@@ -124,7 +124,9 @@ vars:
     stories-ww-stand  4   test:stories:ww:stand PARALLEL=12
     stories-ww        3   test:stories:ww PARALLEL=6
     stories-an        4   test:stories:an PARALLEL=8
+    stories-bl        4   test:stories:bl PARALLEL=8
     stories-o         4   test:stories:o PARALLEL=8
+    stories-wuct      4   test:stories:wuct PARALLEL=8
     stories           4   test:stories:rest PARALLEL=8
     journey-teamlead  3   test:journeys:teamlead PARALLEL=2
     journey-solo      2   test:journeys:solo PARALLEL=4
@@ -708,11 +710,22 @@ tasks:
   # the same story O just as slowly at that load), the part had simply grown to two gates'
   # worth of story O at a load the gate meets most days, so it runs as two steps: stories-an
   # (A to N, landings BL the largest) and stories-o (owner shape O alone).
+  # Counted at the slowdown that same gate measured (devco D-811: the stories parts that are
+  # many tests ran about 3.4 times their count, story WW's matrices about 1.5), stories-an and
+  # the catch-all were still over 70 % of their limit (the catch-all ran 891 s of its 900), so
+  # the landings BL have their own step stories-bl, and the W stories WU and WCT (the catch-all's
+  # longest, most of them serial) theirs, stories-wuct.
   test:stories:an:
-    desc: "Stories A to N after TestStory (bug hunt J, landings BL, dev company A-I, ...): the first of the catch-all parts"
+    desc: "Stories A to N after TestStory but the landings BL (bug hunt J, dev company A-I, ...): the first of the catch-all parts"
     cmds:
       - task: test:stories:part
-        vars: {PART: an, FILTER: "-run '^TestStory[A-N]'", PARALLEL: "{{.PARALLEL}}"}
+        vars: {PART: an, FILTER: "-run '^TestStory[A-N]' -skip '^TestStoryBL'", PARALLEL: "{{.PARALLEL}}"}
+
+  test:stories:bl:
+    desc: "The landing stories BL (lore sync land over branches, squash and stacked merges, worktrees): a catch-all part of their own"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: bl, FILTER: "-run '^TestStoryBL'", PARALLEL: "{{.PARALLEL}}"}
 
   test:stories:o:
     desc: "Story O (the owner-shaped machine: personal, team and linked stores on one box) alone: the second of the catch-all parts"
@@ -720,11 +733,17 @@ tasks:
       - task: test:stories:part
         vars: {PART: o, FILTER: "-run '^TestStoryO'", PARALLEL: "{{.PARALLEL}}"}
 
-  test:stories:rest:
-    desc: "Every story no other part runs (the catch-all of the gate's stories parts): the W stories but WW, the harness and guard tests, and every story added later under another name"
+  test:stories:wuct:
+    desc: "The W stories WU and WCT (the use and count passes from every place a person stands): a catch-all part of their own"
     cmds:
       - task: test:stories:part
-        vars: {PART: rest, FILTER: "-skip '^TestStory(WW|[A-O])'", PARALLEL: "{{.PARALLEL}}"}
+        vars: {PART: wuct, FILTER: "-run '^TestStoryW(U|CT)'", PARALLEL: "{{.PARALLEL}}"}
+
+  test:stories:rest:
+    desc: "Every story no other part runs (the catch-all of the gate's stories parts): the W stories but WW, WU and WCT, the harness and guard tests, and every story added later under another name"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: rest, FILTER: "-skip '^TestStory(WW|WU|WCT|[A-O])'", PARALLEL: "{{.PARALLEL}}"}
 
   test:journeys:frame:
     desc: "Journey harness self-tests: a walk through every harness action, every shared invariant bites, Pending records"
