@@ -305,6 +305,16 @@ func (c *caches) Close() error {
 // (issue #1). A file that several names were opened at holds each row once
 // per name, so it is searched once and a row id counts once.
 func (c *caches) search(ctx context.Context, table row.Table, match string, limit int, shadowed map[store.Source]bool) ([]opsmemory.Hit, error) {
+	return c.searchWith(ctx, table, match, limit, shadowed, false)
+}
+
+// searchWith is search; bare leaves every snippet out (sqlite.Cache.
+// SearchHitsBare, devco:D-808).
+func (c *caches) searchWith(ctx context.Context, table row.Table, match string, limit int, shadowed map[store.Source]bool, bare bool) ([]opsmemory.Hit, error) {
+	hits := (*sqlite.Cache).SearchHits
+	if bare {
+		hits = (*sqlite.Cache).SearchHitsBare
+	}
 	c.mu.Lock()
 	order := append([]store.Source(nil), c.order...)
 	combined := c.combined
@@ -334,7 +344,7 @@ func (c *caches) search(ctx context.Context, table row.Table, match string, limi
 				continue
 			}
 			searched = true
-			got, serr := f.SearchHits(ctx, table, match, limit-len(out))
+			got, serr := hits(f, ctx, table, match, limit-len(out))
 			if serr != nil {
 				return nil, serr
 			}
@@ -355,7 +365,7 @@ func (c *caches) search(ctx context.Context, table row.Table, match string, limi
 		// A shared file returns each row once per name it holds it under:
 		// ask for that many hits per wanted one, then keep each id once.
 		want := limit - len(out)
-		got, err := f.SearchHits(ctx, table, match, want*max(sharers[path], 1))
+		got, err := hits(f, ctx, table, match, want*max(sharers[path], 1))
 		if err != nil {
 			return nil, err
 		}
@@ -369,6 +379,37 @@ func (c *caches) search(ctx context.Context, table row.Table, match string, limi
 			}
 			seen[h.ID] = true
 			out = append(out, opsmemory.Hit{Source: s, ID: h.ID, Score: h.Score, Snippet: h.Snippet})
+		}
+	}
+	return out, nil
+}
+
+// kindNames is every attached cache's kind id -> name (sqlite.Cache.
+// KindNames), each file read once; the first cache in order (repo first)
+// keeps a shared id.
+func (c *caches) kindNames(ctx context.Context) (map[string]string, error) {
+	c.mu.Lock()
+	order := append([]store.Source(nil), c.order...)
+	c.mu.Unlock()
+	out := map[string]string{}
+	read := map[*sqlite.Cache]bool{}
+	for _, s := range order {
+		f, err := c.of(s)
+		if err != nil {
+			return nil, err
+		}
+		if read[f] {
+			continue
+		}
+		read[f] = true
+		names, err := f.KindNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for id, name := range names {
+			if _, ok := out[id]; !ok {
+				out[id] = name
+			}
 		}
 	}
 	return out, nil

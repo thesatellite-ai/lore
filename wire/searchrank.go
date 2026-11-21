@@ -10,9 +10,7 @@ import (
 	"context"
 
 	"github.com/thesatellite-ai/lore/logic/searchrank"
-	"github.com/thesatellite-ai/lore/model/errs"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
-	opssql "github.com/thesatellite-ai/lore/ops/sql"
 )
 
 // scoreInOrder scores hits that matched every term (condition searches:
@@ -23,21 +21,15 @@ func scoreInOrder(hits []opssearch.Hit, terms []string) {
 	}
 }
 
-// resourceKindNames maps every kind id this lens sees to its name, for
-// the resource hits' kind (D-436). No kinds view yet is an empty map.
+// resourceKindNames maps every kind id the attached caches hold to its
+// name, for the resource hits' kind (D-436); the nearest cache (repo
+// first, then the stores in attach order) wins a shared id. devco:D-808:
+// read from each cache's kinds table, not through the SQL lens, which
+// created every lens view on each search.
 func (a *App) resourceKindNames(ctx context.Context) (map[string]string, error) {
-	res, err := a.SQL(ctx, opssql.Request{Query: `SELECT id, name FROM kinds_all`, Timeout: opssql.DefaultTimeout})
+	st, err := a.state(ctx)
 	if err != nil {
-		if errs.Has(err, errs.InvalidInput) {
-			return map[string]string{}, nil
-		}
 		return nil, err
 	}
-	out := make(map[string]string, len(res.Rows))
-	for _, r := range res.Rows {
-		if len(r) > 1 {
-			out[r[0].String()] = r[1].String()
-		}
-	}
-	return out, nil
+	return st.caches.kindNames(ctx)
 }

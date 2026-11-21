@@ -352,6 +352,16 @@ func (a *App) Search(ctx context.Context, table row.Table, match string, limit i
 	return st.caches.search(ctx, table, match, limit, shadowedStores(st.eng))
 }
 
+// SearchBare is Search with no snippets: a topic word's own search in
+// `lore search` only counts which rows hold the word (devco:D-808).
+func (a *App) SearchBare(ctx context.Context, table row.Table, match string, limit int) ([]opsmemory.Hit, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return st.caches.searchWith(ctx, table, match, limit, shadowedStores(st.eng), true)
+}
+
 // SearchColumns implements opsmemory.ColumnSearcher: Search with the
 // match restricted to the named full-text fields (the sqlite cache's FTS5
 // column filter).

@@ -89,6 +89,9 @@ type Cache struct {
 	exp    Expander
 	st     state
 	closed bool
+	// unfoldReads counts the per-row reads unfoldSnippet made (devco:D-808:
+	// a search must not read every hit's row to restore a ı; tests read it).
+	unfoldReads int
 }
 
 var _ store.Cache = (*Cache)(nil)

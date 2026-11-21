@@ -55,6 +55,7 @@ type lensScope struct {
 // deleted-rows file (FA-META-2) attached last; it also returns the
 // internal stores attached only because of sc.Internal.
 func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, sc lensScope, deleted string) (*sqlite.Lens, []string, error) {
+	a.lensOpens.Add(1)
 	st, err := a.state(ctx)
 	if err != nil {
 		return nil, nil, err

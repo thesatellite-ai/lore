@@ -43,6 +43,20 @@ func (c *Cache) Search(ctx context.Context, table row.Table, match string, limit
 
 // SearchHits is Search with each hit's score and snippet.
 func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, limit int) ([]SearchHit, error) {
+	return c.searchHits(ctx, table, match, limit, false)
+}
+
+// SearchHitsBare is SearchHits with no snippet (every Snippet is ""):
+// the same hits in the same order, without FTS5's snippet() and the ı
+// restore per hit. Why (devco:D-808): `lore search` runs each topic
+// word's own search only to count which rows hold the word; building a
+// snippet for each of up to a thousand rows per word was most of a warm
+// search's time.
+func (c *Cache) SearchHitsBare(ctx context.Context, table row.Table, match string, limit int) ([]SearchHit, error) {
+	return c.searchHits(ctx, table, match, limit, true)
+}
+
+func (c *Cache) searchHits(ctx context.Context, table row.Table, match string, limit int, bare bool) ([]SearchHit, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.usable(); err != nil {
@@ -61,7 +75,7 @@ func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, l
 	// The index holds ı as i (upsertFTS), so the query does too: ISPANAK
 	// finds ıspanak and diyarbakır finds DİYARBAKIR (I-9).
 	match = textnorm.SearchFold(match)
-	out, ftsErr := c.ftsHits(ctx, p, match, limit)
+	out, ftsErr := c.ftsHits(ctx, p, match, limit, bare)
 	// Second column (SECRETS_AND_REFERENCES 9, 8.7): the filled-in text of
 	// row_expanded, so `db.hub.acme.example` finds a row that says
 	// ${var:db_host}. Its hits rank after every full-text hit (score 0).
@@ -79,11 +93,18 @@ func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, l
 }
 
 // ftsHits is the FTS5 MATCH of p.
-func (c *Cache) ftsHits(ctx context.Context, p plan, match string, limit int) ([]SearchHit, error) {
+func (c *Cache) ftsHits(ctx context.Context, p plan, match string, limit int, bare bool) ([]SearchHit, error) {
 	q := ftsQueryText(match)
-	out, big, err := c.ftsRank(ctx, p, q, limit)
+	stmt := p.sql.search
+	if bare {
+		stmt = p.sql.searchBare
+	}
+	out, big, err := c.ftsRank(ctx, stmt, q, limit)
 	if err != nil {
 		return nil, err
+	}
+	if bare {
+		return out, nil
 	}
 	// The rows too large for snippet() (I-6), after the ranked query is
 	// closed: the cache holds one connection.
@@ -96,17 +117,75 @@ func (c *Cache) ftsHits(ctx context.Context, p plan, match string, limit int) ([
 	}
 	// Every snippet, big-row ones too, shows the row's own letters, not
 	// the folded ı (unfoldSnippet; the segment marks are already gone).
+	// devco:D-808: one query finds the hits whose row holds a ı at all;
+	// only those are unfolded (before, every snippet with an i cost a
+	// query per full-text field, thousands for a common word).
+	dotless, known := c.dotlessRows(ctx, p, out)
 	for i := range out {
+		if known && !dotless[out[i].ID.String()] {
+			continue
+		}
 		out[i].Snippet = c.unfoldSnippet(ctx, p, out[i].ID, out[i].Snippet)
 	}
 	return out, nil
 }
 
-// ftsRank runs p's ranked MATCH of the segmented query q. big maps the
+// dotlessRows is the set of hit ids (those whose snippet holds an i, the
+// only ones unfoldSnippet can change) whose row holds a dotless ı in a
+// full-text field, read in one query. known is false when that query
+// cannot run (a table that does not hold every full-text field as a
+// column, the resources index): the caller then asks per hit, as before.
+func (c *Cache) dotlessRows(ctx context.Context, p plan, hits []SearchHit) (map[string]bool, bool) {
+	var want []string
+	for _, h := range hits {
+		if strings.ContainsRune(h.Snippet, 'i') {
+			want = append(want, h.ID.String())
+		}
+	}
+	if len(want) == 0 {
+		return nil, true
+	}
+	tq, err := ident(p.def.Name.String())
+	if err != nil || len(p.def.FTS) == 0 {
+		return nil, false
+	}
+	var conds []string
+	for _, f := range p.def.FTS {
+		fq, ferr := ident(f)
+		if ferr != nil {
+			return nil, false
+		}
+		conds = append(conds, `instr(`+fq+`, 'ı') > 0`)
+	}
+	idsJSON, err := json.Marshal(want)
+	if err != nil {
+		return nil, false
+	}
+	rs, err := c.db.QueryContext(ctx, `SELECT "`+colID+`" FROM `+tq+` WHERE "`+colID+`" IN (SELECT value FROM json_each(?)) AND (`+strings.Join(conds, ` OR `)+`)`, string(idsJSON))
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = rs.Close() }()
+	out := map[string]bool{}
+	for rs.Next() {
+		var id string
+		if rs.Scan(&id) != nil {
+			return nil, false
+		}
+		out[id] = true
+	}
+	if rs.Err() != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// ftsRank runs the ranked MATCH stmt (a plan's search or searchBare) of
+// the segmented query q. big maps the
 // index of each hit that got no snippet (a row over snippetMaxChars) to
 // its FTS rowid.
-func (c *Cache) ftsRank(ctx context.Context, p plan, q string, limit int) ([]SearchHit, map[int]int64, error) {
-	rs, err := c.db.QueryContext(ctx, p.sql.search, q, limit)
+func (c *Cache) ftsRank(ctx context.Context, stmt string, q string, limit int) ([]SearchHit, map[int]int64, error) {
+	rs, err := c.db.QueryContext(ctx, stmt, q, limit)
 	if err != nil {
 		if reason, ok := ftsQueryReason(err); ok {
 			return nil, nil, errs.Wrap(errs.InvalidInput, "search "+quoteText(ftsSnippetText(q))+": not a valid search query ("+reason+")", err).
@@ -245,6 +324,7 @@ func (c *Cache) unfoldSnippet(ctx context.Context, p plan, id ids.AnyID, snip st
 			continue
 		}
 		var orig sql.NullString
+		c.unfoldReads++
 		if c.db.QueryRowContext(ctx, `SELECT `+fq+` FROM `+tq+` WHERE "`+colID+`" = ? LIMIT 1`, id.String()).Scan(&orig) != nil || !strings.ContainsRune(orig.String, 'ı') {
 			continue
 		}
