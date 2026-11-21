@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/formatgate"
-	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
@@ -156,13 +155,25 @@ func CheckConfigSet(in ConfigSetIn) error {
 		return errs.New(errs.InvalidInput, "org config set: nothing to change").
 			WithHint("give --value (the whole list, repeat), --add or --remove, e.g. lore org config set --org <org> --key " + in.Key + " --add 'github.com/agency/client-*' --yes")
 	}
-	for _, p := range append(slices.Clone(in.Values), in.Add...) {
-		if _, err := repourl.Compile(p); err != nil {
-			return errs.Wrap(errs.InvalidInput, "org config set --key "+in.Key+": "+strings.TrimPrefix(err.Error(), "repourl: "), err).
-				WithHint("write host/owner/repo with ** as a whole segment and * as a segment or inside one, like github.com/agency/client-*")
-		}
+	vals := append(slices.Clone(in.Values), in.Add...)
+	return checkPatterns("org config set --key "+in.Key, vals, vals, func(bad, fixed string) string {
+		return configSetRerun(in, bad, fixed)
+	})
+}
+
+// configSetRerun is the org config set the person typed with fixed in
+// place of bad (--org only when they gave it: the default org applies
+// again), confirmed with --yes.
+func configSetRerun(in ConfigSetIn, bad, fixed string) string {
+	cmd := "lore org config set"
+	if strings.TrimSpace(in.Org) != "" {
+		cmd += " --org " + shellQuote(in.Org)
 	}
-	return nil
+	cmd += " --key " + in.Key + flagArgs("value", replaced(in.Values, bad, fixed)) + flagArgs("add", replaced(in.Add, bad, fixed)) + flagArgs("remove", in.Remove)
+	if in.Push {
+		cmd += " --push"
+	}
+	return cmd + " --yes"
 }
 
 // checkMinLore refuses a min_lore_version change that is not one release

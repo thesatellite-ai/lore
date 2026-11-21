@@ -206,6 +206,9 @@ func baseOps(env Env) []op.Entry {
 				if in.OrgFolder == "" {
 					in.OrgFolder = DefaultOrgFolder
 				}
+				if err := CheckCreatePatterns(in); err != nil {
+					return Report{}, err
+				}
 				return o.ask(ctx, OpCreate, func(h Host, yes bool) (Report, error) { return h.Create(ctx, in, yes) })
 			}),
 		op.Define(spec(OpImport, "Adopt the org entry a team suggests in its store, with your identity, and join its roster", asking, true,

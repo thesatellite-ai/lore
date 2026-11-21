@@ -419,7 +419,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (stor
  a staging entry (store branch ≠ the store's default) never matches by rules 4–5: only by 1–2
 ```
 
-Org resolution is how lore decides which org (which company setup) a repo belongs to. Remote URLs are compared as `host/owner/repo` (ssh or https, with or without `.git`), read from the raw `remote.<name>.url`. `*` matches one path segment, `**` any depth. When an org is found, its identity is used and the git email fallback is skipped. `LORE_ACTOR` is accepted only for agents on that org's **roster** (the list of people and agents in an org).
+Org resolution is how lore decides which org (which company setup) a repo belongs to. Remote URLs are compared as `host/owner/repo` (ssh or https, with or without `.git`), read from the raw `remote.<name>.url`. `*` matches one path segment, `**` any depth. A pattern always starts with the host: `client-*` or `acme` alone is refused with the pattern it most likely meant (`github.com/<owner>/client-*`, `github.com/acme/*`, the owner taken from the command's other patterns) and the same command with it as the hint. When an org is found, its identity is used and the git email fallback is skipped. `LORE_ACTOR` is accepted only for agents on that org's **roster** (the list of people and agents in an org).
 
 ## `lore org link` and the link scan
 

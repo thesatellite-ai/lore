@@ -213,6 +213,10 @@ func ValidateValue(r Rule, v string) (why string, ok bool) {
 		}
 	case RuleRepoPattern:
 		if _, err := repourl.Compile(v); err != nil {
+			if h := repourl.AsHostless(err); h != nil {
+				// H-112: name the pattern it most likely meant
+				return h.Why(), false
+			}
 			// fieldMsg names the value already: keep only the reason
 			why := strings.TrimPrefix(err.Error(), "repourl: ")
 			why = strings.TrimPrefix(strings.TrimPrefix(why, "pattern "+strconv.Quote(v)), ":")
