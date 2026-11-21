@@ -25,25 +25,34 @@ type MatchFunc func(ctx context.Context, match string, limit int) ([]Hit, error)
 
 // Match runs w's search through match and, for a natural query, each
 // topic word's own search: it returns the hits (the any-word hits in
-// bm25 order, then rows only a word's search found) and how many words
-// each row holds by the index. Plain words FTS5 refuses are retried once
-// with every word quoted (searchrank.Words.Retry); a query written in
-// FTS5 syntax that FTS5 refuses, or a second refusal, is returned as is
-// (E_INVALID_INPUT with the reason, D-475).
-// Shared by `lore search` (wire) and SearchFields.
-func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) ([]Hit, map[ids.AnyID]int, error) {
+// bm25 order, then rows only a word's search found), how many words each
+// row holds by the index, and the words the hits were found with (the
+// caller ranks them with these). A query written in FTS5 syntax that
+// FTS5 refuses is searched again as its plain words when it holds a
+// topic word (searchrank.Words.Plain: `alice (person)`, `orbit)`, P-14);
+// plain words FTS5 refuses are retried once with every word quoted
+// (searchrank.Words.Retry). Syntax with no topic word (`"`, `(`, `AND`),
+// or a refusal after both, is returned as is (E_INVALID_INPUT with the
+// reason, D-475). Shared by `lore search` (wire) and SearchFields.
+func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) ([]Hit, map[ids.AnyID]int, searchrank.Words, error) {
 	hits, err := match(ctx, w.FTS, limit)
+	if errs.Has(err, errs.InvalidInput) {
+		if plain, ok := w.Plain(); ok {
+			w = plain
+			hits, err = match(ctx, w.FTS, limit)
+		}
+	}
 	if errs.Has(err, errs.InvalidInput) && w.Retry() {
 		if quoted := searchrank.Quoted(w.FTS); quoted != "" && quoted != w.FTS {
 			hits, err = match(ctx, quoted, limit)
 		}
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, w, err
 	}
 	matched := map[ids.AnyID]int{}
 	if !w.Natural {
-		return hits, matched, nil
+		return hits, matched, w, nil
 	}
 	found := make(map[ids.AnyID]bool, len(hits))
 	for _, h := range hits {
@@ -55,7 +64,7 @@ func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) 
 			continue // a word FTS5 cannot read on its own counts nowhere
 		}
 		if terr != nil {
-			return nil, nil, terr
+			return nil, nil, w, terr
 		}
 		for _, h := range th {
 			matched[h.ID]++
@@ -65,7 +74,7 @@ func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) 
 			}
 		}
 	}
-	return hits, matched, nil
+	return hits, matched, w, nil
 }
 
 // Held is how many of w's words a row holds: its count from Match, or

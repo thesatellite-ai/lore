@@ -164,6 +164,9 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	// only negated words ("status:open -friday"): no full-text match of
 	// its own, it only drops rows from the conditions' hits
 	narrow := ftsFilter{match: ftsText}
+	if plain, ok := words.Plain(); ok {
+		narrow.plain = plain.FTS // `status:open alice (person)` (P-14)
+	}
 	if ftsText == "" {
 		narrow.exclude = metaquery.Excluded(textTerms)
 	}
@@ -265,15 +268,17 @@ func quoteSearch(s string) string { return `"` + s + `"` }
 
 // searchCoreTable runs w over t in every store's cache and returns t's
 // in-scope hits, scored and best first (searchrank.go), at most perTable.
-// Plain words FTS5 rejects are retried once with every word quoted
-// (v0.1.17's fallback, opsmemory.Match); a query written in FTS5 syntax
-// that FTS5 rejects is E_INVALID_INPUT, as in every `<kind> search`.
+// A query written in FTS5 syntax that FTS5 rejects is searched as its
+// plain words when it holds a topic word (`alice (person)`, P-14), plain
+// words FTS5 rejects are retried once with every word quoted (v0.1.17's
+// fallback); both in opsmemory.Match, as in every `<kind> search`.
+// Syntax with no topic word left (`"`, `(`, `AND`) is E_INVALID_INPUT.
 func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssearch.Target, w searchrank.Words, sc searchScope, perTable int) ([]opssearch.Hit, error) {
 	// D-435: how many topic words each row holds, by each word's own
 	// search (the index's stemming and segmentation, so a word counts
 	// exactly where the any-word search found it); a row only a word's
 	// search finds (the filled-in text of row_expanded) is a hit too.
-	hits, matched, err := opsmemory.Match(ctx, func(ctx context.Context, m string, n int) ([]opsmemory.Hit, error) {
+	hits, matched, w, err := opsmemory.Match(ctx, func(ctx context.Context, m string, n int) ([]opsmemory.Hit, error) {
 		return a.Search(ctx, t.Table, m, n)
 	}, w, searchFetch)
 	if err != nil {
@@ -612,9 +617,11 @@ func sqlText(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + 
 
 // ftsFilter narrows a condition search by full text: match is the FTS5
 // text a row must match ("" = no narrowing; it carries its own NOTs),
-// exclude the FTS5 text of the negated words a row must not match, used
-// only when match is "" (FTS5's NOT needs a left side).
-type ftsFilter struct{ match, exclude string }
+// plain the same text read as plain words, searched when FTS5 refuses
+// match (searchrank.Words.Plain, P-14; "" = keep the refusal), exclude
+// the FTS5 text of the negated words a row must not match, used only
+// when match is "" (FTS5's NOT needs a left side).
+type ftsFilter struct{ match, plain, exclude string }
 
 // ftsOnly is f as a test on t's row ids: keep(id) is false for a row the
 // filter leaves out. An empty filter keeps every row.
@@ -633,6 +640,9 @@ func (a *App) ftsOnly(ctx context.Context, t opssearch.Target, f ftsFilter) (fun
 	switch {
 	case f.match != "":
 		only, err := hitIDs(f.match)
+		if errs.Has(err, errs.InvalidInput) && f.plain != "" {
+			only, err = hitIDs(f.plain)
+		}
 		if err != nil {
 			return nil, err
 		}

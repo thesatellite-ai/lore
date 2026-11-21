@@ -236,7 +236,7 @@ func searchFields(ctx context.Context, env RankEnv, noun string, table row.Table
 		read = cols
 	}
 	w := searchrank.Of(match)
-	hits, matched, err := Match(ctx, run, w, limit)
+	hits, matched, w, err := Match(ctx, run, w, limit)
 	if err != nil {
 		return nil, err
 	}

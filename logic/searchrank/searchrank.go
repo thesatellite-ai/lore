@@ -65,6 +65,10 @@ type Words struct {
 	// not is the FTS5 tail leaving out the negated words (" NOT …"), ""
 	// without any; each word's own search carries it too.
 	not string
+	// plain is a Syntax text read as plain words: its FTS5 punctuation
+	// and operator words dropped, negations kept ("" when no topic word
+	// is left). Plain plans it after FTS5 refused the text (P-14).
+	plain string
 }
 
 // ftsSyntaxChars and ftsSyntaxWords make a query FTS5 syntax rather than
@@ -99,7 +103,7 @@ func Plan(text string, parsed []metaquery.Term) Words {
 	}
 	full := metaquery.FTS(parsed)
 	if syntax {
-		return Words{Terms: querywords.Terms(prefixText(strings.Join(pos, " "))), FTS: full, Syntax: true}
+		return Words{Terms: querywords.Terms(prefixText(strings.Join(pos, " "))), FTS: full, Syntax: true, plain: plainQuery(pos, neg)}
 	}
 	terms := querywords.Terms(strings.Join(pos, " "))
 	w := Words{Terms: terms, Natural: len(terms) > 1}
@@ -118,6 +122,57 @@ func Plan(text string, parsed []metaquery.Term) Words {
 	}
 	w.FTS = "(" + strings.Join(forms, " OR ") + ")" + w.not
 	return w
+}
+
+// Plain is w read as plain words, for a text written in FTS5 syntax
+// that FTS5 refused: `alice (person)`, `orbit)`, `"unclosed`, `rate^`
+// (P-14). A person who types a parenthesis or a stray quote around words
+// means the words, so the search finds them (any word, ranked as plain
+// text) instead of failing with a syntax error. ok is false for plain
+// text (nothing to change) and for syntax with no topic word left (`"`,
+// `(`, `AND`, `a OR`, `NEAR(`): those keep FTS5's refusal and its hint
+// (D-475), as there is nothing to search for.
+func (w Words) Plain() (Words, bool) {
+	if !w.Syntax || w.plain == "" {
+		return Words{}, false
+	}
+	return Plan(w.plain, metaquery.Parse(w.plain, func(string) bool { return false })), true
+}
+
+// plainQuery is the text Plain plans: pos and neg with every FTS5 syntax
+// character turned into a space and every operator word dropped, each
+// negated word kept negated; "" when no word outside the stop words is
+// left (a query of syntax and filler only keeps its refusal).
+func plainQuery(pos, neg []string) string {
+	strip := func(s string) []string {
+		var out []string
+		for _, f := range strings.Fields(strings.Map(func(r rune) rune {
+			if strings.ContainsRune(ftsSyntaxChars, r) {
+				return ' '
+			}
+			return r
+		}, s)) {
+			if ftsSyntaxWords[f] || strings.Trim(f, "-") == "" {
+				continue
+			}
+			out = append(out, f)
+		}
+		return out
+	}
+	words := strip(strings.Join(pos, " "))
+	topic := false
+	for _, t := range querywords.Terms(strings.Join(words, " ")) {
+		topic = topic || !querywords.IsStop(t)
+	}
+	if !topic {
+		return ""
+	}
+	for _, n := range neg {
+		for _, f := range strip(n) {
+			words = append(words, metaquery.NegPrefix+strings.TrimLeft(f, "-"))
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // Retry reports whether a text FTS5 refused is searched again with every
