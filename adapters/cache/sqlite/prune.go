@@ -64,10 +64,11 @@ const (
 	useDirMode  = 0o700
 )
 
-// cacheFileSidecars are the files kept beside a cache: SQLite's WAL files
-// and lore's merged-check memo (wire's mergedMemoSuffix, devco:Q-2). They
-// are part of the cache and go with it, so a pruned cache leaves nothing.
-var cacheFileSidecars = []string{"-wal", "-shm", mergedMemoSuffix}
+// cacheFileSidecars are the files kept beside a cache: SQLite's WAL files,
+// lore's merged-check memo (wire's mergedMemoSuffix, devco:Q-2) and the
+// open stamp (stamp.go, devco:D-826). They are part of the cache and go
+// with it, so a pruned cache leaves nothing.
+var cacheFileSidecars = []string{"-wal", "-shm", mergedMemoSuffix, stampSuffix}
 
 // mergedMemoSuffix ends the merged-check memo wire writes beside a repo
 // cache (<name>.db.merged.json); it must match wire's mergedMemoSuffix.

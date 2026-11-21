@@ -236,3 +236,34 @@ func TestJourneyHookGitExecBudget(t *testing.T) {
 		run("push", "push", "-q", "origin", "HEAD:refs/heads/budget")
 	})
 }
+
+// TestJourneyWarmReadOutsideRepoRunsNoGit: an agent asking its personal
+// store from a folder outside every repository starts no git process once
+// the caches are warm, and gets the same answer as the cold call
+// (devco:D-826: each such read started ten git processes, rev-parse
+// asking "where is the repository?" to hear "none", plus a config
+// listing).
+func TestJourneyWarmReadOutsideRepoRunsNoGit(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	ida := w.Persona("Ida Field", "ida.field@acme-co.example")
+	lap := ida.Laptop()
+	me := w.Remote("github.com/ida-field/lore-me")
+	w.Step("day1/notes-in-the-personal-store", func() {
+		lap.Lore(lap.Home, "store", "init", "--name", "me", "--url", me.SSHURL(), "--yes").OK(t)
+		lap.Lore(lap.Home, "store", "folder", "add", "me", "work").OK(t)
+		lap.Lore(lap.Home, "memory", "add", "--body", "Status update orbit: live with 9 customers.", "--to", "me/work", "--yes").OK(t)
+	})
+	w.Step("day1/ask-twice-from-home", func() {
+		cold := lap.Lore(lap.Home, "ask", "--store", "me", "--query", "what is the status of orbit").OK(t).
+			Says(t, "live with 9 customers").Out()
+		before := len(w.GitCalls(lap.Name))
+		warm := lap.Lore(lap.Home, "ask", "--store", "me", "--query", "what is the status of orbit").OK(t).Out()
+		if calls := w.GitCalls(lap.Name)[before:]; len(calls) != 0 {
+			t.Errorf("a warm read outside every repository started %d git processes (want 0):\n  %s", len(calls), strings.Join(calls, "\n  "))
+		}
+		if warm != cold {
+			t.Errorf("the warm answer differs from the cold one:\ncold:\n%s\nwarm:\n%s", cold, warm)
+		}
+	})
+}

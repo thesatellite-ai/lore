@@ -92,6 +92,11 @@ type Cache struct {
 	// unfoldReads counts the per-row reads unfoldSnippet made (devco:D-808:
 	// a search must not read every hit's row to restore a ı; tests read it).
 	unfoldReads int
+	// lazy is the current stamp a handle was opened from without
+	// connecting (stamp.go, devco:D-826): Cursor and RefreshRefs answer
+	// from it; anything that needs st runs init first (ensureInit), which
+	// clears it. nil once init ran.
+	lazy *fileStamp
 }
 
 var _ store.Cache = (*Cache)(nil)
@@ -125,7 +130,8 @@ func openCache(ctx context.Context, path string, reg *schema.Registry, exp Expan
 }
 
 // walSuffixes are the files SQLite keeps beside a cache file in WAL mode.
-var walSuffixes = []string{"-wal", "-shm"}
+// The open stamp (stamp.go) goes with them: it describes the gone file.
+var walSuffixes = []string{"-wal", "-shm", stampSuffix}
 
 // dropOrphanWAL removes the -wal and -shm files of a cache file that is
 // gone. A cache is derived (deleting it loses nothing), but deleting it
@@ -157,6 +163,11 @@ func openFile(ctx context.Context, path string, reg *schema.Registry, exp Expand
 		return nil, openErr("cache", path, err)
 	}
 	db.SetMaxOpenConns(1)
+	if st, ok := readStamp(path, reg); ok {
+		// devco:D-826: a current stamp: no connection, no schema parse
+		// until something needs more than the cursors (ensureInit)
+		return &Cache{db: db, base: reg, exp: exp, writes: fileWrites{path: path, free: free}, lazy: &st}, nil
+	}
 	if err := connectBusy(ctx, db); err != nil {
 		return nil, errors.Join(explainOpen(path, openErr("cache", path, err), free), db.Close())
 	}
@@ -231,6 +242,7 @@ func (c *Cache) init(ctx context.Context) error {
 		}
 		if ok {
 			c.st = st
+			c.writeStamp(ctx)
 			return nil
 		}
 	}
@@ -273,7 +285,18 @@ func (c *Cache) init(ctx context.Context) error {
 		return err
 	}
 	c.st = st
+	c.writeStamp(ctx)
 	return nil
+}
+
+// ensureInit runs init on a handle opened from a stamp (lazy), once: the
+// table state and the checks of a full open, before anything needs them.
+func (c *Cache) ensureInit(ctx context.Context) error {
+	if c.lazy == nil {
+		return nil
+	}
+	c.lazy = nil
+	return c.init(ctx)
 }
 
 // Prefixes of a view the internal DDL drops and creates again on every open
@@ -360,6 +383,9 @@ func escapeQuoted(s string) string {
 // once (`lore fix --all` children over a shared store cache) a writer
 // could lose every turn past busy_timeout and fail "database is locked".
 func (c *Cache) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	if err := c.ensureInit(ctx); err != nil {
+		return err
+	}
 	tx, err := beginWrite(ctx, c.db)
 	if err != nil {
 		return dbErr("begin", err)
@@ -371,6 +397,7 @@ func (c *Cache) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	if err := tx.Commit(); err != nil {
 		return c.writes.explain(dbErr("commit", err))
 	}
+	c.writeStamp(ctx) // stamp.go: the next read opens without connecting
 	return nil
 }
 
@@ -526,6 +553,9 @@ func (c *Cache) Cursor(ctx context.Context, source store.Source) (store.Cursor, 
 	if err := c.usable(); err != nil {
 		return "", err
 	}
+	if c.lazy != nil {
+		return store.Cursor(c.lazy.Cursors[string(source)]), nil // absent: never applied, as ErrNoRows below
+	}
 	var cur string
 	err := c.db.QueryRowContext(ctx, `SELECT cursor FROM "`+tblCursors+`" WHERE source = ?`, string(source)).Scan(&cur)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -626,6 +656,7 @@ func (c *Cache) ResolveID(ctx context.Context, id ids.AnyID) (LensHit, error) {
 func (c *Cache) Tables() []row.Table {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	_ = c.ensureInit(context.Background()) // a failed init leaves no tables, which is what it can tell
 	return c.st.names()
 }
 

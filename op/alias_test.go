@@ -46,15 +46,15 @@ func TestAliasTags(t *testing.T) {
 		A string `json:"a" flag:"a" alias:"B"`
 	}
 	run("no flag", func() {
-		Define(Spec{Name: "x.a", Summary: "s", Permission: PermRead, Access: AccessRead}, func(context.Context, noFlag) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "x.a", Summary: "s", Permission: PermRead, Access: AccessRead}, func(context.Context, noFlag) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("self", func() {
-		Define(Spec{Name: "x.b", Summary: "s", Permission: PermRead, Access: AccessRead}, func(context.Context, self) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "x.b", Summary: "s", Permission: PermRead, Access: AccessRead}, func(context.Context, self) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("clash", func() {
-		Define(Spec{Name: "x.c", Summary: "s", Permission: PermRead, Access: AccessRead}, func(context.Context, clash) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "x.c", Summary: "s", Permission: PermRead, Access: AccessRead}, func(context.Context, clash) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("bad name", func() {
-		Define(Spec{Name: "x.d", Summary: "s", Permission: PermRead, Access: AccessRead}, func(context.Context, badName) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "x.d", Summary: "s", Permission: PermRead, Access: AccessRead}, func(context.Context, badName) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 }

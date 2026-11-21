@@ -177,7 +177,7 @@ func (b *Backend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store
 			return b.rowAtHead(ctx, path, table, id)
 		}
 		if h, herr := b.headIfHeld(ctx, path); herr == nil && h != "" {
-			if auth, _ := b.authorityOf(ctx, h); auth != nil {
+			if auth, _ := b.rowAuthorityOf(ctx, h); auth != nil {
 				var r store.Row
 				var err error
 				if blob, held := auth.heldBlob(path); held {

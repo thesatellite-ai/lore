@@ -57,7 +57,7 @@ func TestNonEmptyFlag(t *testing.T) {
 }
 
 // TestNonEmptyTagMisuse: the tag goes on a string flag and names what to
-// give; anything else is a Define-time panic, like every other bad tag.
+// give; anything else panics when the input is first read, like every other bad tag.
 func TestNonEmptyTagMisuse(t *testing.T) {
 	t.Parallel()
 	type onArg struct { // a nonempty bool is no string
@@ -79,12 +79,12 @@ func TestNonEmptyTagMisuse(t *testing.T) {
 		f()
 	}
 	check("on a bool", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, onArg) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, onArg) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	check("blank", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, blank) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, blank) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	check("on a bool", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, onBool) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, onBool) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 }

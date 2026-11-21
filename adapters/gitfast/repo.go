@@ -11,6 +11,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -432,6 +433,88 @@ func isFullID(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// repoLocatingEnv are the variables that move git's repository discovery
+// away from the folder walk noRepoAbove repeats; with any of them set the
+// answer is left to git.
+var repoLocatingEnv = []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM"}
+
+// noRepoAbove reports whether git finds no repository at or above dir:
+// dir is a folder and neither it nor any folder above it holds a .git
+// entry of any kind or is itself a git directory. Anything it cannot
+// rule out (a .git it cannot read, a variable in repoLocatingEnv, a dir
+// that is not a folder) is false, so git answers that case itself.
+// Why (devco:D-826): a read outside every repository asked git up to ten
+// times "where is the repository?" (rev-parse --show-toplevel and the
+// like), each a process start of several milliseconds, to hear "none".
+func noRepoAbove(dir string) bool {
+	for _, k := range repoLocatingEnv {
+		if os.Getenv(k) != "" {
+			return false
+		}
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+		return false
+	}
+	for d := abs; ; {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); !errors.Is(err, fs.ErrNotExist) {
+			return false
+		}
+		if isGitDir(d) {
+			return false
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return true
+		}
+		d = parent
+	}
+}
+
+// noRepoMessage is git's standard error for a command that needs a
+// repository run outside every one (git 2.x, unchanged since 1.8).
+const noRepoMessage = "fatal: not a git repository (or any of the parent directories): .git"
+
+// noRepoExit is git's exit status for that refusal.
+const noRepoExit = 128
+
+// noRepoReply is git's answer to a repository read run outside every
+// repository.
+func noRepoReply() Reply {
+	return Reply{Code: noRepoExit, Stderr: noRepoMessage}
+}
+
+// repoFlags are the rev-parse options that ask about the repository and
+// make git refuse outside one (needsRepo); --git-path takes a value.
+var repoFlags = map[string]bool{
+	"--show-toplevel": true, "--is-inside-work-tree": true, "--is-bare-repository": true, "--is-inside-git-dir": true,
+	"--show-object-format": true, "--git-dir": true, "--absolute-git-dir": true, "--git-common-dir": true,
+	"--show-prefix": true, "--path-format=absolute": true, "--path-format=relative": true,
+}
+
+// needsRepo reports whether rev-parse with args only asks about the
+// repository (every argument a repoFlags option or --git-path <path>),
+// which git refuses outside one with noRepoReply. Any other argument (a
+// revision, --parseopt, --sq-quote, ...) is left to git.
+func needsRepo(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	for i := 0; i < len(args); i++ {
+		switch {
+		case repoFlags[args[i]]:
+		case args[i] == "--git-path" && i+1 < len(args):
+			i++
+		default:
 			return false
 		}
 	}

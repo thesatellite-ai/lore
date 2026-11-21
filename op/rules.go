@@ -28,18 +28,24 @@ var rootVerbsRefused = []string{"import", "export"}
 func checkWords(e Entry) []error {
 	s := e.Spec()
 	var p []error
-	// XQ8: --by always means an actor, so a `by` flag must be an ActorRef.
-	for _, f := range e.InputFields() {
-		if f.Flag == byFlag && !f.Actor {
-			p = append(p, errors.New(s.Name+": flag --"+byFlag+" must name an actor (Go type op.ActorRef, XQ8); for grouping use --"+groupByFlag))
-		}
-	}
 	// XQ9: no root-level import/export command.
 	if path := CLIPath(s.Name); len(path) > 0 {
 		for _, w := range rootVerbsRefused {
 			if path[0] == w {
 				p = append(p, errors.New(s.Name+": no root-level `lore "+w+"` (XQ9): "+w+" is a verb under the noun it creates, e.g. task."+w))
 			}
+		}
+	}
+	return p
+}
+
+// checkByFlag is XQ8: --by always means an actor, so a `by` flag must be
+// an ActorRef (Registry.CheckFields: it reads the input fields).
+func checkByFlag(e Entry) []error {
+	var p []error
+	for _, f := range e.InputFields() {
+		if f.Flag == byFlag && !f.Actor {
+			p = append(p, errors.New(e.Spec().Name+": flag --"+byFlag+" must name an actor (Go type op.ActorRef, XQ8); for grouping use --"+groupByFlag))
 		}
 	}
 	return p

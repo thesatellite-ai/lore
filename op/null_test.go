@@ -95,5 +95,5 @@ func TestNullFieldInfo(t *testing.T) {
 			t.Error("Define accepted an input Null")
 		}
 	}()
-	Define(Spec{Name: "plan.add"}, func(context.Context, nullIn) (struct{}, error) { return struct{}{}, nil })
+	_ = Define(Spec{Name: "plan.add"}, func(context.Context, nullIn) (struct{}, error) { return struct{}{}, nil }).InputFields()
 }

@@ -71,10 +71,10 @@ func TestEnumRefusesBadSets(t *testing.T) {
 	}
 	for name, f := range map[string]func(){
 		"repeated": func() {
-			Define(Spec{Name: "a.b"}, func(context.Context, dup) (struct{}, error) { return struct{}{}, nil })
+			_ = Define(Spec{Name: "a.b"}, func(context.Context, dup) (struct{}, error) { return struct{}{}, nil }).InputFields()
 		},
 		"empty": func() {
-			Define(Spec{Name: "a.b"}, func(context.Context, empty) (struct{}, error) { return struct{}{}, nil })
+			_ = Define(Spec{Name: "a.b"}, func(context.Context, empty) (struct{}, error) { return struct{}{}, nil }).InputFields()
 		},
 	} {
 		func() {

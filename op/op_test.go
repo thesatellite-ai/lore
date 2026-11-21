@@ -166,26 +166,49 @@ func TestDefinePanicsOnBadTags(t *testing.T) {
 	noop := func(context.Context, struct{}) (struct{}, error) { return struct{}{}, nil }
 	run("bad name", func() { Define(Spec{Name: "memory"}, noop) })
 	run("no json", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, noJSON) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, noJSON) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("bad ui", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, badUI) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, badUI) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("arg gap", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, gap) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, gap) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("positional flag clash", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, both) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, both) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("nested input", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, nested) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, nested) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("bad flag", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, badFlag) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, badFlag) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
 	run("not a struct", func() {
-		Define(Spec{Name: "a.b"}, func(context.Context, string) (struct{}, error) { return struct{}{}, nil })
+		_ = Define(Spec{Name: "a.b"}, func(context.Context, string) (struct{}, error) { return struct{}{}, nil }).InputFields()
 	})
+}
+
+// TestDefineReadsInputOnFirstUse: Define reads no struct tag (a command
+// line mounts and decodes one operation, devco:D-826), so a bad input tag
+// panics on the first InputFields, not when the registry is built.
+func TestDefineReadsInputOnFirstUse(t *testing.T) {
+	t.Parallel()
+	type noJSON struct{ A string }
+	var e Entry
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("Define read the input tags: %v", r)
+			}
+		}()
+		e = Define(Spec{Name: "a.b"}, func(context.Context, noJSON) (struct{}, error) { return struct{}{}, nil })
+	}()
+	defer func() {
+		if recover() == nil {
+			t.Error("InputFields accepted an input field without a json tag")
+		}
+	}()
+	_ = e.InputFields()
 }
 
 func TestRoutesAndCLI(t *testing.T) {
@@ -250,7 +273,7 @@ func TestRegistry(t *testing.T) {
 		},
 	}
 	for name, entries := range bad {
-		if _, err := NewRegistry(entries...); !errs.Has(err, errs.ConfigInvalid) {
+		if err := checkAll(entries...); !errs.Has(err, errs.ConfigInvalid) {
 			t.Errorf("%s: err = %v", name, err)
 		}
 	}

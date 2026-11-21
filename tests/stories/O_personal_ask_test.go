@@ -217,4 +217,27 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-822] ask --json does not keep the stored text:\n%s", j)
 		}
 	})
+	// devco:D-826: a warm read opens the folder caches from their stamps
+	// (no schema parse) and starts no git process outside a repository;
+	// it must answer exactly as the cold read, and a fact written between
+	// two reads (the stamp no longer matches) shows on the next one.
+	s.Step("personal-store/warm-read-answers-as-cold", func() {
+		q := "what is the status of orbit"
+		cold := ada.Lore(ada.Home, "ask", "--store", "me", "--query", q)
+		cold.OK(t)
+		for i := range 2 {
+			if warm := ada.Lore(ada.Home, "ask", "--store", "me", "--query", q); warm.Out() != cold.Out() {
+				t.Errorf("[O D-826] warm ask %d differs from the cold one:\ncold:\n%s\nwarm:\n%s", i+1, cold, warm)
+			}
+		}
+		ada.Lore(ada.Home, "memory", "add", "--body", "Status update orbit: general availability for 40 users.", "--at", "2026-11-15", "--to", to, "--yes").OK(t)
+		after := ada.Lore(ada.Home, "ask", "--store", "me", "--query", q)
+		after.OK(t)
+		if !strings.Contains(after.Out(), "general availability for 40 users") {
+			t.Errorf("[O D-826] the ask after a write misses the new status (a stale cache was read):\n%s", after)
+		}
+		if again := ada.Lore(ada.Home, "ask", "--store", "me", "--query", q); again.Out() != after.Out() {
+			t.Errorf("[O D-826] the warm ask after the write differs:\nfirst:\n%s\nwarm:\n%s", after, again)
+		}
+	})
 }

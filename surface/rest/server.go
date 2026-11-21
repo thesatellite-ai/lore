@@ -124,6 +124,9 @@ func New(reg *op.Registry, runner op.Runner, opts Options) (*Server, error) {
 	if opts.Token == "" && opts.Authenticate == nil {
 		return nil, errs.New(errs.ConfigInvalid, "rest: no api token; refusing to serve an open API")
 	}
+	if err := reg.CheckFields(); err != nil { // devco:D-826: NewRegistry no longer reads every input to check routes
+		return nil, err
+	}
 	mux := http.NewServeMux()
 	h := &handlers{reg: reg, runner: runner, opts: opts}
 	if opts.Allow == nil { // ONB 5.2: a filtered server publishes no registry-wide documents

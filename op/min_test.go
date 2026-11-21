@@ -45,7 +45,7 @@ func TestMinFlag(t *testing.T) {
 }
 
 // TestMinTagMisuse: min goes on an int flag and is an integer; anything
-// else is a Define-time panic, like every other bad tag.
+// else panics when the input is first read, like every other bad tag.
 func TestMinTagMisuse(t *testing.T) {
 	t.Parallel()
 	type badStr struct {
@@ -56,12 +56,12 @@ func TestMinTagMisuse(t *testing.T) {
 	}
 	for name, def := range map[string]func(){
 		"string": func() {
-			Define(Spec{Name: "a.b", Summary: "s", Permission: PermRead, Access: AccessRead},
-				func(_ context.Context, in badStr) (badStr, error) { return in, nil })
+			_ = Define(Spec{Name: "a.b", Summary: "s", Permission: PermRead, Access: AccessRead},
+				func(_ context.Context, in badStr) (badStr, error) { return in, nil }).InputFields()
 		},
 		"not a number": func() {
-			Define(Spec{Name: "a.b", Summary: "s", Permission: PermRead, Access: AccessRead},
-				func(_ context.Context, in badNum) (badNum, error) { return in, nil })
+			_ = Define(Spec{Name: "a.b", Summary: "s", Permission: PermRead, Access: AccessRead},
+				func(_ context.Context, in badNum) (badNum, error) { return in, nil }).InputFields()
 		},
 	} {
 		func() {

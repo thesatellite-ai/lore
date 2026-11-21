@@ -280,7 +280,73 @@ func (b *Backend) saveAuthority(a *authority) {
 	_, werr := tmp.Write(buf.Bytes())
 	if cerr := tmp.Close(); werr != nil || cerr != nil || os.Rename(tmp.Name(), p) != nil {
 		_ = os.Remove(tmp.Name())
+		return
 	}
+	writeGobAtomic(p+authorityRowsSuffix, savedRows{Format: authorityFormat, Binary: bin, Clone: s.Clone, Head: s.Head, OrgHead: s.OrgHead,
+		Held: s.Held, Trusted: s.Trusted, Credited: s.Credited})
+}
+
+// authorityRowsSuffix names the row view kept beside a saved replay:
+// <replay file>.rows (savedRows).
+const authorityRowsSuffix = ".rows"
+
+// savedRows is the part of a saved replay a row read needs (Backend.Get:
+// heldBlob and creditRow), kept in a file of its own. Why (devco:D-826):
+// the whole replay is ~2 MB of roster state for a store with a long
+// history, and decoding it was ~17 ms of every read that looks up one
+// actor row (the agent-key settle); the row view is a few hundred bytes.
+// It is used only at exactly the head and org head it was saved at, by
+// the binary that saved it, so it is always the full replay's answer.
+type savedRows struct {
+	Format   int
+	Binary   string
+	Clone    string
+	Head     string
+	OrgHead  string
+	Held     map[string]HeldChange
+	Trusted  map[string]string
+	Credited map[string]savedCredit
+}
+
+// writeGobAtomic writes v gob-encoded to p through a temp file and a
+// rename; a failure leaves no file (the reader then takes the slow path).
+func writeGobAtomic(p string, v savedRows) {
+	var buf bytes.Buffer
+	if gob.NewEncoder(&buf).Encode(&v) != nil {
+		return
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(p), filepath.Base(p)+".*")
+	if err != nil {
+		return
+	}
+	_, werr := tmp.Write(buf.Bytes())
+	if cerr := tmp.Close(); werr != nil || cerr != nil || os.Rename(tmp.Name(), p) != nil {
+		_ = os.Remove(tmp.Name())
+	}
+}
+
+// loadRowView is the saved row view of the replay at head (and the org
+// head orgHead), as an authority holding only what heldBlob and
+// creditRow read; nil when none matches exactly.
+func (b *Backend) loadRowView(head, orgHead string) *authority {
+	p, bin := b.authorityPath(), binaryStamp()
+	if p == "" || bin == "" || head == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(p + authorityRowsSuffix)
+	if err != nil {
+		return nil
+	}
+	var s savedRows
+	if gob.NewDecoder(bytes.NewReader(raw)).Decode(&s) != nil || s.Format != authorityFormat || s.Binary != bin ||
+		s.Clone != filepath.Clean(b.work) || s.Head != head || s.OrgHead != orgHead {
+		return nil
+	}
+	a := &authority{head: s.Head, orgHead: s.OrgHead, held: s.Held, trusted: s.Trusted, credited: make(map[string]credit, len(s.Credited))}
+	for p, c := range s.Credited {
+		a.credited[p] = credit{actor: c.Actor, claimed: c.Claimed, hlc: c.HLC, created: c.Created, commit: c.Commit}
+	}
+	return a
 }
 
 // saved is a as authorityFile holds it, stamped with the binary bin; ok

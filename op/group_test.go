@@ -21,7 +21,7 @@ type gIn struct {
 }
 
 func defineG[In any](In) {
-	Define(Spec{Name: "thing.split"}, func(context.Context, In) (struct{}, error) { return struct{}{}, nil })
+	_ = Define(Spec{Name: "thing.split"}, func(context.Context, In) (struct{}, error) { return struct{}{}, nil }).InputFields()
 }
 
 // TestGroupDefinePanics: every malformed group is a startup panic.

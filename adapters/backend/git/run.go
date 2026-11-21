@@ -154,7 +154,7 @@ func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 {
 		if rep, ok := gitfast.Try(ctx, c.dir, args, c.env, c.stdin); ok {
 			if rep.Code != 0 {
-				return rep.Out, &gitError{cmd: subcommand(c.args), code: rep.Code}
+				return rep.Out, &gitError{cmd: subcommand(c.args), code: rep.Code, stderr: rep.Stderr}
 			}
 			return rep.Out, nil
 		}

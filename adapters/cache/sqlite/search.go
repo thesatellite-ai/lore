@@ -62,6 +62,9 @@ func (c *Cache) searchHits(ctx context.Context, table row.Table, match string, l
 	if err := c.usable(); err != nil {
 		return nil, err
 	}
+	if err := c.ensureInit(ctx); err != nil {
+		return nil, err
+	}
 	p, ok := c.st.plans[table]
 	if !ok {
 		return nil, errs.New(errs.NotFound, "sqlite cache: no table "+quoteText(table.String()))

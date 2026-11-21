@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
@@ -571,17 +572,56 @@ func writeClientActor(ctx context.Context, st *state, target store.Source, id id
 // from then on. A non-detected identity (person, LORE_ACTOR, CI) is never
 // touched.
 func (s *state) settleAgentKey(ctx context.Context, backends map[store.Source]store.Backend) error {
-	wide, ok, err := identity.WidenAgentKey(s.who)
+	return s.startSettleAgentKey(ctx, backends)()
+}
+
+// startSettleAgentKey starts settleAgentKey's store reads in the
+// background and returns the wait that applies their verdict to s (call
+// it before anything reads s.who or s.actor, and before the backends
+// close; calling it again returns the same answer). Why (devco:D-826):
+// the reads (two actor rows per store, the first one decoding the
+// clone's saved roster replay, ~25 ms of CPU) share nothing with the
+// cache files a read opens next, so an open runs both side by side
+// instead of one after the other.
+func (s *state) startSettleAgentKey(ctx context.Context, backends map[store.Source]store.Backend) func() error {
+	who := s.who
+	wide, ok, err := identity.WidenAgentKey(who)
 	if err != nil || !ok {
+		return func() error { return err }
+	}
+	actor := s.actor
+	var (
+		wideID ids.ID[ids.Actor]
+		widen  bool
+		done   = make(chan struct{})
+	)
+	go func() {
+		defer close(done)
+		wideID, widen, err = agentKeyWidens(ctx, backends, who, wide, actor)
+	}()
+	var once sync.Once
+	return func() error {
+		<-done
+		once.Do(func() {
+			if err == nil && widen {
+				s.who, s.actor = wide, wideID
+			}
+		})
 		return err
 	}
-	ownerID, err := s.who.Owner.ActorID()
+}
+
+// agentKeyWidens is the store half of settleAgentKey: wideID is the
+// 10-hex key's actor id and widen whether the caller's agent must use it
+// (the table on settleAgentKey). It reads the backends only, never s.
+func agentKeyWidens(ctx context.Context, backends map[store.Source]store.Backend, who, wide identity.Resolved, actor ids.ID[ids.Actor]) (ids.ID[ids.Actor], bool, error) {
+	ownerID, err := who.Owner.ActorID()
 	if err != nil {
-		return err
+		return ids.ID[ids.Actor]{}, false, err
 	}
 	wideID, err := identity.ActorID(wide.StableKey)
 	if err != nil {
-		return err
+		return ids.ID[ids.Actor]{}, false, err
 	}
 	widen := false
 	for _, b := range backends {
@@ -589,7 +629,7 @@ func (s *state) settleAgentKey(ctx context.Context, backends map[store.Source]st
 			widen = true
 			break
 		}
-		got, gerr := b.Get(ctx, schema.TableActors, s.actor.Any())
+		got, gerr := b.Get(ctx, schema.TableActors, actor.Any())
 		if gerr != nil || got.Deleted {
 			continue
 		}
@@ -602,10 +642,7 @@ func (s *state) settleAgentKey(ctx context.Context, backends map[store.Source]st
 			break
 		}
 	}
-	if widen {
-		s.who, s.actor = wide, wideID
-	}
-	return nil
+	return wideID, widen, nil
 }
 
 // backfillKey writes the caller's stable key (and handle) into its own

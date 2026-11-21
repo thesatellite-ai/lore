@@ -56,7 +56,7 @@ func (g gitRun) output(ctx context.Context) ([]byte, error) {
 	// non-zero status is a quiet "no" (git printed nothing either)
 	if rep, ok := gitfast.Try(ctx, g.dir, g.args, g.env, g.stdin); ok {
 		if rep.Code != 0 {
-			return nil, errs.Wrap(errs.Internal, "wire: git "+gitfast.FirstArg(g.args)+": ", &gitfast.ExitError{Code: rep.Code})
+			return nil, errs.Wrap(errs.Internal, "wire: git "+gitfast.FirstArg(g.args)+": "+rep.Stderr, &gitfast.ExitError{Code: rep.Code})
 		}
 		return rep.Out, nil
 	}

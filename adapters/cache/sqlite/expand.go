@@ -197,6 +197,9 @@ func (c *Cache) RefreshRefs(ctx context.Context, stamp string) (int, error) {
 	if err := c.usable(); err != nil {
 		return 0, err
 	}
+	if c.lazy != nil && c.lazy.Refs == stamp {
+		return 0, nil // stamp.go: current, read from the open stamp
+	}
 	have, err := scanRefsStamp(c.db.QueryRowContext(ctx, qRefsStamp))
 	if err != nil || have == stamp {
 		return 0, err

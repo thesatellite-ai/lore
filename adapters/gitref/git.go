@@ -140,7 +140,7 @@ func (x Exec) Run(ctx context.Context, inv Invocation) ([]byte, error) {
 		// from the repository files starts no git
 		if rep, ok := gitfast.Try(ctx, inv.Dir, inv.Args, inv.Env, inv.Stdin); ok {
 			if rep.Code != 0 {
-				return rep.Out, &Error{Args: inv.Args, ExitCode: rep.Code, Err: &gitfast.ExitError{Code: rep.Code}}
+				return rep.Out, &Error{Args: inv.Args, ExitCode: rep.Code, Stderr: rep.Stderr, Err: &gitfast.ExitError{Code: rep.Code}}
 			}
 			return rep.Out, nil
 		}
