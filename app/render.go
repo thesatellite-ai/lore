@@ -81,12 +81,12 @@ func (l *lateSetup) UpdateSchema(ctx context.Context, quiet bool) ([]string, err
 }
 
 // PlanAgentHooks implements opssetup.Host.
-func (l *lateSetup) PlanAgentHooks(ctx context.Context, remove, promptSearch bool) ([]opssetup.HookPlan, error) {
+func (l *lateSetup) PlanAgentHooks(ctx context.Context, remove, promptSearch bool, scope opssetup.HookScope) ([]opssetup.HookPlan, error) {
 	s, err := l.host()
 	if err != nil {
 		return nil, err
 	}
-	return s.PlanAgentHooks(ctx, remove, promptSearch)
+	return s.PlanAgentHooks(ctx, remove, promptSearch, scope)
 }
 
 // WriteAgentHooks implements opssetup.Host.

@@ -25,12 +25,19 @@ package sqlite
 //
 // Any commit by any process (an older lore included) changes the WAL or
 // the main file, so a stamp never needs removing before a write: it just
-// stops matching. Missing, unreadable or stale, it costs one full open,
-// which writes a fresh one.
+// stops matching. Missing, unreadable or stale, it costs a full open.
+//
+// Only a process that committed to the file writes its stamp (devco:D-839):
+// after each commit, and again after its close, because closing the last
+// connection folds the WAL into the main file and so makes the stamp of the
+// last commit stale. A read, a dry run included, never writes one: it only
+// reads the stamp, and a stale one costs it the full open until the next
+// write stamps the file again.
 
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -157,7 +164,46 @@ func readStamp(path string, reg *schema.Registry) (fileStamp, bool) {
 // file fully). A failure only costs that full open, so none is reported.
 // c.db must be usable (init done, or a commit just made).
 func (c *Cache) writeStamp(ctx context.Context) {
+	stampFrom(ctx, c.db, c.writes.path, c.base)
+}
+
+// restamp stamps c's file after Close, from a connection of its own: the
+// close folded this process's WAL into the main file, so the stamp written
+// after the last commit no longer matches. The cursors are read again
+// rather than reused, so a commit by another process in between is either
+// seen or makes the two looks differ (no stamp). A file in another layout
+// (an older lore wrote it since) gets no stamp. Only a handle that
+// committed calls it (Cache.committed).
+func (c *Cache) restamp(ctx context.Context) {
 	path := c.writes.path
+	if path == "" || exeID() == "" {
+		return
+	}
+	dsn, err := fileDSN(path)
+	if err != nil {
+		return
+	}
+	db, err := sql.Open(driverName, dsn)
+	if err != nil {
+		return
+	}
+	defer func() { _ = db.Close() }() // read only: closing an empty WAL leaves the main file as it is
+	db.SetMaxOpenConns(1)
+	var ver, app int64
+	if db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&ver) != nil || db.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app) != nil {
+		return
+	}
+	if ver != layoutVersion || int32(app) != ddlStamp() {
+		_ = os.Remove(stampPath(path))
+		return
+	}
+	stampFrom(ctx, db, path, c.base)
+}
+
+// stampFrom records the cursors and refs stamp db reads from the file at
+// path beside it (writeStamp's work, on the handle's own connection or on
+// restamp's).
+func stampFrom(ctx context.Context, db *sql.DB, path string, reg *schema.Registry) {
 	exe := exeID()
 	if path == "" || exe == "" {
 		return
@@ -168,8 +214,8 @@ func (c *Cache) writeStamp(ctx context.Context) {
 		drop()
 		return
 	}
-	st := fileStamp{Format: stampFormat, Layout: layoutVersion, DDL: ddlStamp(), Exe: exe, Reg: regID(c.base), File: main, WAL: wal, Cursors: map[string]string{}}
-	rs, err := c.db.QueryContext(ctx, `SELECT source, cursor FROM "`+tblCursors+`"`)
+	st := fileStamp{Format: stampFormat, Layout: layoutVersion, DDL: ddlStamp(), Exe: exe, Reg: regID(reg), File: main, WAL: wal, Cursors: map[string]string{}}
+	rs, err := db.QueryContext(ctx, `SELECT source, cursor FROM "`+tblCursors+`"`)
 	if err != nil {
 		drop()
 		return
@@ -187,7 +233,7 @@ func (c *Cache) writeStamp(ctx context.Context) {
 		drop()
 		return
 	}
-	if st.Refs, err = scanRefsStamp(c.db.QueryRowContext(ctx, qRefsStamp)); err != nil {
+	if st.Refs, err = scanRefsStamp(db.QueryRowContext(ctx, qRefsStamp)); err != nil {
 		drop()
 		return
 	}

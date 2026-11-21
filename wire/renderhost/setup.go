@@ -76,7 +76,7 @@ func (s *SetupHost) UpdateSchema(ctx context.Context, quiet bool) ([]string, err
 // PlanAgentHooks is the --agent-hooks plan of this git work tree. CQ5: the
 // per-prompt search hook only when the policy (or --prompt-search for
 // this machine) turns it on.
-func (s *SetupHost) PlanAgentHooks(ctx context.Context, remove, promptSearch bool) (_ []opssetup.HookPlan, err error) {
+func (s *SetupHost) PlanAgentHooks(ctx context.Context, remove, promptSearch bool, scope opssetup.HookScope) (_ []opssetup.HookPlan, err error) {
 	defer func() { err = s.h.hostError(err) }()
 	root, err := agentHooksRoot(ctx)
 	if err != nil {
@@ -93,10 +93,14 @@ func (s *SetupHost) PlanAgentHooks(ctx context.Context, remove, promptSearch boo
 		}
 	}
 	// devco D-835: a tool the repo names in context.targets (lore init
-	// --target claude_code) is set up here even before its folder exists
-	targets, _, err := s.h.coreContextTargets(ctx)
-	if err != nil {
-		return nil, err
+	// --target claude_code) is set up here even before its folder exists,
+	// by the explicit --agent-hooks only (D-839: doctor and --fix plan the
+	// tools present, so they agree and a fresh repo stays as it is)
+	var targets []string
+	if scope == opssetup.HookScopeTargets {
+		if targets, _, err = s.h.coreContextTargets(ctx); err != nil {
+			return nil, err
+		}
 	}
 	plans, err := planAgentHooks(ctx, root, remove, promptSearch, s.sharedHooks(ctx), targets...)
 	if err != nil {

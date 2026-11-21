@@ -1842,7 +1842,7 @@ func (sp setupProber) hooks(ctx context.Context, r opssetup.ProbeRequest) opsset
 	if err != nil {
 		return result(onboard.StatusError, err.Error(), nil)
 	}
-	plans, err := h.PlanAgentHooks(ctx, false, false)
+	plans, err := h.PlanAgentHooks(ctx, false, false, opssetup.HookScopePresent) // what doctor --fix writes (devco:D-839)
 	if err != nil {
 		return result(onboard.StatusError, err.Error(), nil)
 	}
