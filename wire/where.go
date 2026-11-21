@@ -211,9 +211,6 @@ func whereHome(home string, uses map[string]*cacheUse, all bool) ([]opswhere.Ent
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
-		if !d.IsDir() && strings.HasSuffix(rel, sqlite.StampSuffix) {
-			return nil // a cache file's open stamp is part of that file (devco:D-826), listed with it
-		}
 		e, ok := matchHome(rel, d.IsDir())
 		switch {
 		case ok:
@@ -248,6 +245,10 @@ func whereKind(dir bool) string {
 	return opswhere.KindFile
 }
 
+// whatOpenStamp starts the description of a cache file's open stamp
+// (<file>.db.stamp, adapters/cache/sqlite/stamp.go).
+const whatOpenStamp = "the open stamp beside a cache file (what a read needs to open it without parsing its schema; only a command that writes the cache writes it): "
+
 // whereHomeWhat is e's description of rel, with the stores and repos a
 // cache file serves.
 func whereHomeWhat(e homeEntry, rel string, uses map[string]*cacheUse) string {
@@ -258,11 +259,16 @@ func whereHomeWhat(e homeEntry, rel string, uses map[string]*cacheUse) string {
 	for _, suf := range []string{"-wal", "-shm", sqlite.StampSuffix} {
 		cacheRel = strings.TrimSuffix(cacheRel, suf)
 	}
+	what := e.What
+	if strings.HasSuffix(rel, sqlite.StampSuffix) {
+		// devco:D-839: listed like every file lore writes (it was skipped
+		// as part of its cache file, so lore where left it out)
+		what = whatOpenStamp + what
+	}
 	c := uses[cacheRel]
 	if c == nil {
-		return e.What
+		return what
 	}
-	what := e.What
 	if len(c.stores) > 0 {
 		what += "; store " + strings.Join(c.stores, ", ")
 	}

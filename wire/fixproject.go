@@ -580,7 +580,7 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 		st.Result = "skipped: this build has no tool setup"
 		return st
 	}
-	plans, err := h.PlanAgentHooks(ctx, false, false)
+	plans, err := h.PlanAgentHooks(ctx, false, false, opssetup.HookScopePresent) // what doctor checks (devco:D-839)
 	if err != nil {
 		st.Failed, st.Result = true, err.Error()
 		return st

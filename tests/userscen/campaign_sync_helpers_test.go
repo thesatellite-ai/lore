@@ -54,7 +54,11 @@ func camSyncTree(t *testing.T, dir string) map[string]string {
 		if d.IsDir() && d.Name() == ".git" {
 			return filepath.SkipDir
 		}
-		if d.IsDir() || camSyncIsCache(d.Name()) {
+		if d.IsDir() {
+			return nil
+		}
+		cacheFile := strings.HasSuffix(d.Name(), ".db")
+		if camSyncIsCache(d.Name()) && !cacheFile {
 			return nil
 		}
 		b, rerr := os.ReadFile(p)
@@ -63,6 +67,9 @@ func camSyncTree(t *testing.T, dir string) map[string]string {
 		}
 		sum := sha256.Sum256(b)
 		rel, _ := filepath.Rel(dir, p)
+		if cacheFile {
+			rel = camSyncCacheKey + rel // kept only to judge its stamp (camSyncSameTree)
+		}
 		out[rel] = hex.EncodeToString(sum[:])
 		return nil
 	})
@@ -77,12 +84,12 @@ func camSyncSameTree(t *testing.T, what string, before, after map[string]string)
 	t.Helper()
 	var diff []string
 	for p, h := range before {
-		if after[p] != h {
+		if after[p] != h && !camSyncFollowsCache(p, before, after) {
 			diff = append(diff, p)
 		}
 	}
 	for p := range after {
-		if _, ok := before[p]; !ok {
+		if _, ok := before[p]; !ok && !camSyncFollowsCache(p, before, after) {
 			diff = append(diff, p+" (new)")
 		}
 	}
@@ -90,6 +97,28 @@ func camSyncSameTree(t *testing.T, what string, before, after map[string]string)
 	if len(diff) > 0 {
 		t.Fatalf("%s changed files: %v", what, diff)
 	}
+}
+
+// camSyncCacheKey prefixes a SQLite cache file's entry in camSyncTree: the
+// file may change (camSyncIsCache), and its entry only says whether it did.
+const camSyncCacheKey = "cache-file:"
+
+// camSyncFollowsCache reports whether p is an entry a step may change: a
+// cache file itself, or a cache file's open stamp (<file>.db.stamp) when
+// that cache file changed too. devco:D-839: a stamp describes its cache
+// file, so it changes with a refresh that commits to the file (a read
+// inside git's racy window moves the folder cursor's time) and never
+// alone: a read that leaves the cache file as it was writes no stamp.
+func camSyncFollowsCache(p string, before, after map[string]string) bool {
+	if strings.HasPrefix(p, camSyncCacheKey) {
+		return true
+	}
+	file, ok := strings.CutSuffix(p, ".db.stamp")
+	if !ok {
+		return false
+	}
+	key := camSyncCacheKey + file + ".db"
+	return before[key] != after[key]
 }
 
 // camSyncIsCache reports a file lore keeps for itself and refreshes on

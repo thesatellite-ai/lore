@@ -97,6 +97,9 @@ type Cache struct {
 	// from it; anything that needs st runs init first (ensureInit), which
 	// clears it. nil once init ran.
 	lazy *fileStamp
+	// committed is true once this handle committed a write: only then does
+	// Close stamp the file again (devco:D-839: a read writes no stamp).
+	committed bool
 }
 
 var _ store.Cache = (*Cache)(nil)
@@ -241,8 +244,10 @@ func (c *Cache) init(ctx context.Context) error {
 			return err
 		}
 		if ok {
+			// devco:D-839: a read never writes the stamp (a dry run writes
+			// nothing under the lore home); the process that committed to
+			// the file stamps it again after its close (Close, restamp)
 			c.st = st
-			c.writeStamp(ctx)
 			return nil
 		}
 	}
@@ -397,6 +402,7 @@ func (c *Cache) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	if err := tx.Commit(); err != nil {
 		return c.writes.explain(dbErr("commit", err))
 	}
+	c.committed = true
 	c.writeStamp(ctx) // stamp.go: the next read opens without connecting
 	return nil
 }
@@ -626,6 +632,9 @@ func (c *Cache) Close() error {
 	c.closed = true
 	if err := c.db.Close(); err != nil {
 		return dbErr("close", err)
+	}
+	if c.committed {
+		c.restamp(context.Background()) // stamp.go: closing folded the WAL into the file
 	}
 	return nil
 }

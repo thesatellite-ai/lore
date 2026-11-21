@@ -62,6 +62,23 @@ type HookPlan struct {
 	Hook toolprofile.SessionHook `json:"-"`
 }
 
+// HookScope says which tools an agent hooks plan covers.
+type HookScope int
+
+const (
+	// HookScopePresent plans only the tools whose config folder exists in
+	// the checkout: what doctor checks and `lore doctor --fix` writes
+	// (devco:D-839: they planned a tool context.targets names, so --fix
+	// created .codex/ in a fresh repo doctor called HEALTHY, and a repo
+	// whose setup names claude_code read DEGRADED until a person ran
+	// `lore setup --agent-hooks`).
+	HookScopePresent HookScope = iota
+	// HookScopeTargets also plans a tool the repo's context.targets
+	// names, creating its folder (devco:D-835): only the explicit
+	// `lore setup --agent-hooks`, which `lore init --target` names.
+	HookScopeTargets
+)
+
 // Host is the machinery behind setup, supplied by the binary that owns
 // the database and the tool settings writers.
 //
@@ -73,8 +90,9 @@ type Host interface {
 	// the search index rebuild); it returns the lines it reports.
 	UpdateSchema(ctx context.Context, quiet bool) ([]string, error)
 	// PlanAgentHooks lists, per tool, what --agent-hooks would change in
-	// the checkout (E_INVALID_INPUT outside a git work tree).
-	PlanAgentHooks(ctx context.Context, remove, promptSearch bool) ([]HookPlan, error)
+	// the checkout (E_INVALID_INPUT outside a git work tree); scope says
+	// whether a targeted tool whose folder is missing is planned too.
+	PlanAgentHooks(ctx context.Context, remove, promptSearch bool, scope HookScope) ([]HookPlan, error)
 	// WriteAgentHooks applies plans (remove takes lore's hooks out).
 	WriteAgentHooks(ctx context.Context, plans []HookPlan, remove bool) error
 }
@@ -207,7 +225,7 @@ func Run(ctx context.Context, h Host, in RunIn, yes bool) (RunOut, error) {
 // agentHooks is the --agent-hooks mode: list, stop or ask, then write.
 func agentHooks(ctx context.Context, h Host, in RunIn, yes bool) (RunOut, error) {
 	promptSearch := in.PromptSearch || in.Remove // --remove takes out every lore hook
-	plans, err := h.PlanAgentHooks(ctx, in.Remove, promptSearch)
+	plans, err := h.PlanAgentHooks(ctx, in.Remove, promptSearch, HookScopeTargets)
 	if err != nil {
 		return RunOut{}, err
 	}

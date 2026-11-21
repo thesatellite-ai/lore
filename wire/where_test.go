@@ -86,3 +86,45 @@ func writeMkdir(t *testing.T, path, body string) {
 	}
 	writeT(t, path, body)
 }
+
+// TestWhereListsOpenStamps (devco:D-839): every cache file's open stamp
+// (<file>.db.stamp, written beside it since D-826) is listed by
+// `lore where` and says what it is; it was skipped as part of its cache
+// file, so a person could not tell what the file under the lore home was.
+// Break-verified: with the skip back, no stamp is listed.
+func TestWhereListsOpenStamps(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	files := []string{
+		"cache/" + machineCacheFile, "cache/" + machineCacheFile + ".stamp",
+		"cache/" + repoCacheDir + "/app-0123456789ab.db", "cache/" + repoCacheDir + "/app-0123456789ab.db.stamp",
+		"cache/stores/sto_example/main/root.db", "cache/stores/sto_example/main/root.db.stamp",
+	}
+	for _, f := range files {
+		p := filepath.Join(home, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, unknown := whereHome(home, nil, false)
+	if len(unknown) > 0 {
+		t.Fatalf("paths where cannot name: %v", unknown)
+	}
+	listed := map[string]string{}
+	for _, e := range entries {
+		listed[e.Path] = e.What
+	}
+	for _, f := range files {
+		what, ok := listed[filepath.Join(home, filepath.FromSlash(f))]
+		if !ok {
+			t.Errorf("lore where does not list %s", f)
+			continue
+		}
+		if strings.HasSuffix(f, ".stamp") != strings.HasPrefix(what, whatOpenStamp) {
+			t.Errorf("%s is described as %q", f, what)
+		}
+	}
+}

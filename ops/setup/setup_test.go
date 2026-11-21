@@ -18,6 +18,7 @@ type fakeHost struct {
 	notLore     bool
 	written     int
 	removed     bool
+	scopes      []HookScope
 }
 
 // LoreRepoReady implements RepoReady: the fake host is a lore repo
@@ -32,8 +33,9 @@ func (h *fakeHost) UpdateSchema(_ context.Context, quiet bool) ([]string, error)
 	return []string{"→ running ent schema migration...", "✓ setup complete"}, nil
 }
 
-func (h *fakeHost) PlanAgentHooks(_ context.Context, remove, _ bool) ([]HookPlan, error) {
+func (h *fakeHost) PlanAgentHooks(_ context.Context, remove, _ bool, scope HookScope) ([]HookPlan, error) {
 	h.removed = remove
+	h.scopes = append(h.scopes, scope)
 	return h.plans, nil
 }
 
@@ -205,5 +207,30 @@ func TestAgentHooksCountsFiles(t *testing.T) {
 	}
 	if n := strings.Count(done.Text(), "not set up here"); n != 1 {
 		t.Fatalf("the not-set-up line printed %d times:\n%s", n, done.Text())
+	}
+}
+
+// TestAgentHooksPlansTargetedTools (devco:D-839): the explicit
+// `lore setup --agent-hooks` plans the tools context.targets names even
+// when their folder is missing (D-835), dry run, --remove and the
+// confirmed write alike; doctor and `lore doctor --fix` ask for
+// HookScopePresent (wire), so a fresh repo doctor calls HEALTHY stays
+// unchanged by --fix. Break-verified: with HookScopePresent here the
+// scopes differ.
+func TestAgentHooksPlansTargetedTools(t *testing.T) {
+	ctx := context.Background()
+	h := &fakeHost{plans: twoPlans()}
+	for _, in := range []RunIn{{AgentHooks: true, DryRun: true}, {AgentHooks: true, Remove: true, DryRun: true}, {AgentHooks: true}} {
+		if _, err := Run(ctx, h, in, true); err != nil {
+			t.Fatalf("%+v: %v", in, err)
+		}
+	}
+	if len(h.scopes) != 3 {
+		t.Fatalf("plans asked for: %v", h.scopes)
+	}
+	for _, s := range h.scopes {
+		if s != HookScopeTargets {
+			t.Fatalf("setup --agent-hooks planned with scope %d, want HookScopeTargets: %v", s, h.scopes)
+		}
 	}
 }
