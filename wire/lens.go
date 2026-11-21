@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
@@ -63,6 +64,7 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, sc lensScope, d
 		return nil, nil, err
 	}
 	o.Trash = trashIn(o.Trash, srcs, st.eng.Stores())
+	trashSrcs, trashStores := srcs, st.eng.Stores()
 	if sc.RepoOnly {
 		// devco D-799: `--store repo` reads the repo's rows alone, as any
 		// other --store reads that store alone (routedStoreRead). The
@@ -71,6 +73,19 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, sc lensScope, d
 		// every view reads the repo's rows only (sqlite LensOptions.Only).
 		o.Only = string(store.SourceRepo)
 		o.Trash = trashIn(o.Trash, srcs[:1], nil)
+		trashSrcs, trashStores = srcs[:1], nil
+	}
+	if load := o.LoadTrash; load != nil {
+		// the rows read later, during setup, keep to the same stores (the repo's
+		// alone for --store repo, devco D-799)
+		attached, stores := slices.Clone(trashSrcs), trashStores
+		o.LoadTrash = func(ctx context.Context) ([]sqlite.TrashRow, error) {
+			rows, lerr := load(ctx)
+			if lerr != nil {
+				return nil, lerr
+			}
+			return trashIn(rows, attached, stores), nil
+		}
 	}
 	if deleted != "" {
 		srcs = append(srcs, sqlite.LensSource{Name: deletedLensName, Path: deleted, Deleted: true})
@@ -387,15 +402,13 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, error) {
 	// DELETION 3.2: the cache keeps no trashed row, so the trash table is
 	// filled from the row files, which reads every row of every store:
-	// only for a query that can name it. `select 1` on a store with a
-	// 5,000-row folder paid that read on every call (devco D-790).
-	var trashRows []sqlite.TrashRow
-	if queryNamesTrash(r.Query) {
-		var err error
-		if trashRows, err = a.lensTrash(ctx, !r.ShowSensitive); err != nil {
-			return opssql.Result{}, err
-		}
-	}
+	// only for a query that can read it, by name or through a view built
+	// on it (time_spent.task_deleted_at). The lens decides, from its own
+	// view definitions (sqlite.LensOptions.LoadTrash). `select 1` on a
+	// store with a 5,000-row folder paid that read on every call (devco
+	// D-790); deciding by the word "trash" alone left task_deleted_at NULL
+	// (D-805).
+	loadTrash := func(ctx context.Context) ([]sqlite.TrashRow, error) { return a.lensTrash(ctx, !r.ShowSensitive) }
 	sc := lensScope{Internal: r.Internal, RepoOnly: r.RepoOnly}
 	var deleted string
 	if r.IncludeDeleted {
@@ -413,7 +426,7 @@ func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, err
 		return opssql.Result{}, err
 	}
 	clientKey, _ := pol.Text(policy.KeyTimeClientKey) // unset = the lens default
-	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows, TimeClientKey: clientKey, Now: a.Now()}, sc, deleted)
+	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Query: r.Query, LoadTrash: loadTrash, TimeClientKey: clientKey, Now: a.Now()}, sc, deleted)
 	if err != nil {
 		return opssql.Result{}, err
 	}
@@ -425,13 +438,4 @@ func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, err
 		return opssql.Result{}, qerr
 	}
 	return opssql.Result{Columns: res.Columns, Rows: res.Rows, Internal: a.placeLabels(extra)}, nil
-}
-
-// queryNamesTrash reports whether the SQL text q can read the trash table
-// (sqlite.ViewTrash): every way to name a table (bare, "quoted", `ticked`,
-// [bracketed], any case) has the name in its text, and a lens query cannot
-// build a table name at run time. A query that does not name it reads an
-// empty trash table, which it never looks at.
-func queryNamesTrash(q string) bool {
-	return strings.Contains(strings.ToLower(q), sqlite.ViewTrash)
 }
