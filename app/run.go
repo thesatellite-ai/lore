@@ -85,8 +85,15 @@ func WithSetupUI(ui setupweb.UI) Option { return func(o *options) { o.ui = ui } 
 // cancelled context, Run over os.Args, and os.Exit with its status. It
 // never returns.
 func Main(opts ...Option) {
+	// devco:D-864 (issue #94): the options are applied before anything
+	// reads the process state they set. The read server's binary stamp
+	// ends in the version, so a client that asked it before Run applied
+	// WithVersion sent "dev" while its server (which applies them first)
+	// expected the release version: every call of a released lore was
+	// declined as another lore binary and ran one-shot.
+	applyOptions(opts)
 	if len(os.Args) == 2 && os.Args[1] == readServerWord {
-		os.Exit(serveReads(opts)) // readserver.go: the local read server the CLI started (D-833)
+		os.Exit(serveReads()) // readserver.go: the local read server the CLI started (D-833)
 	}
 	gcDefaults() // gcdefaults.go: a short-lived CLI collects less often (fastgate:G1a)
 	if isSessionEndHook(os.Args[1:]) {
@@ -107,7 +114,7 @@ func Main(opts ...Option) {
 		<-ctx.Done()
 		stop()
 	}()
-	code := Run(ctx, os.Args[1:], opts...)
+	code := run(ctx, os.Args[1:])
 	stop()
 	os.Exit(code)
 }
@@ -117,6 +124,15 @@ func Main(opts ...Option) {
 // process's working directory, environment and stdio, so it is one
 // process's entry point, not a library call to run twice concurrently.
 func Run(ctx context.Context, args []string, opts ...Option) int {
+	applyOptions(opts)
+	return run(ctx, args)
+}
+
+// applyOptions sets the process state the Options carry (version,
+// setupUI). It is the one place they are applied, so every entry (Main,
+// before it asks the read server or serves as one; Run, for an importer
+// or an in-process test) reports the same version (devco:D-864).
+func applyOptions(opts []Option) {
 	o := options{}
 	for _, opt := range opts {
 		opt(&o)
@@ -125,7 +141,6 @@ func Run(ctx context.Context, args []string, opts ...Option) int {
 		version = o.version
 	}
 	setupUI = o.ui
-	return run(ctx, args)
 }
 
 // run builds the app and the command tree, executes args and returns the
