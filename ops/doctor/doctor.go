@@ -229,7 +229,10 @@ func (r *RawJSON) UnmarshalText(b []byte) error { return r.UnmarshalJSON(b) }
 
 // RunIn is the input of doctor.run.
 type RunIn struct {
-	Fix bool `json:"fix,omitempty" flag:"fix" desc:"run lore fix's steps (never a migration: a project on the lore 0.1.17 format needs lore migrate run or lore fix --migrate): render, agent hooks, old store clones proved safe, then every safe doctor repair (git info/exclude, store clone identity, merge driver, config style, actor roster, reversed --supersedes links, …); prints each step and the status after them"`
+	// PinHooks (devco D-795): with --fix, pin the clone's hook blocks to
+	// the running build; without it they call lore from PATH.
+	PinHooks bool `json:"pin_hooks,omitempty" flag:"pin-hooks" desc:"with --fix: pin the clone's git hook blocks to the lore build running this command (with its LORE_HOME), also a build in a tmp folder or a source tree; without it the hooks run the first lore on PATH, and the lore on PATH removes a pin"`
+	Fix      bool `json:"fix,omitempty" flag:"fix" desc:"run lore fix's steps (never a migration: a project on the lore 0.1.17 format needs lore migrate run or lore fix --migrate): render, agent hooks, old store clones proved safe, then every safe doctor repair (git info/exclude, store clone identity, merge driver, config style, actor roster, reversed --supersedes links, …); prints each step and the status after them"`
 	// All checks every setup on this machine (ONB 6), not only the active
 	// one.
 	All bool `json:"all,omitempty" flag:"all" desc:"check every setup on this machine: identity, GitHub, stores, repos, tools (exit 0 healthy, 1 degraded, 2 broken)"`

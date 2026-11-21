@@ -246,7 +246,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	// project (D-500).
 	rides := make([]hookWrite, 0, len(missing))
 	for _, h := range missing {
-		rides = append(rides, hookWrite{name: h, marker: rideHookMarker, lines: rideBlockLines(h, shared, hookPinFor(s.top, dir, shared))})
+		rides = append(rides, hookWrite{name: h, marker: rideHookMarker, lines: rideBlockLines(h, shared, hookPinFor(ctx, s.top, dir, shared))})
 	}
 	if created, changed := s.teamHookWrites(ctx, dir, rides); len(created)+len(changed) > 0 {
 		if !s.repoMayHoldLoreFiles(ctx, s.top) {
@@ -268,7 +268,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 			warn(what + "; not installed: " + rerr.Error()) // D-502
 			return
 		}
-		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideBlockLines(h, shared, hookPinFor(s.top, dir, shared))); ierr != nil {
+		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideBlockLines(h, shared, hookPinFor(ctx, s.top, dir, shared))); ierr != nil {
 			warn(what + "; installing it failed: " + ierr.Error())
 			return
 		}
@@ -278,30 +278,26 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	warn(what + "; installed now in " + dir)
 }
 
-// doctorHookBuild says which lore the clone's hook blocks run when it is
-// not this build (devco P-2): a pinned build that is gone (the blocks then
-// run the first lore on PATH, which may be too old for this clone's rows)
-// is a warning; another build, pinned or first on PATH, is a note. Both
-// name the step that points the blocks at this build.
+// doctorHookBuild says which lore the clone's hook blocks run (devco P-2,
+// D-795). A pin is a warning wherever it came from: every commit runs that
+// build, not the lore on PATH; the line names the build, its LORE_HOME and
+// the one command that removes it (lore fix run by the lore on PATH writes
+// bare blocks). Hooks that call the lore on PATH while another build runs
+// doctor are a note naming the opt-in that pins them to this build.
 func (s *liveSession) doctorHookBuild(ctx context.Context, dir string, shared bool, warn, note func(string)) {
-	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, hookPrePush)))
-	if err != nil {
+	if got, pinned := dirHookPin(dir); pinned {
+		gone := ""
+		if !executableHookFile(filepath.FromSlash(got.prog)) {
+			gone = ", which is gone, so they run the first lore on PATH (" + pathLore() + ") instead"
+		}
+		warn("git hooks in " + dir + " are pinned to " + got.describe() + gone + ": every commit there runs that build, not the lore on PATH; `" + unpinHooksCommand + "` run by the lore on PATH removes the pin")
 		return
 	}
-	want := hookPinFor(s.top, dir, shared)
-	fix := "; `doctor --fix` run with the build you want points them at it"
-	if cmd := s.hookBlocksCommand(ctx, dir); cmd == trackedHooksCommand {
-		// D-709: doctor --fix leaves a folder committed with the repo alone
-		fix = "; `" + cmd + "` run with the build you want points them at it (then commit the blocks)"
+	if shared || hooksDirInWorkTree(s.top, dir) {
+		return
 	}
-	got, pinned := pinnedHookProgram(string(b))
-	switch {
-	case pinned && !executableHookFile(filepath.FromSlash(got.prog)):
-		warn("git hooks in " + dir + " run " + got.prog + ", which is gone: they run the first lore on PATH (" + pathLore() + ") instead" + fix)
-	case pinned && got.line() != want:
-		note("git hooks in " + dir + " run " + got.describe() + ", not this build" + fix)
-	case !pinned && want != "" && !shared && !hooksDirInWorkTree(s.top, dir):
-		note("git hooks in " + dir + " run the first lore on PATH (" + pathLore() + "), not this build" + fix)
+	if r := thisRun(ctx); !runsAsPathLore(r.exe, r.home, r.lookPath) {
+		note("git hooks in " + dir + " run the first lore on PATH (" + pathLore() + "), not this build; `doctor --fix --" + pinHooksFlag + "` run with this build pins them to it")
 	}
 }
 

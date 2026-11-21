@@ -196,7 +196,7 @@ func (h *liveHost) wireClientGuard(ctx context.Context, p clientGuardPlace) []st
 			out = append(out, "could not install the leak guard in this clone: "+err.Error()) // D-502
 			continue
 		}
-		if err := ensureHookBlock(p.hooks, n, marker, withHookPin(hookPinFor(p.top, p.hooks, false), lines)); err != nil {
+		if err := ensureHookBlock(p.hooks, n, marker, withHookPin(hookPinFor(ctx, p.top, p.hooks, false), lines)); err != nil {
 			out = append(out, "could not install the leak guard in this clone: "+err.Error())
 			continue
 		}

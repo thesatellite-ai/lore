@@ -40,9 +40,10 @@ func runPinLines(t *testing.T, pathDir string, lines []string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// TestHookPinRunsInstallingBuild (devco P-2): with an older `lore` first
-// on PATH and a newer build run through a wrapper home (LORE_HOME), the
-// hook blocks the newer build writes run THAT build with its LORE_HOME;
+// TestHookPinRunsInstallingBuild (devco P-2, D-795): with an older `lore`
+// first on PATH and a newer build run through a wrapper home (LORE_HOME),
+// the hook blocks the newer build writes with --pin-hooks run THAT build
+// with its LORE_HOME;
 // once the build is gone they fall back to the `lore` on PATH. Without
 // the pin (before the fix) the block ran the `lore` on PATH, which refused
 // every commit of the newer build's rows.
@@ -55,9 +56,9 @@ func TestHookPinRunsInstallingBuild(t *testing.T) {
 	fakeLore(t, pathDir, "lore", "PATH-LORE")
 	dev := fakeLore(t, devDir, "lore", "DEV-BUILD")
 	noPath := func(string) (string, error) { return filepath.Join(pathDir, "lore"), nil }
-	tgt, ok := hookPinTarget(dev, "", "/home/someone/.lore-dev", noPath)
+	tgt, ok := hookPinTarget(hookPinRun{exe: dev, home: "/home/someone/.lore-dev", asked: true, lookPath: noPath, scratch: scratchBuildPath})
 	if !ok {
-		t.Fatal("a build that is not the lore on PATH must pin itself")
+		t.Fatal("--pin-hooks run by a build that is not the lore on PATH must pin it")
 	}
 	pin := tgt.line()
 	lines := hookBlocksFor("", false, pin)[hookPostCommit].lines
@@ -83,7 +84,11 @@ func TestHookPinRunsInstallingBuild(t *testing.T) {
 	}
 }
 
-// TestHookPinTarget (devco P-2): which program the blocks name.
+// TestHookPinTarget (devco P-2, D-795): which program the blocks name. The
+// owner rule: hooks in a repo call `lore` from PATH; a build is pinned only
+// on an explicit ask (--pin-hooks, or LORE_HOOK_BIN outside a tmp folder or
+// a source tree with the default home). Before D-795 every build that was
+// not the lore on PATH, or ran with LORE_HOME, pinned itself.
 func TestHookPinTarget(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("execute bits")
@@ -97,59 +102,121 @@ func TestHookPinTarget(t *testing.T) {
 		return func(string) (string, error) { return p, nil }
 	}
 	none := func(string) (string, error) { return "", errors.New("not found") }
+	noScratch := func(string) bool { return false }
+	allScratch := func(string) bool { return true }
+	selfT := filepath.ToSlash(fspath.Canonical(self))
 	cases := []struct {
-		name, exe, bin, home string
-		look                 func(string) (string, error)
-		want                 hookTarget
-		pinned               bool
+		name string
+		run  hookPinRun
+		want hookTarget
+		ok   bool
 	}{
-		{"same file on PATH, default home: bare lore", self, "", "", onPath(self), hookTarget{}, false},
-		{"same file on PATH, LORE_HOME set: pinned with the home", self, "", "/h/.lore-dev", onPath(self), hookTarget{prog: filepath.ToSlash(fspath.Canonical(self)), home: "/h/.lore-dev"}, true},
-		{"another lore on PATH: pinned", self, "", "", onPath(other), hookTarget{prog: filepath.ToSlash(fspath.Canonical(self))}, true},
-		{"no lore on PATH: pinned", self, "", "", none, hookTarget{prog: filepath.ToSlash(fspath.Canonical(self))}, true},
-		// devco D-423: the wrapper pin carries the installer's home too
-		{"LORE_HOOK_BIN names the wrapper: the wrapper with the home", self, wrapper, "/h/.lore-dev", onPath(other), hookTarget{prog: filepath.ToSlash(wrapper), home: "/h/.lore-dev"}, true},
-		{"LORE_HOOK_BIN, default home: the wrapper alone", self, wrapper, "", onPath(other), hookTarget{prog: filepath.ToSlash(wrapper)}, true},
-		{"LORE_HOOK_BIN, a quote in LORE_HOME: the wrapper alone", self, wrapper, "/h/it's", onPath(other), hookTarget{prog: filepath.ToSlash(wrapper)}, true},
-		{"LORE_HOOK_BIN not executable: ignored", self, filepath.Join(dir, "missing"), "", onPath(self), hookTarget{}, false},
-		{"a quote in LORE_HOME: bare", self, "", "/h/it's", onPath(other), hookTarget{}, false},
+		// D-795: no ask, no pin, whatever build runs
+		{"no ask, a build that is not the lore on PATH: bare", hookPinRun{exe: self, lookPath: onPath(other), scratch: noScratch}, hookTarget{}, false},
+		{"no ask, no lore on PATH: bare", hookPinRun{exe: self, lookPath: none, scratch: noScratch}, hookTarget{}, false},
+		{"no ask, a wrapper's LORE_HOME alone: bare", hookPinRun{exe: self, home: "/h/.lore-dev", lookPath: onPath(other), scratch: noScratch}, hookTarget{}, false},
+		{"--pin-hooks, a build that is not the lore on PATH: pinned", hookPinRun{exe: self, asked: true, lookPath: onPath(other), scratch: noScratch}, hookTarget{prog: selfT, asked: true}, true},
+		{"--pin-hooks names a tmp or source-tree build and a LORE_HOME: pinned with it", hookPinRun{exe: self, home: "/h/.lore-dev", asked: true, lookPath: onPath(other), scratch: allScratch}, hookTarget{prog: selfT, home: "/h/.lore-dev", asked: true}, true},
+		{"--pin-hooks run by the lore on PATH, default home: bare", hookPinRun{exe: self, asked: true, lookPath: onPath(self), scratch: noScratch}, hookTarget{}, false},
+		{"LORE_HOOK_BIN alone, default home: the wrapper", hookPinRun{exe: self, hookBin: wrapper, lookPath: onPath(other), scratch: noScratch}, hookTarget{prog: filepath.ToSlash(wrapper), asked: true}, true},
+		{"LORE_HOOK_BIN alone, LORE_HOME not the default: bare", hookPinRun{exe: self, hookBin: wrapper, home: "/h/.lore-dev", lookPath: onPath(other), scratch: noScratch}, hookTarget{}, false},
+		{"LORE_HOOK_BIN alone in a tmp folder or source tree: bare", hookPinRun{exe: self, hookBin: wrapper, lookPath: onPath(other), scratch: allScratch}, hookTarget{}, false},
+		{"LORE_HOOK_BIN with --pin-hooks: the wrapper with the home", hookPinRun{exe: self, hookBin: wrapper, home: "/h/.lore-dev", asked: true, lookPath: onPath(other), scratch: allScratch}, hookTarget{prog: filepath.ToSlash(wrapper), home: "/h/.lore-dev", asked: true}, true},
+		{"LORE_HOOK_BIN not executable: ignored", hookPinRun{exe: self, hookBin: filepath.Join(dir, "missing"), lookPath: onPath(self), scratch: noScratch}, hookTarget{}, false},
+		{"a quote in LORE_HOME: bare", hookPinRun{exe: self, home: "/h/it's", asked: true, lookPath: onPath(other), scratch: noScratch}, hookTarget{}, false},
 	}
 	for _, c := range cases {
-		got, ok := hookPinTarget(c.exe, c.bin, c.home, c.look)
-		if ok != c.pinned || got != c.want {
-			t.Errorf("%s: got %+v %v, want %+v %v", c.name, got, ok, c.want, c.pinned)
+		got, ok := hookPinTarget(c.run)
+		if ok != c.ok || got != c.want {
+			t.Errorf("%s: got %+v %v, want %+v %v", c.name, got, ok, c.want, c.ok)
 		}
 	}
 	if hooksDirInWorkTree("/r/.git", "/r/.git/hooks") || hooksDirInWorkTree("/r", "/r/.git/hooks") || !hooksDirInWorkTree("/r", "/r/.husky") {
 		t.Error("hooksDirInWorkTree: .git/hooks is git's own folder whatever the top, .husky is in the work tree")
 	}
-	if hookPinFor("/r", "/r/.githooks", false) != "" || hookPinFor("/r", "/r/.git/hooks", true) != "" {
+	asked := hookPinRun{exe: self, asked: true, lookPath: onPath(other), scratch: noScratch}
+	if hookPinForRun(asked, "/r", "/r/.githooks", false) != "" || hookPinForRun(asked, "/r", "/r/.git/hooks", true) != "" {
 		t.Error("a hooks folder in the work tree or shared by every repo must never get a pin")
 	}
 }
 
-// TestKeptSelfPin (devco P-2): blocks already pinned to this very
-// executable are kept when bare would do (lore put on PATH later), so a
-// later command rewrites no hook file; a pin naming another build is not.
-func TestKeptSelfPin(t *testing.T) {
+// writeHookPin writes a pre-commit file in dir holding pin.
+func writeHookPin(t *testing.T, dir, pin string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, hookPreCommit), []byte("#!/bin/sh\n"+pin+"\nlore check leaks --staged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestHookPinForKeepsOnlyAskedPins (devco D-795): a run with no ask keeps a
+// pin the person asked for (another build's, while it is there), drops a
+// pin an older lore wrote by itself (the `# lore-bin:` tag: a scratch
+// worktree build that every commit then ran), and the lore on PATH drops
+// every pin. Before D-795 the hooks kept a pin to whatever non-PATH build
+// last wrote them.
+func TestHookPinForKeepsOnlyAskedPins(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("execute bits")
+	}
 	t.Parallel()
-	exe, err := os.Executable()
-	if err != nil {
-		t.Skip(err)
-	}
-	dir := t.TempDir()
-	self := hookTarget{prog: filepath.ToSlash(exe)}.line()
-	if err := os.WriteFile(filepath.Join(dir, hookPreCommit), []byte("#!/bin/sh\n"+self+"\n"), 0o600); err != nil {
+	hooks := filepath.Join(t.TempDir(), ".git", "hooks")
+	if err := os.MkdirAll(hooks, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := keptSelfPin(dir); !ok || got != self {
-		t.Fatalf("keptSelfPin: %q %v, want this executable's pin", got, ok)
+	top := filepath.Dir(filepath.Dir(hooks))
+	pathLore := fakeLore(t, t.TempDir(), "lore", "PATH-LORE")
+	dev := fakeLore(t, t.TempDir(), "lore", "DEV")
+	pinned := fakeLore(t, t.TempDir(), "lore", "PINNED")
+	look := func(string) (string, error) { return pathLore, nil }
+	noScratch := func(string) bool { return false }
+	devRun := hookPinRun{exe: dev, home: "/h/.lore-dev", lookPath: look, scratch: noScratch}
+	pathRun := hookPinRun{exe: pathLore, lookPath: look, scratch: noScratch}
+
+	legacy := hookTarget{prog: filepath.ToSlash(pinned), home: "/h/.lore-dev"}
+	writeHookPin(t, hooks, legacy.line())
+	if got, ok := dirHookPin(hooks); !ok || got.asked || got.prog != legacy.prog {
+		t.Fatalf("dirHookPin read %+v %v, want the legacy pin, not asked", got, ok)
 	}
-	other := hookTarget{prog: "/elsewhere/lore"}.line()
-	if err := os.WriteFile(filepath.Join(dir, hookPreCommit), []byte("#!/bin/sh\n"+other+"\n"), 0o600); err != nil {
+	if got := hookPinForRun(devRun, top, hooks, false); got != "" {
+		t.Errorf("a pin an older lore wrote by itself must be dropped: %q", got)
+	}
+
+	asked := hookTarget{prog: filepath.ToSlash(pinned), home: "/h/.lore-dev", asked: true}
+	writeHookPin(t, hooks, asked.line())
+	if got := hookPinForRun(devRun, top, hooks, false); got != asked.line() {
+		t.Errorf("a pin the person asked for must stay when another build writes with no ask: %q", got)
+	}
+	if got := hookPinForRun(pathRun, top, hooks, false); got != "" {
+		t.Errorf("the lore on PATH must remove every pin: %q", got)
+	}
+	gone := hookTarget{prog: filepath.ToSlash(filepath.Join(t.TempDir(), "lore")), asked: true}
+	writeHookPin(t, hooks, gone.line())
+	if got := hookPinForRun(devRun, top, hooks, false); got != "" {
+		t.Errorf("a pin to a build that is gone must be dropped: %q", got)
+	}
+	if !strings.Contains(pinRemovedLine(asked), "removed the pin to "+asked.prog+" (LORE_HOME=/h/.lore-dev); they run lore from PATH") {
+		t.Errorf("pinRemovedLine: %q", pinRemovedLine(asked))
+	}
+}
+
+// TestScratchBuildPath (devco D-795): a build in a tmp folder or inside a
+// lore source tree is never pinned without --pin-hooks.
+func TestScratchBuildPath(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, goModFile), []byte(loreModulePrefix+"\n\ngo 1.25\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := keptSelfPin(dir); ok {
-		t.Fatalf("keptSelfPin kept another build's pin: %q", got)
+	cases := map[string]bool{
+		filepath.Join(src, "tmp", "bin", "lore"):            true,
+		filepath.Join(os.TempDir(), "x", "lore"):            true,
+		filepath.FromSlash("/srv/worktree/tmp/bin/lore"):    true,
+		filepath.FromSlash("/opt/lore-tools/bin/lore"):      false,
+		filepath.FromSlash("/usr/local/lib/lore-next/lore"): false,
+	}
+	for p, want := range cases {
+		if got := scratchBuildPath(p); got != want {
+			t.Errorf("scratchBuildPath(%s) = %v, want %v", p, got, want)
+		}
 	}
 }

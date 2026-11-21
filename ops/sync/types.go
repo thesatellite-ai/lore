@@ -8,8 +8,12 @@ import "github.com/thesatellite-ai/lore/op"
 
 // ---------------------------------------------------------------- inputs
 
-// RunIn is the input of sync.run (`lore sync`): no flags of its own.
-type RunIn struct{}
+// RunIn is the input of sync.run (`lore sync`).
+type RunIn struct {
+	// PinHooks (devco D-795) is the explicit ask to pin the clone's hook
+	// blocks to the running build; without it they call lore from PATH.
+	PinHooks bool `json:"pin_hooks,omitempty" flag:"pin-hooks" desc:"pin the clone's git hook blocks to the lore build running this command (with its LORE_HOME), also a build in a tmp folder or a source tree; without it the hooks run the first lore on PATH, and the lore on PATH removes a pin"`
+}
 
 // StatusIn is the input of sync.status.
 type StatusIn struct{}

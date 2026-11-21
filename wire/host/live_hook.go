@@ -812,6 +812,30 @@ func fixTrackedHooks(run *Run) bool {
 	return fixBoolFlag(run, fixTrackedHooksFlag, func(in opsfix.RunIn) bool { return in.TrackedHooks }, false)
 }
 
+// pinHooksRun reports whether run is lore fix, doctor or sync with
+// --pin-hooks (CLI flag or REST body, devco D-795); an input it cannot
+// read is not (the side that pins nothing).
+func pinHooksRun(run *Run) bool {
+	switch run.Entry.Spec().Name {
+	case opsfix.OpRun, opsdoctor.OpRun, opssync.OpRun:
+	default:
+		return false
+	}
+	if run.Cmd != nil {
+		if f, err := run.Cmd.Flags().GetBool(pinHooksFlag); err == nil {
+			return f
+		}
+		return slices.Contains(run.Args, "--"+pinHooksFlag)
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in struct {
+			PinHooks bool `json:"pin_hooks"`
+		}
+		return json.Unmarshal(d.Body, &in) == nil && in.PinHooks
+	}
+	return false
+}
+
 // fixBoolFlag reads one boolean flag of a lore fix run from the command
 // line or the REST body; unreadable answers onBad.
 func fixBoolFlag(run *Run, flag string, field func(opsfix.RunIn) bool, onBad bool) bool {
@@ -959,6 +983,9 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	ctx = withRun(ctx, r)
 	if fixTrackedHooks(run) {
 		ctx = withTrackedHooksYes(ctx) // D-501: the one explicit yes to a tracked hooks folder
+	}
+	if pinHooksRun(run) {
+		ctx = withPinHooks(ctx) // D-795: the one explicit ask to pin the hooks to this build
 	}
 	defer r.finish(ctx)
 	wired := false
