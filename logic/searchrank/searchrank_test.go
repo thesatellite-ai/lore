@@ -118,6 +118,42 @@ func TestNames(t *testing.T) {
 	}
 }
 
+// TestNamesSkipsLeadingFiller (devco D-830): a stop word the terms
+// drop ("the", "a") is not a lead word, so "the session cache holds 5
+// minutes" names "session" like a row opening with the word does, and the
+// newest such row is not pushed out by older rows opening with it; a query
+// of only stop words still needs its own words.
+func TestNamesSkipsLeadingFiller(t *testing.T) {
+	yes := map[string]string{
+		"session":  "the session cache holds 5 minutes",
+		"alice ng": "The Alice Ng overview",
+		"the who":  "The Who live",
+	}
+	for q, label := range yes {
+		if !Names(label, Of(q).Terms) {
+			t.Errorf("Names(%q, %q) = false, want true", label, q)
+		}
+	}
+	no := map[string]string{
+		"session":  "the cache holds a session",
+		"alice ng": "Lunch with Alice Ng",
+	}
+	for q, label := range no {
+		if Names(label, Of(q).Terms) {
+			t.Errorf("Names(%q, %q) = true, want false", label, q)
+		}
+	}
+	day := func(d int) time.Time { return time.Date(2026, 11, d, 0, 0, 0, 0, time.UTC) }
+	items := []Item{
+		{Label: "session cache queue deploy", Matched: 1, At: day(1)},
+		{Label: "session cache queue", Matched: 1, At: day(2)},
+		{Label: "the session cache holds 5 minutes", Matched: 1, At: day(20)},
+	}
+	if got := Of("session").Order(items, 2); got[0].Index != 2 {
+		t.Errorf("the newest row naming the word is not first: %+v", got)
+	}
+}
+
 // TestOrderNewestNamingFirst (D-791): among rows whose label names or
 // holds every word equally the newest comes first (a fact that changed
 // answers with its newest value); rows whose label holds only some of

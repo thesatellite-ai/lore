@@ -41,11 +41,16 @@ func TestStoryWPPolish(t *testing.T) {
 
 	s.Step("D-599/for-file-skips-generic-stems", func() {
 		branch := wuMemID.FindString(m.Lore(wc.Dir, "memory", "add", "--body", "the release branch main is protected and needs two reviews").OK(t).Out())
-		invoice := wuMemID.FindString(m.Lore(wc.Dir, "memory", "add", "--body", "invoice totals are rounded per line, never per invoice").OK(t).Out())
+		invoice := wuMemID.FindString(m.Lore(wc.Dir, "memory", "add", "--body", "billing rounds invoice totals per line, never per invoice").OK(t).Out())
+		font := wuMemID.FindString(m.Lore(wc.Dir, "memory", "add", "--body", "customers asked for a bigger font on the invoice header").OK(t).Out())
 		m.Lore(wc.Dir, "context", "--for-file", "main.go").OK(t).Never(t, branch, "words main")
 		m.Lore(wc.Dir, "context", "--for-file", "cmd/main.go").OK(t).Never(t, branch, "words main")
-		// a meaningful word of the path still finds its note
-		m.Lore(wc.Dir, "context", "--for-file", "billing/invoice.go").OK(t).Says(t, invoice, "words billing invoice")
+		// the meaningful words of the path still find their note; one of
+		// two is not enough (devco D-815, D-830)
+		m.Lore(wc.Dir, "context", "--for-file", "billing/invoice.go").OK(t).Says(t, invoice, "words billing invoice").Never(t, font)
+		// a monorepo's container folder is no topic word (devco D-830)
+		app1 := wuMemID.FindString(m.Lore(wc.Dir, "memory", "add", "--body", "app1 runs locally on port 7400").OK(t).Out())
+		m.Lore(wc.Dir, "context", "--for-file", "apps/app1/main.go").OK(t).Says(t, app1, "words app1").Never(t, "words apps")
 	})
 
 	s.Step("D-600/one-label-for-the-folder", func() {

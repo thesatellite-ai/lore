@@ -47,3 +47,26 @@ func TestSemanticWords(t *testing.T) {
 		t.Error(`"log" does not match the logging description`)
 	}
 }
+
+// TestPathWordsMonorepoFolders (devco D-830): a monorepo's container
+// folders name no topic, so a note on the app or package itself meets
+// the path floor (D-815) without naming "apps" or "packages".
+func TestPathWordsMonorepoFolders(t *testing.T) {
+	for p, want := range map[string][]string{
+		"apps/app1/main.go":           {"app1"},
+		"packages/ledger/index.ts":    {"ledger"},
+		"billing/invoice.go":          {"billing", "invoice"},
+		"apps/web/src/billing/tax.ts": {"billing"},
+	} {
+		got := PathWords(p)
+		if !slices.Equal(got, want) {
+			t.Errorf("PathWords(%s) = %q, want %q", p, got, want)
+		}
+		if PathFloor(got) > len(want) {
+			t.Errorf("%s: path floor %d over its %d words", p, PathFloor(got), len(want))
+		}
+	}
+	if Score("app1 runs locally on port 7400", PathWords("apps/app1/main.go")) < PathFloor(PathWords("apps/app1/main.go")) {
+		t.Error("a note on app1 does not meet the floor of apps/app1/main.go")
+	}
+}

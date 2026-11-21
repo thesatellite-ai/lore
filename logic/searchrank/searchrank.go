@@ -31,6 +31,7 @@
 package searchrank
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -303,7 +304,7 @@ func Names(label string, terms []string) bool {
 	if k == 0 {
 		return false
 	}
-	return querywords.Coverage(leadWords(label, k), terms) == len(terms)
+	return querywords.Coverage(leadWords(label, k, terms), terms) == len(terms)
 }
 
 // notWordRune splits words as the index does: anything but a letter or a
@@ -312,19 +313,34 @@ func notWordRune(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(
 
 // leadWords is label up to the end of its k-th word (the whole label
 // when it has fewer); querywords.Coverage splits a snake_case name into
-// its words the same way.
-func leadWords(label string, k int) string {
-	in, n := false, 0
+// its words the same way. A stop word the terms leave out ("the", "a")
+// is not one of the k: the terms dropped it, so "the session cache holds
+// 5 minutes" names "session" as "session cache …" does; counting it put
+// such a row behind every row opening with the word (devco D-830).
+func leadWords(label string, k int, terms []string) string {
+	in, n, start := false, 0, 0
 	for i, r := range label {
 		w := !notWordRune(r)
+		if !in && w {
+			start = i
+		}
 		if in && !w {
-			if n++; n == k {
-				return label[:i]
+			if !filler(label[start:i], terms) {
+				if n++; n == k {
+					return label[:i]
+				}
 			}
 		}
 		in = w
 	}
 	return label
+}
+
+// filler reports whether word is a stop word that is not one of the
+// terms (a query of only stop words, "the who", keeps them as terms).
+func filler(word string, terms []string) bool {
+	w := strings.ToLower(word)
+	return querywords.IsStop(w) && !slices.Contains(terms, w)
 }
 
 // TitleShare is the share of terms title holds (0 without terms or title).

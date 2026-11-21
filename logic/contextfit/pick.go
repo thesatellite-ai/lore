@@ -173,8 +173,12 @@ func PathWords(p string) []string {
 // genericPathWords are file stems, folder names and file-type words of
 // four letters or more that appear in most repositories and so say nothing
 // about what a file is for (D-599). Shorter ones (app, mod, lib, src, cmd)
-// are already below minWord.
+// are already below minWord. The folders a monorepo keeps its apps and
+// packages in (apps/app1/main.go) are such names too: counted as a word,
+// "apps" became one of the two path words a note must hold (D-815), so a
+// note on app1 never reached apps/app1/main.go (devco D-830).
 var genericPathWords = map[string]bool{
+	"apps": true, "packages": true,
 	"main": true, "index": true, "init": true, "util": true, "utils": true, "test": true, "tests": true,
 	"spec": true, "specs": true, "types": true, "type": true, "common": true, "helper": true, "helpers": true,
 	"base": true, "core": true, "misc": true, "default": true, "defaults": true, "module": true, "modules": true,
