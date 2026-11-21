@@ -98,6 +98,10 @@ type Out struct {
 	Context  string    `json:"context,omitempty" desc:"lore context's text for that file (rules and hotfixes in full while they fit)"`
 	maxChars int
 	note     string
+	// lead is how many of Rows (the first ones) are an everything-about
+	// answer's newest row of each folder, printed one line each (devco
+	// D-822); 0 for any other question.
+	lead int
 }
 
 // Ranked names one item of an answer: which list holds it and its id.
@@ -171,6 +175,11 @@ type Row struct {
 	// a row ranks after every current row and an agent reads it as what
 	// used to be true.
 	History string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
+	// readTitle and readBody are Title and Body as the text answer prints
+	// them: each ${res:…} naming a resource the ask read replaced by the
+	// resource's name (refs.Readable, devco D-822). --json keeps the
+	// stored text.
+	readTitle, readBody string
 }
 
 // RoutedStore implements the op package's StoreRouter, as sql.run does

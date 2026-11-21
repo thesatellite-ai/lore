@@ -197,4 +197,24 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-820] memory list does not mark old facts as history:\n%s", l)
 		}
 	})
+	// devco D-822 (bug hunt H-81): a small model summarising everything
+	// about a person dropped "watched the match after lunch" from a
+	// journal row printed as "Saw ${res:person/…} about ${res:project/…}".
+	// The newest row of each folder prints one line each, with its day
+	// and folder, a reference read as the name; --json keeps the stored
+	// text.
+	s.Step("personal-store/about-one-line-each", func() {
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "everything about alice-ng")
+		r.OK(t)
+		out := r.Out()
+		line := "  - 2026-11-02 (me/journal): Journal 2026-11-02: baked sourdough. Saw alice-ng about orbit.  [memories mem_"
+		if !strings.Contains(out, "newest row of each folder, one line each:\n") || !strings.Contains(out, line) || strings.Contains(out, "${res:") {
+			t.Errorf("[O D-822] everything about: want the journal row on one line with names, no ${res:…}:\n%s", r)
+		}
+		j := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "everything about alice-ng", "--json")
+		j.OK(t)
+		if !strings.Contains(j.Out(), "Saw ${res:person/alice-ng} about ${res:project/orbit}.") {
+			t.Errorf("[O D-822] ask --json does not keep the stored text:\n%s", j)
+		}
+	})
 }
