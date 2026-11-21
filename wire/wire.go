@@ -1053,6 +1053,7 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 			res = notePersonalDefault(res)
 		}
 	}
+	err = a.heldNotFound(ctx, err)        // rosterhold.go (devco:D-858)
 	err = a.goneRowAnswer(ctx, e, d, err) // rowgone.go (devco:D-590)
 	err = purgedAsDeclared(e, err)        // rowgone.go: E_PURGED only where declared
 	if err != nil && top != "" {

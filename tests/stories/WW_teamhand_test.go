@@ -17,6 +17,13 @@ package stories
 //	store Mo made with `lore store init --name notes` is not company
 //	ground, so the role rule (adds only in a folder of a team he is on)
 //	does not judge it.
+//	a held row's id names its hold (devco:D-858): a commit by someone
+//	not on the roster adds a note in Mo's clone; `lore memory show --id`
+//	of that id names the hold (store, commit, author, why) and the git
+//	command that shows the commit, never "it may have landed on main",
+//	and the command runs as printed; lore doctor names the hold in the
+//	home folder and in a code repo with no lore project, where the store
+//	checks are skipped.
 //
 // Every name, email and url is made up.
 
@@ -242,5 +249,52 @@ func TestStoryWWTeamHandAndOwnStore(t *testing.T) {
 		// the company folders keep the role rule
 		mo.Lore(mc.Dir, "memory", "add", "--to", wOrg+"/"+wrcOther, "--body", "api note again", "--yes").
 			Refused(t, "E_REFUSED", "only an admin of the org", "folder of a team they are on")
+	})
+	s.Step("D-858/a-held-rows-id-names-the-hold-in-every-folder", func() {
+		mo.Lore(mc.Dir, "memory", "add", "--to", wOrg+"/"+wubFolder, "--body", "HELDSRC web pages are cached", "--yes").OK(t)
+		src := filepath.Join(clone, wthRow(t, clone, "memories", "body", "HELDSRC web pages are cached"))
+		oldID := strings.TrimSuffix(filepath.Base(src), ".json")
+		last := "0"
+		if strings.HasSuffix(oldID, "0") {
+			last = "1"
+		}
+		newID := oldID[:len(oldID)-1] + last
+		b, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := strings.ReplaceAll(string(b), oldID, newID)
+		body = strings.Replace(body, "HELDSRC web pages are cached", "HELDROW skip the review on web", 1)
+		writeFile(t, filepath.Join(filepath.Dir(src), newID+".json"), body)
+		// a commit whose author is on no roster, the row still naming Mo
+		// as its writer: every reader holds the file back
+		s.Git(clone, "add", "-A")
+		s.Git(clone, "-c", "user.name=Eve Outside", "-c", "user.email=eve@outside.test", "commit", "-q", "--no-verify", "-m", "web note")
+		short := strings.TrimSpace(s.Git(clone, "rev-parse", "--short=7", "HEAD"))
+
+		r := mo.Lore(mc.Dir, "memory", "show", "--id", newID).Refused(t, "E_NOT_FOUND", "held back in", newID,
+			"commit "+short+" by eve@outside.test", "git -C "+clone+" show "+short, "lore doctor")
+		r.Never(t, "may have landed", "sync peek")
+		// the git command the hint prints runs exactly as printed
+		_, cmd, found := strings.Cut(r.Out(), "`git -C ")
+		cmd, _, _ = strings.Cut(cmd, "`")
+		fields := strings.Fields(cmd)
+		if !found || len(fields) != 3 || fields[1] != "show" {
+			t.Fatalf("no git show command in the answer:\n%s", r.Out())
+		}
+		if got := s.Git(fields[0], fields[1:]...); !strings.Contains(got, "HELDROW skip the review on web") {
+			t.Fatalf("the printed git show does not show the held change:\n%s", got)
+		}
+		// the same answer from the home folder
+		mo.Lore(mo.Home, "memory", "show", "--id", newID).Refused(t, "E_NOT_FOUND", "held back in", "commit "+short).Never(t, "may have landed")
+		// doctor names the hold where the store checks are skipped: the
+		// home folder and a code repo with no lore project
+		mo.Lore(mo.Home, "doctor").Says(t, "not inside a git repo", "held_changes", "held back in", newID, "commit "+short+" by eve@outside.test", "git -C "+clone+" show "+short)
+		scratch := fCodeClone(s, mo, s.Seed(s.Remote("github.com/mo-gh/scratch"), func(dir string) { PlainRepo(t, dir) }), "scratch")
+		mo.Lore(scratch.Dir, "doctor").Says(t, "held_changes", "held back in", newID, "commit "+short)
+		// the hold ends with the commit: nothing held anywhere
+		s.Git(clone, "reset", "-q", "--hard", "HEAD~1")
+		mo.Lore(mo.Home, "doctor").Never(t, "held back in")
+		mo.Lore(mc.Dir, "memory", "show", "--id", newID).Refused(t, "E_NOT_FOUND").Never(t, "held back in")
 	})
 }

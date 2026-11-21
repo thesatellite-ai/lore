@@ -129,7 +129,10 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 			}
 			runs = append(runs, run)
 		}
-		return runs
+		// devco:D-858: the setup's stores are still checked for changes
+		// every reader holds back (rosterhold.go), so a hold is named by
+		// doctor in every folder, not only in sync
+		return append(runs, a.setupDoctorRuns(ctx)...)
 	}
 	// Outside any git work tree there is no repo store to open: a check
 	// that needs it is skipped (one note below), not counted as a check
@@ -197,6 +200,11 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		out = append(out, run)
 	}
 	if skipped {
+		// devco:D-858, as above: outside a git repo the folder opens at
+		// most the personal store, so the setup's stores are read too
+		out = withSetupHeld(out, a.setupDoctorRuns(ctx))
+	}
+	if skipped {
 		note := doctorNoRepoNote
 		if gitBareRepo(ctx, a.projectDir()) {
 			note = doctorBareRepoNote
@@ -204,6 +212,43 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		out = append(out, opsdoctor.CheckRun{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: opsdoctor.LevelNote, Line: note}}})
 	}
 	return out
+}
+
+// setupDoctorRuns are the store checks doctor runs over the setup's
+// stores where the folder opens no lore project: the changes every reader
+// holds back in each store of the setup cloned on this machine
+// (setupHeldChanges). Only findings are reported: a store that cannot be
+// read is no failure of this folder.
+func (a *App) setupDoctorRuns(ctx context.Context) []opsdoctor.CheckRun {
+	found := a.heldFindings(ctx, a.setupHeldChanges(ctx))
+	if len(found) == 0 {
+		return nil
+	}
+	run := opsdoctor.CheckRun{Check: string(DoctorCheckHeldChanges)}
+	for _, f := range found {
+		run.Findings = append(run.Findings, opsdoctor.Finding{Check: string(f.Check), Level: doctorLevel(f.Level), Line: f.Line()})
+	}
+	return []opsdoctor.CheckRun{run}
+}
+
+// withSetupHeld puts the setup's held-change runs into out: in place of
+// a held-change run that found nothing, else after the others; a run
+// that already names holds is kept as it is (the same clone is not read
+// twice).
+func withSetupHeld(out, setup []opsdoctor.CheckRun) []opsdoctor.CheckRun {
+	if len(setup) == 0 {
+		return out
+	}
+	for i, r := range out {
+		if r.Check != string(DoctorCheckHeldChanges) {
+			continue
+		}
+		if len(r.Findings) > 0 || r.Err != nil {
+			return out
+		}
+		return append(append(out[:i:i], setup...), out[i+1:]...)
+	}
+	return append(out, setup...)
 }
 
 // anyFixed reports whether a check fixed any of its findings.
