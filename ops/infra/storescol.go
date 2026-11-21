@@ -32,9 +32,14 @@ func storeName(src store.Source) string { return string(src) }
 // stores holding the row after it, then countLine. A list read from one
 // store only keeps its v0.1.17 lines, no column and no count: nothing was
 // merged, so there is nothing to tell apart.
-func storeColumn(heads []string, stores [][]string, one, many string) string {
+func storeColumn(heads []string, stores, extras [][]string, one, many string) string {
 	if !merged(stores) {
-		return strings.Join(heads, "\n") + "\n"
+		var b strings.Builder
+		for i, h := range heads {
+			b.WriteString(h + "\n")
+			writeExtras(&b, extras, i)
+		}
+		return b.String()
 	}
 	w := 0
 	for _, h := range heads {
@@ -47,6 +52,7 @@ func storeColumn(heads []string, stores [][]string, one, many string) string {
 			line += strings.Repeat(" ", w-utf8.RuneCountInString(h)) + "  " + strings.Join(stores[i], ", ")
 		}
 		b.WriteString(line + "\n")
+		writeExtras(&b, extras, i)
 	}
 	b.WriteString(countLine(len(heads), stores, one, many))
 	return b.String()
@@ -90,4 +96,15 @@ func countLine(n int, stores [][]string, one, many string) string {
 		return fmt.Sprintf("%d %s\n", n, noun)
 	}
 	return fmt.Sprintf("%d %s across %d %s\n", n, noun, len(all), where)
+}
+
+// writeExtras writes the lines printed under head i (actor list --with),
+// none when extras holds nothing for it.
+func writeExtras(b *strings.Builder, extras [][]string, i int) {
+	if i >= len(extras) {
+		return
+	}
+	for _, l := range extras[i] {
+		b.WriteString(l + "\n")
+	}
 }
