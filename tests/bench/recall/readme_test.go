@@ -39,10 +39,12 @@ func TestReportRatioPerType(t *testing.T) {
 }
 
 // TestReadmeQuotesRecallGate keeps the repo README's "Why lore over notes
-// files" section (gate G-4): it must exist, quote the gate's numbers in
-// the order the owner asked for (accuracy, then calls and characters,
-// then time), say which bars still miss (or that it meets every bar), and tell
-// the reader how to rerun it.
+// files" section (gate G-4, H-142): it must exist, quote the gate's numbers
+// in the order the owner asked for (accuracy, then calls and characters,
+// then time, then the blind agent run and the coding gate), say which bars
+// still miss or that it meets every bar (never both: a passing run's
+// section that still lists misses is stale), and tell the reader how to
+// rerun it.
 func TestReadmeQuotesRecallGate(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join("..", "..", "..", "README.md"))
 	if err != nil {
@@ -68,9 +70,19 @@ func TestReadmeQuotesRecallGate(t *testing.T) {
 	if right > calls || calls > chars || chars > speed {
 		t.Error("the section's table must put accuracy first, then calls and characters, then time")
 	}
+	// the blind agent run (tokens, commands, cost) and the coding gate come
+	// after the scripted run's numbers
+	agent, tokens, cost, coding := at("| commands run |"), at("| tokens in / out |"), at("| cost |"), at("tests/bench/coding/README.md")
+	if speed > agent || agent > tokens || tokens > cost || cost > coding {
+		t.Error("after the time row the section must quote the blind agent run (commands, tokens, cost), then the coding gate")
+	}
 	at("tests/bench/recall/README.md")
 	at("`task bench:recall`")
-	if !strings.Contains(sec, "still misses") && !strings.Contains(sec, "every bar") {
+	misses, every := strings.Contains(sec, "still misses"), strings.Contains(sec, "every bar")
+	if !misses && !every {
 		t.Error(`the section says neither which bars the gate "still misses" nor that it meets "every bar"`)
+	}
+	if misses && every {
+		t.Error(`the section says the gate meets "every bar" and also lists bars it "still misses"`)
 	}
 }

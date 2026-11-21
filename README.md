@@ -91,20 +91,30 @@ If you want a hosted, embeddings-based agent memory, plenty of those exist. If y
 
 ### Why lore over notes files
 
-A folder of tidy markdown notes plus `grep` and `cat` is the honest alternative, so lore measures itself against exactly that. The recall gate ([tests/bench/recall](tests/bench/recall/README.md)) builds one synthetic personal store of about 6,200 rows (40 people, 36 projects, 700 notes, 500 journal days, 4,800 feed events, 110 owed tasks), writes the same facts as a markdown tree, and asks both 70 questions: who is X, project status, a decision and why, what I owe / who owes me, what happened on a day or in a week, everything about X, plus 20 harder ones (paraphrase, a typo in a name, "two Fridays ago", a nickname or role, a fact that changed). lore answers each with one `lore ask --query "who is alice-ng"` style call; the notes side runs the `grep`/`cat` steps a careful agent would. Numbers from the newest run (2026-11-21, dev branch):
+A folder of tidy markdown notes plus `grep` and `cat` is the honest alternative, so lore measures itself against exactly that. The recall gate ([tests/bench/recall](tests/bench/recall/README.md)) builds one synthetic personal store of about 6,200 rows (40 people, 36 projects, 700 notes, 500 journal days, 4,800 feed events, 110 owed tasks), writes the same facts as a markdown tree, and asks both 70 questions: who is X, project status, a decision and why, what I owe / who owes me, what happened on a day or in a week, everything about X, plus 20 harder ones (paraphrase, a typo in a name, "two Fridays ago", a nickname or role, a fact that changed). lore answers each with one `lore ask --query "who is alice-ng"` style call; the notes side runs the `grep`/`cat` steps a careful agent would. Numbers from the newest run (v0.1.30, 2026-11-21), which meets every bar of the gate:
 
 | | lore | notes + grep |
 |---|---|---|
 | answers right | 70/70 (harder set 20/20) | 70/70 |
-| right answer in the top 3 / first | 70/70 / 70/70, 0 stale facts | (one pile of text) |
+| right answer in the top 3 / first | 70/70 / 70/70, 0 stale facts, 0 noisy answers | (one pile of text) |
 | calls | 70 (one per question) | 114 |
-| characters read | 38,798 | 139,274 (3.6x more) |
-| everything about a person or project | 9,753 chars | 108,300 chars (11x more) |
-| who is X | 528 chars | 6,680 chars (12.7x more) |
+| characters read | 38,884 | 139,274 (3.6x more) |
+| everything about a person or project | 7,757 chars | 108,300 chars (14x more) |
+| who is X | 546 chars | 6,680 chars (12.2x more) |
 | what I owe / who owes me | 1,173 chars | 1,209 chars |
-| time per call | warm p50 187 ms, max 391 ms; cold max 405 ms (on a loaded shared box) | — |
+| time per call | warm p50 32 ms, max 42 ms; cold max 230 ms (bars: warm under 50 ms, cold under 300 ms; on a loaded shared box) | — |
 
-Where the gate still misses its own bar (so it does not block releases yet): warm calls under 50 ms and cold calls under 300 ms. Decisions and day/week questions also still print more than grep's single matching lines (no bar on those beyond the total). Rerun it yourself with `task bench:recall` (report in `tmp/bench/recall.md`).
+The same 70 questions asked of two blind agents on one small model (one with only the `lore` command and its skill, one with `grep`/`cat` over the markdown tree, both graded by the same grader):
+
+| | lore agent | grep agent |
+|---|---|---|
+| answers right | 50/50, harder set 20/20 | 50/50, harder set 19/20 |
+| commands run | 133 | 245 |
+| tokens in / out | 4,797,810 / 41,857 | 1,167,430 / 71,582 |
+| cost | $0.87 | $1.28 |
+| wall time | 674 s | 895 s |
+
+The lore agent reads more input tokens (cached ones counted too: it carries the lore skill in every run) and still costs less, because it writes fewer tokens and runs about half the commands. The coding gate ([tests/bench/coding](tests/bench/coding/README.md)) passes too: before each of 30 coding tasks, lore puts every rule and trap the task needs in front of the agent (46/46 rows, 30/30 tasks) with 86% of what it prints applying to the task (bar 80%); in its blind trap run the agent with lore fell into none of 7 traps a hotfix warns about, the agent without lore into 4. Decisions and day/week questions still print more than grep's single matching lines (no bar on those beyond the total). Rerun it yourself with `task bench:recall` (report in `tmp/bench/recall.md`).
 
 ## Install
 
