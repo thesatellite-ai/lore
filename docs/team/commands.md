@@ -1659,7 +1659,7 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `merge_check.adapter` | `none` | `github` asks `gh` whether a done task's pull request merged |
 | `default_branch` | from `origin/HEAD` | override the default branch |
 | `repo_orgs.<project-id>` | — | written by `lore org use`: this machine's org choice for one project |
-| `link_index.max_age` | `1h` | how old a cached link index may be when the store cannot be read |
+| `link_index.max_age` | `1h` | how old a cached link index may be when the store cannot be read; past it a repo linked only by its remote is not linked, and its reads name the folder as `link unknown ...; not searched` |
 | `untrusted_hosts` | — | hostname patterns of client-owned machines; `lore doctor` warns when stores are configured there |
 | `access` | — | this machine's way to canonical store urls: items of `url` (the prefix shared config uses) and `via` (yours, such as an ssh alias), applied per git call as `-c url.<via>.insteadOf=<url>` |
 

@@ -217,6 +217,12 @@ type Options struct {
 	// under ~/.lore, its repo store is read-only, and its git is never
 	// wired (no hooks, .gitignore or .gitattributes lines).
 	RepoLinkedByRemote func(ctx context.Context) string
+	// RepoUnknownLinks are the folders that link this repo by its remote
+	// only in a store copy older than link_index.max_age while the store
+	// does not answer (linkunknown.go, devco:D-860): the repo is then not
+	// linked, so they are not read, and every read that lists what it
+	// searched names them. Nil: none.
+	RepoUnknownLinks func(ctx context.Context) []UnknownLink
 	// RepoLinkTarget is the --to that names the store folder this repo's
 	// link points at ("<store short name>/<folder>", which a write's --to
 	// resolves from config.yaml even when that folder is not attached
@@ -1032,11 +1038,15 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	err = a.personalStoreHint(ctx, e, d, err) // personalunread.go (devco:D-771)
 	if err == nil {
 		empty := emptyResult(res)
+		if emptySearchSpec(e.Spec()) {
+			ctx = withUnknownLinks(ctx, a.unknownLinks(ctx)) // linkunknown.go (devco:D-860)
+		}
 		res = a.noteUnreadPersonal(ctx, e, d, res) // personalunread.go (devco:D-771)
 		if empty {
 			res = a.noteEmptySearch(ctx, e, d, res) // emptysearch.go (devco:D-821)
 		}
-		res = noteStaleRead(ctx, e.Spec(), res, empty) // stalecopy.go (devco:D-853)
+		res = noteStaleRead(ctx, e.Spec(), res, empty)   // stalecopy.go (devco:D-853)
+		res = noteLinkUnknown(ctx, e.Spec(), res, empty) // linkunknown.go (devco:D-860)
 		if personalDefaultMarked(ctx) {
 			// last, so the empty-answer hooks above still see the answer's
 			// own last line ("(no answer)")

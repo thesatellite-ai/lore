@@ -117,7 +117,19 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 				level = opsdoctor.LevelError // H-1: every row file is gone, never "HEALTHY"
 			}
 		}
-		return []opsdoctor.CheckRun{{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: level, Line: line}}}}
+		runs := []opsdoctor.CheckRun{{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: level, Line: line}}}}
+		if fs := a.unknownLinkFindings(ctx); len(fs) > 0 {
+			// devco:D-860: a repo linked by its remote, offline past
+			// link_index.max_age, is "not linked" here; the link that
+			// dropped out is named, never "lore init sets one up"
+			runs[0].Findings[0].Line = doctorUnknownLinkNote
+			run := opsdoctor.CheckRun{Check: string(DoctorCheckStoreAccess)}
+			for _, f := range fs {
+				run.Findings = append(run.Findings, opsdoctor.Finding{Check: string(f.Check), Level: doctorLevel(f.Level), Line: f.Line()})
+			}
+			runs = append(runs, run)
+		}
+		return runs
 	}
 	// Outside any git work tree there is no repo store to open: a check
 	// that needs it is skipped (one note below), not counted as a check

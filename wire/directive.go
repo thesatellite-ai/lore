@@ -104,7 +104,7 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 	// the directive in the same step
 	if NoCreate(ctx) {
 		if top := gitTopLevel(ctx, a.projectDir()); top != "" && !loreFolderAt(a.loreRootFrom(top)) {
-			return opsdirective.Pick{}, noProjectErr(ctx, top)
+			return opsdirective.Pick{}, withUnknownLinkErr(ctx, noProjectErr(ctx, top), a.opts) // linkunknown.go (devco:D-860)
 		}
 	}
 	reg, err := a.toolRegistry(ctx)

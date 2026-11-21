@@ -5127,6 +5127,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -6127,6 +6152,31 @@
                     "left": {
                       "type": "integer",
                       "description": "how many items were left out to stay under --max-chars"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "personal_unread": {
                       "type": "string",
@@ -8090,6 +8140,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -11898,6 +11973,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more comments match than are listed; raise --limit to list more"
@@ -13874,6 +13974,31 @@
                         }
                       }
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
@@ -14728,6 +14853,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -16661,6 +16811,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -21773,6 +21948,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -23909,6 +24109,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -26646,6 +26871,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -33125,6 +33375,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -41778,6 +42053,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -46817,6 +47117,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -49994,6 +50319,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -51839,6 +52189,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -56795,6 +57170,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -72580,6 +72980,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -75719,6 +76144,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "personal_unread": {
                       "type": "string",
@@ -86414,6 +86864,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -92060,6 +92535,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -103591,6 +104091,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -108657,6 +109182,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -115173,6 +115723,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -119117,6 +119692,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",
@@ -124102,6 +124702,31 @@
                     "kind": {
                       "type": "string"
                     },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
+                    },
                     "more": {
                       "type": "boolean",
                       "description": "more rows match than are listed; raise --limit to list more"
@@ -125697,6 +126322,31 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "link_unknown": {
+                      "type": "array",
+                      "description": "the folders that link this repo only in a store copy older than link_index.max_age while the store does not answer: not searched until the store is reached again (absent when every link is known)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "max_age": {
+                            "type": "string",
+                            "description": "link_index.max_age, past which a copy decides no link, such as 1h"
+                          },
+                          "since": {
+                            "type": "string",
+                            "description": "the copy's last fetch that reached the store, a UTC time such as 2026-11-21T16:20:00Z; absent when it was never fetched here"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "the folder as \u003corg\u003e/\u003cfolder\u003e"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "max_age"
+                        ]
+                      }
                     },
                     "more": {
                       "type": "boolean",

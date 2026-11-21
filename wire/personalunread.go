@@ -76,7 +76,7 @@ func topFieldsOf(entries []op.Entry) func(op.Spec) []op.FieldInfo {
 		}
 		out = append(out, emptySearchFields(spec)...) // emptysearch.go (devco:D-821)
 		if emptySearchSpec(spec) {
-			out = append(out, staleCopyInfo) // stalecopy.go (devco:D-853)
+			out = append(out, staleCopyInfo, linkUnknownInfo) // stalecopy.go (devco:D-853), linkunknown.go (devco:D-860)
 		}
 		return out
 	}

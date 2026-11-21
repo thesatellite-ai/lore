@@ -72,6 +72,10 @@ type emptySearched struct {
 	// did not answer (stalecopy.go, devco:D-853): named under the
 	// searched line; --json has them as the top-level "unreachable".
 	stale []staleCopy
+	// unknown is the linked folders not searched because their link
+	// could not be decided offline (linkunknown.go, devco:D-860): named
+	// under the searched line; --json has them as "link_unknown".
+	unknown []UnknownLink
 }
 
 // emptySearchInfo declares the two fields for the OpenAPI document.
@@ -177,6 +181,7 @@ func (a *App) noteEmptySearch(ctx context.Context, e op.Entry, d op.Decoder, res
 // stale copy are named under the searched line (devco:D-853).
 func withEmptyNote(ctx context.Context, res op.Result, s emptySearched, try []string) op.Result {
 	s.stale = staleSearched(staleCopiesOf(ctx), s.Stores)
+	s.unknown = unknownLinksOf(ctx)
 	sj, serr := json.Marshal(s)
 	tj, terr := json.Marshal(try)
 	if serr != nil || terr != nil {
@@ -368,7 +373,8 @@ func emptySearchLines(s emptySearched, try []string) string {
 		stores = strings.Join(s.Stores, ", ")
 	}
 	b.WriteString("  searched: " + stores + " (" + strings.Join(s.Kinds, ", ") + ")\n")
-	b.WriteString(staleCopyLines(s.stale)) // devco:D-853: never a stale copy listed as searched without a word
+	b.WriteString(staleCopyLines(s.stale))     // devco:D-853: never a stale copy listed as searched without a word
+	b.WriteString(unknownLinkLines(s.unknown)) // devco:D-860: never a linked folder dropped without a word
 	var read []string
 	if s.Path != "" {
 		at := "globs"
