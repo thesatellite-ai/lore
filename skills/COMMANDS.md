@@ -304,8 +304,8 @@ lore comment search --query "<query>"
 ## Ask a question (one call, the recall command)
 
 ```bash
-lore ask --query "who is alice-ng"                         # the resource, its fields (a changed one says when and what it was), what links to it
-lore ask --store me --query "what do I owe alice-ng"       # open tasks owed by me to alice-ng (and "what does alice-ng owe me")
+lore ask --query "who is alice-ng"                         # one line: kind, name, fields (a changed one says when and what it was), aliases
+lore ask --store me --query "what do I owe alice-ng"       # one line per open task owed by me to alice-ng (and "what does alice-ng owe me")
 lore ask --store me --query "what happened last week"      # the journal rows of those days, oldest first
 lore ask --query "what did we decide for orbit and why"    # the best 3 rows in full, newest first
 lore ask --query "everything about alise-ng" --json        # a typo, a nickname or a role finds the resource too
@@ -314,7 +314,7 @@ lore ask --query "status of orbit" --max-chars 8000 --top 5
 lore ask --query "add partial refunds in billing/refund.go"  # names a file: its rules and hotfixes first (as lore context --for-file)
 ```
 
-The answer is capped at `--max-chars` (default 4000) and ends with `cited:` and the id of every resource, task and row in it.
+The answer is capped at `--max-chars` (default 4000) and ends with `cited:` and the id of every resource, task and row in it. Two answers are kept short on purpose: "who is X" is one line per resource (contact values such as an email only when the question names that field, no linked resources, no id: `lore resource show --kind <kind> --name <name>` prints the whole resource), and a debt question is one line per open task (the title, its status when not todo, who owes whom when the title does not say) with the task ids once in `cited:`. `--json` always holds every field, id and link.
 
 ## Global search (cross-entity, one call)
 

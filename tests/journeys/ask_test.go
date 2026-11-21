@@ -41,11 +41,11 @@ func TestJourneyAskAnswersInOneCall(t *testing.T) {
 	w.Step("day1/ask-from-the-code-repo", func() {
 		lap.LoreIn(code, "init").OK(t)
 		lap.LoreIn(code, "ask", "--store", "me", "--query", "who is keiko-satto").OK(t).
-			Says(t, "person keiko-sato", "role: lawyer", "cited: res_")
+			Says(t, "person keiko-sato", "role: lawyer")
 		lap.LoreIn(code, "ask", "--store", "me", "--query", "who is our lawyer").OK(t).
 			Says(t, "person keiko-sato")
 		lap.LoreIn(code, "ask", "--store", "me", "--query", "what do I owe keiko-sato").OK(t).
-			Says(t, "send the contract to keiko-sato", "owed by me to keiko-sato")
+			Says(t, "send the contract to keiko-sato\ncited: tsk_")
 		lap.LoreIn(code, "ask", "--store", "me", "--query", "what was the reasoning behind orbit's pick").OK(t).
 			Says(t, "we chose hetzner over aws because the bill is 30 percent smaller")
 		status := lap.LoreIn(code, "ask", "--store", "me", "--query", "what is the status of orbit").OK(t).
@@ -53,9 +53,10 @@ func TestJourneyAskAnswersInOneCall(t *testing.T) {
 		if strings.Index(status, "live in production") > strings.Index(status, "project orbit") {
 			t.Errorf("the project is printed before its status update:\n%s", status)
 		}
+		// the task line names the person: no card of them under it (devco D-827)
 		owe := lap.LoreIn(code, "ask", "--store", "me", "--query", "what do I owe keiko-sato").OK(t).Out()
-		if strings.Index(owe, "send the contract") > strings.Index(owe, "person keiko-sato") {
-			t.Errorf("the person is printed before what you owe them:\n%s", owe)
+		if strings.Contains(owe, "person keiko-sato") {
+			t.Errorf("the debt answer repeats the person under the task that names them:\n%s", owe)
 		}
 	})
 

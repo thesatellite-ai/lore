@@ -214,7 +214,8 @@ func TestAnswerOrderAndCap(t *testing.T) {
 
 // TestRankedAnswerFirst: the item that answers the question type is read
 // first (devco D-818): a status or decision row before its project, the
-// owed tasks before the person, a date's rows first; "who is X" and
+// owed tasks first (the person only when a line names them by an alias,
+// devco D-827), a date's rows first; "who is X" and
 // "everything about X" lead with the resource, the latter followed by the
 // newest row of each folder, then the open tasks, then the other rows.
 // The text prints the items in the same order.
@@ -229,8 +230,8 @@ func TestRankedAnswerFirst(t *testing.T) {
 		{"how far along is lumen these days", []string{"mem_s3"}},
 		{"what did we decide for lumen and why", []string{"mem_d1", "res_lumen"}},
 		{"how much money can lumen spend now", []string{"mem_b2"}},
-		{"what do I owe Bobby", []string{"tsk_3", "res_robert"}},
-		{"what does robert-kim owe me", []string{"tsk_2", "res_robert"}},
+		{"what do I owe Bobby", []string{"tsk_3"}},
+		{"what does robert-kim owe me", []string{"tsk_2"}},
 		{"who is alice-ng", []string{"res_alice"}},
 		{"what happened yesterday", []string{"mem_j1120"}},
 		{"everything about alice-ng", []string{"res_alice", "mem_j1120", "mem_m1", "tsk_1", "mem_j1119"}},
@@ -446,5 +447,55 @@ func TestReadableUnknownRef(t *testing.T) {
 		if got := readable(in, names); got != want {
 			t.Errorf("readable(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestTypedAnswersCompact: a who-is answer is one line per resource (kind,
+// name, the fields that say who it is, a changed one with what it was,
+// aliases) with no contact value, linked resource, id or echo of the
+// question; a field the question names is printed even when it is a
+// contact value. A debt answer is one line per open task (title, and who owes whom when
+// the title does not name them) with no heading, status, place or person
+// card, the ids cited once at the end (devco D-827, recall gate G-4: typed
+// answers lighter than the files grep reads).
+func TestTypedAnswersCompact(t *testing.T) {
+	t.Parallel()
+	d := fixture(t)
+	for i := range d.resources {
+		if d.resources[i].Name == "robert-kim" {
+			d.resources[i].Fields = append(d.resources[i].Fields, fieldValue{"email", "robert@birchwood.example"})
+			d.resources[i].Aliases = []string{"Robbie"}
+		}
+	}
+	d.tasks = append(d.tasks, taskRow{ID: "tsk_5", Place: "me/work", Title: "return the ladder #5", Status: "in_progress", OwedBy: "me", OwedTo: "robert-kim", Created: "2026-11-05"})
+	cases := []struct {
+		q    string
+		want string
+	}{
+		{"who is Bobby", "person robert-kim: company: birchwood-co; nickname: Bobby; role: designer; aliases: Robbie\n"},
+		{"what is the email of robert-kim", "person robert-kim: company: birchwood-co; nickname: Bobby; role: designer; email: robert@birchwood.example; aliases: Robbie\n"},
+		{"who is alice-ng", "person alice-ng: company: acme-co (changed 2026-10-15, was cobalt-co); role: engineer\n"},
+		{"what do I owe Bobby", "return the ladder #5 [in_progress] (owed to robert-kim)\nsend the price list #3 to robert-kim\ncited: tsk_5 tsk_3\n"},
+		{"what does robert-kim owe me", "robert-kim owes me the board deck #2\ncited: tsk_2\n"},
+	}
+	for _, c := range cases {
+		o := build(parseQuestion(c.q, now), d, 0, 0)
+		if got := o.Text(); got != c.want {
+			t.Errorf("%q:\n got %q\nwant %q", c.q, got, c.want)
+		}
+		if len(o.Cited) == 0 {
+			t.Errorf("%q: --json cites nothing", c.q)
+		}
+	}
+	// a person the lines name only by an alias keeps a one-line card
+	d.resources = append(d.resources[:0:0], d.resources...)
+	for i := range d.resources {
+		if d.resources[i].Name == "hugo-berg" {
+			d.resources[i].Aliases = []string{"Huey"}
+		}
+	}
+	d.tasks = append(d.tasks, taskRow{ID: "tsk_6", Place: "me/work", Title: "return the drill #6", Status: "todo", OwedBy: "me", OwedTo: "Huey"})
+	if got, want := build(parseQuestion("what do I owe Huey", now), d, 0, 0).Text(), "return the drill #6 (owed to Huey)\nperson hugo-berg: aliases: Huey\ncited: tsk_6 res_hugo\n"; got != want {
+		t.Errorf("alias debt:\n got %q\nwant %q", got, want)
 	}
 }

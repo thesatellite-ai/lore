@@ -102,6 +102,13 @@ type Out struct {
 	// answer's newest row of each folder, printed one line each (devco
 	// D-822); 0 for any other question.
 	lead int
+	// identity is a who-is question with a resource it names, answer
+	// the list that answers first (leadOf) and asked the question's words:
+	// the text prints a who-is answer as one-line cards and a debt answer
+	// as bare task lines (devco D-827); --json keeps every field.
+	identity bool
+	answer   answerFirst
+	asked    []string
 }
 
 // Ranked names one item of an answer: which list holds it and its id.
