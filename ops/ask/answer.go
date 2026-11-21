@@ -94,6 +94,13 @@ func build(q question, d data, top, maxChars int) Out {
 		// resource: rows would only make the answer heavier
 	case !q.window.IsZero():
 		out.Rows = windowRows(q, ms, d.rows)
+	case q.file != "":
+		// a change to a file: its context says what applies; a row is
+		// added only when it holds two or more of the question's words
+		// (one shared word, such as "invoice", is not about the change)
+		rows, _ := topRows(q, ms, d.rows, top)
+		out.Rows = slices.DeleteFunc(rows, func(r Row) bool { return len(r.Matched) < 2 })
+		lead = len(out.Rows)
 	default:
 		out.Rows, lead = topRows(q, ms, d.rows, top)
 	}
@@ -592,8 +599,21 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 // follow each other), then the ids it cites.
 func (o Out) Text() string {
 	var b strings.Builder
-	b.WriteString(o.body())
-	if len(o.Ranked) == 0 {
+	body := o.body()
+	if o.File != "" && (o.Context != "" || o.note != "") {
+		// the file's rules and hotfixes come before the ranked items
+		h := o.header()
+		f := "\napplies to " + o.File + " (lore context --for-file):\n"
+		if o.Context != "" {
+			f += o.Context + "\n"
+		}
+		if o.note != "" {
+			f += o.note + "\n"
+		}
+		body = h + f + strings.TrimPrefix(body, h)
+	}
+	b.WriteString(body)
+	if len(o.Ranked)+len(o.Applies) == 0 {
 		b.WriteString("nothing in the store answers it; try other words, or lore search --query \"<words>\"\n")
 	}
 	if o.Left > 0 {

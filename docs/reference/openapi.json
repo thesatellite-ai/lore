@@ -5920,7 +5920,7 @@
                   },
                   "query": {
                     "type": "string",
-                    "description": "the question, in your own words: who is alice-ng, what is the status of orbit, what did we decide for orbit and why, what do I owe alice-ng, what does alice-ng owe me, what happened yesterday / last week / on 2026-11-02, everything about alice-ng (a typo, a nickname or a role finds the resource too)"
+                    "description": "the question, in your own words: who is alice-ng, what is the status of orbit, what did we decide for orbit and why, what do I owe alice-ng, what does alice-ng owe me, what happened yesterday / last week / on 2026-11-02, everything about alice-ng (a typo, a nickname or a role finds the resource too); name the file you are changing (add partial refunds in billing/refund.go) for the rules and hotfixes that apply to it"
                   },
                   "store": {
                     "type": "string",
@@ -5947,12 +5947,45 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "applies": {
+                      "type": "array",
+                      "description": "the rules, hotfixes and notes that apply to that file and the question's words, as lore context --for-file --for-prompt picks them",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "description": "rule, hotfix, memory, decision, pattern or architecture-note"
+                          },
+                          "why": {
+                            "type": "string",
+                            "description": "why it applies: the glob, folder scope, mention or words that matched"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "why"
+                        ]
+                      }
+                    },
                     "cited": {
                       "type": "array",
                       "description": "the id of every item in the answer, in reading order",
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "context": {
+                      "type": "string",
+                      "description": "lore context's text for that file (rules and hotfixes in full while they fit)"
+                    },
+                    "file": {
+                      "type": "string",
+                      "description": "the file the question names"
                     },
                     "left": {
                       "type": "integer",
@@ -13329,7 +13362,7 @@
                   },
                   "for_prompt": {
                     "type": "string",
-                    "description": "rows matching this free text"
+                    "description": "rows matching this free text; with --for-file, what the text adds to the rows for that file (one call for a change: the file and what it is for)"
                   },
                   "for_task": {
                     "type": "string",

@@ -43,7 +43,7 @@ const errNeedsMode = "pass --for-file <path>, --for-task <id>, --topic <name>, -
 
 // errOneMode refuses two modes at once: the fetch answers one question, and
 // silently answering only one of two would read as the answer to both.
-const errOneMode = "pass only one of --for-file, --for-task, --topic, --topics, --for-prompt, --hook or --internal"
+const errOneMode = "pass only one of --for-file (--for-prompt may go with it), --for-task, --topic, --topics, --for-prompt, --hook or --internal"
 
 // FetchIn is the input of context.fetch (the v0.1.17 flags).
 type FetchIn struct {
@@ -55,7 +55,7 @@ type FetchIn struct {
 	ForTask      string `json:"for_task,omitempty" flag:"for-task" desc:"the task, its plan and links, then what applies to the files it names"`
 	Topic        string `json:"topic,omitempty" flag:"topic" desc:"every row tagged with this topic"`
 	Topics       bool   `json:"topics,omitempty" flag:"topics" desc:"list the topics with their counts"`
-	ForPrompt    string `json:"for_prompt,omitempty" flag:"for-prompt" desc:"rows matching this free text"`
+	ForPrompt    string `json:"for_prompt,omitempty" flag:"for-prompt" desc:"rows matching this free text; with --for-file, what the text adds to the rows for that file (one call for a change: the file and what it is for)"`
 	Hook         string `json:"hook,omitempty" flag:"hook" desc:"answer a tool hook (claude_code, codex, gemini_cli)"`
 	HookStdin    bool   `json:"hook_stdin,omitempty" flag:"hook-stdin" desc:"with --hook: read the hook input JSON from stdin"`
 	SessionStart bool   `json:"session_start,omitempty" flag:"session-start" desc:"with --hook: answer SessionStart (in a repo with no LORE.md the always-on rules first, then in-flight tasks, rows changed since your last session)"`
@@ -228,9 +228,11 @@ func Fetch(ctx context.Context, h Host, in FetchIn, stdin io.Reader) (FetchOut, 
 
 // modes counts the fetch modes in names (--session-start, --hook-stdin,
 // --table, --search, --meta and --max-bytes refine a mode; they are none).
+// --for-file with --for-prompt is one mode: the change an agent is about
+// to make, its file and its words (devco D-815).
 func modes(in FetchIn) int {
 	n := 0
-	for _, on := range []bool{in.Internal, in.Hook != "", in.Topics, in.ForFile != "", in.ForTask != "", in.Topic != "", in.ForPrompt != ""} {
+	for _, on := range []bool{in.Internal, in.Hook != "", in.Topics, in.ForFile != "" || in.ForPrompt != "", in.ForTask != "", in.Topic != ""} {
 		if on {
 			n++
 		}
