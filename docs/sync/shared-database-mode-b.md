@@ -131,18 +131,20 @@ ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lo
   hint: `lore fix --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)
 $ lore migrate run --dry-run
-Would upgrade 2 rows
-  mode-b: memories/mem_77cb…76c4 → store shared (~/.lore/stores/infra)
-  mode-b: rules/rul_d191…45c2 → store shared (~/.lore/stores/infra)
-  mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
+Would upgrade 3 rows
+  mode-b: memories/mem_77cb…76c4 → store shared, folder infra (~/.lore/stores/infra)
+  mode-b: projects/prj_4f89…b64b → store shared, folder infra (~/.lore/stores/infra)
+  mode-b: rules/rul_d191…45c2 → store shared, folder infra (~/.lore/stores/infra)
+  mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra at its folder infra
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 Nothing written (dry run).
 $ lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-Upgraded 2 rows
-  mode-b: memories/mem_77cb…76c4 → store shared (~/.lore/stores/infra)
-  mode-b: rules/rul_d191…45c2 → store shared (~/.lore/stores/infra)
-  mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
+Upgraded 3 rows
+  mode-b: memories/mem_77cb…76c4 → store shared, folder infra (~/.lore/stores/infra)
+  mode-b: projects/prj_4f89…b64b → store shared, folder infra (~/.lore/stores/infra)
+  mode-b: rules/rul_d191…45c2 → store shared, folder infra (~/.lore/stores/infra)
+  mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra at its folder infra
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
@@ -154,9 +156,10 @@ stores.yaml
 stores:
     - name: shared
       url: file://~/.lore/stores/infra
+      folder: infra
 $ lore rule list; lore memory list
-rul_d191…45c2 [must/always] Terraform changes need a plan in the pull request. [shared]
-mem_77cb…76c4 [retrieved] The staging cluster sleeps at night. [shared]
+rul_d191…45c2 [must/always] Terraform changes need a plan in the pull request. [shared/infra]
+mem_77cb…76c4 [retrieved] The staging cluster sleeps at night. [shared/infra]
 ```
 <!-- /example -->
 
@@ -174,7 +177,7 @@ writes: 2
 places:
   PLACE   V1  V2  NEWER  TOTAL
   repo    0   0   0      0
-  shared  0   2   0      2
+  shared  0   3   0      3
 journal: last migration 2026-11-02 converted the shared-database mode (.lore/lore.yaml; backup refs/lore-backup/migrate/2026-11-02); it cannot be rolled back
 lock: free
 
