@@ -171,6 +171,7 @@ func (m *Machine) env() []string {
 	env := append([]string{
 		"PATH=" + path,
 		"HOME=" + m.Home, "TERM=dumb", "LANG=C.UTF-8", "GIT_CONFIG_NOSYSTEM=1",
+		"LORE_READ_SERVER=0", // D-833: a release build; every command one-shot, no server left in the temp home
 		"LORE_NO_UPDATE_CHECK=1", "LORE_HUMAN=1", "LORE_GITHUB_API=" + deadAPI,
 		"TMPDIR=" + filepath.Join(m.Dir, "tmp"), "FAKE_W=" + m.Dir,
 	}, e2eenv.LoreGoEnv()...)

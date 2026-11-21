@@ -13,9 +13,14 @@ package stories
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // TestStoryOPersonalAsk: one call answers who, typo, nickname, debts,
@@ -280,6 +285,69 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		ada.Lore(ada.Home, "memory", "delete", "--id", id, "--yes").OK(t)
 		if out := on("2026-11-06"); strings.Contains(out, "repotted the fern") {
 			t.Errorf("[O D-834] a deleted row still answers a date question:\n%s", out)
+		}
+	})
+	// devco:D-833 (bug hunt H-90): a one-shot ask cannot answer warm in
+	// under 50 ms (process start + one schema parse of every cache), so a
+	// local read server runs reads with its caches open. It must answer
+	// every question exactly as the one-shot process (stdout, stderr and
+	// exit code), show a write made between two asks, and when it dies
+	// mid-command the command still answers, one-shot.
+	s.Step("personal-store/read-server-answers-as-one-shot", func() {
+		qs := []string{"who is alise-ng", "what do I owe Bobby", "how much money can orbit spend now", "what happened on 2026-11-02", "everything about alice-ng"}
+		ask := func(q string) teamharness.Result { return ada.Lore(ada.Home, "ask", "--store", "me", "--query", q) }
+		oneShot := map[string]teamharness.Result{}
+		for _, q := range qs {
+			oneShot[q] = ask(q) // a test build runs one-shot unless LORE_READ_SERVER=1
+		}
+		refused := ada.Lore(ada.Home, "ask", "--store", "nope", "--query", "who is alice-ng")
+		log := filepath.Join(t.TempDir(), "read-server.log")
+		sock := filepath.Join(ada.Home, ".lore", "run", "read.sock")
+		ada.SetEnv("LORE_READ_SERVER", "1")
+		ada.SetEnv("LORE_TEST_READ_SERVER_LOG", log)
+		ada.SetEnv("LORE_TEST_READ_SERVER_IDLE", "1m")
+		defer func() {
+			for _, k := range []string{"LORE_READ_SERVER", "LORE_TEST_READ_SERVER_LOG", "LORE_TEST_READ_SERVER_IDLE", "LORE_TEST_READ_SERVER_DIE"} {
+				ada.SetEnv(k, "")
+			}
+			_ = os.Remove(sock) // the server stops once its socket is gone
+		}()
+		started := func() {
+			t.Helper()
+			for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+				if _, err := os.Stat(sock); err == nil {
+					return
+				}
+			}
+			t.Fatalf("[O D-833] no read server listens on %s after a read started it", sock)
+		}
+		if r := ask(qs[0]); r.Out() != oneShot[qs[0]].Out() { // starts the server; runs one-shot itself
+			t.Errorf("[O D-833] the read that starts the server differs:\n%s\nwant:\n%s", r, oneShot[qs[0]])
+		}
+		started()
+		_ = os.Remove(log)
+		same := func(what string, got, want teamharness.Result) {
+			t.Helper()
+			if got.Stdout != want.Stdout || got.Stderr != want.Stderr || got.Code != want.Code {
+				t.Errorf("[O D-833] %s: served differs from one-shot:\nserved: %s\none-shot: %s", what, got, want)
+			}
+		}
+		for _, q := range qs {
+			same(q, ask(q), oneShot[q])
+		}
+		same("a refused read", ada.Lore(ada.Home, "ask", "--store", "nope", "--query", "who is alice-ng"), refused)
+		if b, _ := os.ReadFile(log); strings.Count(string(b), "served\n") != len(qs)+1 || strings.Contains(string(b), "one-shot") {
+			t.Errorf("[O D-833] want every ask served by the read server, the log says:\n%s", b)
+		}
+		ada.Lore(ada.Home, "memory", "add", "--body", "Status update orbit: 60 users on the paid plan.", "--at", "2026-11-16", "--to", to, "--yes").OK(t)
+		if r := ask("what is the status of orbit"); !strings.Contains(r.Out(), "60 users on the paid plan") {
+			t.Errorf("[O D-833] the served ask after a write misses it (a stale lens was reused):\n%s", r)
+		}
+		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "1")
+		_ = os.Remove(log)
+		same("a server gone mid-command", ask(qs[1]), oneShot[qs[1]])
+		if b, _ := os.ReadFile(log); string(b) != "one-shot\n" {
+			t.Errorf("[O D-833] the call whose server died should run one-shot, the log says:\n%s", b)
 		}
 	})
 }

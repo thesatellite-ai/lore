@@ -122,6 +122,8 @@ var homeLayout = []homeEntry{
 	{Pattern: "render/*", Dir: true, Collapse: true, What: "private context of one repo (imported by its CLAUDE.local.md)", ByHand: "safe to delete: the next `lore render` writes it again"},
 	{Pattern: "logs", Dir: true, What: "logs", ByHand: "safe to delete", Readme: true},
 	{Pattern: "logs/hooks.log*", What: "errors of agent hooks (`lore context --hook`), which must never print into the agent; capped, one older copy kept", ByHand: "safe to delete", Readme: true},
+	// devco:D-833: the local read server (app/readserver.go)
+	{Pattern: "run", Dir: true, Collapse: true, What: "the local read server: read.sock, the socket only you can open, and its lock; a lore process that answers read commands (such as lore ask) with its caches already open, started by the first read and gone after 10 minutes without one", ByHand: "safe to delete: the server stops and the next read starts it again", Readme: true},
 	{Pattern: "tmp", Dir: true, Collapse: true, What: "scratch space for setup probes; lore removes what it left there after a day, and the folder once it is empty", ByHand: "safe to delete while no lore command runs", Readme: true},
 	{Pattern: "clones", Dir: true, Collapse: true, What: "store clones of lore 0.1.17 (<host>/<owner>/<repo>.git, a bare clone) or of an earlier 0.1.18 build (now under stores/; lore moves them itself)", ByHand: "safe to delete once `lore doctor` reports no unpushed work in it (`lore fix` removes the ones doctor proved safe)"},
 	{Pattern: "clones-v017", Dir: true, Collapse: true, What: "second store clones of an earlier 0.1.18 build (no longer used)", ByHand: "safe to delete"},

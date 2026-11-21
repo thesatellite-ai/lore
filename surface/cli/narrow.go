@@ -96,3 +96,49 @@ func (cfg config) mounts(e op.Entry) bool {
 	p := op.CLIPath(e.Spec().Name)
 	return len(p) > 0 && slices.Contains(cfg.nouns, p[0])
 }
+
+// ReadCall returns the operation a call with args runs when that is one
+// operation that only reads (op.Spec.OnlyReads), resolved exactly as
+// cobra will: args[0] an operation noun, each following word up to the
+// first flag continuing an operation's path, then the leaf's positionals.
+// defaults maps a group's words (joined by a space) to the verb its bare
+// spelling runs (`lore ask` runs ask run): a call that stops at such a
+// group resolves to that verb, as the host's default-verb commands
+// forward it. ok is false for anything else (a write, a host command, help, a flag
+// first, a shortcut, a group word): the read server (app/readserver,
+// devco:D-833) serves only calls this accepts and leaves the rest to a
+// one-shot process.
+func ReadCall(reg *op.Registry, args []string, defaults map[string]string) (op.Spec, bool) {
+	if reg == nil || len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return op.Spec{}, false
+	}
+	for _, a := range args {
+		if slices.Contains(helpWords, a) || strings.HasPrefix(a, "--help=") {
+			return op.Spec{}, false
+		}
+	}
+	byPath := map[string]op.Spec{}
+	var paths [][]string
+	for _, e := range reg.Entries() {
+		if p := op.CLIPath(e.Spec().Name); len(p) > 0 && p[0] == args[0] {
+			paths = append(paths, p)
+			byPath[strings.Join(p, " ")] = e.Spec()
+		}
+	}
+	prefix := []string{args[0]}
+	for _, w := range args[1:] {
+		if strings.HasPrefix(w, "-") || !pathStarts(paths, append(slices.Clone(prefix), w)) {
+			break
+		}
+		prefix = append(prefix, w)
+	}
+	at := strings.Join(prefix, " ")
+	s, ok := byPath[at]
+	if verb, isGroup := defaults[at]; !ok && isGroup {
+		s, ok = byPath[at+" "+verb]
+	}
+	if !ok || !s.OnlyReads() {
+		return op.Spec{}, false
+	}
+	return s, true
+}

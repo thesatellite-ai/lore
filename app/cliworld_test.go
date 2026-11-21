@@ -92,7 +92,9 @@ func newCLIWorld(t *testing.T) *cliWorld {
 	// D-105: PATH without the host's lore builds, so doctor's "multiple
 	// lore binaries on PATH" warning (DEGRADED) never depends on the
 	// machine running the test; hermeticPath narrows it further.
-	env := map[string]string{"GIT_CONFIG_NOSYSTEM": "1", "PATH": pathWithoutLore(os.Getenv("PATH"))}
+	// devco:D-833: every command one-shot (this test binary is a release
+	// build, whose reads would start a local read server in the temp home).
+	env := map[string]string{"GIT_CONFIG_NOSYSTEM": "1", "PATH": pathWithoutLore(os.Getenv("PATH")), "LORE_READ_SERVER": "0"}
 	for _, k := range testenv.HomeVars { // HOME, and USERPROFILE for Windows
 		env[k] = home
 	}

@@ -175,6 +175,7 @@ Store cache files are named by a store id, not by a store name: two repos that c
 | `stores/_me/` | your personal store `me` when it is a plain folder (`file://`), not a git repo; the `_` keeps it apart from any owner folder | it holds your notes: do not delete it unless you mean to lose them |
 | `render/` | private context for repos, imported by their `CLAUDE.local.md` | rewritten by `lore render` |
 | `logs/hooks.log` | errors of agent hooks (capped, one older copy kept) | safe to delete |
+| `run/` | the local read server's socket (`read.sock`, only you can open it) and its lock | safe to delete: the server stops and the next read starts it again |
 | `tmp/` | scratch space for setup probes | safe to delete while no lore runs |
 
 Cache files are named by a store id or by a hash of a repo's path, not by a name: two repos that call the same store by different names share one cache, and a moved repo gets a fresh one. `lore where` prints the store and the repos each cache file serves.
@@ -213,6 +214,12 @@ A command that only reads (`list`, `show`, `search`, `whoami`, `doctor`, `where`
 A command that writes names each row file it wrote (`lore: wrote /home/pat/code/app/.lore/data/memories/mem_….json`, or a count per folder when there are many), and every push names the store, the commit and the branch, with the commits and row files it sent as `git rev-list` and `git diff` count them: `lore: pushed store notes: commit 1a2b3c4 to branch main (3 commits, 4 row files)`. A row written to a folder of an org store is named by its folder (`(store acme/web)`), as search and the lists name it, and one push that carried several folders of a store clone is one line for the whole clone: `lore: pushed store acme (the store clone: folders org, web): …`.
 
 A command that only reads also never sets up git: it does not install the merge driver, hooks, attributes or a clone's identity, in a code repo or a store clone. When something is missing it prints at most one line naming the command that sets it up (`lore sync`, `lore fix`, or the next write), and that command says what it wrote.
+
+## The local read server
+
+On Linux and macOS a read such as `lore ask`, `lore search` or a `list`/`show` is answered by a lore process that keeps running between commands, with its folder caches and lookups already open: a warm `lore ask` takes about 40-50 ms instead of about 100 ms. The first read starts it in the background (that read still runs on its own); it listens on `run/read.sock` in lore's home, a socket only you can open, in a folder only you can enter. It exits after 10 minutes without a call, when its socket is deleted, and when the lore binary changes (an upgrade), and the next read starts it again.
+
+It runs exactly the command you typed, in your folder, with your environment and your terminal, so the output, the exit code and the agent lore sees are the same as without it. It answers only commands that only read, one at a time, and only for the same lore binary: anything else, a busy server, or a server that is gone runs the command in its own process as before. A server stopped while it was printing an answer leaves the command to run again in its own process (a read changes nothing, so that is safe), and the first part of the answer can then show twice. Turn it off with `read_server: false` in `config.yaml`, or for one shell with `LORE_READ_SERVER=0`; it is off in CI (`CI` set) unless `LORE_READ_SERVER=1`. On Windows every command runs in its own process.
 
 ## Try it
 

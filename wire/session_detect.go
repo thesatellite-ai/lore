@@ -124,7 +124,7 @@ func agentPID() int {
 			return p.PID
 		}
 	}
-	return os.Getppid()
+	return procwalk.Parent() // the client's parent in the read server (D-833)
 }
 
 // CurrentSession finds or creates this process's session row in the
