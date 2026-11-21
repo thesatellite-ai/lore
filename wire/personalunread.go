@@ -74,7 +74,11 @@ func topFieldsOf(entries []op.Entry) func(op.Spec) []op.FieldInfo {
 		if orgReadOp(spec) && personalUnreadSpec(spec, withStore(spec.Name)) {
 			out = append(out, personalUnreadInfo)
 		}
-		return append(out, emptySearchFields(spec)...) // emptysearch.go (devco:D-821)
+		out = append(out, emptySearchFields(spec)...) // emptysearch.go (devco:D-821)
+		if emptySearchSpec(spec) {
+			out = append(out, staleCopyInfo) // stalecopy.go (devco:D-853)
+		}
+		return out
 	}
 }
 

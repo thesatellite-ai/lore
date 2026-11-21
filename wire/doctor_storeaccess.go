@@ -34,6 +34,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
@@ -323,8 +324,19 @@ func (a *App) unreachableFinding(ctx context.Context, t accessTarget) (DoctorFin
 		fix = gitbackend.GoneSteps(name, repourl.Mask(t.URL))
 	}
 	return DoctorFinding{Check: DoctorCheckStoreAccess, Level: DoctorWarning,
-		Message: "store " + t.Label + " (from " + t.Where + "): " + reasonOf(perr), // reasonOf names the masked url and git's telling line
+		Message: "store " + t.Label + " (from " + t.Where + "): " + reasonOf(perr) + "; " + copyReadText(dir), // reasonOf names the masked url and git's telling line
 		Fix:     fix}, true
+}
+
+// copyReadText says which copy the reads of an unreachable store use:
+// the clone's last fetch that reached the remote (devco:D-853, the date
+// search and ask print beside their answers).
+func copyReadText(dir string) string {
+	at := live.FetchStamp(gitbackend.StateDirOf(dir))
+	if at.IsZero() {
+		return "reads use this machine's copy, never fetched here"
+	}
+	return "reads use this machine's copy of " + at.UTC().Format(staleCopyLayout) + " UTC"
 }
 
 // accessFixText is the fix for an unreachable canonical url: the access

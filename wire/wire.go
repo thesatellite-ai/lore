@@ -1026,6 +1026,7 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		return op.Result{}, err
 	}
 	ctx = withPersonalDefaultMark(ctx) // personaldefault.go (devco:D-828)
+	ctx = withStaleCopies(ctx)         // stalecopy.go (devco:D-853)
 	res, err := a.run(ctx, e, d, c)
 	err = fitHomeHint(ctx, e, err)            // hintflags.go (devco:D-539)
 	err = a.personalStoreHint(ctx, e, d, err) // personalunread.go (devco:D-771)
@@ -1035,6 +1036,7 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		if empty {
 			res = a.noteEmptySearch(ctx, e, d, res) // emptysearch.go (devco:D-821)
 		}
+		res = noteStaleRead(ctx, e.Spec(), res, empty) // stalecopy.go (devco:D-853)
 		if personalDefaultMarked(ctx) {
 			// last, so the empty-answer hooks above still see the answer's
 			// own last line ("(no answer)")

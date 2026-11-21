@@ -111,7 +111,7 @@ $ git switch -q -c feat/login && lore task list --mine
 ```
 <!-- /example -->
 
-Offline, reads use the last fetched state. A **hook** is a small script git runs at a set moment. Git's `post-checkout` and `post-merge` hooks also start a fetch in the background, so switching branches refreshes live rows.
+Offline, reads use the last fetched state, and a search or ask that read a store that way names it under its answer (`<store>: unreachable, results from the copy of <date>`; `--json`: `unreachable`). A **hook** is a small script git runs at a set moment. Git's `post-checkout` and `post-merge` hooks also start a fetch in the background, so switching branches refreshes live rows.
 
 ## Writing to live
 
