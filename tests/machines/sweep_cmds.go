@@ -367,6 +367,9 @@ var rowChains = []sweepChain{
 	{Name: "resource", Steps: []sweepStep{
 		r("resource kind add", "sweephost", "--description", "a server"), r("resource kind show", "sweephost"),
 		rs("resource add", "sweephost", "hub1"), r("resource show", varID), r("resource history", varID),
+		// an alias, and lore ask finding the resource by it (devco D-831)
+		r("resource alias add", "--id", varID, "--alias", "sweepnick", "--yes"), r("resource alias list", "--id", varID),
+		r("ask run", "--query", "who is sweepnick"), r("resource alias remove", "--id", varID, "--alias", "sweepnick", "--yes"),
 		r("resource graph", varID), r("resource impact", varID), r("resource delete", varID, "--yes"),
 	}},
 	{Name: "task-view", Steps: []sweepStep{

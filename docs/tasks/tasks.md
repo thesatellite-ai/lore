@@ -151,6 +151,7 @@ $ lore task search --query invoice
 (no matches)
   searched: repo (task)
   read as: words: invoice
+  try: lore task search --query "invoice" --all
   try: lore search --query "invoice"
   try: lore ask --query "invoice"
 $ lore task search --query invoice --all

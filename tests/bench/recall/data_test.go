@@ -292,7 +292,7 @@ func TestAccuracyMissesFirst(t *testing.T) {
 	if !strings.Contains(got[0], "recall@3") || strings.Contains(strings.Join(got[:5], "\n"), "warm call") {
 		t.Errorf("the accuracy bars are not first:\n%s", all)
 	}
-	if rep := Report(RunInfo{}, rs); strings.Index(rep, "## Accuracy") > strings.Index(rep, "## Speed") || strings.Index(rep, "## Accuracy") < 0 {
+	if rep := Report(RunInfo{}, rs); !strings.Contains(rep, "## Accuracy") || strings.Index(rep, "## Accuracy") > strings.Index(rep, "## Speed") {
 		t.Error("the report does not show accuracy before speed")
 	}
 }

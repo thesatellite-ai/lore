@@ -65,7 +65,7 @@ $ lore sync conflicts | head -3
 
 ## Try it
 
-Delete the cache on purpose and let the next command build it again. `ls ~/.lore/cache/repo` shows the repo's cache file gone, then back after one `lore doctor`:
+Delete the cache on purpose and let the next command build it again. `ls ~/.lore/cache/repo` shows the repo's cache file gone, then back after one `lore doctor`, with the `.stamp` beside it (what the next read needs to open the cache without reading its whole schema again):
 
 <!-- example: ops#try-cache -->
 ```console
@@ -76,6 +76,7 @@ $ lore doctor | grep '^Status'
 Status: HEALTHY
 $ ls ~/.lore/cache/repo | grep website | sed 's/-[0-9a-f]\{12\}\./-<hash>./'
 website-<hash>.db
+website-<hash>.db.stamp
 ```
 <!-- /example -->
 

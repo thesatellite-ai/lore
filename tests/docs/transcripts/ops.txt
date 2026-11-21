@@ -308,6 +308,7 @@ alice (work/website)$ lore doctor | grep '^Status'
 Status: HEALTHY
 alice (work/website)$ ls ~/.lore/cache/repo | grep website | sed 's/-[0-9a-f]\{12\}\./-<hash>./'
 website-<hash>.db
+website-<hash>.db.stamp
 
 ### config refusals
 alice (work/website)$ lore config set --key live.autopush --value maybe

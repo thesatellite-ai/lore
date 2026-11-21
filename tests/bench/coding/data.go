@@ -24,7 +24,6 @@ package coding
 import (
 	"fmt"
 	"slices"
-	"sort"
 )
 
 // Kind is the lore table a row is written to.
@@ -225,14 +224,4 @@ func Validate() error {
 		}
 	}
 	return nil
-}
-
-// sortedKeys is the keys of m, sorted.
-func sortedKeys(m map[string]bool) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
