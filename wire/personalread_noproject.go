@@ -81,7 +81,7 @@ func (a *App) runPersonalReadNoProject(ctx context.Context, e op.Entry, d op.Dec
 	if err != nil {
 		return op.Result{}, true, err
 	}
-	res, err = eng.Run(ctx, e, d, c)
+	res, err = a.runAsCaller(ctx, eng, e, d, c)
 	return res, true, err
 }
 
