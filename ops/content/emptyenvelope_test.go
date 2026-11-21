@@ -1,6 +1,7 @@
 package content_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
@@ -70,7 +71,13 @@ func TestEmptyEnvelopesMatchV0117(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: %v", c.op, err)
 			}
-			if got := h.JSON(res); got != c.want {
+			got := h.JSON(res)
+			if strings.HasSuffix(c.op, ".search") {
+				// devco:D-832: an empty search leads with the searched/try
+				// note (D-821), checked whole; the v0.1.17 envelope after it
+				got = opstest.EmptyJSONOf(t, got, emptyQuery)
+			}
+			if got != c.want {
 				t.Errorf("%s --json\n got %s\nwant %s", c.op, got, c.want)
 			}
 		})

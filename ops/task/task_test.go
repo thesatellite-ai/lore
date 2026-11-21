@@ -52,7 +52,7 @@ func TestTextMatchesV017(t *testing.T) {
 	check("someday", opstest.Text(h.Must(opstask.OpSomeday, ``)), "○ tsk_ID Some one [medium] (someday)\n")
 	check("deferred", opstest.Text(h.Must(opstask.OpDeferred, ``)), "○ tsk_ID Later [medium] ⏾2099-01-05\n")
 	check("search", opstest.Text(h.Must(opstask.OpSearch, `{"query":"login"}`)), "tsk_ID [todo] Fix the login redirect\n")
-	check("search none", opstest.Text(h.Must(opstask.OpSearch, `{"query":"nothinghere"}`)), "(no matches)\n")
+	check("search none", opstest.EmptyTextOf(t, opstest.Text(h.Must(opstask.OpSearch, `{"query":"nothinghere"}`)), "nothinghere"), "(no matches)\n") // delta (D-821): the note under it, checked whole (D-832)
 
 	check("start", opstest.Text(h.Must(opstask.OpStart, `{"id":"`+second+`"}`)), "✓ tsk_ID started\n")
 	check("done --pr", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+second+`","pr":12}`)),

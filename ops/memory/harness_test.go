@@ -90,7 +90,9 @@ func TestDeleteIsATombstone(t *testing.T) {
 	if got := opstest.Text(h.Must(memory.OpList, ``)); got != "(no memories)\n" {
 		t.Fatalf("list %q", got)
 	}
-	if got := h.JSON(h.Must(memory.OpSearch, `{"query":"gateway"}`)); got != `{"schema_version":1,"kind":"memory.search","query":"gateway","count":0,"data":null}` {
+	// devco:D-832: the searched/try note (D-821) leads the JSON, checked
+	// whole; the v0.1.17 envelope after it exactly
+	if got := opstest.EmptyJSONOf(t, h.JSON(h.Must(memory.OpSearch, `{"query":"gateway"}`)), "gateway"); got != `{"schema_version":1,"kind":"memory.search","query":"gateway","count":0,"data":null}` {
 		t.Fatalf("search %s", got)
 	}
 }

@@ -67,14 +67,17 @@ func TestCampaignData_CommentLifecycle(t *testing.T) {
 	}
 }
 
-// TestCampaignData_CommentSearchSyntax: an FTS5 operator or a lone quote
-// is refused as E_INVALID_INPUT naming the query and the parser's reason,
-// with a hint (it said only "sqlite cache: search").
+// TestCampaignData_CommentSearchSyntax: a query with no word left to
+// search for (a bare operator, a lone quote) is refused as E_INVALID_INPUT
+// naming the query and the parser's reason, with a hint (it said only
+// "sqlite cache: search"). Since devco:D-798 a word behind an unclosed
+// quote is searched as the plain word, as in every search (search.md "Ask
+// a question"); devco:D-832 split this test along that rule.
 func TestCampaignData_CommentSearchSyntax(t *testing.T) {
 	c := resRepo(t)
 	m := cdMemory(t, c, "x")
-	c.MustLore("comment", "add", "--on-table=memories", "--on-id="+m, "--body=and or not")
-	for _, q := range []string{"AND", "OR", `"unclosed`, "NOT", "a AND"} {
+	other := renderID(t, c.MustLore("comment", "add", "--on-table=memories", "--on-id="+m, "--body=and or not"), "cmt")
+	for _, q := range []string{"AND", "OR", `"`, "NOT", "a AND"} {
 		e := cdRefused(t, c.Lore("comment", "search", q, "--json"), "E_INVALID_INPUT")
 		if !strings.Contains(e.Message, "not a valid search query (") || !strings.Contains(e.Message, q) || strings.TrimSpace(e.Hint) == "" {
 			t.Errorf("comment search %q: %q / %q", q, e.Message, e.Hint)
@@ -82,6 +85,13 @@ func TestCampaignData_CommentSearchSyntax(t *testing.T) {
 	}
 	if r := c.MustLore("comment", "search", `"and"`, "--json"); !strings.Contains(r.Stdout, "cmt_") {
 		t.Errorf("the quoted operator finds nothing: %s", r.Stdout)
+	}
+	// an unclosed quote before a word: the word is searched, the comment
+	// holding it found, the one without it not
+	quoted := renderID(t, c.MustLore("comment", "add", "--on-table=memories", "--on-id="+m, "--body=an unclosed quote"), "cmt")
+	r := c.MustLore("comment", "search", `"unclosed`, "--json")
+	if !strings.Contains(r.Stdout, quoted) || strings.Contains(r.Stdout, other) {
+		t.Errorf("comment search '\"unclosed' finds the comment holding the word, and only it: %s", r.Stdout)
 	}
 }
 
