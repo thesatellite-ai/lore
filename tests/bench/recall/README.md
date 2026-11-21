@@ -56,7 +56,7 @@ The grep arm runs the commands a careful agent would run, one by one with bash i
 
 ## What is measured, and the bars
 
-Per question: lore calls (always 1), the cold wall time (the first call after the store changed: before each question one feed row arrives from the side clone, as a sync brings it), the warm wall time (the same call again), the characters lore printed (stdout + stderr of the warm call), correctness; for grep its calls, wall time, characters and correctness. The first read after loading the store (every folder's cache built from nothing) is timed and logged but is not a question.
+Per question: lore calls (always 1), the cold wall time (the first call after the store changed: before each question one feed row arrives from the side clone, as a sync brings it), the warm wall time (the same call again), the CPU time (user + system) of both calls next to their wall times (on a loaded box the wall time is mostly waiting for a core; the bars stay on wall time), the characters lore printed (stdout + stderr of the warm call), correctness; for grep its calls, wall time, characters and correctness. The first read after loading the store (every folder's cache built from nothing) is timed and logged but is not a question.
 
 Accuracy, first (owner 2026-11-21: retrieval accuracy comes before speed). A third run of the same call with `--json` gives the structured answer; the bench reads it as one ranked list (resources, then tasks, then rows, the order lore prints them) and grades the top of it (`GradeAccuracy` in `accuracy.go`):
 
@@ -76,10 +76,10 @@ The run passes when every accuracy bar and every bar below holds (the raised bar
 
 ## The report
 
-`tmp/bench/recall.md`: the run (now, seed, rows, lore version, grep tool, load time), the summary line, PASS or every missed bar (accuracy bars first), the accuracy table (per type and per set: recall@3, top-1, stale, noise, grep present and stale), then the speed and size table per question type (correct, calls, warm and cold max, characters and the lore/grep character ratio), and a table per question (the lore call, recall@3, top-1, stale and noise, its times and characters, what it missed, the grep arm's calls and characters). The summary line is the one the coordinator copies into `GATE PASS lore beats grep: <line>`:
+`tmp/bench/recall.md`: the run (now, seed, rows, lore version, grep tool, load time), the box load average at the first question and after the last, the summary line, PASS or every missed bar (accuracy bars first), the accuracy table (per type and per set: recall@3, top-1, stale, noise, grep present and stale), then the speed and size table per question type (correct, calls, warm and cold max, characters and the lore/grep character ratio), and a table per question (the lore call, recall@3, top-1, stale and noise, its times and characters, what it missed, the grep arm's calls and characters). The summary line is the one the coordinator copies into `GATE PASS lore beats grep: <line>`:
 
 ```
-recall@3 R/70, top-1 T/70, stale S, noise X, calls L/G, warm p50/max ms, cold max ms, chars L/G, correct L/G of 70, harder L/20
+recall@3 R/70, top-1 T/70, stale S, noise X, calls L/G, warm p50/max ms, cold max ms, chars L/G, correct L/G of 70, harder L/20, warm cpu p50/max ms
 ```
 
 stale counts the questions with a stale fact in the top 3, noise the questions with more than one irrelevant item there.

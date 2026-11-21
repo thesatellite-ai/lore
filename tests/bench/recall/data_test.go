@@ -247,3 +247,18 @@ func TestAccuracyMissesFirst(t *testing.T) {
 		t.Error("the report does not show accuracy before speed")
 	}
 }
+
+// TestReportShowsCPUAndLoad (devco D-813): on a loaded box wall time is
+// mostly waiting for a core, so the report shows each call's CPU time next
+// to its wall time, the warm CPU p50/max in the summary line, and the box
+// load at the start and end of the run.
+func TestReportShowsCPUAndLoad(t *testing.T) {
+	r := Result{Q: Question{ID: "Q01", Type: TypeWho, Text: "who is alice-ng", Lore: []string{"ask", "--query", "who is alice-ng"}},
+		Lore: LoreRun{Calls: 1, Warm: 900 * time.Millisecond, WarmCPU: 123 * time.Millisecond, Cold: 1100 * time.Millisecond, ColdCPU: 234 * time.Millisecond, Chars: 100, Correct: true}}
+	out := Report(RunInfo{BoxLoad: [2]string{"150.10 140.00 130.00", "160.20 150.00 140.00"}}, []Result{r})
+	for _, want := range []string{"Box load (1/5/15 min): 150.10 140.00 130.00 at the first question, 160.20 150.00 140.00 after the last", "warm cpu p50/max 123/123 ms", "| 900 | 123 | 1100 | 234 |", "warm cpu ms", "cold cpu ms"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report does not say %q:\n%s", want, out)
+		}
+	}
+}

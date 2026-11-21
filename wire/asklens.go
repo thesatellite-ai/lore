@@ -14,10 +14,11 @@ import (
 // and runs fn with it, so `lore ask` runs its few statements on one open
 // instead of paying the open per statement (devco D-807). repoOnly is
 // `--store repo`: the repo's own rows alone (lensScope, devco D-799); any
-// other --store is routed before the op runs (RunIn.RoutedStore).
+// other --store is routed before the op runs (RunIn.RoutedStore). The lens
+// exposes only the tables ask reads (opsask.LensTables, devco D-813).
 func (a *App) AskLens(ctx context.Context, repoOnly bool, fn func(q opsask.Query) error) error {
 	return a.withExtra(a.lensFolders(ctx), func() error {
-		l, _, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: true, Now: a.Now()}, lensScope{RepoOnly: repoOnly}, "")
+		l, _, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: true, Now: a.Now(), Tables: opsask.LensTables}, lensScope{RepoOnly: repoOnly}, "")
 		if err != nil {
 			return err
 		}
