@@ -83,6 +83,17 @@ type LensOptions struct {
 	// lens_trash.go): the cache keeps no trashed row, so the caller reads
 	// them from the stores and hands them in. nil gives an empty view.
 	Trash []TrashRow
+	// Query is the statement the lens is opened for; LoadTrash reads it.
+	Query string
+	// LoadTrash, when set, reads the rows of the trash table (adding to
+	// Trash), called once during setup and only when Query can read that
+	// table: it names it, or names a lens view whose SQL reads it directly
+	// or through another view (time_spent's task_deleted_at). The set is
+	// derived from the lens's own view definitions (trashReaders), never a
+	// word list, so a view built on the trash later is covered by itself.
+	// Listing the trash reads every row file of every store, so a query
+	// that cannot see it skips that read (devco D-790, D-805).
+	LoadTrash func(context.Context) ([]TrashRow, error)
 	// TimeClientKey is the metadata key (a name, or its mky_ id) the
 	// time_spent view reads as the client column: the policy
 	// time.client_key (TQ8, FB-TASK-4). "" means TimeClientKey ("client").
@@ -141,6 +152,9 @@ type Lens struct {
 	closed bool
 	expand Expander
 	trash  []TrashRow
+	// query and loadTrash are LensOptions.Query and LoadTrash.
+	query     string
+	loadTrash func(context.Context) ([]TrashRow, error)
 	// clientKey is LensOptions.TimeClientKey (timespans.go).
 	clientKey string
 	// now is LensOptions.Now: where an open time span ends (zero = time.Now).
@@ -207,7 +221,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places, only: o.Only}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, query: o.Query, loadTrash: o.LoadTrash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places, only: o.Only}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -351,6 +365,11 @@ func (l *Lens) setup(ctx context.Context) error {
 	// TASK 6.6 (rollup.go): task_rollup over tasks_all, task_tree_all and
 	// the spans above.
 	if err := l.createTaskRollup(ctx, tables); err != nil {
+		return err
+	}
+	// D-805: every view exists now, so the trash is filled when the query
+	// can read it through any of them, before the lens locks.
+	if err := l.loadTrashFor(ctx); err != nil {
 		return err
 	}
 	if _, err := l.conn.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
