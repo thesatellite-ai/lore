@@ -10,6 +10,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/logic/resquar"
 
@@ -58,14 +59,11 @@ func (s state) names() []row.Table {
 // definition; one bad settings row must not stop the whole cache.
 // Duplicates of one kind id across sources take the first by source name.
 func (c *Cache) loadState(ctx context.Context, tx *sql.Tx) (state, error) {
-	st := state{plans: map[row.Table]plan{}, kinds: map[ids.ID[ids.Kind]]kindInfo{}}
-	for _, def := range c.base.Tables() {
-		p, err := planFor(def, "")
-		if err != nil {
-			return state{}, err
-		}
-		st.plans[def.Name] = p
+	base, err := basePlansFor(c.base)
+	if err != nil {
+		return state{}, err
 	}
+	st := state{plans: maps.Clone(base), kinds: map[ids.ID[ids.Kind]]kindInfo{}}
 	kinds, err := liveRows(ctx, tx, schema.TableKinds)
 	if err != nil {
 		return state{}, err
@@ -131,6 +129,40 @@ func (c *Cache) loadState(ctx context.Context, tx *sql.Tx) (state, error) {
 		st.kinds[kindID] = info
 	}
 	return st, nil
+}
+
+// basePlans is the plans of the built-in tables of the last registry a
+// cache was opened with. devco D-825: one read opens the cache of every
+// folder (five on a usual machine) with the same registry, and each open
+// built the same ~60 plans again (~17 ms of a warm lore ask). A plan is
+// never changed after planFor builds it and a Registry never changes
+// (With returns a new one), so the map is shared read-only; loadState
+// clones it before adding the kind plans. One entry, not a map per
+// registry, so a long-running process holds at most one set.
+var basePlans struct {
+	sync.Mutex
+	reg   *schema.Registry
+	plans map[row.Table]plan
+}
+
+// basePlansFor returns the plans of reg's built-in tables, building them
+// on the first call for reg. The caller must not change the map or a plan.
+func basePlansFor(reg *schema.Registry) (map[row.Table]plan, error) {
+	basePlans.Lock()
+	defer basePlans.Unlock()
+	if basePlans.reg == reg && basePlans.plans != nil {
+		return basePlans.plans, nil
+	}
+	plans := map[row.Table]plan{}
+	for _, def := range reg.Tables() {
+		p, err := planFor(def, "")
+		if err != nil {
+			return nil, err
+		}
+		plans[def.Name] = p
+	}
+	basePlans.reg, basePlans.plans = reg, plans
+	return plans, nil
 }
 
 // viewTaken reports whether view collides with a table or another view of

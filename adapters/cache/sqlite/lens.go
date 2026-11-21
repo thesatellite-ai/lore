@@ -303,6 +303,14 @@ func (l *Lens) setup(ctx context.Context) error {
 		return errs.New(errs.Unsupported, "sqlite lens: attach limit is "+strconv.Itoa(limit))
 	}
 	tables := map[string][]srcTable{}
+	// devco D-825: one prepared column query for every table of every
+	// source; QueryContext parsed the same text again per table (a lens
+	// over five folders asked it 55 times for 11 tables, 300+ for lore sql).
+	colStmt, err := l.conn.PrepareContext(ctx, columnsSQL)
+	if err != nil {
+		return dbErr("prepare column list", err)
+	}
+	defer func() { _ = colStmt.Close() }()
 	for i, s := range l.sources {
 		abs, err := filepath.Abs(s.Path)
 		if err != nil {
@@ -325,7 +333,7 @@ func (l *Lens) setup(ctx context.Context) error {
 			if !l.wants(n) {
 				continue // D-813: a narrowed lens reads only the tables it exposes
 			}
-			cols, err := l.columns(ctx, i, n)
+			cols, err := lensColumns(ctx, colStmt, i, n)
 			if err != nil {
 				return err
 			}
@@ -609,9 +617,14 @@ func (l *Lens) publicTables(ctx context.Context, i int) ([]string, error) {
 	return out, nil
 }
 
-// columns lists the columns of table in source i.
-func (l *Lens) columns(ctx context.Context, i int, table string) ([]string, error) {
-	rs, err := l.conn.QueryContext(ctx, "SELECT name FROM pragma_table_info(?, ?) ORDER BY cid", table, attachedName(i))
+// columnsSQL lists one table's columns in order; it takes the table and
+// the attached schema name.
+const columnsSQL = "SELECT name FROM pragma_table_info(?, ?) ORDER BY cid"
+
+// lensColumns lists the columns of table in source i through stmt, the
+// prepared columnsSQL of the lens connection.
+func lensColumns(ctx context.Context, stmt *sql.Stmt, i int, table string) ([]string, error) {
+	rs, err := stmt.QueryContext(ctx, table, attachedName(i))
 	if err != nil {
 		return nil, dbErr("read columns of "+table, err)
 	}
