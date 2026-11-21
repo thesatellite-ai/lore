@@ -21,6 +21,8 @@ import (
 // and in a lore repo an empty search said "(no matches)" with no word that
 // the personal store's folders were not read. The printed next step then
 // answers, and a machine with no personal store is told nothing new.
+// (Since devco:D-828 search and ask from a plain folder read the personal
+// store without the flag; the refusal is pinned for the other reads.)
 func TestPlainReadNamesStoreMe(t *testing.T) {
 	t.Parallel()
 	ctx := background()
@@ -51,8 +53,9 @@ func TestPlainReadNamesStoreMe(t *testing.T) {
 		}
 		return b.Run(ctx, e, op.JSONDecoder{Body: []byte(in)}, op.Caller{})
 	}
+	// (search and ask read the personal store there instead, devco:D-828,
+	// TestAskReadsPersonalStoreOutsideRepo)
 	reads := []struct{ op, in string }{
-		{opssearch.OpRun, `{"query":"zebra"}`},
 		{opssql.OpRun, `{"query":"SELECT body FROM memories_all"}`},
 		{"memory.search", `{"query":"zebra"}`},
 		{"memory.list", `{}`},

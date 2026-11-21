@@ -5986,7 +5986,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "read this store alone instead of every attached one: \u003corg\u003e (every folder), \u003cstore\u003e/\u003cfolder\u003e, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder"
+                    "description": "read this store alone instead of every attached one: \u003corg\u003e (every folder), \u003cstore\u003e/\u003cfolder\u003e, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder; with none outside a code repo, where no setup covers the folder, it reads your personal store"
                   },
                   "top": {
                     "type": "integer",
@@ -74754,7 +74754,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store)"
+                    "description": "only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store; outside a code repo, where no setup covers the folder, your personal store)"
                   },
                   "tables": {
                     "type": "array",

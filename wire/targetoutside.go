@@ -184,6 +184,13 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 			return op.Result{}, true, rowElsewhereErr(in, to, string(h.Name), spec.Name)
 		}
 	}
+	personalDefault := false
+	if useDefault && a.personalDefaultRead(ctx, e) {
+		// ask and search with no store named and no setup covering this
+		// folder read the personal store, as with --store me, where they
+		// refused E_NOT_A_STORE (personaldefault.go, devco:D-828)
+		to, useDefault, personalDefault = personalDefaultStore, false, true
+	}
 	if useDefault {
 		return a.runOnDefaultStore(ctx, e, d, c)
 	}
@@ -253,6 +260,9 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	res, err = eng.Run(ctx, e, d, c)
 	if err == nil && write && !previewRun(e, d) { // D-712: a dry run makes no project row
 		a.ensureFolderProject(ctx)
+	}
+	if err == nil && personalDefault {
+		markPersonalDefault(ctx) // App.Run adds the note after its other hooks
 	}
 	return res, true, err
 }
@@ -349,7 +359,7 @@ func (a *App) projectFolderOutside(ctx context.Context, project string) (string,
 // "run git init".
 func (a *App) runOnDefaultStore(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, bool, error) {
 	r, err := a.repoRoster(ctx)
-	if err != nil || r.src == store.SourceRepo {
+	if noOrgDefault(r, err) {
 		// E_NOT_A_STORE as before (exit 19, scripts key on it), but the
 		// hint names the flag: never "run git init here first". It names
 		// --setup too (devco:D-510, the where-you-stand matrix): from any
