@@ -186,21 +186,21 @@ func (s *liveSession) doctorTrackedHooks(ctx context.Context, dir string, shared
 	if !s.repoMayHoldLoreFiles(ctx, s.top) {
 		return // D-500: a private project's blocks never go there
 	}
-	if text := s.trackedPasteText(dir, shared); text != "" {
+	if text := s.trackedPasteText(ctx, dir, shared); text != "" {
 		note(text)
 	}
 }
 
 // trackedPasteText is the paste lines for every lore block missing from
 // the tracked hooks folder dir ("" when none is missing).
-func (s *liveSession) trackedPasteText(dir string, shared bool) string {
+func (s *liveSession) trackedPasteText(ctx context.Context, dir string, shared bool) string {
 	rel := ""
 	if root := liveProjectRoot(s.h.cfg.WorkDir); root != "" {
 		if r, inside := fspath.Rel(s.top, root); inside {
 			rel = r
 		}
 	}
-	blocks := hookBlocksFor(rel, shared, hookPinFor(s.top, dir, shared))
+	blocks := hookBlocksFor(rel, shared, hookPinFor(ctx, s.top, dir, shared))
 	missing := map[string]bool{}
 	for _, n := range missingGuardHooks(dir) {
 		missing[n] = true
@@ -255,5 +255,5 @@ func (h *liveHost) clientGuardPasteOnDoctor(ctx context.Context, opName string) 
 	}
 	b := hookBlocks("")[hookCommitMsg]
 	h.line("lore doctor: commits in this client repo are NOT checked for internal notes: git runs hooks from " + p + ", which is committed with the repo, so lore writes nothing there; " +
-		pasteBlock(p, hookWrite{name: hookCommitMsg, marker: b.marker, lines: withHookPin(hookPinFor(dir, p, false), b.lines)}))
+		pasteBlock(p, hookWrite{name: hookCommitMsg, marker: b.marker, lines: withHookPin(hookPinFor(ctx, dir, p, false), b.lines)}))
 }

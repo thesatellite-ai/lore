@@ -231,6 +231,9 @@ type RunIn struct {
 	// the work tree, such as .githooks or .husky): without it no command
 	// writes there, init and doctor --fix included. A project whose .lore
 	// folder git ignores never gets them (D-500).
+	// PinHooks (devco D-795) is the explicit ask to pin the clone's hook
+	// blocks to the running build; without it they call lore from PATH.
+	PinHooks     bool `json:"pin_hooks,omitempty" flag:"pin-hooks" desc:"pin the clone's git hook blocks to the lore build running this command (with its LORE_HOME), also a build in a tmp folder or a source tree; without it the hooks run the first lore on PATH, and the lore on PATH removes a pin"`
 	TrackedHooks bool `json:"tracked_hooks,omitempty" flag:"tracked-hooks" desc:"also add lore's hook blocks to a hooks folder committed with the repo (core.hooksPath in the work tree, such as .githooks); without it lore leaves such a folder alone"`
 }
 

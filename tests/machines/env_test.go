@@ -326,9 +326,10 @@ func TestEnvBrokenLoreHome(t *testing.T) {
 // TestEnvTwoLores: an old lore (0.1.17) earlier on PATH than this one.
 // doctor names which binary a bare `lore` runs, its version, what it
 // shadows and that it is not this binary. The git hooks this binary wrote
-// run this binary (devco P-2: their pin line; the first lore on PATH only
-// once it is gone), so the commit of its 0.1.18 rows goes through and the
-// old lore is never run on the new data.
+// call lore from PATH until `lore fix --pin-hooks` pins them to this binary
+// (devco P-2, D-795: their pin line; the first lore on PATH only once it is
+// gone), so the commit of its 0.1.18 rows goes through and the old lore is
+// never run on the new data.
 func TestEnvTwoLores(t *testing.T) {
 	t.Parallel()
 	m := Build(t, ShapeEnvTwoLores, loreBin)
@@ -355,9 +356,15 @@ func TestEnvTwoLores(t *testing.T) {
 	if out, err := git("add", "-A"); err != nil {
 		t.Fatalf("git add: %v %s", err, out)
 	}
-	// devco P-2: the hook blocks this binary wrote run this binary (the
-	// pin line), not the old lore first on PATH, so the commit of its rows
-	// goes through; before the fix it was refused with "install lore 0.1.18".
+	// devco D-795: a build that is not the lore on PATH writes bare blocks
+	// (hooks call lore from PATH) until the person asks for the pin there.
+	if pre, rerr := os.ReadFile(filepath.Join(repo, ".git", "hooks", "pre-commit")); rerr != nil || strings.Contains(string(pre), "if [ -x '") {
+		t.Errorf("pre-commit pinned a build nobody asked for: %v\n%s", rerr, pre)
+	}
+	csOK(t, m.Lore(t, repo, "fix", "--pin-hooks"))
+	// devco P-2: once asked (--pin-hooks), the hook blocks run this binary
+	// (the pin line), not the old lore first on PATH, so the commit of its
+	// rows goes through; without the pin it is refused with "install lore 0.1.18".
 	self, serr := filepath.EvalSymlinks(real) // the pin names the executable itself
 	if serr != nil {
 		t.Fatal(serr)

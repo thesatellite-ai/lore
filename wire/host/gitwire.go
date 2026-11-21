@@ -186,7 +186,7 @@ func hookBlocks(rel string) map[string]struct {
 	// P-2: the person may keep an older lore as `lore` on purpose (a newer
 	// build beside it as lore-dev): the first step names what they can do
 	// with the build they have, which points these hooks at itself.
-	needsCore := `echo "` + bn + `: .lore/data holds lore 0.1.18 rows but the ` + bn + ` these hooks run ($(command -v ` + bn + `)) is older; run doctor --fix here with your lore 0.1.18 or newer build (e.g. lore-dev doctor --fix) so the hooks run that build, or install lore 0.1.18 or newer as ` + bn + `" >&2; exit 1`
+	needsCore := `echo "` + bn + `: .lore/data holds lore 0.1.18 rows but the ` + bn + ` these hooks run ($(command -v ` + bn + `)) is older; run doctor --fix --pin-hooks here with your lore 0.1.18 or newer build (e.g. lore-dev doctor --fix --pin-hooks) so the hooks run that build, or install lore 0.1.18 or newer as ` + bn + `" >&2; exit 1`
 	absMsg := `m="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; `
 	// No lore that can check, in a clone the last check found to be a
 	// client repo (wire/clientmark.go): refuse rather than let the commit
@@ -364,7 +364,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		rel = ""
 	}
 	bin := mergeDriverBinary()
-	pin := hookPinFor(s.top, dir, shared)
+	pin := hookPinFor(ctx, s.top, dir, shared)
 	blocks := hookBlocksFor(rel, shared, pin)
 	// the pin is in the fingerprint: a run of another build (lore and
 	// lore-dev side by side) re-points the blocks at itself
@@ -515,7 +515,8 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		}
 		teamNew, teamChanged = nil, nil
 	}
-	s.noteTrackedAsked(teamNew) // D-732: created on the person's yes; doctor --fix keeps them
+	s.noteTrackedAsked(teamNew)       // D-732: created on the person's yes; doctor --fix keeps them
+	oldPin, hadPin := dirHookPin(dir) // D-795: a pin this run removes is said
 	for _, n := range names {
 		b := blocks[n]
 		if skip[n] {
@@ -529,6 +530,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 			s.warn("git wiring: " + err.Error())
 			return
 		}
+	}
+	if _, still := dirHookPin(dir); hadPin && !still {
+		s.cmdNotice(ctx, pinRemovedLine(oldPin))
 	}
 	if changed := changedWiring(wired, before, dir); len(changed) > 0 {
 		// no hidden magic: each file lore changed in the clone, named the
@@ -665,7 +669,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 		}
 	}
 	var stale []string
-	blocks := hookBlocksFor(rel, shared, hookPinFor(s.top, hooks, shared))
+	blocks := hookBlocksFor(rel, shared, hookPinFor(ctx, s.top, hooks, shared))
 	for n, b := range blocks {
 		if hookBlockStale(filepath.Join(hooks, n), b.marker, b.lines) {
 			stale = append(stale, n)

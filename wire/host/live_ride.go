@@ -641,7 +641,7 @@ func (s *liveSession) ensureRideHooks(ctx context.Context) {
 		return
 	}
 	hooks := []string{hookPostCommit, hookPrePush}
-	pin := hookPinFor(s.top, dir, shared)
+	pin := hookPinFor(ctx, s.top, dir, shared)
 	writes := make([]hookWrite, 0, len(hooks))
 	for _, hook := range hooks {
 		writes = append(writes, hookWrite{name: hook, marker: rideHookMarker, lines: rideBlockLines(hook, shared, pin)})

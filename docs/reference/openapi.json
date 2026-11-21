@@ -17686,6 +17686,10 @@
                     "type": "boolean",
                     "description": "probe again instead of reusing results from the last minute"
                   },
+                  "pin_hooks": {
+                    "type": "boolean",
+                    "description": "with --fix: pin the clone's git hook blocks to the lore build running this command (with its LORE_HOME), also a build in a tmp folder or a source tree; without it the hooks run the first lore on PATH, and the lore on PATH removes a pin"
+                  },
                   "setup": {
                     "type": "string",
                     "description": "the setup to check (default: every setup with --all, else the active one)"
@@ -19443,6 +19447,10 @@
                   "migrate": {
                     "type": "boolean",
                     "description": "also migrate a project still on the lore 0.1.17 format (runs lore migrate run; teammates then need lore 0.1.18); without it such a project is refused, or listed by --all"
+                  },
+                  "pin_hooks": {
+                    "type": "boolean",
+                    "description": "pin the clone's git hook blocks to the lore build running this command (with its LORE_HOME), also a build in a tmp folder or a source tree; without it the hooks run the first lore on PATH, and the lore on PATH removes a pin"
                   },
                   "tracked_hooks": {
                     "type": "boolean",
@@ -91424,6 +91432,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "pin_hooks": {
+                    "type": "boolean",
+                    "description": "pin the clone's git hook blocks to the lore build running this command (with its LORE_HOME), also a build in a tmp folder or a source tree; without it the hooks run the first lore on PATH, and the lore on PATH removes a pin"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"

@@ -25,6 +25,7 @@ package host
 // teammate's clone never sees the pin.
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,40 +53,126 @@ const shellQuoteChar = "'"
 
 // hookPinRe reads the program and the optional LORE_HOME back out of a pin
 // line (doctor).
-var hookPinRe = regexp.MustCompile(`if \[ -x '([^']*)' \]; then lore\(\) \{ (?:LORE_HOME='([^']*)' )?'[^']*' "\$@"; \}; fi`)
+var hookPinRe = regexp.MustCompile(`if \[ -x '([^']*)' \]; then lore\(\) \{ (?:LORE_HOME='([^']*)' )?'[^']*' "\$@"; \}; fi( # lore-pin:)?`)
+
+// hookPinAskedTag ends a pin the person asked for (devco D-795): written by
+// a run with --pin-hooks or with LORE_HOOK_BIN set. A later run of another
+// build keeps it; the lore on PATH removes it.
+const hookPinAskedTag = "# lore-pin: pinned on request (--pin-hooks or LORE_HOOK_BIN); the first lore on PATH when it is gone"
+
+// pinHooksFlag is the flag of lore fix, doctor --fix and sync that pins
+// the clone's hook blocks to the build running it (devco D-795).
+const pinHooksFlag = "pin-hooks"
+
+// unpinHooksCommand removes a pin: lore fix run by the lore on PATH writes
+// bare blocks.
+const unpinHooksCommand = "lore fix"
+
+// tmpPathElem is a folder name a build is never pinned from without
+// --pin-hooks (a scratch build in a worktree's tmp/bin).
+const tmpPathElem = "tmp"
+
+// loreModulePrefix starts the go.mod module line of a lore source tree; a
+// build inside one is never pinned without --pin-hooks.
+const loreModulePrefix = "module github.com/thesatellite-ai/lore"
+
+// goModFile is the file that marks a Go source tree.
+const goModFile = "go.mod"
 
 // hookTarget is the program a pin runs and the LORE_HOME it sets ("" for
-// none).
+// none); asked is true for a pin the person asked for (hookPinAskedTag).
 type hookTarget struct {
 	prog, home string
+	asked      bool
 }
 
-// hookPinTarget is the pin for a build: exe is the running executable,
-// loreBin the value of LORE_HOOK_BIN, home the value of LORE_HOME ("" when
-// unset). ok is false when the blocks should call bare `lore`.
-func hookPinTarget(exe, loreBin, home string, lookPath func(string) (string, error)) (hookTarget, bool) {
-	if loreBin != "" && filepath.IsAbs(loreBin) && executableHookFile(loreBin) && !strings.Contains(loreBin, shellQuoteChar) {
-		// the home goes with it (devco D-423): a hook pinned to
-		// LORE_HOOK_BIN under LORE_HOME=~/.lore-dev otherwise ran against
-		// ~/.lore; a wrapper that sets its own LORE_HOME still wins
-		if strings.Contains(home, shellQuoteChar) {
-			home = ""
+// hookPinRun is what decides the pin of one run: the running executable, the
+// value of LORE_HOOK_BIN, the LORE_HOME it runs with ("" for the default
+// home) and whether the person passed --pin-hooks.
+type hookPinRun struct {
+	exe, hookBin, home string
+	asked              bool
+	lookPath           func(string) (string, error)
+	// scratch reports a path in a tmp folder or a lore source tree
+	// (scratchBuildPath; a test passes its own).
+	scratch func(string) bool
+}
+
+// hookPinTarget is the pin a run writes (devco D-795, owner rule: hooks in
+// a repo call `lore` from PATH; a build is pinned only when the person
+// asks for it there). ok is false when the blocks call bare `lore`.
+//
+//	--pin-hooks          ─▶ pin LORE_HOOK_BIN (when it names an executable) or this build, with its LORE_HOME
+//	LORE_HOOK_BIN alone  ─▶ pin it, unless it sits in a tmp folder or a lore source tree, or LORE_HOME is not the default
+//	neither              ─▶ no pin (a wrapper that only sets LORE_HOME, a scratch build: bare `lore`)
+//
+// The lore on PATH with the default home is never pinned: bare runs it.
+func hookPinTarget(r hookPinRun) (hookTarget, bool) {
+	if strings.Contains(r.home, shellQuoteChar) {
+		return hookTarget{}, false
+	}
+	viaEnv := r.hookBin != "" && filepath.IsAbs(r.hookBin) && executableHookFile(r.hookBin) && !strings.Contains(r.hookBin, shellQuoteChar)
+	if !viaEnv && !r.asked {
+		return hookTarget{}, false // no opt-in: bare `lore`, whatever build runs
+	}
+	t := hookTarget{home: r.home, asked: true}
+	if viaEnv {
+		t.prog = filepath.ToSlash(filepath.Clean(r.hookBin))
+	} else {
+		exe := r.exe
+		if exe == "" || runsAsPathLore(exe, r.home, r.lookPath) {
+			return hookTarget{}, false // `lore` on PATH is this file: bare survives an upgrade in place
 		}
-		return hookTarget{prog: filepath.ToSlash(filepath.Clean(loreBin)), home: home}, true
+		if res, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = res
+		}
+		if strings.Contains(exe, shellQuoteChar) {
+			return hookTarget{}, false
+		}
+		t.prog = filepath.ToSlash(exe)
 	}
-	if exe == "" || strings.Contains(home, shellQuoteChar) {
-		return hookTarget{}, false
+	if !r.asked && (t.home != "" || r.scratch(filepath.FromSlash(t.prog))) {
+		return hookTarget{}, false // only --pin-hooks names these explicitly
 	}
-	if r, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = r
+	return t, true
+}
+
+// runsAsPathLore reports whether exe with home ("" for the default) is the
+// lore on PATH run as itself: the build that never pins and removes pins.
+func runsAsPathLore(exe, home string, lookPath func(string) (string, error)) bool {
+	if home != "" || exe == "" {
+		return false
 	}
-	if home == "" && reposync.DriverBinary(exe, lookPath) == reposync.BinaryName {
-		return hookTarget{}, false // `lore` on PATH is this file: bare survives an upgrade in place
+	if res, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = res
 	}
-	if strings.Contains(exe, shellQuoteChar) {
-		return hookTarget{}, false
+	return reposync.DriverBinary(exe, lookPath) == reposync.BinaryName
+}
+
+// scratchBuildPath reports whether p is in a tmp folder (a path element
+// named tmp, or under the system temp folder) or inside a lore source tree
+// (a folder above it holds lore's go.mod): a build there is replaced or
+// removed at any time, so it is never pinned without --pin-hooks.
+func scratchBuildPath(p string) bool {
+	p = filepath.Clean(p)
+	for _, el := range strings.Split(filepath.ToSlash(p), "/") {
+		if el == tmpPathElem {
+			return true
+		}
 	}
-	return hookTarget{prog: filepath.ToSlash(exe), home: home}, true
+	if tmp := os.TempDir(); tmp != "" {
+		if _, inside := fspath.Rel(filepath.Clean(tmp), p); inside {
+			return true
+		}
+	}
+	for dir := filepath.Dir(p); ; dir = filepath.Dir(dir) {
+		if b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, goModFile))); err == nil && strings.HasPrefix(strings.TrimSpace(string(b)), loreModulePrefix) {
+			return true
+		}
+		if filepath.Dir(dir) == dir {
+			return false
+		}
+	}
 }
 
 // line is the pin line chained first into each block.
@@ -95,7 +182,11 @@ func (t hookTarget) line() string {
 		env = "LORE_HOME=" + shellQuoteChar + t.home + shellQuoteChar + " "
 	}
 	q := shellQuoteChar + t.prog + shellQuoteChar
-	return "if [ -x " + q + " ]; then " + binaryName + "() { " + env + q + ` "$@"; }; fi ` + hookPinTag
+	tag := hookPinTag
+	if t.asked {
+		tag = hookPinAskedTag
+	}
+	return "if [ -x " + q + " ]; then " + binaryName + "() { " + env + q + ` "$@"; }; fi ` + tag
 }
 
 // describe is the pinned program for a doctor line, with its LORE_HOME.
@@ -106,66 +197,91 @@ func (t hookTarget) describe() string {
 	return t.prog + " (LORE_HOME=" + t.home + ")"
 }
 
-// runningHookPin is the pin line for this process ("" for bare `lore`).
-func runningHookPin() string {
+// thisRun is the hookPinRun of this process.
+func thisRun(ctx context.Context) hookPinRun {
 	exe, err := os.Executable()
 	if err != nil {
 		exe = ""
 	}
+	return hookPinRun{exe: exe, hookBin: os.Getenv(EnvHookBin), home: runningHome(), asked: pinHooksAsked(ctx), lookPath: exec.LookPath, scratch: scratchBuildPath}
+}
+
+// runningHome is this process's LORE_HOME, absolute and with slashes; ""
+// when unset or when it names the default home (~/.lore).
+func runningHome() string {
 	home := os.Getenv(lorehome.EnvName)
-	if home != "" {
-		if abs, aerr := filepath.Abs(home); aerr == nil {
-			home = abs
-		}
-	}
-	t, ok := hookPinTarget(exe, os.Getenv(EnvHookBin), filepath.ToSlash(home), exec.LookPath)
-	if !ok {
+	if home == "" {
 		return ""
 	}
-	return t.line()
+	if abs, err := filepath.Abs(home); err == nil {
+		home = abs
+	}
+	if uh, err := os.UserHomeDir(); err == nil && uh != "" && filepath.Clean(home) == filepath.Join(uh, lorehome.DirName) {
+		return ""
+	}
+	return filepath.ToSlash(home)
 }
 
 // hookPinFor is the pin line for the hooks folder dir of the clone at top
 // ("" when the folder is shared by every repo or is in the work tree, see
-// the DECISION above).
-func hookPinFor(top, dir string, shared bool) string {
+// the DECISION above). With no opt-in in this run, a pin the person asked
+// for earlier stays while its program is there, unless this run is the
+// lore on PATH (devco D-795: it writes bare blocks, removing every pin,
+// and says so).
+func hookPinFor(ctx context.Context, top, dir string, shared bool) string {
+	return hookPinForRun(thisRun(ctx), top, dir, shared)
+}
+
+// hookPinForRun is hookPinFor for the run r.
+func hookPinForRun(r hookPinRun, top, dir string, shared bool) string {
 	if shared || hooksDirInWorkTree(top, dir) {
 		return ""
 	}
-	pin := runningHookPin()
-	if pin == "" {
-		// bare would do (this file is the lore on PATH, no LORE_HOME), but
-		// blocks already pinned to this same file run it too: keep them,
-		// so lore appearing on PATH later rewrites no hook file
-		if kept, ok := keptSelfPin(dir); ok {
-			return kept
-		}
+	if t, ok := hookPinTarget(r); ok {
+		return t.line()
 	}
-	return pin
+	if r.asked || runsAsPathLore(r.exe, r.home, r.lookPath) {
+		return ""
+	}
+	if t, ok := dirHookPin(dir); ok && t.asked && executableHookFile(filepath.FromSlash(t.prog)) {
+		return t.line()
+	}
+	return ""
 }
 
-// keptSelfPin is the pin of lore's blocks in dir when it names this very
-// executable with no LORE_HOME.
-func keptSelfPin(dir string) (string, bool) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", false
-	}
-	for _, n := range []string{hookPreCommit, hookPostCommit, hookPrePush, hookCommitMsg} {
-		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, n)))
-		if rerr != nil {
+// dirHookPin is the pin of lore's blocks in the hooks folder dir (the
+// first hook that holds one).
+func dirHookPin(dir string) (hookTarget, bool) {
+	for _, n := range []string{hookPreCommit, hookCommitMsg, hookPostCommit, hookPrePush} {
+		b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, n)))
+		if err != nil {
 			continue
 		}
-		t, ok := pinnedHookProgram(string(b))
-		if !ok {
-			continue
+		if t, ok := pinnedHookProgram(string(b)); ok {
+			return t, true
 		}
-		if t.home == "" && sameExecutable(filepath.FromSlash(t.prog), exe) {
-			return t.line(), true
-		}
-		return "", false
 	}
-	return "", false
+	return hookTarget{}, false
+}
+
+// pinRemovedLine is what a run that removed a pin says (devco D-795).
+func pinRemovedLine(old hookTarget) string {
+	return "hooks: removed the pin to " + old.describe() + "; they run lore from PATH"
+}
+
+// pinHooksKey marks a context whose run passed --pin-hooks.
+type pinHooksKey struct{}
+
+// withPinHooks marks ctx: this run (lore fix, doctor --fix or sync with
+// --pin-hooks) pins the hook blocks to its build.
+func withPinHooks(ctx context.Context) context.Context {
+	return context.WithValue(ctx, pinHooksKey{}, true)
+}
+
+// pinHooksAsked reports whether ctx's run passed --pin-hooks.
+func pinHooksAsked(ctx context.Context) bool {
+	v, ok := ctx.Value(pinHooksKey{}).(bool)
+	return ok && v
 }
 
 // sameExecutable reports whether a and b are the same file.
@@ -211,7 +327,7 @@ func pinnedHookProgram(content string) (hookTarget, bool) {
 	if m == nil {
 		return hookTarget{}, false
 	}
-	return hookTarget{prog: m[1], home: m[2]}, true
+	return hookTarget{prog: m[1], home: m[2], asked: m[3] != ""}, true
 }
 
 // executableHookFile reports whether p is a regular file someone may run.
