@@ -86,7 +86,7 @@ stale counts the questions with a stale fact in the top 3, noise the questions w
 
 ## The blind agent run
 
-`task bench:agent` asks every question of two agents on one small model (`claude-haiku-4-5`) and grades their final answers automatically against the question's facts with `GradeAnswer`, the same grade for both agents. It starts real agents and costs money, so it never runs in `task check` or on push; the release script runs it.
+`task bench:agent` asks every question of two agents on one small model (`claude-haiku-4-5`) and grades their final answers automatically against the question's facts with `GradeAnswer`, the same grade for both agents. It starts real agents and costs money, so it never runs in `task check` or on push; the release script runs it. The same task then runs the coding gate's blind agent trap run (an agent with lore and one without make the edit a critical hotfix forbids; tests/bench/coding/README.md); both parts always run and the task fails when either misses a bar.
 
 - The lore agent starts in the person's home folder with `skills/SKILL.md` appended to its system prompt and the Bash tool; the `lore` first on its PATH is the measured binary as the bench's person. It is told to start with `lore ask --query "<the question>"` and to use other documented lore read commands only when that is not enough.
 - The grep agent starts in the markdown tree's root with the Bash tool and rg, grep, cat, ls, find, head.

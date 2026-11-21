@@ -38,7 +38,7 @@ tasks:
       - task: lore:bench:recall
 
   bench:agent:
-    desc: alias → lore:bench:agent — the blind agent run (lore agent vs grep agent, starts real agents; section in tmp/bench/recall.md)
+    desc: alias → lore:bench:agent — the blind agent runs (lore agent vs grep agent on the recall questions, lore agent vs plain agent on the coding traps; starts real agents; sections in tmp/bench/recall.md and tmp/bench/coding.md)
     cmds:
       - task: lore:bench:agent
 

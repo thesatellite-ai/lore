@@ -659,13 +659,19 @@ tasks:
   # the markdown tree) on one small model, both graded against the ground truth they never see; tokens
   # and wall time per question. It starts real agents and costs money: never in task check or on push;
   # the release script runs it. LORE_BENCH_AGENT names the command that starts the agent CLI.
+  # It also runs the coding gate's trap run (devco D-823): per critical hotfix trap an agent with lore
+  # and one without make the same edit; the one with lore must fall into none. Both parts always run;
+  # the task fails when either misses a bar.
   bench:agent:
-    desc: "Blind agent run (tests/bench/recall, tag bench): every recall-gate question asked of a lore agent (SKILL.md + lore only) and a grep agent (rg/cat over the markdown tree) on claude-haiku-4-5, graded automatically; tokens and wall time per question; section in tmp/bench/recall.md; fails unless lore >= grep on the normal set and > grep on the harder set. Starts real agents (costs money): set LORE_BENCH_AGENT to the agent launcher (default claude). Settings: tests/bench/recall/README.md. Extra go test flags after --"
+    desc: "Blind agent runs (tag bench): (1) tests/bench/recall: every recall-gate question asked of a lore agent (SKILL.md + lore only) and a grep agent (rg/cat over the markdown tree) on claude-haiku-4-5, graded automatically; tokens and wall time per question; section in tmp/bench/recall.md; fails unless lore >= grep on the normal set and > grep on the harder set. (2) tests/bench/coding: per hotfix trap a lore agent (store + SKILL.md) and a plain agent (same checkout, no lore) make the trap's edit; diffs graded by Trap.FellIn; section in tmp/bench/coding.md; fails when the lore agent falls into a trap or no trap shows the difference. Starts real agents (costs money): set LORE_BENCH_AGENT to the agent launcher (default claude). Settings: tests/bench/recall/README.md, tests/bench/coding/README.md. Extra go test flags after --"
     vars:
       BENCH_BIN: "{{.BIN_DIR}}/lore-bench"
     cmds:
       - CGO_ENABLED=0 go build -o {{.BENCH_BIN}} ./cmd/lore
-      - "LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^TestBenchAgent$' -timeout 90m -v {{.CLI_ARGS}} ./tests/bench/recall/"
+      - |
+        LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^TestBenchAgent$' -timeout 90m -v {{.CLI_ARGS}} ./tests/bench/recall/; recall=$?
+        LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^TestBenchTraps$' -timeout 60m -v {{.CLI_ARGS}} ./tests/bench/coding/; traps=$?
+        exit $(( recall | traps ))
 
   bench:coding:
     desc: "Coding-agent context gate (tests/bench/coding, tag bench): 30 coding tasks (a file and what to change) on a synthetic repo whose store holds rules, hotfixes, decisions, patterns and memories; lore context --for-file + --for-prompt and lore ask must show every must-rule and critical hotfix that applies (recall 100%) with at least 80% of what they show applying; report tmp/bench/coding.md, non-zero exit naming every miss. Settings: tests/bench/coding/README.md. Extra go test flags after --"

@@ -71,6 +71,11 @@ type AgentTask struct {
 	Prompt     string // the user turn: the question
 	PathPrefix string // a folder put first on PATH (the lore agent's lore), or ""
 	Deny       []string
+	// Tools are the CLI tools the agent gets (default: Bash only, the
+	// question arms). A coding task that edits files (the coding gate's
+	// trap run) adds Read, Edit and Write; every tool named here is also
+	// allowed without a prompt (--allowedTools), the deny rules still win.
+	Tools []string
 }
 
 // Tokens is what one agent run consumed, summed over every model turn.
@@ -245,6 +250,20 @@ func OffTool(arm Arm, cmd string) bool {
 	return false
 }
 
+// RunsLore reports whether cmd starts lore in any of its commands or
+// pipe stages (the coding gate's trap run counts the lore agent's lore
+// calls and refuses a plain agent that ran lore).
+func RunsLore(cmd string) bool {
+	for _, stages := range splitShell(cmd) {
+		for _, st := range stages {
+			if firstWord(st) == "lore" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // splitShell splits a shell command list into its commands (at &&, ||,
 // ;, & and newlines) and each command into its pipe stages, outside
 // quotes only: `rg "a|b" x` is one stage, its | is the pattern's.
@@ -321,9 +340,16 @@ type ClaudeAgent struct {
 
 // Args is the CLI arguments for one task (after the launcher).
 func (c ClaudeAgent) Args(task AgentTask) []string {
+	tools := "Bash"
+	if len(task.Tools) > 0 {
+		tools = strings.Join(task.Tools, ",")
+	}
 	args := []string{"-p", task.Prompt, "--bare", "--disable-slash-commands", "--no-session-persistence",
-		"--tools", "Bash", "--model", c.Model, "--max-turns", fmt.Sprint(c.MaxTurns),
+		"--tools", tools, "--model", c.Model, "--max-turns", fmt.Sprint(c.MaxTurns),
 		"--output-format", "stream-json", "--verbose", "--append-system-prompt", task.System}
+	if len(task.Tools) > 0 {
+		args = append(args, "--allowedTools", tools)
+	}
 	if len(task.Deny) > 0 {
 		args = append(args, "--disallowedTools", strings.Join(task.Deny, ","))
 	}

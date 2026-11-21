@@ -365,3 +365,20 @@ func TestRegradeAnswers(t *testing.T) {
 		t.Error("answers of another data set: want an error")
 	}
 }
+
+func TestClaudeAgentArgsTools(t *testing.T) {
+	s, qs := agentSetup()
+	task := AgentTasks(qs[:1], s)[0]
+	a := ClaudeAgent{Model: DefaultAgentModel, MaxTurns: 8}
+	plain := strings.Join(a.Args(task), " ")
+	if !strings.Contains(plain, "--tools Bash ") || strings.Contains(plain, "--allowedTools") {
+		t.Errorf("question task: %q, want Bash only and no allow list", plain)
+	}
+	task.Tools = []string{"Bash", "Read", "Edit", "Write"}
+	edit := strings.Join(a.Args(task), " ")
+	for _, want := range []string{"--tools Bash,Read,Edit,Write ", "--allowedTools Bash,Read,Edit,Write", "--disallowedTools Bash(cat:*)"} {
+		if !strings.Contains(edit, want) {
+			t.Errorf("coding task: %q lacks %q", edit, want)
+		}
+	}
+}
