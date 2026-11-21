@@ -83166,6 +83166,252 @@
         }
       }
     },
+    "/v1/setup/machine/guard/install": {
+      "post": {
+        "operationId": "setup.guard.install",
+        "summary": "Opt in: check commits and pushes in every client repo on this machine for internal notes, also clones where lore never ran (a global core.hooksPath entry that runs each repo's own hooks first)",
+        "tags": [
+          "setup"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "show what would change; write nothing"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "already": {
+                      "type": "boolean"
+                    },
+                    "chain": {
+                      "type": "string"
+                    },
+                    "dir": {
+                      "type": "string"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "left": {
+                      "type": "string"
+                    },
+                    "previous": {
+                      "type": "string"
+                    },
+                    "previous_set": {
+                      "type": "boolean"
+                    },
+                    "removed": {
+                      "type": "boolean"
+                    },
+                    "wrote": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "dir"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_SETUP_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/setup/machine/guard/remove": {
+      "post": {
+        "operationId": "setup.guard.remove",
+        "summary": "Remove the machine guard: the global core.hooksPath goes back to exactly what it was before the install",
+        "tags": [
+          "setup"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "show what would change; write nothing"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "already": {
+                      "type": "boolean"
+                    },
+                    "chain": {
+                      "type": "string"
+                    },
+                    "dir": {
+                      "type": "string"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "left": {
+                      "type": "string"
+                    },
+                    "previous": {
+                      "type": "string"
+                    },
+                    "previous_set": {
+                      "type": "boolean"
+                    },
+                    "removed": {
+                      "type": "boolean"
+                    },
+                    "wrote": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "dir"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_SETUP_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/setup/machine/leftovers/clear": {
       "post": {
         "operationId": "setup.leftovers.clear",

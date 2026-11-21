@@ -50,6 +50,7 @@ func nounDocs() map[string]NounDoc {
 		"setup trash":      {Short: "Setups lore setup remove moved aside: list, restore (with their repo pins), purge for good (never a repo)"},
 		"machine path":     {Short: "Where lore keeps its own files on this machine: lore home, config.yaml, this repo's .lore"},
 		"setup leftovers":  {Short: "The identity or personal.store of " + lorehome.Shown() + "/config.yaml no setup uses any more: clear one (lore setup list shows them)"},
+		"setup guard":      {Short: "Opt in to lore's client leak guard for every clone on this machine (a global core.hooksPath entry): install or remove it"},
 		"agent":            {Short: "Agent sessions (one actor per session label)"},
 		"architecturenote": {Short: "Manage architecture notes"},
 		"audit":            {Short: "Inspect and verify the hash-chained audit log of knowledge changes"},

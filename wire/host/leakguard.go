@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/machineguard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/wire"
@@ -83,7 +84,7 @@ func (s *liveSession) guardOffText(ctx context.Context, dir string, missing []st
 		}
 	}
 	where := dir
-	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); err == nil && strings.TrimSpace(string(out)) != "" {
+	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); err == nil && strings.TrimSpace(string(out)) != "" && !s.machineGuarded(string(out)) {
 		where += " (core.hooksPath=" + strings.TrimSpace(string(out)) + ")"
 	}
 	head := "leak guard off in this clone"
@@ -91,6 +92,14 @@ func (s *liveSession) guardOffText(ctx context.Context, dir string, missing []st
 		head = "lore's commit check is off in this clone"
 	}
 	return head + ": lore's hook blocks are missing in " + where + " (" + strings.Join(missing, ", ") + "), so " + strings.Join(what, " and ")
+}
+
+// machineGuarded reports whether hooksPath (git's core.hooksPath text)
+// is the machine guard's folder (devco H-119): no hook manager owns it,
+// and lore's blocks live where its dispatchers chain (hooksFolder).
+func (s *liveSession) machineGuarded(hooksPath string) bool {
+	_, ok := machineguard.Chained(strings.TrimSpace(hooksPath), s.h.cfg.Home)
+	return ok && s.h.cfg.Home != ""
 }
 
 // guardNextStep is the one next step of every leak-guard-off line (doctor
@@ -112,7 +121,7 @@ func (s *liveSession) guardNextStep(ctx context.Context) string {
 	if cmd == trackedHooksCommand {
 		step += " (" + dir + " is committed with the repo: commit the blocks after; to keep them on this machine only, copy that folder's hooks into .git/hooks, run `git config --local core.hooksPath .git/hooks`, then `lore fix`)"
 	}
-	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); err == nil && strings.TrimSpace(string(out)) != "" {
+	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); err == nil && strings.TrimSpace(string(out)) != "" && !s.machineGuarded(string(out)) {
 		// D-709: a tracked folder needs the flag again after a reinstall
 		step += " (core.hooksPath belongs to a hook manager: run `" + cmd + "` again after it reinstalls its hooks)"
 	}

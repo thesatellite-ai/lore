@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
+	"github.com/thesatellite-ai/lore/adapters/machineguard"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/fspath"
@@ -562,6 +563,9 @@ func whereHooks(ctx context.Context, top string) []opswhere.Entry {
 			}
 			dir = p
 		}
+	}
+	if own, ok := machineguard.OwnHere(ctx, dir, top); ok {
+		dir = own // devco H-119: the machine guard's dispatchers chain to it
 	}
 	ents, err := os.ReadDir(dir)
 	if err != nil {

@@ -65,6 +65,7 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 	}
 	note := func(msg string) { base.Notes = append(base.Notes, liveDoctorPrefix+msg) }
 	doctorWorkflowPin(ctx, d.h.cfg.WorkDir, d.h.pinVersion(), fix, warn) // devco:D-742
+	d.h.doctorMachineGuard(ctx, fix, warn, note)                         // devco H-119
 	s, folder, err := liveSync{h: d.h}.here(ctx)
 	if err != nil || s == nil {
 		// not a lore project in a git repo: no live rows to report; a

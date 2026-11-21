@@ -32,6 +32,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/machineguard"
 	"github.com/thesatellite-ai/lore/adapters/reposync"
 	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/wire"
@@ -284,7 +285,21 @@ func (s *liveSession) hooksFolder(ctx context.Context) (dir string, shared bool,
 		dir = p
 		shared = scope == gitScopeGlobal || scope == gitScopeSystem
 	}
+	if shared {
+		// devco H-119: the machine guard's folder holds dispatchers only;
+		// lore's blocks go where they chain (machineGuardChain)
+		if cd, cshared, ok := machineGuardChain(ctx, s.repo, s.h.cfg.Home, dir, s.top); ok {
+			return cd, cshared, nil
+		}
+	}
 	return dir, shared, nil
+}
+
+// machineGuardChain is machineguard.Own (devco H-119): the folder lore's
+// blocks go in when dir, a global or system hooks folder, is the machine
+// guard's.
+func machineGuardChain(ctx context.Context, g gitref.Git, home, dir, top string) (chained string, shared, ok bool) {
+	return machineguard.Own(ctx, g, home, dir, top)
 }
 
 // git config scopes (`git config --show-scope`) whose core.hooksPath names

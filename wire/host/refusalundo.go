@@ -24,6 +24,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitfast"
+	"github.com/thesatellite-ai/lore/adapters/machineguard"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/fspath"
 )
@@ -65,6 +66,9 @@ func takeSetupSnapshot(ctx context.Context, dir string) *setupSnapshot {
 			hp = filepath.Join(top, hp)
 		}
 		hooks = hp
+	}
+	if own, ok := machineguard.OwnHere(ctx, hooks, top); ok {
+		hooks = own // devco H-119: the set-up writes where the machine guard chains
 	}
 	paths := []string{filepath.Join(top, gitignoreName), filepath.Join(top, gitAttributesFile), cfg,
 		filepath.Join(common, "info", "exclude"), filepath.Join(common, liveStateDirName, gitWiringStamp)}

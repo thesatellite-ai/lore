@@ -49,9 +49,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/machineguard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
@@ -122,6 +124,10 @@ type clientGuardPlace struct {
 	scope      string
 	shared     bool
 	tracked    bool
+	// machine: git runs this clone's hooks through the machine guard
+	// (`lore setup guard install`, devco H-119), which checks its commits
+	// and pushes whatever hooks holds.
+	machine bool
 }
 
 // clientGuardPlaceOf resolves the guard's place for the clone at
@@ -151,6 +157,14 @@ func (h *liveHost) clientGuardPlaceOf(ctx context.Context) (clientGuardPlace, bo
 		}
 		p.scope = scope
 		p.shared = scope == gitScopeGlobal || scope == gitScopeSystem
+	}
+	if p.shared {
+		// devco H-119: git runs the machine guard's dispatchers, which
+		// check commits and pushes here; the clone's own blocks still go
+		// where they chain (so the clone stays guarded without it)
+		if cd, cshared, mok := machineGuardChain(ctx, h.git(), h.cfg.Home, p.hooks, p.top); mok {
+			p.hooks, p.shared, p.machine = cd, cshared, true
+		}
 	}
 	p.tracked = !p.shared && hooksDirInWorkTree(p.top, p.hooks)
 	return p, true, nil
@@ -340,9 +354,13 @@ func (h *liveHost) doctorClientGuard(ctx context.Context, fix bool, warn, note f
 		warn(msg)
 		return
 	}
+	if !fix && p.machine {
+		note("client repo leak guard: the machine guard (`lore setup guard install`) checks commits and pushes in this clone; `lore doctor --fix` also installs lore's blocks in " + p.hooks + " so the clone stays guarded without it")
+		return
+	}
 	if !fix {
 		if !h.clientGuardWasOn(ctx, p, missing) {
-			note("client repo leak guard off in this clone (no lore block in " + strings.Join(missing, ", ") + " in " + p.hooks + "): commits and pushes here are not checked for internal notes until the link runs here or `lore doctor --fix` installs it (in .git/hooks only: the repo's files stay unchanged)")
+			note("client repo leak guard off in this clone (no lore block in " + strings.Join(missing, ", ") + " in " + p.hooks + "): commits and pushes here are not checked for internal notes until the link runs here or `lore doctor --fix` installs it (in .git/hooks only: the repo's files stay unchanged); `lore setup guard install` guards every clone on this machine, also ones lore never ran in")
 			return
 		}
 		warn("client repo leak guard missing in " + strings.Join(missing, ", ") + " (" + p.hooks + "): commits or pushes here are not checked for internal notes; run `lore doctor --fix` to install it (in .git/hooks only: the repo's files stay unchanged)")
@@ -369,4 +387,44 @@ func (h *liveHost) clientGuardWasOn(ctx context.Context, p clientGuardPlace, mis
 	}
 	out, err := h.git().Run(ctx, gitref.Invocation{Dir: p.top, Args: []string{"config", "--local", "--get", wire.ClientRepoGitKey}})
 	return err == nil && strings.TrimSpace(string(out)) == clientRepoMarkOn
+}
+
+// doctorMachineGuard is doctor's check of the machine guard (devco H-119,
+// `lore setup guard install`), wherever doctor runs: nothing when it was
+// never installed (it is opt-in); a warning when its hooks are missing or
+// changed (--fix rewrites them: they are lore's own files) or when the
+// global core.hooksPath no longer names its folder (left alone: the
+// person or a tool changed it; the warning names both ways out).
+func (h *liveHost) doctorMachineGuard(ctx context.Context, fix bool, warn, note func(string)) {
+	if h.cfg.Home == "" {
+		return
+	}
+	st, err := machineguard.Read(ctx, h.git(), h.cfg.Home)
+	switch {
+	case err != nil && st.HasState:
+		warn("machine guard: " + err.Error())
+	case err != nil:
+		// opt-in: a machine whose git config cannot be read (no git) has
+		// no guard to report
+	case st.On && len(st.Broken) > 0 && fix:
+		if _, ierr := machineguard.Install(ctx, h.git(), h.cfg.Home, false); ierr != nil {
+			warn("machine guard: could not rewrite its hooks: " + ierr.Error())
+			return
+		}
+		warn("machine guard: rewrote its hooks in " + st.Dir + " (" + strings.Join(st.Broken, ", ") + " were missing or changed)")
+	case st.On && len(st.Broken) > 0:
+		warn("machine guard: its hooks in " + st.Dir + " are missing or changed (" + strings.Join(st.Broken, ", ") + "), so those hooks of every repo may not run; run `lore setup guard install` (or `lore doctor --fix`) to rewrite them")
+	case st.On:
+		note("machine guard on: git runs every repo's hooks through " + st.Dir + " (commits and pushes in client repos are checked, also in clones lore never ran in); `lore setup guard remove` turns it off")
+	case st.HasState:
+		warn("machine guard off: the global core.hooksPath is " + quoteOrUnset(st.Global) + ", no longer " + st.Dir + " (changed after `lore setup guard install`); run `lore setup guard install` to turn it on again, or `lore setup guard remove` to delete its folder")
+	}
+}
+
+// quoteOrUnset is v quoted, or "unset" when v is empty.
+func quoteOrUnset(v string) string {
+	if v == "" {
+		return "unset"
+	}
+	return strconv.Quote(v)
 }

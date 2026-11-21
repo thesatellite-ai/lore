@@ -474,6 +474,7 @@ const (
 	whyStoreMove   = "moves rows to a second attached store, which these shapes do not attach; the move tests run it"
 	whyRepoAdmin   = "changes which repos and projects a store knows; TestInitInEveryFolder and the repo tests run it"
 	whyTaskFixture = "needs another person, a running timer or a merged branch; the task scenario tests run it"
+	whyMachineHook = "changes the machine's global git config (core.hooksPath) for every repo; TestStoryOMachineGuard and the adapters/machineguard tests run it"
 	whyBatch       = "needs a bulk action's batch id; the trash and batch tests run it"
 	whyNoCommit    = "needs a commit; the shapes' repos have none"
 	whyIdentity    = "replaces who the person is on this machine; the identity lifecycle tests run it"
@@ -527,6 +528,7 @@ var notUserRun = map[string]string{
 	"pii-pattern add": whyRetired, "pii-pattern disable": whyRetired, "pii-pattern enable": whyRetired,
 	"setup fix": whyLifecycle, "setup repair": whyLifecycle, "setup import": whyLifecycle, "setup import-dismiss": whyLifecycle,
 	"setup leftovers clear": whyLifecycle, "setup use": whyLifecycle,
+	"setup guard install": whyMachineHook, "setup guard remove": whyMachineHook,
 	"move": whyStoreMove, "row move": whyStoreMove, "memory move": whyStoreMove, "meta move": whyStoreMove, "meta rehome": whyStoreMove,
 	"resource rehome": whyStoreMove, "secrets move": whyStoreMove, "scope move": whyStoreMove,
 	"init": whyRepoAdmin, "repo init": whyRepoAdmin, "repo add": whyRepoAdmin, "repo archive": whyRepoAdmin, "repo unarchive": whyRepoAdmin,

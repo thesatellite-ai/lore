@@ -91,5 +91,5 @@ func guidedOps(e engine) []op.Entry {
 			Errors:   errsPort,
 			Examples: []op.Example{{Title: "which alias logs in as whom", CLI: "lore setup aliases --json", Want: ""}}}),
 			e.Aliases),
-	}, append(lifecycleOps(e, local), leftoverOps(e, local)...)...)
+	}, append(append(lifecycleOps(e, local), leftoverOps(e, local)...), guardOps(e, local)...)...)
 }
