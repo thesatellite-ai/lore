@@ -66,7 +66,7 @@ type Env interface {
 type RunIn struct {
 	Query string `json:"query" arg:"0" rest:"true" desc:"the question, in your own words: who is alice-ng, what is the status of orbit, what did we decide for orbit and why, what do I owe alice-ng, what does alice-ng owe me, what happened yesterday / last week / on 2026-11-02, everything about alice-ng (a typo, a nickname or a role finds the resource too); name the file you are changing (add partial refunds in billing/refund.go) for the rules and hotfixes that apply to it"`
 	// Store names the stores to read, as every other read's --store.
-	Store    string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store alone instead of every attached one: <org> (every folder), <store>/<folder>, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder"`
+	Store    string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store alone instead of every attached one: <org> (every folder), <store>/<folder>, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder; with none outside a code repo, where no setup covers the folder, it reads your personal store"`
 	MaxChars int    `json:"max_chars,omitempty" flag:"max-chars" min:"200" desc:"cap the answer at this many characters (default 4000); what is left out is counted at the end"`
 	Top      int    `json:"top,omitempty" flag:"top" min:"1" desc:"how many best rows to print in full (default 3); a date question prints every row of its dates"`
 }

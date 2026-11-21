@@ -140,6 +140,12 @@ func (a *App) noteEmptySearch(ctx context.Context, e op.Entry, d op.Decoder, res
 	if q.store == "" {
 		q.store = n.to
 	}
+	if q.store == "" && personalDefaultMarked(ctx) {
+		// the read defaulted to the personal store (personaldefault.go,
+		// devco:D-828): its tries name it, so each runs where printed
+		// (`lore resource list` alone refuses in the home folder)
+		q.store = personalDefaultStore
+	}
 	for _, tv := range in.Texts() {
 		switch tv.Field {
 		case "query":

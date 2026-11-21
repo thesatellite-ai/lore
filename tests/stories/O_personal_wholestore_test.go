@@ -70,8 +70,9 @@ func TestStoryOPersonalWholeStore(t *testing.T) {
 	s.Step("plain-read-names-store-me", func() {
 		wc := ana.Clone(web, "web-plain")
 		ana.LoreIn(wc, "init").OK(t)
+		// (search reads the personal store there since devco D-828: step
+		// ask-and-search-from-home-read-personal-store)
 		for _, args := range [][]string{
-			{"search", "--query", "kestrel"},
 			{"sql", "run", "--query", "SELECT body FROM memories_all"},
 			{"memory", "list"},
 		} {
@@ -93,6 +94,37 @@ func TestStoryOPersonalWholeStore(t *testing.T) {
 			r = ana.LoreIn(wc, append(args, "--store", "me")...)
 			if r.Code != 0 || !strings.Contains(r.Out(), "alpha note") || strings.Contains(r.Out(), "were not read") {
 				t.Errorf("[O D-771] `lore %s --store me` in a lore repo misses the notes:\n%s", strings.Join(args, " "), r)
+			}
+		}
+	})
+
+	// devco D-828 (bug hunt H-86): ask and search are reads; from the home
+	// folder with no --store they refused E_NOT_A_STORE, and an agent spent
+	// a call learning --store me. They now read the personal store there
+	// (every folder) and say so in one line; a named store prints no note.
+	s.Step("ask-and-search-from-home-read-personal-store", func() {
+		for _, args := range [][]string{
+			{"ask", "--query", "everything about kestrel"},
+			{"search", "--query", "kestrel"},
+		} {
+			r := ana.Lore(home, args...)
+			if r.Code != 0 || !strings.Contains(r.Out(), "alpha note") || !strings.Contains(r.Out(), "note: read your personal store (not in a repo)") {
+				t.Errorf("[O D-828] `lore %s` in the home folder does not read the personal store with its note:\n%s", strings.Join(args, " "), r)
+			}
+			r = ana.Lore(home, append(args, "--store", "me")...)
+			if r.Code != 0 || strings.Contains(r.Out(), "not in a repo") {
+				t.Errorf("[O D-828] `lore %s --store me` in the home folder prints the default note:\n%s", strings.Join(args, " "), r)
+			}
+		}
+		// an empty answer there names what it searched, and each try runs
+		// in the home folder exactly as printed
+		for _, args := range [][]string{
+			{"ask", "--query", "who is zed-quill"},
+			{"search", "--query", "zedquill"},
+		} {
+			out := ana.Lore(home, args...).OK(t).Says(t, "  searched: me", "note: read your personal store (not in a repo)").Out()
+			for _, cmd := range oTries(t, "lore "+strings.Join(args, " "), out) {
+				ana.Lore(home, oShellWords(cmd)...).OK(t)
 			}
 		}
 	})

@@ -58,4 +58,12 @@ func TestJourneyAskAnswersInOneCall(t *testing.T) {
 			t.Errorf("the person is printed before what you owe them:\n%s", owe)
 		}
 	})
+
+	// devco:D-828 (bug hunt H-86): from the home folder ask with no --store
+	// refused E_NOT_A_STORE; it is a read, so it reads the personal store
+	// there and says so.
+	w.Step("day1/ask-from-the-home-folder", func() {
+		lap.Lore(lap.Home, "ask", "--query", "what is the status of orbit").OK(t).
+			Says(t, "live in production with 9 customers", "note: read your personal store (not in a repo)")
+	})
 }

@@ -301,7 +301,7 @@ type RunIn struct {
 	MasterOnly      bool     `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows"`
 	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope (reserved)"`
 	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
-	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store)"`
+	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store; outside a code repo, where no setup covers the folder, your personal store)"`
 	Full            bool     `json:"full,omitempty" flag:"full" desc:"print the whole text (body) of the best hits under their line instead of the snippet (the top 3, see --full-top); --json adds it as text on those hits"`
 	// FullTop is --full-top (devco D-800): how many of the best hits
 	// --full prints whole; 0 = DefaultFullTop. Giving it turns --full on.

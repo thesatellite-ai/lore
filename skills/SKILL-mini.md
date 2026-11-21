@@ -355,7 +355,7 @@ lore doctor                        # DB integrity + FTS5 check; exit 0/1/2
 
 1. Read the core: `.lore/LORE.md` is already loaded through the pointer file (must rules, critical/high hotfixes, topic index). Obey it.
 2. Before touching a path: `lore context --for-file <path>` (rules, hotfixes, notes for that file and its folders). Task: `lore context --for-task <tsk_id>`. Topic from the index: `lore context --topic <t>`.
-3. Everything else: `lore ask --query "<the question>"` before a substantive answer, the question whole as asked, not a bare name (outside a code repo add `--store me`; one call: the resources it names, their open tasks, the best rows in full; name the file you change and its rules and hotfixes come first); `lore search --query "<keywords>"` to list every row holding some words; cite hits by id.
+3. Everything else: `lore ask --query "<the question>"` before a substantive answer, the question whole as asked, not a bare name (outside a code repo it reads your personal store; one call: the resources it names, their open tasks, the best rows in full; name the file you change and its rules and hotfixes come first); `lore search --query "<keywords>"` to list every row holding some words; cite hits by id.
 
 ## SEARCH (FTS5 BM25)
 
