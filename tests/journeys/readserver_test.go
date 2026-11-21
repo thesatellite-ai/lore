@@ -10,9 +10,11 @@ package journeys
 // the one-shot process does, and a write is never handed to it.
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -236,6 +238,99 @@ func TestJourneyReadServerKeepsItsMemoryBounded(t *testing.T) {
 		t.Logf("live heap once warm %d KB, highest over the next %d calls %d KB", base>>10, n-warm, top>>10)
 		if top > base+slack {
 			t.Errorf("the read server's live heap grew from %d KB once warm (call %d) to %d KB over %d more calls: something it keeps across calls has no bound", base>>10, warm, top>>10, n-warm)
+		}
+	})
+}
+
+// TestJourneyReadServerStaysFlatAcrossWritesToABigFolder (devco:D-866,
+// public issue #96): every write to a big store folder made a new version
+// of its table tree, and the read server's kept git object store parsed
+// and kept each one for good, so the server grew ~1.3 MB of live heap per
+// write to a 5,000-row folder until it exited on its live-heap limit and
+// the calls ran one-shot. A folder of a few thousand rows committed by
+// hand (an import), then rounds of one write and one served ask: every
+// ask is served by the one server and its live heap stays where it was
+// once warm.
+func TestJourneyReadServerStaysFlatAcrossWritesToABigFolder(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	uma := w.Persona("Uma Reyes", "uma@acme-co.example")
+	lap := uma.Laptop()
+	me := w.Remote("github.com/uma-reyes/lore-me")
+	const rows = 2500
+	w.Step("day1/an-import-fills-the-feeds-folder", func() {
+		lap.Lore(lap.Home, "store", "init", "--name", "me", "--url", me.SSHURL(), "--yes").OK(t)
+		out := lap.Lore(lap.Home, "memory", "add", "--to", "me/feeds", "--create", "--body", "seed event: Dana reviews the deploy checklist on mondays.", "--yes").OK(t)
+		seed := regexp.MustCompile(`mem_[0-9a-f]{32}`).FindString(out.Out())
+		if seed == "" {
+			t.Fatalf("no memory id in: %s", out.Out())
+		}
+		seedFile := strings.TrimSpace(lap.Lore(lap.Home, "path", "--id", seed).OK(t).Stdout)
+		doc, err := os.ReadFile(seedFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range rows {
+			id := fmt.Sprintf("%s%012x", seed[:len(seed)-12], 0x100000+i) // same prefix and version bits, new tail
+			body := strings.Replace(strings.ReplaceAll(string(doc), seed, id), "seed event", fmt.Sprintf("feed event %d", i), 1)
+			if err := os.WriteFile(filepath.Join(filepath.Dir(seedFile), id+".json"), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		store := &teamharness.Clone{A: lap.Actor, Dir: filepath.Dir(filepath.Dir(filepath.Dir(seedFile)))}
+		store.Git("add", "-A")
+		store.Git("commit", "-q", "-m", "import feed events")
+	})
+	w.Step("day1/writes-between-served-asks-keep-the-server-flat", func() {
+		dir := t.TempDir()
+		log, heap := filepath.Join(dir, "read-server.log"), filepath.Join(dir, "heap")
+		sock := lap.LorePath("run", "read.sock")
+		lap.SetEnv("LORE_READ_SERVER", "1")
+		lap.SetEnv("LORE_TEST_READ_SERVER_LOG", log)
+		defer func() {
+			lap.SetEnv("LORE_READ_SERVER", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_LOG", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_HEAP", "")
+			_ = os.Remove(sock) // the server stops once its socket is gone
+		}()
+		ask := []string{"ask", "--store", "me", "--query", "who reviews the deploy checklist"}
+		lap.Lore(lap.Home, ask...).OK(t) // imports the rows and starts the server
+		for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+			if _, err := os.Stat(sock); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no read server listens on %s", sock)
+			}
+		}
+		_ = os.Remove(log)
+		lap.SetEnv("LORE_TEST_READ_SERVER_HEAP", heap)
+		const n, warm = 36, 8
+		for i := range n {
+			lap.Lore(lap.Home, "memory", "add", "--to", "me/feeds", "--body", fmt.Sprintf("cycle %d: Dana moved the deploy checklist review to slot %d.", i, i), "--yes").OK(t)
+			lap.Lore(lap.Home, ask...).OK(t)
+		}
+		if b, _ := os.ReadFile(log); strings.Count(string(b), "served\n") != n || strings.Contains(string(b), "one-shot") {
+			t.Fatalf("want all %d asks served by the one server (the writes run one-shot and are not logged), the log says:\n%s", n, b)
+		}
+		raw, _ := os.ReadFile(heap)
+		var live []int
+		for f := range strings.FieldsSeq(string(raw)) {
+			v, err := strconv.Atoi(f)
+			if err != nil {
+				t.Fatalf("heap file holds %q", f)
+			}
+			live = append(live, v)
+		}
+		if len(live) != n {
+			t.Fatalf("the server reported its heap after %d of %d calls", len(live), n)
+		}
+		const slack = 6 << 20 // what one more kept lens or a memo refill may add
+		base := slices.Max(live[warm-4 : warm])
+		top := slices.Max(live[warm:])
+		t.Logf("live heap once warm %d KB, highest over the next %d write+ask rounds %d KB", base>>10, n-warm, top>>10)
+		if top > base+slack {
+			t.Errorf("the read server's live heap grew from %d KB once warm (round %d) to %d KB over %d more write+ask rounds of a %d-row folder: it keeps every version a write replaced", base>>10, warm, top>>10, n-warm, rows)
 		}
 	})
 }

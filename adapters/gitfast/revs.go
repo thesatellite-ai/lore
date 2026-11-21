@@ -275,28 +275,48 @@ func lookupPath(objs *objectStore, treeID string, tree []byte, path string) (id,
 // first ask and kept: an object id names one content forever, so the
 // index never goes stale. ok is false for a tree that does not parse. A
 // name git lists twice (a broken tree) keeps its first entry, as the
-// linear search before it did.
+// linear search before it did. Each index is counted in s.bytes and
+// stamped with the use that read it, so a kept store drops the indexes of
+// tree versions a write replaced (beginUse, devco:D-866).
 func (s *objectStore) treeIndex(treeID string, data []byte) (map[string]treeEntry, bool) {
 	s.mu.Lock()
-	idx, hit := s.trees[treeID]
+	t, hit := s.trees[treeID]
+	if hit {
+		t.used = s.use
+	}
 	s.mu.Unlock()
 	if hit {
-		return idx, idx != nil
+		return t.entries, t.entries != nil
 	}
 	entries, ok := parseTree(data)
+	var idx map[string]treeEntry
+	size := treeIdxOverhead
 	if ok {
 		idx = make(map[string]treeEntry, len(entries))
 		for _, e := range entries {
 			if _, dup := idx[e.name]; !dup {
 				idx[e.name] = e
+				size += treeEntryOverhead + len(e.name) + len(e.mode) + len(e.id)
 			}
 		}
 	}
 	s.mu.Lock()
-	s.trees[treeID] = idx // nil: does not parse
+	if _, raced := s.trees[treeID]; !raced {
+		s.trees[treeID] = &treeIdx{entries: idx, size: size, used: s.use} // nil entries: does not parse
+		s.bytes += size
+	}
 	s.mu.Unlock()
 	return idx, ok
 }
+
+// treeIdxOverhead and treeEntryOverhead estimate the heap a tree index
+// takes beyond its strings: the map header and a map slot (key and
+// treeEntry headers, bucket share) per entry. Rough on purpose: the
+// estimate only has to grow with what is kept (objPoolMaxBytes).
+const (
+	treeIdxOverhead   = 96
+	treeEntryOverhead = 96
+)
 
 // cutAncestry strips trailing first-parent steps ("~", "~N", "^", "^1")
 // and returns how many; ok=false for any other suffix (^2, ~^…{…}).

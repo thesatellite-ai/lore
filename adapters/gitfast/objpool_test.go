@@ -3,7 +3,11 @@ package gitfast
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -131,5 +135,110 @@ func TestKeptObjectStoreBoundedByBytes(t *testing.T) {
 	kept.mu.Unlock()
 	if fresh := storeOf(); fresh == kept {
 		t.Fatalf("a store holding %d decoded bytes (bound %d) was kept", kept.bytes, objPoolMaxBytes)
+	}
+}
+
+// TestKeptObjectStoreDropsReplacedTrees (devco:D-866): every write to a
+// big folder makes a new version of its table tree, and the kept store of
+// the read server parsed and kept each version for good (tree index, raw
+// tree, commit), so its heap grew ~1.3 MB per write to a 5,000-row folder
+// until the server exited on its live-heap limit. Now many write-then-read
+// rounds keep the store's trees, its counted bytes and the live heap
+// within a fixed margin: only the versions recent calls read stay. Not
+// parallel: the pool is process state (and the heap is measured).
+func TestKeptObjectStoreDropsReplacedTrees(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("HOME", t.TempDir())
+	work := filepath.Join(t.TempDir(), "work")
+	gitT(t, filepath.Dir(work), "init", "-q", "-b", "main", work)
+	rows := filepath.Join(work, "feeds", "memories")
+	if err := os.MkdirAll(rows, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const n = 3000
+	for i := range n {
+		if err := os.WriteFile(filepath.Join(rows, fmt.Sprintf("mem_%020x.json", i)), []byte(fmt.Sprintf(`{"body":"event %d"}`, i)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitT(t, work, "add", "-A")
+	gitT(t, work, "commit", "-q", "-m", "rows")
+
+	stop := ShareObjectStores()
+	defer stop()
+	ctx := context.Background()
+	var kept *objectStore
+	// round writes one row (a new commit and a new feeds/memories tree)
+	// and reads it back through a new Session, as one served call does.
+	round := func(i int) {
+		t.Helper()
+		name := fmt.Sprintf("feeds/memories/mem_new_%04d.json", i)
+		body := fmt.Sprintf(`{"body":"write %d"}`, i)
+		if err := os.WriteFile(filepath.Join(work, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitT(t, work, "add", "-A")
+		gitT(t, work, "commit", "-q", "-m", "write")
+		s := New()
+		defer s.Close()
+		rep, ok := s.Answer(ctx, work, []string{"cat-file", "--batch"}, nil, []byte("HEAD:"+name+"\n"))
+		if !ok || rep.Code != 0 || !bytes.HasSuffix(bytes.TrimSpace(rep.Out), []byte(body)) {
+			t.Fatalf("round %d: answered %v (exit %d) %q, want the row just written", i, ok, rep.Code, rep.Out)
+		}
+		objs, err := s.repoFor(work).objects()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kept == nil {
+			kept = objs
+		} else if objs != kept {
+			t.Fatalf("round %d: the kept store was dropped (bytes bound?), so this test measures nothing", i)
+		}
+	}
+	live := func() uint64 {
+		runtime.GC()
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		return m.HeapAlloc
+	}
+	stored := func() (trees, others, counted int) {
+		kept.mu.Lock()
+		defer kept.mu.Unlock()
+		for _, c := range kept.cache {
+			if c.o.typ != typeBlob {
+				others++
+			}
+		}
+		return len(kept.trees), others, kept.bytes
+	}
+
+	const warm, rounds = keepUses + 2, 40
+	for i := range warm {
+		round(i)
+	}
+	_, _, bytes0 := stored()
+	heap0 := live()
+	for i := warm; i < rounds; i++ {
+		round(i)
+	}
+	trees, others, bytes1 := stored()
+	heap1 := live()
+	// three trees (root, feeds, feeds/memories) and a commit per version;
+	// the versions of the last keepUses+1 uses at most
+	if maxTrees := 3 * (keepUses + 1); trees > maxTrees {
+		t.Errorf("%d tree indexes kept after %d write+read rounds, want at most %d (the versions recent calls read)", trees, rounds, maxTrees)
+	}
+	if maxOthers := 4 * (keepUses + 1); others > maxOthers {
+		t.Errorf("%d trees and commits kept after %d write+read rounds, want at most %d", others, rounds, maxOthers)
+	}
+	// the new row blobs are all that may add up (a few dozen bytes each)
+	if grew := bytes1 - bytes0; grew > 64<<10 {
+		t.Errorf("the kept store's counted bytes grew %d over %d rounds (from %d to %d), want flat", grew, rounds-warm, bytes0, bytes1)
+	}
+	if heap1 > heap0 && heap1-heap0 > 4<<20 {
+		t.Errorf("live heap grew %.1f MB over %d write+read rounds of a %d-row folder, want flat", float64(heap1-heap0)/(1<<20), rounds-warm, n)
 	}
 }
