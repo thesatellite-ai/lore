@@ -64465,6 +64465,16 @@
             }
           },
           {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "only a resource of this kind (name or knd_ id)",
+            "schema": {
+              "type": "string",
+              "description": "only a resource of this kind (name or knd_ id)"
+            }
+          },
+          {
             "name": "show_sensitive",
             "in": "query",
             "required": false,
@@ -64482,6 +64492,26 @@
             "schema": {
               "type": "boolean",
               "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
+            }
+          },
+          {
+            "name": "with_refs",
+            "in": "query",
+            "required": false,
+            "description": "also print every row that references it (memories, tasks, decisions, …), body in full, newest first, from every folder of the store",
+            "schema": {
+              "type": "boolean",
+              "description": "also print every row that references it (memories, tasks, decisions, …), body in full, newest first, from every folder of the store"
+            }
+          },
+          {
+            "name": "max_refs",
+            "in": "query",
+            "required": false,
+            "description": "with --with-refs: print at most this many rows (default 20); the rest are counted",
+            "schema": {
+              "type": "integer",
+              "description": "with --with-refs: print at most this many rows (default 20); the rest are counted"
             }
           },
           {
@@ -64616,6 +64646,60 @@
                         "type": "string"
                       }
                     },
+                    "referenced_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string",
+                            "description": "the date the row is about (valid_at, else when it was written), RFC 3339"
+                          },
+                          "body": {
+                            "type": "string",
+                            "description": "the row's text in full: its body, else its description, else its title"
+                          },
+                          "fields": {
+                            "type": "array",
+                            "description": "the text fields holding the reference (${res:…} or the res_ id)",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "relations": {
+                            "type": "array",
+                            "description": "the relation of each --ref pointer the row holds at it (mentions, …)",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "row": {
+                            "type": "string",
+                            "description": "the id of the row whose text references the resource"
+                          },
+                          "store": {
+                            "type": "string",
+                            "description": "where the row is stored"
+                          },
+                          "table": {
+                            "type": "string",
+                            "description": "its table (memories, tasks, decisions, …)"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "the row's title or name, when it has one"
+                          }
+                        },
+                        "required": [
+                          "row",
+                          "table",
+                          "fields"
+                        ]
+                      }
+                    },
+                    "referenced_total": {
+                      "type": "integer"
+                    },
                     "refs": {
                       "type": "array",
                       "items": {
@@ -64697,6 +64781,16 @@
           },
           "409": {
             "description": "E_AMBIGUOUS_ID, E_RESOURCE_AMBIGUOUS, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "E_KIND_CONFLICT, E_KIND_UNKNOWN, E_RESOURCE_STALE",
             "content": {
               "application/json": {
                 "schema": {

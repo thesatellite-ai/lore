@@ -49,6 +49,32 @@ const mentionTitleMax = 60
 // nodes, sorted by node, table and row; nil when the Env cannot read
 // row_refs.
 func (o ops) mentions(ctx context.Context, nodes []string) ([]GraphMention, error) {
+	hits, err := o.mentionHits(ctx, nodes)
+	if err != nil {
+		return nil, err
+	}
+	var out []GraphMention
+	for _, h := range hits {
+		out = append(out, GraphMention{Row: h.ref.ID, Table: h.ref.Table.String(), Field: h.ref.Field, Node: h.ref.RefID, Title: mentionTitle(h.at.Row), Store: string(h.at.Src)})
+	}
+	slices.SortFunc(out, func(a, b GraphMention) int {
+		return strings.Compare(a.Node+"\x00"+a.Table+"\x00"+a.Row+"\x00"+a.Field, b.Node+"\x00"+b.Table+"\x00"+b.Row+"\x00"+b.Field)
+	})
+	return out, nil
+}
+
+// mentionHit is one row_refs line whose row is live in this view, with
+// that row (graph --up prints its title, resource show --with-refs its
+// body: devco D-792).
+type mentionHit struct {
+	ref RefRow
+	at  located
+}
+
+// mentionHits are the row_refs lines of the view that reference one of
+// nodes and whose row is live here (nearest store first), each line once;
+// nil when the Env cannot read row_refs.
+func (o ops) mentionHits(ctx context.Context, nodes []string) ([]mentionHit, error) {
 	f, ok := o.env.(RefFinder)
 	if !ok || len(nodes) == 0 {
 		return nil, nil
@@ -59,7 +85,7 @@ func (o ops) mentions(ctx context.Context, nodes []string) ([]GraphMention, erro
 	}
 	byTable := map[row.Table]map[string]located{}
 	srcs := engine.ReadStoresOf(o.env)
-	var out []GraphMention
+	var out []mentionHit
 	seen := map[string]bool{}
 	for _, rr := range refRows {
 		rows, ok := byTable[rr.Table]
@@ -82,11 +108,8 @@ func (o ops) mentions(ctx context.Context, nodes []string) ([]GraphMention, erro
 			continue // deleted, out of this view, or a second cache file's copy
 		}
 		seen[key] = true
-		out = append(out, GraphMention{Row: rr.ID, Table: rr.Table.String(), Field: rr.Field, Node: rr.RefID, Title: mentionTitle(l.Row), Store: string(l.Src)})
+		out = append(out, mentionHit{ref: rr, at: l})
 	}
-	slices.SortFunc(out, func(a, b GraphMention) int {
-		return strings.Compare(a.Node+"\x00"+a.Table+"\x00"+a.Row+"\x00"+a.Field, b.Node+"\x00"+b.Table+"\x00"+b.Row+"\x00"+b.Field)
-	})
 	return out, nil
 }
 

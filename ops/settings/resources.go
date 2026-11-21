@@ -100,7 +100,7 @@ type ResEditIn struct {
 	// --store <org>[/<folder>] (devco D-586): where the resource is, so
 	// the write runs from any folder, as resource list reads.
 	op.StoreFlag
-	Name  string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
+	Name  string   `json:"id,omitempty" arg:"0" flag:"id" alias:"name" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
 	Set   []string `json:"set,omitempty" flag:"set" desc:"field=value (repeatable)"`
 	Unset []string `json:"unset,omitempty" flag:"unset" desc:"field to remove (repeatable)"`
 	BulkWhere
@@ -112,7 +112,7 @@ type ResEditIn struct {
 
 // ResRef names one resource.
 type ResRef struct {
-	Name          string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
+	Name          string `json:"id" arg:"0" flag:"id" alias:"name" desc:"the resource (name or res_ id)"`
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
 }
 
@@ -123,9 +123,37 @@ type ResRef struct {
 type ResShowIn struct {
 	// --store <store> (devco D-499): the read names its store.
 	op.StoreFlag
-	Name          string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
+	// Name takes --name as well as --id (devco D-792): "the person named
+	// alice-ng" reads as --kind person --name alice-ng.
+	Name string `json:"id" arg:"0" flag:"id" alias:"name" desc:"the resource (name or res_ id)"`
+	// Kind narrows the name to one kind, so a name two kinds share is not
+	// ambiguous (devco D-792).
+	Kind          string `json:"kind,omitempty" flag:"kind" desc:"only a resource of this kind (name or knd_ id)"`
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
 	expand.Flag
+	// WithRefs adds every row whose text references the resource, body in
+	// full, newest first (devco D-792, owner P-19): everything about X in
+	// one read. MaxRefs caps how many are printed.
+	WithRefs bool `json:"with_refs,omitempty" flag:"with-refs" desc:"also print every row that references it (memories, tasks, decisions, …), body in full, newest first, from every folder of the store"`
+	MaxRefs  int  `json:"max_refs,omitempty" flag:"max-refs" min:"1" desc:"with --with-refs: print at most this many rows (default 20); the rest are counted"`
+}
+
+// RoutedStore implements op.StoreRouter. With --with-refs a --store that
+// names one folder (me/work) opens every folder of that store (me), so a
+// note in me/journal about a person kept in me/work is listed (devco
+// D-792); resShow still looks the resource up in the named folder only.
+func (in ResShowIn) RoutedStore() string {
+	if base, ok := in.widened(); ok {
+		return base
+	}
+	return in.Store
+}
+
+// widened is the store a --with-refs read of one folder opens instead
+// (me for --store me/work); ok is false when the read is not widened.
+func (in ResShowIn) widened() (string, bool) {
+	base, _, isFolder := strings.Cut(in.Store, "/")
+	return base, in.WithRefs && isFolder
 }
 
 // ResDeleteIn is the input of resource.delete: one resource by name, or
@@ -134,7 +162,7 @@ type ResDeleteIn struct {
 	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
 	// names is, so the write runs from any folder as reads take --store.
 	op.StoreFlag
-	Name   string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --kind --where"`
+	Name   string   `json:"id,omitempty" arg:"0" flag:"id" alias:"name" desc:"the resource (name or res_ id); leave out for the bulk form --kind --where"`
 	Reason string   `json:"reason,omitempty" flag:"reason" desc:"why (recorded in the audit log)"`
 	Kind   string   `json:"kind,omitempty" flag:"kind" desc:"bulk: delete every resource of this kind matching --where (one batch)"`
 	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk: filter on a field, as resource list --where (repeatable; all must match)"`
@@ -166,7 +194,7 @@ type ResNameIn struct {
 	// --store <org>[/<folder>] (devco D-586): where the resource is, so
 	// the write runs from any folder, as resource list reads.
 	op.StoreFlag
-	Name string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
+	Name string `json:"id" arg:"0" flag:"id" alias:"name" desc:"the resource (name or res_ id)"`
 }
 
 // ResListIn is the input of resource.list.
@@ -254,13 +282,21 @@ type ResOut struct {
 	// name (Values keeps the stored text); Refs lists every reference met.
 	Expanded map[string]string `json:"expanded,omitempty"`
 	Refs     []refpoint.Used   `json:"refs,omitempty"`
+	// ReferencedBy are the rows whose text references the resource, newest
+	// first (--with-refs, devco D-792); ReferencedTotal counts them all,
+	// also those --max-refs left out. Both are absent without --with-refs.
+	ReferencedBy    []RefBody `json:"referenced_by,omitempty"`
+	ReferencedTotal int       `json:"referenced_total,omitempty"`
+	// withRefs marks a --with-refs show, so Text says "none" too.
+	withRefs bool
 }
 
 // Text implements op.Texter.
-// Text is the show text ending with the writers line (INTEG-AUDIT-2).
+// Text is the show text ending with the writers line (INTEG-AUDIT-2),
+// then the referencing rows of --with-refs.
 func (o ResOut) Text() string {
 	d := o.Data
-	return o.mainText() + auditrec.Line(d.CreatedAt, d.CreatedBy, d.UpdatedAt, d.UpdatedBy) + expand.Text(o.Expanded, o.Refs)
+	return o.mainText() + auditrec.Line(d.CreatedAt, d.CreatedBy, d.UpdatedAt, d.UpdatedBy) + expand.Text(o.Expanded, o.Refs) + o.refsText()
 }
 
 func (o ResOut) mainText() string {
@@ -569,8 +605,8 @@ func (o ops) resourceOps() []op.Entry {
 			Examples: []op.Example{{Title: "bulk edit", CLI: "lore resource edit --kind service --where runs_on=hub_prod --set runs_on=hub_prod_2 --yes", Want: "batch bat_"}}}, o.resEdit),
 		op.Define(op.Spec{Name: OpResShow, Summary: "Show one resource", Permission: op.PermRead, Access: op.AccessRead,
 			// XQ3: --show-sensitive always confirms; without a terminal it needs --yes.
-			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm, errs.ResourceAmbiguous, errs.Unsupported), Confirm: op.ConfirmRule{When: "show_sensitive"},
-			Examples: []op.Example{{Title: "one resource", CLI: "lore resource show --id prod_db"}, {Title: "fill in its ${var:…} references", CLI: "lore resource show --id prod_db --expand"}}}, o.resShow),
+			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm, errs.ResourceAmbiguous, errs.Unsupported, errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{When: "show_sensitive"},
+			Examples: []op.Example{{Title: "one resource", CLI: "lore resource show --id prod_db"}, {Title: "fill in its ${var:…} references", CLI: "lore resource show --id prod_db --expand"}, {Title: "everything about a person: the resource and every note that mentions it, newest first", CLI: "lore resource show --kind person --name alice-ng --with-refs"}}}, o.resShow),
 		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind (every kind when none is given)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}, Examples: []op.Example{{Title: "every database", CLI: "lore resource list --kind database"}}}, o.resList),
 		// XQ2: MayAsk, not Always: the bulk form must count its rows before
@@ -923,6 +959,14 @@ func (o ops) fieldValue(ctx context.Context, d kindDef, name string, def located
 // The shared byNameOrID (nearest store wins) is not used here, because
 // other nouns keep that rule.
 func (o ops) resourceByName(ctx context.Context, key, kindID string) (located, error) {
+	return o.resourceIn(ctx, key, kindID, "")
+}
+
+// resourceIn is resourceByName limited to the resources of store only
+// ("" for every store of the view): resource show --with-refs --store
+// <store>/<folder> reads the whole store for the rows that reference the
+// resource but names it in that folder (devco D-792).
+func (o ops) resourceIn(ctx context.Context, key, kindID string, only store.Source) (located, error) {
 	kindName := func(id string) string { return o.kindName(ctx, id) }
 	if l, ok, err := pendingRow(ctx, key, kindID, kindName); ok { // FB-RES-1: a row this import creates
 		return l, err
@@ -935,7 +979,7 @@ func (o ops) resourceByName(ctx context.Context, key, kindID string) (located, e
 	forms := resname.Forms(key)
 	match := func(l located) bool {
 		c := resname.Of(l.Src, l.Row)
-		return (kindID == "" || c.KindID == kindID) && resname.Matches(c, key, forms, kindName)
+		return (only == "" || l.Src == only) && (kindID == "" || c.KindID == kindID) && resname.Matches(c, key, forms, kindName)
 	}
 	var hits []located
 	for _, l := range rows {
@@ -1283,7 +1327,19 @@ func (o ops) successor(ctx context.Context, r located) string {
 }
 
 func (o ops) resShow(ctx context.Context, in ResShowIn) (ResOut, error) {
-	r, err := o.resourceByName(ctx, in.Name, "")
+	kindID := ""
+	if strings.TrimSpace(in.Kind) != "" {
+		k, kerr := o.kindByName(ctx, in.Kind)
+		if kerr != nil {
+			return ResOut{}, kerr
+		}
+		kindID = k.Row.ID.String()
+	}
+	only := store.Source("")
+	if _, ok := in.widened(); ok { // the read opened the whole store: name the resource in its folder
+		only = store.Source(in.Store)
+	}
+	r, err := o.resourceIn(ctx, in.Name, kindID, only)
 	if err != nil {
 		return ResOut{}, err
 	}
@@ -1305,6 +1361,11 @@ func (o ops) resShow(ctx context.Context, in ResShowIn) (ResOut, error) {
 			return ResOut{}, xerr
 		}
 		out.Expanded, out.Refs = b.Expanded, b.Refs
+	}
+	if in.WithRefs {
+		if out, err = o.withRefs(ctx, out, r.Row.ID.String(), in.MaxRefs); err != nil {
+			return ResOut{}, err
+		}
 	}
 	return out, nil
 }

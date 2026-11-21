@@ -414,3 +414,33 @@ func text(r row.Row, f string) string {
 	}
 	return ""
 }
+
+// Pointer is one --ref pointer at a row, seen from its target: the row
+// that holds it (SrcTable, SrcID) and the relation it records.
+type Pointer struct {
+	SrcTable row.Table
+	SrcID    string
+	Relation string
+}
+
+// Referrers are the --ref pointers of every readable store at row id of
+// dstTable (knowledge_refs rows whose dst is it), nearest store first, so
+// `resource show --with-refs` lists the tasks, decisions and incidents
+// that point at a resource beside the notes whose text names it (devco
+// D-792). A pointer whose source table this version does not know is
+// left out.
+func Referrers(ctx context.Context, env Env, dstTable row.Table, id string) ([]Pointer, error) {
+	rows, err := engine.FindByKey(ctx, env, tableRefs, map[string]string{fieldDstTable: string(dstTable), fieldDstID: id})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Pointer, 0, len(rows))
+	for _, f := range rows {
+		t, terr := row.ParseTable(text(f.Row, fieldSrcTable))
+		if terr != nil {
+			continue
+		}
+		out = append(out, Pointer{SrcTable: t, SrcID: text(f.Row, fieldSrcID), Relation: text(f.Row, fieldRelation)})
+	}
+	return out, nil
+}

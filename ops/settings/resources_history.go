@@ -279,7 +279,7 @@ func quarantineLine(q []Quarantined) string {
 type ResHistoryIn struct {
 	// --store <store> (devco D-499): the read names its store.
 	op.StoreFlag
-	Name  string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
+	Name  string `json:"id" arg:"0" flag:"id" alias:"name" desc:"the resource (name or res_ id)"`
 	Field string `json:"field,omitempty" flag:"field" desc:"only changes of this field"`
 	Git   bool   `json:"git,omitempty" flag:"git" desc:"also read older versions from git history (beyond the row's last 100 entries)"`
 }
