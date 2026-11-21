@@ -823,18 +823,23 @@ func TestJourneySoloMonth6(t *testing.T) {
 		if !strings.Contains(show.Stdout, "codex") {
 			t.Errorf("setup show does not list codex: %s", show.Stdout)
 		}
-		// Sam uninstalls Claude Code and installs Codex; doctor names the
-		// codex skill. The repo's pointer file is Sam's own pick: since
-		// D-711 (3f6199fe) a setup tool the repo does not use is no doctor
-		// problem and is never written unasked, and with a context.targets
-		// row the row is the repo's pick (no skipped line), so Sam adds
-		// codex with render --add-target. Sam runs both.
+		// Sam uninstalls Claude Code and switches to Codex. Saving the tools
+		// step installs the lore skill for each picked tool that has none
+		// (D-809), so the codex skill is there before Sam runs anything and
+		// doctor is HEALTHY with no skill hint (devco D-831: this step used
+		// to expect the old "lore skill install --tool codex" hint). The
+		// repo's pointer file is Sam's own pick: since D-711 (3f6199fe) a
+		// setup tool the repo does not use is no doctor problem and is never
+		// written unasked, and with a context.targets row the row is the
+		// repo's pick (no skipped line), so Sam adds codex with
+		// render --add-target.
 		if err := os.RemoveAll(filepath.Join(desk.Home, ".claude")); err != nil {
 			t.Fatal(err)
 		}
-		d := desk.LoreIn(deskApp, "doctor")
-		d.Says(t, "lore skill install --tool codex")
-		desk.Lore("", "skill", "install", "--tool", "codex").OK(t)
+		if _, err := os.Stat(filepath.Join(desk.Home, ".codex", "skills", "lore", "SKILL.md")); err != nil {
+			t.Errorf("saving the tools step with codex did not install the codex skill: %v", err)
+		}
+		desk.LoreIn(deskApp, "doctor").OK(t).Says(t, "Status: HEALTHY", "codex (skill").Never(t, "lore skill install")
 		desk.LoreIn(deskApp, "render", "--add-target", "codex").OK(t)
 		if s, ok := deskApp.ReadFile("AGENTS.md"); !ok || !strings.Contains(s, "LORE.md") {
 			t.Errorf("after switching to codex AGENTS.md does not point at .lore/LORE.md: %q", s)
