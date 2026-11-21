@@ -253,4 +253,33 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-826] the warm ask after the write differs:\nfirst:\n%s\nwarm:\n%s", after, again)
 		}
 	})
+	s.Step("personal-store/date-question-follows-edits", func() {
+		// D-834: row_meta reads a metadata copy kept beside the cached rows;
+		// a date question must follow an add, a changed day and a delete
+		on := func(day string) string {
+			r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "what happened on "+day)
+			r.OK(t)
+			return r.Out()
+		}
+		add := ada.Lore(ada.Home, "memory", "add", "--body", "Journal 2026-11-05: repotted the fern.", "--at", "2026-11-05", "--meta", "day:date=2026-11-05", "--to", "me/journal", "--yes", "--json")
+		add.OK(t)
+		id := regexp.MustCompile(`mem_[0-9a-f]{20,}`).FindString(add.Out())
+		if id == "" {
+			t.Fatalf("[O D-834] no memory id in the add output:\n%s", add)
+		}
+		if out := on("2026-11-05"); !strings.Contains(out, "repotted the fern") {
+			t.Errorf("[O D-834] the new day is not found:\n%s", out)
+		}
+		ada.Lore(ada.Home, "memory", "edit", "--id", id, "--meta", "day:date=2026-11-06", "--at", "2026-11-06", "--yes").OK(t)
+		if out := on("2026-11-05"); strings.Contains(out, "repotted the fern") {
+			t.Errorf("[O D-834] the old day still answers after the edit (stale metadata):\n%s", out)
+		}
+		if out := on("2026-11-06"); !strings.Contains(out, "repotted the fern") {
+			t.Errorf("[O D-834] the edited day is not found:\n%s", out)
+		}
+		ada.Lore(ada.Home, "memory", "delete", "--id", id, "--yes").OK(t)
+		if out := on("2026-11-06"); strings.Contains(out, "repotted the fern") {
+			t.Errorf("[O D-834] a deleted row still answers a date question:\n%s", out)
+		}
+	})
 }

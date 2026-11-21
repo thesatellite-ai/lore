@@ -23,11 +23,20 @@ import (
 //	project ─► metaText(row) ─► FTS column f_meta (non-sensitive values only)
 //	meta_keys row applied ─► reindexMetaKey: rows using the key re-projected
 //
-// OV39-VIEW: row_meta is a view over `_rows`, not a projected table: it can
-// never be stale against the row files (a delete, a trash or a registry
-// change shows at once) and needs no re-projection on registry change
-// (design 4 asks for a table with surrogate keys; that is a measured
-// optimisation for later, D26).
+// OV39-VIEW: row_meta is a view, not a projected table: it can never be
+// stale against the row files (a delete, a trash or a registry change shows
+// at once) and needs no re-projection on registry change (design 4 asks for
+// a table with surrogate keys; that is a measured optimisation for later,
+// D26).
+//
+// The view reads `_row_meta_src`, not `_rows` (devco D-834): each live row's
+// "meta" object alone, kept by triggers on `_rows`. Why: reading row_meta
+// read every row's whole document (body text and all, overflow pages) to
+// find a few metadata values; on a 6,200-row store that was ~65 ms of every
+// date question. The triggers live in the file, so every writer of `_rows`
+// (an older binary, a rebuild, a refill) keeps the copy current, and init's
+// write path refills it from `_rows` (a file from before the copy, or a
+// copy edited by hand, heals on the next DDL change).
 const (
 	// ViewRowMeta is the readable metadata view (one row per value).
 	ViewRowMeta = "row_meta"
@@ -36,7 +45,41 @@ const (
 	ftsMeta = row.KeyMeta
 	// ftsWeightMeta is the bm25 weight of the meta column (3.17: weight 2).
 	ftsWeightMeta = 2
+	// tblRowMetaSrc is the "meta" object of every live `_rows` row (no
+	// tombstone, not in the trash, valid JSON, meta an object), keyed like
+	// `_rows`; the row_meta view reads it (D-834, see above).
+	tblRowMetaSrc = "_row_meta_src"
 )
+
+// rowMetaLive is the condition under which a `_rows` row (alias r, or the
+// trigger's NEW) has metadata rows (3.22: no tombstones, nothing in the
+// trash); shared by the triggers and the refill so they cannot drift.
+func rowMetaLive(r string) string {
+	return r + `.deleted = 0 AND json_valid(` + r + `.doc) AND json_type(` + r + `.doc, '$.meta') = 'object' AND json_type(` + r + `.doc, '$.deleted_at') IS NULL`
+}
+
+// rowMetaSrcPut copies one `_rows` row (NEW in a trigger) into
+// tblRowMetaSrc when it is live, after its old copy is removed.
+func rowMetaSrcPut(r string) string {
+	return `DELETE FROM "` + tblRowMetaSrc + `" WHERE source = ` + r + `.source AND tbl = ` + r + `.tbl AND id = ` + r + `.id; ` +
+		`INSERT INTO "` + tblRowMetaSrc + `" (source, tbl, id, meta) SELECT ` + r + `.source, ` + r + `.tbl, ` + r + `.id, json_extract(` + r + `.doc, '$.meta') WHERE ` + rowMetaLive(r) + `;`
+}
+
+// rowMetaSrcDDL creates the copy and its triggers and refills it from
+// `_rows` (init's write path only: a current file never runs it). The
+// triggers are dropped and created again so a changed definition reaches
+// old files; the refill makes the copy equal to `_rows` whatever it held.
+var rowMetaSrcDDL = []string{
+	`CREATE TABLE IF NOT EXISTS "` + tblRowMetaSrc + `" (source TEXT NOT NULL, tbl TEXT NOT NULL, id TEXT NOT NULL, meta TEXT NOT NULL, PRIMARY KEY (source, tbl, id))`,
+	`DROP TRIGGER IF EXISTS "_row_meta_src_ins"`,
+	`DROP TRIGGER IF EXISTS "_row_meta_src_upd"`,
+	`DROP TRIGGER IF EXISTS "_row_meta_src_del"`,
+	`CREATE TRIGGER "_row_meta_src_ins" AFTER INSERT ON "` + tblRows + `" BEGIN ` + rowMetaSrcPut("NEW") + ` END`,
+	`CREATE TRIGGER "_row_meta_src_upd" AFTER UPDATE ON "` + tblRows + `" BEGIN DELETE FROM "` + tblRowMetaSrc + `" WHERE source = OLD.source AND tbl = OLD.tbl AND id = OLD.id; ` + rowMetaSrcPut("NEW") + ` END`,
+	`CREATE TRIGGER "_row_meta_src_del" AFTER DELETE ON "` + tblRows + `" BEGIN DELETE FROM "` + tblRowMetaSrc + `" WHERE source = OLD.source AND tbl = OLD.tbl AND id = OLD.id; END`,
+	`DELETE FROM "` + tblRowMetaSrc + `"`,
+	`INSERT INTO "` + tblRowMetaSrc + `" (source, tbl, id, meta) SELECT r.source, r.tbl, r.id, json_extract(r.doc, '$.meta') FROM "` + tblRows + `" r WHERE ` + rowMetaLive("r"),
+}
 
 // rowMetaValueCols are the row_meta columns a masked lens hides for a
 // sensitive key (3.20: entity, key and scope stay readable).
@@ -60,9 +103,8 @@ var rowMetaDDL = []string{
 		SELECT r.source AS _source, r.tbl AS entity_table, r.id AS entity_id, m.key AS key_id,
 			json_extract(m.value, '$.name') AS name, json_extract(m.value, '$.scope') AS scope,
 			COALESCE(json_extract(m.value, '$.sensitive'), 0) AS sensitive, m.value AS entry
-		FROM "` + tblRows + `" r, json_each(r.doc, '$.meta') m
-		WHERE r.deleted = 0 AND json_valid(r.doc) AND json_type(r.doc, '$.meta') = 'object'
-			AND json_type(r.doc, '$.deleted_at') IS NULL AND json_type(m.value) = 'object'
+		FROM "` + tblRowMetaSrc + `" r, json_each(r.meta) m
+		WHERE json_type(m.value) = 'object'
 			-- METADATA 3.13: a quarantined row's metadata is kept out
 			AND NOT EXISTS (SELECT 1 FROM "` + tblMetaQuarantine + `" q WHERE q.source = r.source AND q.tbl = r.tbl AND q.id = r.id)
 	),
@@ -93,7 +135,7 @@ var rowMetaDDL = []string{
 		FROM leaf)`,
 }
 
-func init() { internalDDL = append(internalDDL, rowMetaDDL...) }
+func init() { internalDDL = append(append(internalDDL, rowMetaSrcDDL...), rowMetaDDL...) }
 
 // metaKeySensitiveQuery tells whether a cache's meta_keys table marks one
 // key id sensitive (constant identifiers only).
