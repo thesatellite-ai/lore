@@ -46,6 +46,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -173,8 +174,18 @@ func readStamp(path string, reg *schema.Registry) (fileStamp, bool) {
 // file fully). A failure only costs that full open, so none is reported.
 // c.db must be usable (init done, or a commit just made).
 func (c *Cache) writeStamp(ctx context.Context) {
-	stampFrom(ctx, c.db, c.writes.path, c.base)
+	c.stamped = stampFrom(ctx, c.db, c.writes.path, c.base)
 }
+
+// stampedFiles is what a stamp's files looked like when it was written
+// (fileState); the zero value is no stamp.
+type stampedFiles struct{ main, wal string }
+
+// restamps counts restamp's runs: each one opens the file again and
+// parses its whole schema. Why kept: a close that left the file as its
+// last stamp saw it skips restamp (Cache.stampHolds, devco:D-848), and a
+// test checks that path really skips the reopen.
+var restamps atomic.Int64
 
 // restamp stamps c's file after Close, from a connection of its own: the
 // close folded this process's WAL into the main file, so the stamp written
@@ -182,8 +193,10 @@ func (c *Cache) writeStamp(ctx context.Context) {
 // rather than reused, so a commit by another process in between is either
 // seen or makes the two looks differ (no stamp). A file in another layout
 // (an older lore wrote it since) gets no stamp. Only a handle that
-// committed calls it (Cache.committed).
+// committed calls it (Cache.committed), and only when the close changed
+// the file since its last stamp (stampHolds).
 func (c *Cache) restamp(ctx context.Context) {
+	restamps.Add(1)
 	path := c.writes.path
 	if path == "" || exeID() == "" {
 		return
@@ -198,76 +211,109 @@ func (c *Cache) restamp(ctx context.Context) {
 	}
 	defer func() { _ = db.Close() }() // read only: closing an empty WAL leaves the main file as it is
 	db.SetMaxOpenConns(1)
-	var ver, app int64
-	if db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&ver) != nil || db.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app) != nil {
-		return
-	}
-	if ver != layoutVersion || int32(app) != ddlStamp() {
-		_ = os.Remove(stampPath(path))
+	if !currentLayout(ctx, db, path) {
 		return
 	}
 	stampFrom(ctx, db, path, c.base)
 }
 
+// currentLayout reports whether the file db reads is in this code's layout
+// (user_version and application_id); a file in another one loses its
+// stamp.
+func currentLayout(ctx context.Context, db *sql.DB, path string) bool {
+	var ver, app int64
+	if db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&ver) != nil || db.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app) != nil {
+		return false
+	}
+	if ver != layoutVersion || int32(app) != ddlStamp() {
+		_ = os.Remove(stampPath(path))
+		return false
+	}
+	return true
+}
+
+// stampHolds reports whether the stamp this handle wrote after its last
+// commit still describes its file once the handle is closed: the main file
+// and the WAL look exactly as they did when that stamp read the cursors.
+// Why (devco:D-848): restamp opened the file again after every close of a
+// handle that wrote, parsing its whole schema (~700 objects), ~22 ms of
+// each served read right after a sync. A close folds the WAL into the main
+// file only when it is the file's last connection; while another one keeps
+// the file open (the read server's lens has every folder attached) the
+// close changes nothing and the stamp is still true. Any commit by any
+// process since the stamp grows the WAL or changes the main file, so a
+// stale cursor never passes; a close that folded fails the check and
+// restamp reads the file again.
+func (c *Cache) stampHolds() bool {
+	if c.stamped.main == "" {
+		return false
+	}
+	main, wal, ok := fileState(c.writes.path)
+	return ok && main == c.stamped.main && wal == c.stamped.wal
+}
+
 // stampFrom records the cursors and refs stamp db reads from the file at
 // path beside it (writeStamp's work, on the handle's own connection or on
-// restamp's).
-func stampFrom(ctx context.Context, db *sql.DB, path string, reg *schema.Registry) {
+// restamp's); what the files looked like, or the zero value when it wrote
+// no stamp.
+func stampFrom(ctx context.Context, db *sql.DB, path string, reg *schema.Registry) stampedFiles {
 	exe := exeID()
 	if path == "" || exe == "" {
-		return
+		return stampedFiles{}
 	}
 	drop := func() { _ = os.Remove(stampPath(path)) }
 	main, wal, ok := fileState(path)
 	if !ok {
 		drop()
-		return
+		return stampedFiles{}
 	}
 	st := fileStamp{Format: stampFormat, Layout: layoutVersion, DDL: ddlStamp(), Exe: exe, Reg: regID(reg), File: main, WAL: wal, Cursors: map[string]string{}}
 	rs, err := db.QueryContext(ctx, `SELECT source, cursor FROM "`+tblCursors+`"`)
 	if err != nil {
 		drop()
-		return
+		return stampedFiles{}
 	}
 	for rs.Next() {
 		var s, cur string
 		if err := rs.Scan(&s, &cur); err != nil {
 			_ = rs.Close()
 			drop()
-			return
+			return stampedFiles{}
 		}
 		st.Cursors[s] = cur
 	}
 	if err := errors.Join(rs.Err(), rs.Close()); err != nil {
 		drop()
-		return
+		return stampedFiles{}
 	}
 	if st.Refs, err = scanRefsStamp(db.QueryRowContext(ctx, qRefsStamp)); err != nil {
 		drop()
-		return
+		return stampedFiles{}
 	}
 	if main2, wal2, ok := fileState(path); !ok || main2 != main || wal2 != wal {
 		drop()
-		return
+		return stampedFiles{}
 	}
 	raw, err := json.Marshal(st)
 	if err != nil {
 		drop()
-		return
+		return stampedFiles{}
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+stampSuffix+".tmp-*")
 	if err != nil {
 		drop()
-		return
+		return stampedFiles{}
 	}
 	_, werr := tmp.Write(raw)
 	if err := errors.Join(werr, tmp.Close()); err != nil {
 		_ = os.Remove(tmp.Name())
 		drop()
-		return
+		return stampedFiles{}
 	}
 	if err := os.Rename(tmp.Name(), stampPath(path)); err != nil {
 		_ = os.Remove(tmp.Name())
 		drop()
+		return stampedFiles{}
 	}
+	return stampedFiles{main: main, wal: wal}
 }

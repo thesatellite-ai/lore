@@ -178,6 +178,12 @@ type Lens struct {
 	// ATTACH (lenspool.go, D-833: the read server only).
 	poolKey string
 	files   []pooledFile
+	// base is the tables a pooled lens found in its files before the kind
+	// arms, and shape names the views it built from them (lensShape); a
+	// file whose rows moved keeps the lens while both still match
+	// (lenspool.go sameShape, D-848).
+	base  map[string][]srcTable
+	shape string
 	// kept holds QueryKept answers of a pooled lens, by statement; it lives
 	// and dies with the lens, which any change to an attached file rebuilds.
 	kept map[string]Result
@@ -358,23 +364,19 @@ func (l *Lens) setup(ctx context.Context) error {
 			tables[n] = append(tables[n], srcTable{src: i, cols: cols})
 		}
 	}
-	// devco D-758: a res_<kind> view also reads the sources whose own
-	// cache lacks the kind (lens_kindarms.go).
-	if l.wantsKindArms() {
-		if err := l.addKindArms(ctx, tables); err != nil {
-			return err
-		}
+	if l.poolKey != "" {
+		l.base = cloneTables(tables) // lenspool.go: what a later sameShape starts from
 	}
-	var m mask
+	m, err := l.rowShape(ctx, tables)
+	if err != nil {
+		return err
+	}
 	if l.masked {
-		var maskErr error
-		if m, maskErr = l.sensitive(ctx, tables); maskErr != nil {
-			return maskErr
-		}
 		l.hidden = l.hiddenNames()
 	}
-	l.keepOnly(tables)
-	l.keepNamed(tables)
+	if l.poolKey != "" {
+		l.shape = lensShape(tables, m)
+	}
 	names := make([]string, 0, len(tables))
 	for n := range tables {
 		names = append(names, n)
@@ -418,6 +420,30 @@ func (l *Lens) setup(ctx context.Context) error {
 		return err
 	}
 	return l.lock(ctx)
+}
+
+// rowShape completes tables (each table's sources, read from the files'
+// schemas) with what the files' rows decide: the kind arms (D-758: a
+// res_<kind> view also reads the sources whose own cache lacks the kind,
+// lens_kindarms.go) and the mask; then keeps the tables the lens exposes.
+// setup builds the views from the result, and a pooled lens runs it again
+// to learn whether rows written since change any view (sameShape).
+func (l *Lens) rowShape(ctx context.Context, tables map[string][]srcTable) (mask, error) {
+	if l.wantsKindArms() {
+		if err := l.addKindArms(ctx, tables); err != nil {
+			return mask{}, err
+		}
+	}
+	var m mask
+	if l.masked {
+		var err error
+		if m, err = l.sensitive(ctx, tables); err != nil {
+			return mask{}, err
+		}
+	}
+	l.keepOnly(tables)
+	l.keepNamed(tables)
+	return m, nil
 }
 
 // lock makes the lens read-only once its views exist.

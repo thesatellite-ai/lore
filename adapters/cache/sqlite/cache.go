@@ -100,6 +100,9 @@ type Cache struct {
 	// committed is true once this handle committed a write: only then does
 	// Close stamp the file again (devco:D-839: a read writes no stamp).
 	committed bool
+	// stamped is what the files looked like when this handle last wrote
+	// its stamp (stamp.go stampHolds: Close then needs no restamp).
+	stamped stampedFiles
 }
 
 var _ store.Cache = (*Cache)(nil)
@@ -633,8 +636,10 @@ func (c *Cache) Close() error {
 	if err := c.db.Close(); err != nil {
 		return dbErr("close", err)
 	}
-	if c.committed {
-		c.restamp(context.Background()) // stamp.go: closing folded the WAL into the file
+	// stamp.go: the close folded the WAL into the file only when it was the
+	// file's last connection; otherwise the last commit's stamp holds (D-848)
+	if c.committed && !c.stampHolds() {
+		c.restamp(context.Background())
 	}
 	return nil
 }

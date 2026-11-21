@@ -438,6 +438,27 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			}
 			same("where does alice-ng work now after a write (one word split per row)", r, one)
 		}
+		// devco:D-848 (bug hunt H-105): after a write the server keeps its
+		// lens when only rows moved and the views come out the same (no
+		// rebuild of every folder), dropping what it kept; a write that
+		// changes a view (a field turned sensitive changes the mask)
+		// rebuilds it. robert-kim's role is masked in the next served ask
+		// and shown again once the field is not sensitive, as one-shot.
+		ask("who is robert-kim") // the lens is kept with role unmasked
+		for _, c := range []struct{ flag, wantOut, notOut string }{{"--sensitive", "", "art-director"}, {"--no-sensitive", "art-director", ""}} {
+			ada.Lore(ada.Home, "resource", "field", "edit", "--kind", "person", "--field", "role", c.flag, "--to", to, "--yes").OK(t)
+			r := ask("who is robert-kim")
+			ada.SetEnv("LORE_READ_SERVER", "0")
+			one := ask("who is robert-kim")
+			ada.SetEnv("LORE_READ_SERVER", "1")
+			if c.notOut != "" && strings.Contains(r.Out(), c.notOut) {
+				t.Errorf("[O D-848] after %s the served ask shows the role (a kept lens kept the old mask):\n%s", c.flag, r)
+			}
+			if c.wantOut != "" && !strings.Contains(r.Out(), c.wantOut) {
+				t.Errorf("[O D-848] after %s the served ask misses the role:\n%s", c.flag, r)
+			}
+			same("who is robert-kim after "+c.flag, r, one)
+		}
 		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "1")
 		_ = os.Remove(log)
 		same("a server gone mid-command", ask(qs[1]), oneShot[qs[1]])
