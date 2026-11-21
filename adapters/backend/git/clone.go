@@ -931,7 +931,17 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 			return rows, store.Cursor(h), nil
 		}
 	}
-	paths, err := b.changedPaths(ctx, from, h, b.folder.Pathspecs())
+	// A full read under a table hint (store.WithTables) reads only those
+	// tables' files, like rowfs does in repo mode: the identity lookup every
+	// command makes listed a store's actors by reading every blob at HEAD,
+	// about 4 s per call once a folder held 5,000 rows (devco D-790). A
+	// hinted read is partial, so it returns the empty cursor and is not
+	// kept as the full read.
+	pathspecs, hinted := b.folder.Pathspecs(), false
+	if tables := store.TablesOf(ctx); from == "" && len(tables) > 0 {
+		pathspecs, hinted = b.folder.TablePathspecs(tables), true
+	}
+	paths, err := b.changedPaths(ctx, from, h, pathspecs)
 	if err != nil {
 		return nil, "", err
 	}
@@ -984,6 +994,9 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 			continue // reported by Problems
 		}
 		rows = append(rows, auth.creditRow(roots[name], r)) // C35: the committer named as the writer
+	}
+	if hinted {
+		return rows, "", nil
 	}
 	if from == "" {
 		b.keepFull(h, rows)

@@ -103,6 +103,19 @@ func (f *Folder) DataPath() string { return f.rel }
 // (Layout.Pathspecs).
 func (f *Folder) Pathspecs() []string { return f.layout.Pathspecs(f.name) }
 
+// TablePathspecs are the git pathspecs holding only this folder's row
+// files of tables: one table folder each. A store clone answers a table
+// hint (store.WithTables) with them, so listing the actors of a store
+// whose folder holds 5,000 feed rows reads the actors' files only, not
+// every blob at HEAD (devco D-790).
+func (f *Folder) TablePathspecs(tables []row.Table) []string {
+	out := make([]string, 0, len(tables))
+	for _, t := range tables {
+		out = append(out, f.layout.StorePath(f.name, string(t)))
+	}
+	return out
+}
+
 // Layout is where this folder's rows sit.
 func (f *Folder) Layout() Layout { return f.layout }
 
