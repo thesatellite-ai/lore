@@ -13,6 +13,9 @@ package sqlite
 //	   ├─ idle lens with the key, every file still the one attached and
 //	   │  unchanged (same device+inode, same PRAGMA data_version and
 //	   │  schema_version as right after its ATTACH) ─▶ reused
+//	   ├─ same files and schemas, only rows written since (data_version
+//	   │  moved) and the views those rows decide (kind arms, mask) come
+//	   │  out the same ─▶ reused, its kept answers dropped (D-848)
 //	   └─ else build a new one; record each file's identity and versions
 //	Lens.Close ─▶ pooled lens back to idle (closed for real when reuse is
 //	              off, evicted, or a file changed)
@@ -20,7 +23,13 @@ package sqlite
 // Correctness: the views, the mask and the kind arms are built from the
 // files' schemas and rows, so ANY committed change to an attached file
 // (data_version moves for every commit by another connection) or a file
-// replaced on disk (new inode) rebuilds the lens. Only setup inputs are in
+// replaced on disk (new inode) either rebuilds the lens or, when only rows
+// moved, re-reads every row-decided input of the views on the open
+// connection (rowShape) and keeps the lens only when they name the same
+// views (lensShape). Why (devco:D-848): a sync that adds one row to one
+// folder rebuilt the whole lens, ATTACH parsing every folder's schema
+// again: ~30 ms of each served read right after a sync. Kept answers are
+// dropped either way: they were read from the old rows. Only setup inputs are in
 // the key; the per-command inputs (expander, query, clock) are set on
 // every reuse. Off by default: a one-shot process never pools.
 
@@ -127,7 +136,14 @@ func takePooled(ctx context.Context, key string, o LensOptions) *Lens {
 	if hit == nil {
 		return nil
 	}
-	if !hit.unchanged(ctx) {
+	switch hit.state(ctx) {
+	case fileSame:
+	case fileRowsMoved:
+		if !hit.sameShape(ctx) {
+			_ = hit.closeConn()
+			return nil
+		}
+	default:
 		_ = hit.closeConn()
 		return nil
 	}
@@ -166,28 +182,112 @@ func (l *Lens) pragmaOf(ctx context.Context, i int, name string) (int64, error) 
 	return v, err
 }
 
-// unchanged reports whether every attached file is still the file the
-// lens was built over, with no commit and no schema change since.
-func (l *Lens) unchanged(ctx context.Context) bool {
+// pooledState is what became of a pooled lens's files since it was built.
+type pooledState int
+
+const (
+	// fileSame: every file is the one attached, with no commit since.
+	fileSame pooledState = iota
+	// fileRowsMoved: every file is the one attached with the schema it
+	// had, and at least one commit since (rows written or removed).
+	fileRowsMoved
+	// fileReplaced: a file is gone, replaced, unreadable or its schema
+	// changed: only a new lens is right.
+	fileReplaced
+)
+
+// state reports what became of the lens's files since its build (or its
+// last sameShape). It records each file's new data_version when rows
+// moved, before sameShape reads them: a commit landing after this look
+// moves the version again, so the next command looks again.
+func (l *Lens) state(ctx context.Context) pooledState {
 	if len(l.files) != len(l.sources) {
-		return false
+		return fileReplaced
 	}
+	moved := false
+	data := make([]int64, len(l.sources))
 	for i, s := range l.sources {
 		abs, err := filepath.Abs(s.Path)
 		if err != nil {
-			return false
+			return fileReplaced
 		}
 		fi, err := os.Stat(abs)
 		if err != nil || fileIdentity(fi) != l.files[i].identity {
-			return false
+			return fileReplaced
 		}
-		data, derr := l.pragmaOf(ctx, i, "data_version")
+		d, derr := l.pragmaOf(ctx, i, "data_version")
 		sv, serr := l.pragmaOf(ctx, i, "schema_version")
-		if derr != nil || serr != nil || data != l.files[i].data || sv != l.files[i].schemaV {
-			return false
+		if derr != nil || serr != nil || sv != l.files[i].schemaV {
+			return fileReplaced
+		}
+		data[i] = d
+		moved = moved || d != l.files[i].data
+	}
+	if !moved {
+		return fileSame
+	}
+	for i := range l.files {
+		l.files[i].data = data[i]
+	}
+	return fileRowsMoved
+}
+
+// sameShape reports whether the lens's views are still the ones its files
+// call for after rows moved: the row-decided inputs (kind arms, mask) are
+// read again from base on the open connection and must name the same views
+// (lensShape). True drops the kept answers (read from the old rows); false
+// leaves the lens to be closed.
+func (l *Lens) sameShape(ctx context.Context) bool {
+	if l.base == nil || l.shape == "" {
+		return false
+	}
+	tables := cloneTables(l.base)
+	m, err := l.rowShape(ctx, tables)
+	if err != nil || lensShape(tables, m) != l.shape {
+		return false
+	}
+	l.mu.Lock()
+	l.kept = nil
+	l.mu.Unlock()
+	return true
+}
+
+// cloneTables copies tables so rowShape may add arms and drop tables
+// without touching the original.
+func cloneTables(tables map[string][]srcTable) map[string][]srcTable {
+	out := make(map[string][]srcTable, len(tables))
+	for n, parts := range tables {
+		out[n] = slices.Clone(parts)
+	}
+	return out
+}
+
+// lensShape names every input createViews builds the views from: each
+// exposed table's sources (index, columns, the arm SQL of a kind arm) and
+// the mask. Two equal shapes build the same views over the same files.
+func lensShape(tables map[string][]srcTable, m mask) string {
+	names := make([]string, 0, len(tables))
+	for n := range tables {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	var b strings.Builder
+	for _, n := range names {
+		b.WriteString("t\x00" + n + "\x01")
+		for _, st := range tables[n] {
+			b.WriteString(strconv.Itoa(st.src) + "\x00" + strings.Join(st.cols, "\x00") + "\x00" + st.from + "\x01")
 		}
 	}
-	return true
+	b.WriteString("mask\x00" + strconv.FormatBool(m.on) + "\x01")
+	cols := make([]string, 0, len(m.cols))
+	for t, cs := range m.cols {
+		cs = slices.Clone(cs)
+		slices.Sort(cs)
+		cols = append(cols, t+"\x00"+strings.Join(cs, "\x00"))
+	}
+	slices.Sort(cols)
+	b.WriteString(strings.Join(cols, "\x02") + "\x01" + strings.Join(m.fieldIDs, "\x00") + "\x01" + strings.Join(m.metaKeyIDs, "\x00"))
+	return b.String()
 }
 
 // release puts a pooled lens back to idle; false when it is not pooled

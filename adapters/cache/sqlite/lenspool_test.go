@@ -87,8 +87,9 @@ func TestLensReuseRebuildsAfterAnyWrite(t *testing.T) {
 // TestLensQueryKeptForgetsOnAnyWrite (devco:D-842): QueryKept on a pooled
 // lens (the read server) hands out the answer it read first, even to the
 // next command that reuses the lens; a write to an attached file makes the
-// next open build a new lens whose QueryKept reads the files again, so a
-// kept answer never outlives its rows. A lens that is not pooled (every
+// next open drop every kept answer (keeping the lens itself when the write
+// only moved rows, D-848), so QueryKept reads the files again and a kept
+// answer never outlives its rows. A lens that is not pooled (every
 // one-shot command) reads every time, and a caller changing a kept answer
 // does not change what the next caller gets. Not parallel: reuse is
 // process state.
@@ -163,13 +164,79 @@ func TestLensQueryKeptForgetsOnAnyWrite(t *testing.T) {
 	if err := again.Close(); err != nil {
 		t.Fatal(err)
 	}
-	// the write made the next open build a new lens, which reads the files
+	// the write only added a row: the next open keeps the lens (its views
+	// are the same, D-848) but drops what it kept, so it reads the files
 	after := must(OpenLensWith(ctx, srcs, o))
 	defer func() { _ = after.Close() }()
-	if after == first {
-		t.Fatal("a lens was reused after a write to its file")
+	if after != first {
+		t.Fatal("a lens whose file only gained a row was built again (D-848: only its kept answers are stale)")
 	}
 	if got := names(after); got != "alpha,bravo,charlie" {
 		t.Fatalf("after a write QueryKept answered %q, want alpha,bravo,charlie", got)
+	}
+}
+
+// TestLensReuseKeepsShapeAfterRowWrites (devco:D-848): a sync that adds a
+// row to one folder used to rebuild the read server's whole lens (ATTACH
+// parses every folder's schema again). Rows written since its build keep
+// the lens when the views they decide come out the same, and every answer
+// still reads the new rows; a write that changes a view (a source starts
+// holding resources of a kind another source defines: a new kind arm)
+// builds a new lens. Not parallel: reuse is process state.
+func TestLensReuseKeepsShapeAfterRowWrites(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	kind := must(ids.New[ids.Kind]())
+	write := func(name, seq string, rows ...store.Row) {
+		t.Helper()
+		c := f.open(name)
+		f.apply(c, store.Source(name), seq, rows...)
+		if err := c.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("repo.db", "1", f.kindRow(kind, "server"), f.resource(must(ids.New[ids.Resource]()), kind, "alpha", nil))
+	write("acme.db", "1", f.memory(newMem(), newPrj(), "first note"))
+	srcs := []LensSource{{Name: "repo.db", Path: filepath.Join(f.dir, "repo.db")}, {Name: "acme.db", Path: filepath.Join(f.dir, "acme.db")}}
+	o := LensOptions{MaskSensitive: true, Tables: []string{"resources", "memories", "res_server"}}
+	read := func(l *Lens, q string) string {
+		t.Helper()
+		var out []string
+		for _, r := range must(l.QueryKept(ctx, q, 0)).Rows {
+			out = append(out, r[0].String())
+		}
+		return strings.Join(out, ",")
+	}
+	const notes = `SELECT body FROM memories_all ORDER BY 1`
+	const servers = `SELECT name FROM res_server_all ORDER BY name`
+
+	stop := EnableLensReuse()
+	defer stop()
+	first := must(OpenLensWith(ctx, srcs, o))
+	before := read(first, notes)
+	if !strings.Contains(before, "first note") || read(first, servers) != "alpha" {
+		t.Fatalf("first lens: notes %q, servers %q", before, read(first, servers))
+	}
+	_ = first.Close()
+
+	write("acme.db", "2", f.memory(newMem(), newPrj(), "second note"))
+	again := must(OpenLensWith(ctx, srcs, o))
+	if again != first {
+		t.Fatal("a row added to one folder rebuilt the whole lens")
+	}
+	if got := read(again, notes); !strings.Contains(got, "second note") || !strings.Contains(got, "first note") {
+		t.Fatalf("the kept lens answered %q: the new row is missing (a stale kept answer)", got)
+	}
+	_ = again.Close()
+
+	// acme now holds a server too: res_server_all gains an arm over acme
+	write("acme.db", "3", f.resource(must(ids.New[ids.Resource]()), kind, "bravo", nil))
+	after := must(OpenLensWith(ctx, srcs, o))
+	defer func() { _ = after.Close() }()
+	if after == first {
+		t.Fatal("a write that adds a kind arm kept the old views")
+	}
+	if got := read(after, servers); got != "alpha,bravo" {
+		t.Fatalf("servers after the arm = %q, want alpha,bravo", got)
 	}
 }

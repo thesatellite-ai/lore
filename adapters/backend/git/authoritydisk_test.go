@@ -217,3 +217,36 @@ func commitIn(t *testing.T, dir, author, rel, body string) {
 	gitT(t, dir, "add", rel)
 	gitT(t, dir, "-c", "user.name=x", "-c", "user.email="+author, "commit", "--quiet", "--no-verify", "--author", "x <"+author+">", "-m", "edit")
 }
+
+// TestAuthorityCarriedInMemory (devco:D-848): a process that holds the
+// replay (the read server) carries it on over the plain commits a sync
+// adds, without decoding the saved replay again: with the file gone only
+// the new commit replays. The result is the full replay's, it is saved
+// for the next process, and the replay held before is left as it was for
+// any caller still reading it.
+func TestAuthorityCarriedInMemory(t *testing.T) {
+	o := newOrgTeam(t)
+	roster := mustID[ids.ActorPeriod](t)
+	o.h.commit(o.max.email, map[string]string{orgPath("actor_periods", roster): o.max.periodRowAt("2026-01-03T00:00:00.000Z", "admin", "")})
+	b := orgFolderClone(t, o.h.remote)
+	first := authorityNow(t, b)
+	firstHead, firstAccepted := first.head, len(first.accepted)
+
+	if err := os.Remove(b.authorityPath()); err != nil {
+		t.Fatal(err)
+	}
+	own := mustID[ids.Memory](t)
+	commitIn(t, b.work, o.max.email, orgPath("memories", own), stampedRow(own, o.max.actor, "2026-01-04T00:00:00.000Z", "mine"))
+	before := replayCount()
+	next := authorityNow(t, b)
+	if n := replayCount() - before; n != 1 {
+		t.Errorf("after one plain commit %d commit(s) were replayed, want 1 (the replay held in memory, carried on)", n)
+	}
+	sameAuthority(t, next, fullReplay(t, b))
+	if first.head != firstHead || len(first.accepted) != firstAccepted || next == first {
+		t.Error("carrying the replay on changed the one held before")
+	}
+	if b.loadAuthority() == nil {
+		t.Error("the carried replay was not saved for the next process")
+	}
+}

@@ -171,3 +171,71 @@ func TestStampReadWritesNothing(t *testing.T) {
 		t.Fatalf("cursor from the writer's stamp: %q, %v", cur, err)
 	}
 }
+
+// TestStampCloseNeedsNoReopen (devco:D-848): while another connection
+// keeps the file open (the read server's lens has every folder attached),
+// the close of a handle that wrote leaves the file as its last commit's
+// stamp saw it, so no second open parses the schema just to read the
+// cursors back (~22 ms of each served read after a sync); the next open is
+// warm and right. As the file's last connection the close folds the WAL:
+// it reads the file again. A commit by another connection after the stamp
+// also makes it read the file again, never trusting a stale cursor. Not
+// parallel: restamps counts for the whole package.
+func TestStampCloseNeedsNoReopen(t *testing.T) {
+	f := newFixture(t)
+	path := filepath.Join(f.dir, "a.db")
+	c := f.open("a.db")
+	f.apply(c, "s1", "c1", f.memory(newMem(), newPrj(), "one"))
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	dsn, err := fileDSN(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := sql.Open(driverName, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = other.Close() }()
+	var n0 int
+	if err := other.QueryRowContext(f.ctx, `SELECT count(*) FROM "`+tblCursors+`"`).Scan(&n0); err != nil {
+		t.Fatal(err) // connected: the file stays open while the writer closes
+	}
+	check := func(step, want string, restamped int64, close func() error) {
+		t.Helper()
+		n := restamps.Load()
+		if err := close(); err != nil {
+			t.Fatal(err)
+		}
+		if got := restamps.Load() - n; got != restamped {
+			t.Fatalf("%s: the close read the file again %d time(s), want %d", step, got, restamped)
+		}
+		r := f.open("a.db")
+		defer func() { _ = r.Close() }()
+		if r.lazy == nil {
+			t.Fatalf("%s: the next open was not warm", step)
+		}
+		if cur, err := r.Cursor(f.ctx, "s1"); err != nil || string(cur) != want {
+			t.Fatalf("%s: cursor %q, %v, want %q", step, cur, err, want)
+		}
+	}
+
+	w := f.open("a.db")
+	f.apply(w, "s1", "c2", f.memory(newMem(), newPrj(), "two"))
+	check("file kept open elsewhere", "c2", 0, w.Close)
+
+	w = f.open("a.db")
+	f.apply(w, "s1", "c3", f.memory(newMem(), newPrj(), "three"))
+	if _, err := other.ExecContext(f.ctx, `UPDATE "`+tblCursors+`" SET cursor = 'c4' WHERE source = 's1'`); err != nil {
+		t.Fatal(err)
+	}
+	check("another connection committed after the stamp", "c4", 1, w.Close)
+
+	w = f.open("a.db")
+	f.apply(w, "s1", "c5", f.memory(newMem(), newPrj(), "five"))
+	if err := other.Close(); err != nil {
+		t.Fatal(err)
+	}
+	check("last connection", "c5", 1, w.Close)
+}

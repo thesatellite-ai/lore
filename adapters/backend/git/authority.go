@@ -79,6 +79,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -613,9 +614,15 @@ func (b *Backend) authorityOf(ctx context.Context, head string) (*authority, err
 	if a != nil && a.head == head && a.orgHead == orgHead {
 		return a, nil
 	}
-	a, err := b.replayFromDisk(ctx, head, orgHead)
+	a, err := b.replayOverHeld(ctx, a, head, orgHead)
 	if err != nil {
 		return nil, err
+	}
+	if a == nil {
+		a, err = b.replayFromDisk(ctx, head, orgHead)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if a == nil {
 		commits, err := b.replayCommits(ctx, head)
@@ -669,6 +676,49 @@ var rowViews = struct {
 	sync.Mutex
 	byWork map[string]*authority
 }{byWork: map[string]*authority{}}
+
+// replayOverHeld carries held (the replay this process already holds for
+// the clone) on to head when head only added plain commits on top of it
+// and the org head is the same: a copy of held replays those commits, and
+// is saved like any replay; nil when held cannot be carried on. Why
+// (devco:D-848): a long-lived process (the read server) holds the replay
+// across commands, and after each sync replayFromDisk decoded the whole
+// saved replay again (~13 ms of each served read after a sync) to rebuild
+// what it held already. The copy keeps held as it was for any caller still
+// reading it.
+func (b *Backend) replayOverHeld(ctx context.Context, held *authority, head, orgHead string) (*authority, error) {
+	if held == nil || held.orgHead != orgHead || held.head == "" {
+		return nil, nil
+	}
+	commits, ok := b.linearCommitsAfter(ctx, held.head, head)
+	if !ok {
+		return nil, nil
+	}
+	a := held.clone()
+	if err := b.replayOver(ctx, a, commits); err != nil {
+		return nil, err
+	}
+	a.head = head
+	b.saveAuthority(a)
+	return a, nil
+}
+
+// clone copies a deep enough for replayOver to carry the copy on without
+// changing a: every map replayOver writes is copied (the stamps of each
+// file too, whose lists it appends to). The values themselves (row docs,
+// admin sets, holds) are never changed in place, so they are shared.
+func (a *authority) clone() *authority {
+	st := &rosterState{docs: maps.Clone(a.state.docs), stamps: make(map[string]map[string][]stampRec, len(a.state.stamps)), orgless: a.state.orgless}
+	for p, byHLC := range a.state.stamps {
+		m := make(map[string][]stampRec, len(byHLC))
+		for h, recs := range byHLC {
+			m[h] = slices.Clip(recs) // an append copies instead of writing past a's end
+		}
+		st.stamps[p] = m
+	}
+	return &authority{head: a.head, orgHead: a.orgHead, state: st, held: maps.Clone(a.held), trusted: maps.Clone(a.trusted), refused: maps.Clone(a.refused),
+		credited: maps.Clone(a.credited), admins: maps.Clone(a.admins), accepted: maps.Clone(a.accepted), snap: a.snap}
+}
 
 // replayFromDisk is the replay at head from the one kept on disk
 // (loadAuthority): as is when it was made at head, or carried on over the
