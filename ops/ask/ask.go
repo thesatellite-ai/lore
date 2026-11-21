@@ -165,6 +165,12 @@ type Row struct {
 	Body    string   `json:"body"`
 	Matched []string `json:"matched" desc:"the topics and words of the question it holds"`
 	Note    string   `json:"note,omitempty" desc:"newest: it replaces <id> from <day>, when an older row says the same thing"`
+	// History is set on a row that is no longer the current answer
+	// (devco D-820): superseded by another row, past its valid_until, or
+	// replaced by a newer row of the same folder on the same thing. Such
+	// a row ranks after every current row and an agent reads it as what
+	// used to be true.
+	History string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
 }
 
 // RoutedStore implements the op package's StoreRouter, as sql.run does
@@ -436,14 +442,14 @@ func loadDays(ctx context.Context, run Query, since, end string) (map[string]str
 	return days, ids, nil
 }
 
-var textTables = []struct{ table, title, body, extra string }{
-	{"memories", "''", "m.body", "m.valid_at"},
-	{"decisions", "m.title", "m.body", "NULL"},
-	{"rules", "''", "m.body", "NULL"},
-	{"patterns", "m.title", "m.body", "NULL"},
-	{"incidents", "m.title", "m.body", "NULL"},
+var textTables = []struct{ table, title, body, extra, until string }{
+	{"memories", "''", "m.body", "m.valid_at", "m.valid_until"},
+	{"decisions", "m.title", "m.body", "NULL", "NULL"},
+	{"rules", "''", "m.body", "NULL", "NULL"},
+	{"patterns", "m.title", "m.body", "NULL", "NULL"},
+	{"incidents", "m.title", "m.body", "NULL", "NULL"},
 	// devco D-815: a hotfix is the trap a coding question must not miss
-	{"hotfixes", "m.title", "m.body", "NULL"},
+	{"hotfixes", "m.title", "m.body", "NULL", "NULL"},
 }
 
 // loadRows reads the rows that can answer q: rows holding a word of the
@@ -503,20 +509,20 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 		if t.table == "memories" {
 			imported = "(m.source_kind = 'imported')"
 		}
-		superseded := "0"
+		superseded := "''"
 		if t.table != "incidents" {
-			superseded = "(m.superseded_by_id IS NOT NULL AND m.superseded_by_id != '')"
+			superseded = "COALESCE(m.superseded_by_id, '')"
 		}
 		archived := ""
 		if t.table != "incidents" {
 			archived = " AND m.archived_at IS NULL"
 		}
-		parts = append(parts, "SELECT 'row', '"+t.table+"', m.id, m.place, COALESCE("+t.title+", ''), COALESCE("+t.body+", ''), COALESCE("+t.extra+", m.created_at), "+imported+", "+superseded+
+		parts = append(parts, "SELECT 'row', '"+t.table+"', m.id, m.place, COALESCE("+t.title+", ''), COALESCE("+t.body+", ''), COALESCE("+t.extra+", m.created_at), "+imported+", "+superseded+", COALESCE("+t.until+", '')"+
 			" FROM "+t.table+"_all m WHERE ("+where+")"+archived)
 	}
 	stmt := strings.Join(parts, "\nUNION ALL ")
 	if len(ids) > 0 {
-		stmt += "\nUNION ALL SELECT 'ref', entity_table, entity_id, ref_id, '', '', '', 0, 0 FROM row_refs_all WHERE ref_id IN (" + strings.Join(ids, ", ") + ")"
+		stmt += "\nUNION ALL SELECT 'ref', entity_table, entity_id, ref_id, '', '', '', 0, '', '' FROM row_refs_all WHERE ref_id IN (" + strings.Join(ids, ", ") + ")"
 	}
 	res, err := run(ctx, stmt)
 	if err != nil {
@@ -526,7 +532,7 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 	at := map[string]int{}
 	refs := map[string][]string{}
 	for _, row := range res.Rows {
-		if len(row) < 9 {
+		if len(row) < 10 {
 			continue
 		}
 		c := make([]string, len(row))
@@ -540,7 +546,8 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 			}
 			at[c[2]] = len(out)
 			t, _ := time.Parse(time.RFC3339Nano, c[6])
-			out = append(out, textRow{Table: c[1], ID: c[2], Place: c[3], Title: c[4], Body: c[5], At: t, Imported: c[7] == "1", Superseded: c[8] == "1"})
+			until, _ := time.Parse(time.RFC3339Nano, c[9])
+			out = append(out, textRow{Table: c[1], ID: c[2], Place: c[3], Title: c[4], Body: c[5], At: t, Imported: c[7] == "1", SupersededBy: c[8], ValidUntil: until})
 		case "ref":
 			refs[c[2]] = append(refs[c[2]], c[3])
 		}

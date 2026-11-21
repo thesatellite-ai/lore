@@ -232,6 +232,11 @@ type Hit struct {
 	// InTrash marks a row in the trash, listed only with --include-deleted
 	// after the live hits (DELETION 2.9, FA-META-4).
 	InTrash bool `json:"in_trash,omitempty"`
+	// History is set on a row that is no longer the current answer
+	// (schema.HistoryNote, devco D-820): superseded by another row or past
+	// its valid_until. Such hits are listed after every current hit and
+	// marked, so an agent never reads an old fact as the answer.
+	History string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id> or valid until <day>; such hits come after the current ones"`
 	// Meta / MetaMasked are the hit row's metadata by name, sensitive
 	// values masked (MQ13 / METADATA 3.17: search hits carry it; absent
 	// when the row has none, so v0.1.17's hit bytes stay for such rows).
@@ -547,6 +552,9 @@ func (o RunOut) Text() string {
 		}
 		if h.InTrash {
 			body += "  (in the trash)"
+		}
+		if h.History != "" {
+			body += "  [" + h.History + "]"
 		}
 		if body = strings.TrimPrefix(body, "  "); body != "" {
 			body += "  "

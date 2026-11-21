@@ -532,7 +532,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if in.Store != "" {
 		sources = engine.NamedSources(o.env, store.Source(in.Store))
 	}
-	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}}
+	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, now: opclock.Now(o.env)}
 	var idx tagref.Index
 	if len(in.Tags) > 0 {
 		if idx, err = tagref.Load(ctx, o.env); err != nil {
@@ -807,7 +807,19 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 		out.Data = append(out.Data, hitOf(LabelerOf(o.env), src, h, r))
 		hm := metashow.Row(ctx, o.env, r) // MQ13: metadata on every read
 		out.Data[len(out.Data)-1].Meta, out.Data[len(out.Data)-1].MetaMasked = hm.Meta, hm.MetaMasked
+		out.Data[len(out.Data)-1].history = schema.RowHistory(r, opclock.Now(o.env))
 	}
+	// devco D-820: a superseded or expired memory never stands where the
+	// current answer goes: after every current hit, marked
+	slices.SortStableFunc(out.Data, func(a, b SearchHit) int {
+		switch {
+		case a.history == "" && b.history != "":
+			return -1
+		case a.history != "" && b.history == "":
+			return 1
+		}
+		return 0
+	})
 	out.Count = len(out.Data)
 	return out, nil
 }

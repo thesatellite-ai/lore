@@ -36,6 +36,9 @@ type question struct {
 	file string
 	// rest is the question without the path (what the change is for).
 	rest string
+	// now is the moment the question is asked: a row whose valid_until
+	// is not after it is history, not the answer (devco D-820).
+	now time.Time
 }
 
 // oweDir is the direction of a debt question.
@@ -114,7 +117,7 @@ var reWord = regexp.MustCompile(`[\p{L}\p{N}]+(?:[-.'’][\p{L}\p{N}]+)*`)
 
 // parseQuestion reads q against now (the day relative dates count from).
 func parseQuestion(q string, now time.Time) question {
-	out := question{text: strings.TrimSpace(q)}
+	out := question{text: strings.TrimSpace(q), now: now}
 	out.file = fileOf(out.text)
 	low := strings.ToLower(out.text)
 	if out.file != "" {

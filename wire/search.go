@@ -210,8 +210,15 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		return opssearch.Result{}, err
 	}
 	// D-436: one score across kinds, best first. Stable: equal scores keep
-	// table order (deterministic output).
-	sort.SliceStable(res.Hits, func(i, j int) bool { return res.Hits[i].Score > res.Hits[j].Score })
+	// table order (deterministic output). A hit that is history (superseded,
+	// past valid_until) comes after every current one (devco D-820): the
+	// first hit is what an agent takes as the answer.
+	sort.SliceStable(res.Hits, func(i, j int) bool {
+		if hi, hj := res.Hits[i].History != "", res.Hits[j].History != ""; hi != hj {
+			return hj
+		}
+		return res.Hits[i].Score > res.Hits[j].Score
+	})
 	if len(res.Hits) > r.Limit {
 		res.More, res.Hits = true, res.Hits[:r.Limit]
 	}
@@ -336,7 +343,7 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		if h.Source == store.SourceRepo {
 			if sc.keeps(t, r) {
-				out = append(out, rankedHit{hit: hitOf(t, h.ID.String(), h.Snippet, r), matched: held(h.ID, r), at: schema.RowDate(r)})
+				out = append(out, rankedHit{hit: hitOf(t, h.ID.String(), h.Snippet, r, a.Now()), matched: held(h.ID, r), at: schema.RowDate(r)})
 			}
 			continue
 		}
@@ -345,7 +352,7 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		if !sc.keepsStoreRow(t, r) {
 			continue
 		}
-		hit := hitOf(t, h.ID.String(), h.Snippet, r)
+		hit := hitOf(t, h.ID.String(), h.Snippet, r, a.Now())
 		hit.Source = a.DescribeSource(h.Source)
 		out = append(out, rankedHit{hit: hit, matched: held(h.ID, r), at: schema.RowDate(r)})
 	}
@@ -469,7 +476,7 @@ func (a *App) searchTrashed(ctx context.Context, eng *engine.Engine, targets []o
 		if !allWords(hay.String(), words) || anyWord(hay.String(), without) {
 			continue
 		}
-		hit := hitOf(t, live.ID.String(), "", live)
+		hit := hitOf(t, live.ID.String(), "", live, a.Now())
 		hit.InTrash = true
 		if tr.Store != store.SourceRepo {
 			hit.Source = a.DescribeSource(tr.Store)
@@ -503,8 +510,8 @@ func anyWord(hay string, words []string) bool {
 // id, Body = the table's label field (body-labelled ones cut). A title or
 // name label is the hit's Title too, and a resource hit carries its kind
 // id in ResourceKind until nameResourceKinds names it (D-436).
-func hitOf(t opssearch.Target, id, snippet string, r row.Row) opssearch.Hit {
-	h := opssearch.Hit{EntityTable: t.Table.String(), Entity: t.Entity, ID: id, Pretty: id, Snippet: snippet}
+func hitOf(t opssearch.Target, id, snippet string, r row.Row, now time.Time) opssearch.Hit {
+	h := opssearch.Hit{EntityTable: t.Table.String(), Entity: t.Entity, ID: id, Pretty: id, Snippet: snippet, History: schema.RowHistory(r, now)}
 	if t.Label.Field != "" {
 		h.Body = searchField(r, t.Label.Field)
 		if t.Label.Trunc {
@@ -738,7 +745,7 @@ func (a *App) condHits(ctx context.Context, eng *engine.Engine, t opssearch.Targ
 // condHitOf is the search hit of h, labelled with its store when it is
 // not the repo's (as a full-text hit of a store row is).
 func (a *App) condHitOf(t opssearch.Target, h condHit) opssearch.Hit {
-	hit := hitOf(t, h.id, "", h.r)
+	hit := hitOf(t, h.id, "", h.r, a.Now())
 	if h.src != store.SourceRepo {
 		hit.Source = a.DescribeSource(h.src)
 	}

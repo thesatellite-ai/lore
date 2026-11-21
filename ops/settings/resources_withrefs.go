@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/rowref"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -41,7 +42,12 @@ type RefBody struct {
 	At    string `json:"at,omitempty" desc:"the date the row is about (valid_at, else when it was written), RFC 3339"`
 	Title string `json:"title,omitempty" desc:"the row's title or name, when it has one"`
 	Body  string `json:"body,omitempty" desc:"the row's text in full: its body, else its description, else its title"`
-	when  time.Time
+	// History is set on a row that is no longer current (devco D-820):
+	// superseded by another row or past its valid_until, so the newest
+	// row about the resource is not taken for the current fact when it is
+	// not.
+	History string `json:"history,omitempty" desc:"set when the row is no longer current, read it as history: superseded by <id> or valid until <day>"`
+	when    time.Time
 }
 
 // withRefs fills out's ReferencedBy with the rows referencing resource id,
@@ -60,6 +66,7 @@ func (o ops) withRefs(ctx context.Context, out ResOut, id string, max int) (ResO
 	if err != nil {
 		return ResOut{}, err
 	}
+	now := opclock.Now(o.env)
 	byRow := map[string]int{}
 	bodies := []RefBody{}
 	add := func(l located, table, field, relation string) {
@@ -67,7 +74,9 @@ func (o ops) withRefs(ctx context.Context, out ResOut, id string, max int) (ResO
 		if !dup {
 			i = len(bodies)
 			byRow[l.Row.ID.String()] = i
-			bodies = append(bodies, refBodyOf(l, table))
+			b := refBodyOf(l, table)
+			b.History = schema.RowHistory(l.Row, now)
+			bodies = append(bodies, b)
 		}
 		b := &bodies[i]
 		if field != "" && !slices.Contains(b.Fields, field) {
@@ -160,6 +169,9 @@ func (o ResOut) refsText() string {
 		}
 		if len(r.Relations) > 0 {
 			fmt.Fprintf(&b, "  --ref %s", strings.Join(r.Relations, ", "))
+		}
+		if r.History != "" {
+			b.WriteString("  [" + r.History + "]")
 		}
 		b.WriteString("\n")
 		if r.Title != "" {

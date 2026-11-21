@@ -6141,6 +6141,10 @@
                           "body": {
                             "type": "string"
                           },
+                          "history": {
+                            "type": "string",
+                            "description": "set when the row is no longer the current answer, read it as history: superseded by \u003cid\u003e, valid until \u003cday\u003e, or replaced by \u003cid\u003e from \u003cday\u003e (a newer row of the same folder on the same thing)"
+                          },
                           "id": {
                             "type": "string"
                           },
@@ -65627,6 +65631,10 @@
                               "type": "string"
                             }
                           },
+                          "history": {
+                            "type": "string",
+                            "description": "set when the row is no longer current, read it as history: superseded by \u003cid\u003e or valid until \u003cday\u003e"
+                          },
                           "relations": {
                             "type": "array",
                             "description": "the relation of each --ref pointer the row holds at it (mentions, …)",
@@ -73767,6 +73775,10 @@
                               "entity_table": {
                                 "type": "string"
                               },
+                              "history": {
+                                "type": "string",
+                                "description": "set when the row is no longer the current answer, read it as history: superseded by \u003cid\u003e or valid until \u003cday\u003e; such hits come after the current ones"
+                              },
                               "id": {
                                 "type": "string"
                               },
@@ -73855,6 +73867,10 @@
                               },
                               "entity_table": {
                                 "type": "string"
+                              },
+                              "history": {
+                                "type": "string",
+                                "description": "set when the row is no longer the current answer, read it as history: superseded by \u003cid\u003e or valid until \u003cday\u003e; such hits come after the current ones"
                               },
                               "id": {
                                 "type": "string"

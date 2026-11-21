@@ -291,7 +291,7 @@ func (f *fakeEnv) AskLens(_ context.Context, _ bool, fn func(q Query) error) err
 			}}, nil
 		}
 		return opssql.Result{Rows: [][]value.Value{
-			{txt("row"), txt("memories"), txt("mem_1"), txt("me/work"), txt(""), txt("Met alice-ng about lumen."), txt("2026-11-01T00:00:00.000000000Z"), txt("0"), txt("0")},
+			{txt("row"), txt("memories"), txt("mem_1"), txt("me/work"), txt(""), txt("Met alice-ng about lumen."), txt("2026-11-01T00:00:00.000000000Z"), txt("0"), txt(""), txt("")},
 		}}, nil
 	})
 }

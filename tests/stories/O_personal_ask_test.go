@@ -13,6 +13,7 @@ package stories
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -21,7 +22,11 @@ import (
 // decision in other words, a changed fact and a day (devco D-807); the
 // item that answers the question is read first: the status row before the
 // project, the owed task before the person, the person then their newest
-// journal row for everything about X (devco D-818).
+// journal row for everything about X (devco D-818). A fact that changed
+// (a newer note on the same thing, memory add --supersedes, memory
+// invalidate) is never handed out as the answer: the current row leads and
+// the old one is marked as history in ask, search and memory list (devco
+// D-820).
 func TestStoryOPersonalAsk(t *testing.T) {
 	s := New(t, "O")
 	me := s.Remote("github.com/" + oAdminPersonal.Login + "/lore-me")
@@ -128,6 +133,68 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		text.OK(t)
 		if st, pr := strings.Index(text.Out(), "Status update orbit"), strings.Index(text.Out(), "project orbit"); st < 0 || pr < 0 || st > pr {
 			t.Errorf("[O D-818] the text prints the project before its status:\n%s", text)
+		}
+	})
+	s.Step("personal-store/stale-facts-are-history", func() {
+		memID := regexp.MustCompile(`mem_[0-9a-f]{20,}`)
+		add := func(args ...string) string {
+			r := ada.Lore(ada.Home, append([]string{"memory", "add"}, append(args, "--to", to, "--yes")...)...)
+			r.OK(t)
+			return memID.FindString(r.Out())
+		}
+		old := add("--body", "gym: ironworks gym")
+		cur := add("--body", "Since the move I train at peakfit, the gym two streets from the new flat.", "--supersedes", old)
+		ins := add("--body", "My car insurance: harbourline.")
+		ada.Lore(ada.Home, "memory", "invalidate", "--id", ins, "--yes").OK(t)
+		if old == "" || cur == "" || ins == "" {
+			t.Fatalf("[O D-820] memory add printed no id: %q %q %q", old, cur, ins)
+		}
+		type row struct{ ID, Body, History string }
+		ask := func(q string) ([]row, string) {
+			r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", q, "--json")
+			r.OK(t)
+			var got struct {
+				Rows []row `json:"rows"`
+			}
+			if err := json.Unmarshal([]byte(r.Stdout), &got); err != nil || len(got.Rows) == 0 {
+				t.Fatalf("[O D-820] ask --json %q: %v\n%s", q, err, r)
+			}
+			return got.Rows, r.Stdout
+		}
+		// a newer note on the same thing: the older one is history
+		rows, out := ask("how much money can orbit spend now")
+		if rows[0].History != "" || !strings.Contains(rows[0].Body, "moved to 55k") {
+			t.Errorf("[O D-820] the newest budget is not the answer:\n%s", out)
+		}
+		for _, r := range rows {
+			if strings.Contains(r.Body, "is 40k") && !strings.HasPrefix(r.History, "history: replaced by ") {
+				t.Errorf("[O D-820] the old budget is presented as current:\n%s", out)
+			}
+		}
+		// --supersedes: the superseded row never leads, and is marked
+		rows, out = ask("what is my gym now")
+		if rows[0].ID != cur || rows[0].History != "" {
+			t.Errorf("[O D-820] the current gym is not the answer:\n%s", out)
+		}
+		for _, r := range rows {
+			if r.ID == old && r.History != "history: superseded by "+cur {
+				t.Errorf("[O D-820] the superseded gym is not marked as history:\n%s", out)
+			}
+		}
+		// memory invalidate: past valid_until is history
+		rows, out = ask("who is my car insurance with")
+		if rows[0].ID != ins || !strings.HasPrefix(rows[0].History, "history: valid until ") {
+			t.Errorf("[O D-820] the invalidated insurance is not marked as history:\n%s", out)
+		}
+		sr := ada.Lore(ada.Home, "search", "--query", "gym", "--store", "me")
+		sr.OK(t)
+		if c, o := strings.Index(sr.Out(), cur), strings.Index(sr.Out(), old); c < 0 || o < 0 || c > o || !strings.Contains(sr.Out(), "[history: superseded by "+cur+"]") {
+			t.Errorf("[O D-820] lore search lists the superseded gym first or unmarked:\n%s", sr)
+		}
+		l := ada.Lore(ada.Home, "memory", "list", "--store", to)
+		l.OK(t)
+		if !strings.Contains(l.Out(), "[history: superseded by "+cur+"]") || !strings.Contains(l.Out(), "[history: valid until ") {
+			t.Errorf("[O D-820] memory list does not mark old facts as history:\n%s", l)
 		}
 	})
 }
