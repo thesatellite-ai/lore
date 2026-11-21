@@ -58,7 +58,10 @@ func j1StartTeam(t testing.TB, m *journeys.Machine, dir, storeURL string) {
 	} {
 		j1Apply(t, m, dir, j1Setup, st[0], st[1])
 	}
-	m.Lore(dir, "skill", "install", "--tool", "claude_code").OK(t)
+	// devco D-809: the tools step installed the skill itself; no lore
+	// skill install by hand, and the doctor has no skill row to fix.
+	m.Lore(dir, "skill", "status", "--tool", "claude_code").OK(t).Says(t, "claude_code").Never(t, "not installed")
+	m.Lore(dir, "doctor").OK(t).Never(t, "tools.skill_installed", "skill install --tool claude_code")
 	m.Lore(dir, "sync").OK(t)
 }
 

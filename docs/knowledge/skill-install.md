@@ -36,7 +36,7 @@ codex        warn  not installed; run lore skill install --tool codex
 
 ## Step 2 — Look before you write
 
-`--dry-run` lists the folders lore would write and writes nothing. `--all` means every tool that has a skill folder; `--tool <profile>` (repeatable) picks tools. Without either, lore installs for the tools of the active [setup](../team/guided-setup.md), else for the tools it finds on this machine. The setup page's coding tools step runs the same install.
+`--dry-run` lists the folders lore would write and writes nothing. `--all` means every tool that has a skill folder; `--tool <profile>` (repeatable) picks tools. Without either, lore installs for the tools of the active [setup](../team/guided-setup.md), else for the tools it finds on this machine. Saving a setup's coding tools step (the setup page or `lore setup apply --setup <setup> --step tools`) runs the same install for each picked tool that has no skill yet; a linked skill folder, a hand-edited skill and a lore on PATH older than this one are left for you, with their fix in `lore doctor`.
 
 <!-- example: render#skill-install-dry-run -->
 ```console

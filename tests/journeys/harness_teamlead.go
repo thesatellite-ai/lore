@@ -129,8 +129,8 @@ func tlLastSteps(t testing.TB, m *Machine, dir, setup string, folders []string) 
 	tlApply(t, m, dir, setup, "folders", map[string]any{"folders": folders, "default": false})
 	tlApply(t, m, dir, setup, "this_folder", map[string]any{})
 	tlApply(t, m, dir, setup, "summary", map[string]any{})
-	// doctor's fix for the tool picked: what the person runs next.
-	m.Lore(dir, "skill", "install", "--tool", "claude_code").OK(t)
+	// No lore skill install here: the tools step installs the skill of the
+	// tool it picks (devco D-809), so a person is HEALTHY once setup ends.
 }
 
 // tlStartTeam saves every step of an admin setup that starts org on storeURL.

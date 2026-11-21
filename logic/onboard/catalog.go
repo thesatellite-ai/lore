@@ -238,7 +238,7 @@ func Catalog() []Step {
 		{ // ONB 4.7
 			ID:       StepTools,
 			Title:    "Which coding tools do you use?",
-			Help:     "lore records the tools you use and checks each one has the lore skill, current; a missing or old skill shows with its fix, lore skill install --tool <tool>.",
+			Help:     "lore records the tools you use and checks each one has the lore skill, current: saving installs the skill for a tool that has none; an old, edited or linked skill shows with its fix, lore skill install --tool <tool>.",
 			Kinds:    allKinds(),
 			Needs:    []StepID{StepKind},
 			Optional: true,
