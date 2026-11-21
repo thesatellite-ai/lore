@@ -729,7 +729,7 @@ Examples:
 
 Flags:
       --as-client           check the whole repo as the client would see it (before a hand-over)
-      --ci                  CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal
+      --ci                  CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal. CI cannot read your private store: a not-a-secret allow kept in a store folder (where a linked repo saves them) is not seen here; the commit and pre-push hooks on each member's machine enforce it, and a committed .lore/data/secret_allows entry or .gitleaksignore line is seen
       --commit-msg string   also check this commit message file (the commit-msg hook's $1)
       --explain             print the rule, the source and the matched words of each finding
       --json                print the result (or the error) as JSON

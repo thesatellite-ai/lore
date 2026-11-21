@@ -41,6 +41,15 @@ import (
 // ciWhere names the CI check in its refusal and in the allow hint.
 const ciWhere = "lore check leaks --ci"
 
+// ciStoreAllowNote ends the CI refusal's hint (devco D-803, owner answer
+// 1): in a repo linked to a store folder `lore secrets allow` saves the
+// entry in that folder, which a CI clone does not have, so the same value
+// the hooks let through is reported here. The owner accepted that CI does
+// not read the private store; the note says so where the person meets it
+// and names the committed .gitleaksignore line, which CI does read
+// (committedAllows), as the way to let CI pass the value too.
+const ciStoreAllowNote = "; in a repo linked to a store folder the allow is saved in that folder, which CI cannot read, so CI still reports the value (the commit and pre-push hooks on each member's machine enforce the allow): to let CI pass it too, add the finding to the repo's committed .gitleaksignore as <path>:<rule>:<line>"
+
 // ciNameHit is a secret found in a tracked file's name.
 type ciNameHit struct {
 	path string
@@ -163,6 +172,7 @@ func ciSecretRefusal(paths []string, hits [][]leakcheck.SecretHit, names []ciNam
 	if unnamed {
 		hint += " (" + leakcheck.AllowRowTemplate() + ")"
 	}
+	hint += ciStoreAllowNote
 	return errs.New(errs.LeakBlocked, fmt.Sprintf("%s: the checkout carries %d secret(s):\n%s", ciWhere, count, strings.Join(lines, "\n"))).WithHint(hint)
 }
 

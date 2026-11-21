@@ -15,7 +15,10 @@ package journeys
 // (_meta.json, its project and repos rows) and the named deletion record.
 // Reads, writes with no --to, policy show and branch mode still work, and
 // `lore secrets allow --file` for a finding in a repo file writes its
-// entry to the folder, which the commit check then honours.
+// entry to the folder, which the commit check then honours. CI cannot read
+// that folder (devco D-803, hunt H-57, owner answer 1): a CI clone's
+// `lore check leaks --ci` still reports the value and says why, and so
+// does --help; the committed .gitleaksignore line it names lets CI pass.
 
 import (
 	"os"
@@ -36,8 +39,10 @@ func TestJourneyLinkedRepoDoctorCleansRows(t *testing.T) {
 	lee := tt.person(tlLee)
 	parent := filepath.Join(lee.Home, "code")
 	place := tlOrg + "/" + jMlFolder
-	repo := jPlainRepo(t, lee, w.Remote(jLcSlug), filepath.Join(parent, "billing-clean"))
+	remote := w.Remote(jLcSlug)
+	repo := jPlainRepo(t, lee, remote, filepath.Join(parent, "billing-clean"))
 	var s jMlIDs
+	pw := "Zq7" + strings.Repeat("x9K", 6) // built at run time: no password literal in the repo
 	var gone string
 
 	w.Step("day1/a-linked-repo-with-notes-and-a-deletion-record", func() {
@@ -99,7 +104,6 @@ func TestJourneyLinkedRepoDoctorCleansRows(t *testing.T) {
 		// cleaned linked repo is allowed with the printed line; the entry
 		// lands in the folder (it refused "this repo has no lore project"
 		// and wrote into the repo), and the commit check reads it there.
-		pw := "Zq7" + strings.Repeat("x9K", 6) // built at run time: no password literal in the repo
 		repo.WriteFile("config.yaml", "db:\n  password: \""+pw+"\"\n")
 		repo.Git("add", "config.yaml")
 		r := repo.TryGit("commit", "-q", "-m", "config").Refused(t, "E_LEAK_BLOCKED", "config.yaml").Never(t, pw)
@@ -116,6 +120,28 @@ func TestJourneyLinkedRepoDoctorCleansRows(t *testing.T) {
 		}
 		repo.TryGit("commit", "-q", "-m", "config").OK(t)
 		lee.LoreIn(repo, "secrets", "allow", "list").OK(t).Says(t, "config.yaml")
+	})
+
+	w.Step("day2/ci-cannot-see-the-folder-allow-and-says-so", func() {
+		// D-803 (hunt H-57, owner answer 1): the allow above lives in the
+		// store folder, which a CI clone does not have. The owner accepted
+		// that CI cannot read it (the hooks enforce it); --help and the CI
+		// refusal say so, and the committed .gitleaksignore line the hint
+		// names really lets CI pass.
+		repo.Git("push", "-q", "origin", "HEAD:main")
+		ci := lee.Clone(remote, "billing-ci")
+		lee.LoreIn(ci, "check", "leaks", "--help").OK(t).Says(t, "CI cannot read your private store", "commit and pre-push hooks", ".gitleaksignore")
+		r := lee.LoreIn(ci, "check", "leaks", "--ci")
+		r.Fails(t, 19, "E_LEAK_BLOCKED", "config.yaml:2", "CI cannot read", "pre-push hooks", ".gitleaksignore as <path>:<rule>:<line>").Never(t, pw)
+		m := regexp.MustCompile(`--rule (\S+)`).FindStringSubmatch(r.Out())
+		if m == nil {
+			t.Fatalf("the CI refusal names no rule:\n%s", r.Out())
+		}
+		repo.WriteFile(".gitleaksignore", "config.yaml:"+m[1]+":2\n")
+		repo.Git("add", ".gitleaksignore")
+		repo.TryGit("commit", "-q", "-m", "ci: config.yaml holds a sample password").OK(t)
+		repo.Git("push", "-q", "origin", "HEAD:main")
+		lee.LoreIn(lee.Clone(remote, "billing-ci2"), "check", "leaks", "--ci").OK(t).Never(t, pw)
 	})
 
 	w.Step("day2/reads-writes-policy-and-branch-mode-still-work", func() {

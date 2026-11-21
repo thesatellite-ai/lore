@@ -180,3 +180,31 @@ func TestPRBodyTooLarge(t *testing.T) {
 		t.Errorf("over the bound: %v, checker ran %d", err, len(fc.texts))
 	}
 }
+
+// TestCIHelpSaysTheStoreIsNotRead (devco D-803, owner answer 1): CI cannot
+// read the private store, so a not-a-secret allow a linked repo saves in
+// its store folder is invisible to `lore check leaks --ci`; the owner
+// accepted that and asked --help to say so, with who enforces the allow
+// (the hooks) and what CI does read. Break-verified: the old --ci text said
+// only "no store access".
+func TestCIHelpSaysTheStoreIsNotRead(t *testing.T) {
+	t.Parallel()
+	for _, e := range Ops(&fakeChecker{}) {
+		if e.Spec().Name != OpLeaks {
+			continue
+		}
+		for _, f := range e.InputFields() {
+			if f.Name != "ci" {
+				continue
+			}
+			for _, want := range []string{"CI cannot read your private store", "allow kept in a store folder", "commit and pre-push hooks", ".lore/data/secret_allows", ".gitleaksignore"} {
+				if !strings.Contains(f.Desc, want) {
+					t.Errorf("--ci help misses %q: %s", want, f.Desc)
+				}
+			}
+			return
+		}
+		t.Fatal("check.leaks has no ci input")
+	}
+	t.Fatal("no check.leaks op")
+}

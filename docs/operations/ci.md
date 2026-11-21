@@ -141,6 +141,8 @@ jobs:
 
 On another CI, pass the last commit the job checked yourself, for example `lore check leaks --ci --since "$LAST_CHECKED_SHA"`. A run that fails must be fixed before the next push: the next run starts after the commits the failed run saw.
 
+CI cannot read your private store. In a repo linked to a store folder, `lore secrets allow` (or a `--not-a-secret` answer) saves the allow entry in that folder, not in the repo's `.lore/data/secret_allows`, so `lore check leaks --ci` does not see it and still reports the value. The commit and pre-push hooks on each member's machine read the folder and enforce the allow. To let CI pass the value too, name the finding in the repo's committed `.gitleaksignore` as `<path>:<rule>:<line>` (CI reads that file and any committed `.lore/data/secret_allows` entry); `lore check leaks --help` and the CI refusal's hint say the same.
+
 ## Try it
 
 Clone a repo that uses lore into a new folder, as a CI job would, and list its rules with `LORE_READ_ONLY=1` and `LORE_NO_STALE_WARN=1` set in the environment, as in Step 3. The first command builds the local cache and wires git in the clone; nothing is written to `.lore/data`:
