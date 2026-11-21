@@ -80,8 +80,8 @@ func TestE55_StorePushAttachedStoreSetBatchCompact(t *testing.T) {
 }
 
 // An org's store attached only in stores.yaml (bob never imported the org)
-// is still the org's: its lore-org.yaml names the org, so bob, who has no
-// admin setup of it, is refused set and compact and nothing moves.
+// is still the org's: its lore-org.yaml names the org, so bob, who holds no
+// admin role on its roster, is refused set and compact and nothing moves.
 // Break-verified by dropping refinePlace (bob's set lands on the remote).
 func TestE56_StorePushAttachedOrgStoreStaysAdminOnly(t *testing.T) {
 	w := newTeamWorld(t)

@@ -55,8 +55,8 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	if aud != orgconf.AudienceEveryone {
 		// D-727: keeping a store from some members is an org config
 		// change, an admin's (the rule of lore org store audience)
-		if !isOrgAdmin(h.home, in.Org) {
-			return opsorgcmd.Report{}, orgAudienceRefusal(in.Org, opsorgcmd.StoreAddCommand(in.Org, in.URL)+" --audience "+aud.String())
+		if !orgRosterAdmin(ctx, h.home, in.Org) {
+			return opsorgcmd.Report{}, orgAudienceRefusal(h.home, in.Org, opsorgcmd.StoreAddCommand(in.Org, in.URL)+" --audience "+aud.String())
 		}
 		if err := checkAudience(ctx, h.home, sc, in.Org, aud, opsorgcmd.StoreAddCommand(in.Org, in.URL)); err != nil {
 			return opsorgcmd.Report{}, err

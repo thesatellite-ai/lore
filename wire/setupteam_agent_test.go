@@ -63,7 +63,7 @@ func TestSetupTeamStepByAnAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an agent saving the team step of a new org: %v", err)
 	}
-	if !res.Changed || !isOrgAdmin(home, "northwind") {
+	if !res.Changed || !hasOrgAdminSetup(home, "northwind") {
 		t.Fatalf("team step by an agent = %+v, want the org created with its admin setup", res)
 	}
 	if files := orgGit(t, filepath.Join(w.hosts, "agency/team.git"), "for-each-ref"); files == "" {
@@ -143,14 +143,14 @@ func TestSetupTeamStepMachinePolicyRefusesFirst(t *testing.T) {
 	if refs := orgGit(t, filepath.Join(w.hosts, "agency/team.git"), "for-each-ref"); refs != "" {
 		t.Fatalf("the refused team step wrote the team store:\n%s", refs)
 	}
-	if after, _ := os.ReadFile(cfg); string(after) != string(before) || isOrgAdmin(home, "northwind") {
+	if after, _ := os.ReadFile(cfg); string(after) != string(before) || hasOrgAdminSetup(home, "northwind") {
 		t.Fatalf("the refused team step changed config.yaml:\n%s", after)
 	}
 
 	if _, err = ap.Apply(ctx, req); err != nil {
 		t.Fatalf("the person saves the same step: %v", err)
 	}
-	if !isOrgAdmin(home, "northwind") {
+	if !hasOrgAdminSetup(home, "northwind") {
 		t.Fatal("the person's team step made no org entry")
 	}
 }
@@ -191,7 +191,7 @@ func TestSetupTeamStepOutsideAGitCheckout(t *testing.T) {
 			if _, err = ap.Apply(tc.ctx, req); err != nil {
 				t.Fatalf("the team step saved outside a git checkout: %v", err)
 			}
-			if !isOrgAdmin(home, "northwind") {
+			if !hasOrgAdminSetup(home, "northwind") {
 				t.Fatal("the team step made no org entry")
 			}
 		})

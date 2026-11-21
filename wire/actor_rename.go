@@ -18,7 +18,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsidentity "github.com/thesatellite-ai/lore/ops/identity"
@@ -45,7 +44,7 @@ func (p *profileRoster) MayEditPerson(ctx context.Context, id ids.AnyID) error {
 	if !owner.IsZero() && owner.Any() == id {
 		return nil
 	}
-	admin, err := p.app.orgAdmin(ctx, p.st, p.at.src, owner)
+	admin, err := p.app.orgAdmin(ctx, p.st, p.at.src, owner, p)
 	if err != nil {
 		return err
 	}
@@ -57,18 +56,19 @@ func (p *profileRoster) MayEditPerson(ctx context.Context, id ids.AnyID) error {
 		who = rosterShown(actorOfRow(r))
 	}
 	return errs.New(errs.PolicyDenied, "only "+who+" or an admin of the org may change "+who+"'s roster row, and you ("+p.st.actor.String()+") are neither").
-		WithHint("ask " + who + " to run it on their machine, or an org admin (the person who created the org, or one with an admin setup of it)")
+		WithHint("ask " + who + " to run it on their machine, or an org admin (the person who created the org, or one with the admin role on its roster)")
 }
 
 // orgAdmin reports whether the caller is an admin of the org whose roster
 // is rs: the creator of the roster folder's project row (written by `lore
-// org create`, so it names the org's creator in the store itself), or
-// the holder of an admin setup of that org on this machine (the admin
-// concept team invites already use, ops/team adminSetup). An agent acts
-// with its person's rights (the people writes reach here only when
-// agents.may_manage_people lets agents make them), so the creator check
-// accepts the person the agent acts for too.
-func (a *App) orgAdmin(ctx context.Context, st *state, rs store.Source, owner ids.ID[ids.Actor]) (bool, error) {
+// org create`, so it names the org's creator in the store itself), or a
+// person with an open admin stint on that roster (profilestore.ReadAdmins,
+// the role team ops check too). An admin setup on this machine is not the
+// question (H-109): a person demoted on the roster keeps their setup. An
+// agent acts with its person's rights (the people writes reach here only
+// when agents.may_manage_people lets agents make them), so both checks
+// accept the person the agent acts for too.
+func (a *App) orgAdmin(ctx context.Context, st *state, rs store.Source, owner ids.ID[ids.Actor], roster profilestore.Roster) (bool, error) {
 	pid, err := folderProjectIDOf(ctx, st, rs)
 	if err != nil {
 		return false, err
@@ -78,25 +78,11 @@ func (a *App) orgAdmin(ctx context.Context, st *state, rs store.Source, owner id
 			return true, nil
 		}
 	}
-	org := ""
-	if a.opts.Org != nil {
-		if o, oerr := a.opts.Org(ctx); oerr == nil && o != nil {
-			org = o.Name
-		}
-	}
-	if org == "" {
-		org, _, _ = strings.Cut(string(rs), targetSep)
-	}
-	cfg, err := ReadSetupsConfig(a.opts.Home)
+	ad, err := profilestore.ReadAdmins(ctx, roster)
 	if err != nil {
-		return false, nil // no readable setups: no admin setup (the creator check stands)
+		return false, nil // an unreadable roster names no admin (the creator check stands)
 	}
-	for _, e := range cfg.Setups {
-		if e.Kind == onboard.KindAdmin && e.Org == org {
-			return true, nil
-		}
-	}
-	return false, nil
+	return ad.Caller, nil
 }
 
 // callerOwner is the actor id of the person the caller acts for when the

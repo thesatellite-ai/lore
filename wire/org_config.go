@@ -84,8 +84,8 @@ func (h *standaloneOrg) OrgConfigSet(ctx context.Context, in opsorgcmd.ConfigSet
 		return opsorgcmd.Report{}, err
 	}
 	cmd := opsorgcmd.ConfigSetCommand(in.Org, in.Key)
-	if !isOrgAdmin(h.home, in.Org) {
-		return opsorgcmd.Report{}, errs.New(errs.Refused, "org config set: only an admin of "+in.Org+" changes its lore-org.yaml; this machine has no admin setup of "+in.Org).
+	if !orgRosterAdmin(ctx, h.home, in.Org) {
+		return opsorgcmd.Report{}, errs.New(errs.Refused, "org config set: only an admin of "+in.Org+" changes its lore-org.yaml: "+notOrgAdminWhy(h.home, in.Org)).
 			WithHint("ask the org admin to run `" + cmd + " --add <pattern> --push --yes`")
 	}
 	if in.Key == opsorgcmd.ConfigKeyMinLore {

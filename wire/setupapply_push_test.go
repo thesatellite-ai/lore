@@ -149,7 +149,7 @@ func TestSetupApplyTeamPush(t *testing.T) {
 	if !res.Changed || !strings.Contains(strings.Join(res.Wrote, " "), url) {
 		t.Fatalf("team result = %+v, want the store written", res)
 	}
-	if !isOrgAdmin(home, "northwind") {
+	if !hasOrgAdminSetup(home, "northwind") {
 		t.Fatal("no admin setups[] entry for northwind after the team step")
 	}
 	// C5: the settings commit waits in the local clone until a person syncs

@@ -67,9 +67,10 @@ func checkAudience(ctx context.Context, home string, sc *orgconf.Store, org stri
 }
 
 // orgAudienceRefusal is the refusal of a store audience change by a person
-// with no admin setup of org (the rule every org config write follows).
-func orgAudienceRefusal(org, cmd string) error {
-	return errs.New(errs.Refused, "org store audience: only an admin of "+org+" sets who uses its stores; this machine has no admin setup of "+org).
+// who holds no admin role on the roster of org (the rule every org config
+// write follows: orgRosterAdmin).
+func orgAudienceRefusal(home, org, cmd string) error {
+	return errs.New(errs.Refused, "org store audience: only an admin of "+org+" sets who uses its stores; "+notOrgAdminWhy(home, org)).
 		WithHint("ask the org admin to run `" + cmd + " --push --yes`")
 }
 
@@ -102,8 +103,8 @@ func (h *standaloneOrg) SetStoreAudience(ctx context.Context, in opsorgcmd.Store
 			WithHint("give the store's git url as lore store list shows it, e.g. --url git@github.com:agency/ops.git")
 	}
 	cmd := opsorgcmd.StoreAudienceCommand(in.Org, in.URL, aud)
-	if !isOrgAdmin(h.home, in.Org) {
-		return opsorgcmd.Report{}, orgAudienceRefusal(in.Org, cmd)
+	if !orgRosterAdmin(ctx, h.home, in.Org) {
+		return opsorgcmd.Report{}, orgAudienceRefusal(h.home, in.Org, cmd)
 	}
 	sc := o.OrgFolderStore()
 	if sc == nil {

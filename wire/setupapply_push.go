@@ -99,16 +99,16 @@ func (ap setupApplier) applyPersonalPush(set []storepush.Assignment, dryRun bool
 
 // applyTeamPush writes set into the lore-store.yaml of org's store at url
 // (the store the team step just made), as `lore store set <store>` does:
-// one commit, pushed. It runs after the admin setups[] entry is written,
-// because only a machine holding an admin setup of org may change the
-// store's shared settings (isOrgAdmin).
+// one commit, pushed. Only an admin of org on its roster may change the
+// store's shared settings (orgRosterAdmin): the team step's person, who
+// just made the org, is its first admin.
 func (ap setupApplier) applyTeamPush(ctx context.Context, org, url string, set []storepush.Assignment) (bool, error) {
 	if len(set) == 0 {
 		return false, nil
 	}
 	home := ap.a.opts.Home
-	if !isOrgAdmin(home, org) {
-		return false, errNotAdmin("setup apply team", org, org)
+	if !orgRosterAdmin(ctx, home, org) {
+		return false, errNotAdmin(home, "setup apply team", org, org)
 	}
 	src, err := teamStoreAt(home, org, url)
 	if err != nil {

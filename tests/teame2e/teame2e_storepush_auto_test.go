@@ -48,8 +48,8 @@ func TestE53_StorePushAutoCompactsPersonal(t *testing.T) {
 func TestE54_StorePushAutoCompactsOrgFromAdminOnly(t *testing.T) {
 	p := newSPOrg(t, spOld)
 	// automatic compaction rides on a push after a write: the admin sets the
-	// org store to push now, the opt-in (the default, manual: C5)
-	spMakeAdmin(t, p.a)
+	// org store to push now, the opt-in (the default, manual: C5); alice
+	// created the org, so the roster makes her its admin
 	p.ca.MustLore("store", "set", spOrgStore, "push=now")
 	p.cb.MustLore("sync")
 	for _, b := range []string{"org old one", "org old two"} {

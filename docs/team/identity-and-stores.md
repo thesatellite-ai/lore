@@ -379,7 +379,7 @@ $ lore doctor | grep 'store me:'
 ### Where the setting lives, and who may change it
 
 - **Your personal store:** in the `personal:` block of `~/.lore/config.yaml` (keys `push`, `push_every`, `compact`, `compact_after`). `lore store set --store me --settings …` writes it; `lore config set --key personal.push --value batch` works too, and `lore config check` checks the values.
-- **An org's store:** in the store's own `lore-store.yaml`, so every member gets the same setting. Only an admin of the org may change it: a machine whose `~/.lore/config.yaml` holds an admin setup of that org (`setups:` with `kind: admin` and `org: <org name>`, see [Guided setup](guided-setup.md)). A member cannot override it on their own machine.
+- **An org's store:** in the store's own `lore-store.yaml`, so every member gets the same setting. Only an admin of the org may change it: the person this machine is in that org (`orgs[<org>].identity` in `~/.lore/config.yaml`) must hold the admin role on the org's roster (`lore member list` shows it), as the org's creator does from `lore org create` on, with or without an admin setup. An admin setup on a machine whose person the roster names a member gives no admin rights; only where this machine cannot read the roster (no clone of the org's store yet, or a store with no `lore-org.yaml`) does the admin setup decide. A member cannot override it on their own machine.
 - **A store attached in `.lore/stores.yaml`** (`lore store init` or `lore store add`) that belongs to no org: in the store's own `lore-store.yaml` too, so every clone of it gets the same setting. There is no admin to ask, so anyone who can push to the store may change it with `lore store set --store <store> --settings …`, and compact it. If the store holds an org's `lore-org.yaml` (it is an org's store that this machine attached by its address without `lore org import`), it is that org's store and only the org's admin may change it.
 
 The admin sets it once and every member's next sync picks it up:
@@ -444,7 +444,7 @@ ERROR: [E_REFUSED] store set: `repo` is the code repository's own .lore/data; lo
 
 # bob, in website
 $ lore store set --store agency --settings push=batch
-ERROR: [E_REFUSED] store set: store agency belongs to org agency and only an admin of agency may change its shared settings; this machine has no admin setup of agency
+ERROR: [E_REFUSED] store set: store agency belongs to org agency and only an admin of agency may change its shared settings; human:bob@agency.example (this machine's identity in agency) holds no admin role on the roster of agency
   hint: ask the org admin to run `lore store set --store agency --settings …`; a member cannot override the org's setting locally
 (exit 23)
 

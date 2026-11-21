@@ -34,8 +34,11 @@ orgs:
 // of an admin's second org store names the org and its main store, so an
 // empty repo becomes a store in one commit (the admin's sync has nothing
 // left to name). The main store, a member's store and a store no org lists
-// get a marker naming no org. Break-verified: with newStoreMarker leaving
-// Org and OrgStore empty, the notes-two case fails (and
+// get a marker naming no org. Who is an admin is the roster's answer
+// (orgRosterAdmin, H-109), passed in to orgMarkFor here as acme; with no
+// clone to read the roster from (this fixture), the admin setup answers,
+// so newStoreMarker names the same. Break-verified:
+// with orgMarkFor leaving the names empty, the notes-two case fails (and
 // TestJourneyFoldersManyStores counts 2 commits in each new store).
 func TestNewStoreMarkerNamesTheOrg(t *testing.T) {
 	t.Parallel()
@@ -53,12 +56,16 @@ func TestNewStoreMarkerNamesTheOrg(t *testing.T) {
 		{"git@github.com:globex-co/notes.git", "", ""},
 		{"git@github.com:elsewhere/notes.git", "", ""},
 	} {
+		org, main := orgMarkFor(context.Background(), home, c.url, func(org string) bool { return org == "acme" })
+		if org != c.org || main != c.main {
+			t.Errorf("new marker of %s names org %q, main store %q; want %q, %q", c.url, org, main, c.org, c.main)
+		}
 		m, err := newStoreMarker(context.Background(), home, c.url, wall)
 		if err != nil {
 			t.Fatalf("%s: %v", c.url, err)
 		}
 		if m.Org != c.org || m.OrgStore != c.main {
-			t.Errorf("new marker of %s names org %q, main store %q; want %q, %q", c.url, m.Org, m.OrgStore, c.org, c.main)
+			t.Errorf("new marker of %s names org %q, main store %q; want %q, %q (no roster here: the admin setup answers)", c.url, m.Org, m.OrgStore, c.org, c.main)
 		}
 		if m.ID.IsZero() || m.Version == 0 {
 			t.Errorf("new marker of %s has no id or version: %+v", c.url, m)

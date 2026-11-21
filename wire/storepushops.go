@@ -134,7 +134,7 @@ func (a *App) pushView(ctx context.Context, name string, gb *git.Backend, place 
 	v := opsstores.PushView{Store: name, Place: opsstores.PlacePersonal}
 	switch place {
 	case placeOrg:
-		v.Place, v.Org, v.Admin = opsstores.PlaceOrg, org, isOrgAdmin(a.opts.Home, org)
+		v.Place, v.Org, v.Admin = opsstores.PlaceOrg, org, orgRosterAdmin(ctx, a.opts.Home, org)
 	case placeStore:
 		v.Place = opsstores.PlaceStore
 	}
@@ -237,8 +237,8 @@ func (a *App) SetStorePush(ctx context.Context, name string, set []storepush.Ass
 			}
 		}
 	case placeOrg, placeStore:
-		if place == placeOrg && !isOrgAdmin(a.opts.Home, org) {
-			return opsstores.PushView{}, errNotAdmin("store set", name, org)
+		if place == placeOrg && !orgRosterAdmin(ctx, a.opts.Home, org) {
+			return opsstores.PushView{}, errNotAdmin(a.opts.Home, "store set", name, org)
 		}
 		c, werr := a.setOrgStorePushAt(ctx, src, name, set)
 		if werr != nil {
@@ -315,8 +315,8 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 	}
 	defer done()
 	place, org = refinePlace(gb.Dir(), place, org)
-	if place == placeOrg && !isOrgAdmin(a.opts.Home, org) {
-		return opsstores.CompactOut{}, errNotAdmin("store compact", in.Store, org).WithHint("ask the org admin to run `lore store compact --store " + in.Store + "`; only an admin rewrites an org store's history")
+	if place == placeOrg && !orgRosterAdmin(ctx, a.opts.Home, org) {
+		return opsstores.CompactOut{}, errNotAdmin(a.opts.Home, "store compact", in.Store, org).WithHint("ask the org admin to run `lore store compact --store " + in.Store + "`; only an admin rewrites an org store's history")
 	}
 	s := a.storeSettings(gb, place)
 	before := in.Before
@@ -452,7 +452,7 @@ func (b *storePush) autoCompact(ctx context.Context) {
 		return
 	}
 	if b.name != store.Source(attach.ReservedMe) {
-		if org := cloneOrg(b.res.home, gb.Dir()); org != "" && !isOrgAdmin(b.res.home, org) {
+		if org := cloneOrg(b.res.home, gb.Dir()); org != "" && !orgRosterAdmin(ctx, b.res.home, org) {
 			return
 		}
 		if len(otherClonesUnpushed(ctx, b.res.home, gb.Dir())) > 0 {

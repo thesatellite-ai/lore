@@ -48,7 +48,7 @@ func TestSetupTeamStepOnAnOpenPageApp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("team step on an App opened before the org entry existed: %v", err)
 	}
-	if !out.Changed || !isOrgAdmin(home, "northwind") {
+	if !out.Changed || !hasOrgAdminSetup(home, "northwind") {
 		t.Fatalf("team step = %+v, want the org created with its admin setup", out)
 	}
 	// the same App now sees the org store it attached (the page's next

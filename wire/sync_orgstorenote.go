@@ -43,7 +43,7 @@ func (a *App) nameOrgInStores(ctx context.Context) []string {
 	var notes []string
 	for i := range cfg.Orgs {
 		o := &cfg.Orgs[i]
-		if (only != "" && o.Name != only) || !isOrgAdmin(a.opts.Home, o.Name) {
+		if (only != "" && o.Name != only) || !orgRosterAdmin(ctx, a.opts.Home, o.Name) {
 			continue // another org's stores, or an org this machine only joined
 		}
 		main := o.OrgFolderStore()

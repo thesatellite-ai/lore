@@ -814,8 +814,9 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 	if res.StorePushed {
 		out.Pushed = append(out.Pushed, pushedFirstCommit(teamURL))
 	}
-	// Now that setups[] holds the admin entry, this machine may set the
-	// team store's shared settings (isOrgAdmin).
+	// The team step made this person the org's first admin on its roster,
+	// so this machine may set the team store's shared settings
+	// (orgRosterAdmin).
 	changed, err := ap.applyTeamPush(ctx, teamOrg, teamURL, push)
 	if err != nil {
 		return out, err

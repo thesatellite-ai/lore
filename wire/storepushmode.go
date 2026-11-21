@@ -126,8 +126,10 @@ func orgOfURL(home, raw string) string {
 	return ""
 }
 
-// isOrgAdmin reports whether this machine holds an admin setup of org.
-func isOrgAdmin(home, org string) bool {
+// hasOrgAdminSetup reports whether this machine holds an admin setup of
+// org: a setup question (which setup runs the org's team step), never
+// whether the person may run an org admin op (orgRosterAdmin, H-109).
+func hasOrgAdminSetup(home, org string) bool {
 	if org == "" {
 		return false
 	}
@@ -236,9 +238,10 @@ func errFolderStorePush(verb, name string) error {
 		WithHint("push modes and compaction apply to git stores; `lore store set-url --name " + name + " --url <git url>` moves it to one")
 }
 
-// errNotAdmin refuses an org store's shared setting to a non-admin.
-func errNotAdmin(verb, name, org string) *errs.Error {
-	return errs.New(errs.Refused, verb+": store "+name+" belongs to org "+org+" and only an admin of "+org+" may change its shared settings; this machine has no admin setup of "+org).
+// errNotAdmin refuses an org store's shared setting to a person who holds
+// no admin role on the roster of org (orgRosterAdmin).
+func errNotAdmin(home, verb, name, org string) *errs.Error {
+	return errs.New(errs.Refused, verb+": store "+name+" belongs to org "+org+" and only an admin of "+org+" may change its shared settings; "+notOrgAdminWhy(home, org)).
 		WithHint("ask the org admin to run `lore store set --store " + name + " --settings …`; a member cannot override the org's setting locally")
 }
 
