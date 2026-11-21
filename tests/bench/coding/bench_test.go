@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/tests/bench/recall"
 )
 
 // Environment knobs (README.md lists them).
@@ -185,9 +187,7 @@ func newEnv(t *testing.T, bin, home, repo string) *env {
 	if tmp == "" {
 		tmp = os.TempDir()
 	}
-	return &env{t: t, bin: bin, repo: repo, env: []string{
-		"HOME=" + home, "PATH=" + filepath.Dir(bin) + ":/usr/local/bin:/usr/bin:/bin", "TMPDIR=" + tmp, "NO_COLOR=1", "LANG=C.UTF-8",
-	}}
+	return &env{t: t, bin: bin, repo: repo, env: recall.HarnessEnv(home, filepath.Dir(bin), tmp, time.Time{})}
 }
 
 // repoRoot is the module root (the folder holding go.mod).

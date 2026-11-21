@@ -96,7 +96,7 @@ func TestBenchTraps(t *testing.T) {
 			t.Fatal(err)
 		}
 		var envs strings.Builder
-		for _, kv := range le.env {
+		for _, kv := range recall.AgentEnv(le.env) {
 			envs.WriteString(" " + sq(kv))
 		}
 		wrapper := fmt.Sprintf("#!/bin/sh\nexec env%s %s \"$@\"\n", envs.String(), sq(le.bin))

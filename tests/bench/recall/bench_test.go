@@ -214,10 +214,7 @@ func prepare(t *testing.T) *prepared {
 		}
 		limit = d
 	}
-	e := &benchEnv{t: t, bin: bin, home: home, limit: limit, env: []string{
-		"HOME=" + home, "PATH=" + filepath.Dir(bin) + ":/usr/local/bin:/usr/bin:/bin", "TMPDIR=" + tmp,
-		"NO_COLOR=1", "LANG=C.UTF-8", "LORE_NOW=" + ds.Now.Format(time.RFC3339),
-	}}
+	e := &benchEnv{t: t, bin: bin, home: home, limit: limit, env: HarnessEnv(home, filepath.Dir(bin), tmp, ds.Now)}
 	useRG := false
 	if _, err := exec.LookPath("rg"); err == nil {
 		useRG = true

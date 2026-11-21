@@ -58,7 +58,7 @@ func TestBenchAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	var env strings.Builder
-	for _, kv := range p.e.env {
+	for _, kv := range AgentEnv(p.e.env) {
 		env.WriteString(" " + sq(kv))
 	}
 	wrapper := fmt.Sprintf("#!/bin/sh\nexec env%s %s \"$@\"\n", env.String(), sq(p.e.bin))

@@ -30,6 +30,8 @@ The plain `go test ./tests/bench/recall/` (part of `go test ./...`) runs only th
 | `LORE_BENCH_CALL_TIMEOUT` | `20s` | a question's lore call is stopped after this long (a Go duration); far above every bar, so a stopped call changes no verdict (it counts as wrong and its time as the limit), and a slow lore still ends the run |
 | `LORE_BENCH_DIR` | a temp folder, removed after the run | keep the run here (HOME with the store clone under `home/.lore/stores`, the bare remote under `srv/`, the side clone the bulk rows come from under `side/`, the markdown tree under `tree/`) to poke at it afterwards; the folder is emptied first |
 
+The bench runs every lore and git it starts (the setup writes, the lore arm, the cold and warm calls) in one fixed environment (`HarnessEnv`: HOME, PATH, TMPDIR, `TZ=UTC`, LANG, NO_COLOR, `LORE_NOW`, `LORE_HUMAN=1`), never the caller's, so it gives the same result from a terminal, CI or inside an agent session, where lore would otherwise detect the agent from the parent processes and apply its agent rules to the setup writes. The blind agent run's `lore` wrapper uses the same environment without `LORE_HUMAN`, so the agent's own calls stay the agent's.
+
 ## The data (seeded, synthetic)
 
 One personal store `me` with the folders `work`, `life`, `journal` and `feeds`, about 6,200 rows:

@@ -25,6 +25,8 @@ The plain `go test ./tests/bench/coding/` runs only the unit tests of the gate's
 | `LORE_BENCH_CODING_REPORT` | `<repo>/tmp/bench/coding.md` | where the report is written |
 | `LORE_BENCH_DIR` | a temp folder, removed after the run | keep the run here (HOME under `home/`, the repo under `orbit/`) to poke at it afterwards; the folder is emptied first |
 
+lore and git run in the recall gate's fixed environment (`recall.HarnessEnv`, with `LORE_HUMAN=1`: never the caller's, so a run inside an agent session writes its rows as the gate's person); the trap run's `lore` wrapper for the agent drops `LORE_HUMAN`, so the agent's calls stay the agent's.
+
 ## The data (`data.go`)
 
 One repo, `orbit` (a Go service with a web front end), set up with `lore init`; its rows are written with `lore rule|hotfix|decision|pattern|memory add` into the repo's own store:
