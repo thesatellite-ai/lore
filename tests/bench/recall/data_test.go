@@ -354,3 +354,69 @@ func TestWarmIsMedianOfRepeats(t *testing.T) {
 		}
 	}
 }
+
+// TestMissedSpeedBarIsTimedAgain (bug hunt H-138, devco D-879): a burst of
+// load on a shared box slows a question's cold call and all three warm
+// calls (they run back to back), so a question that misses a speed bar is
+// timed again after the run and the bars judge that timing: a question
+// slowed only by the burst passes, one slow both times still fails with
+// both timings named, a question within the bars is not timed again, and
+// the report and summary keep the first calls (raw max, retimed count).
+func TestMissedSpeedBarIsTimedAgain(t *testing.T) {
+	ms := func(xs ...int) []time.Duration {
+		out := make([]time.Duration, len(xs))
+		for i, x := range xs {
+			out[i] = time.Duration(x) * time.Millisecond
+		}
+		return out
+	}
+	run := func(id string, cold int, warm []time.Duration) Result {
+		r := Result{Q: Question{ID: id, Type: TypeNickname}, Lore: LoreRun{Calls: 1, Chars: 100, Correct: true, Acc: Accuracy{Recall: true, Top1: true}}, Grep: GrepRun{Calls: 2, Chars: 5000, Correct: true}}
+		r.Lore.SetTiming(Timing{Cold: time.Duration(cold) * time.Millisecond, ColdCPU: 30 * time.Millisecond, Warm: warm, WarmCPU: ms(29, 31, 30)})
+		return r
+	}
+	rs := []Result{
+		run("Q01", 140, ms(30, 28, 29)),    // within the bars: never timed again
+		run("Q64", 406, ms(169, 226, 100)), // the burst: fast when timed again
+		run("Q70", 503, ms(114, 50, 92)),   // slow both times: still fails
+	}
+	if m := Misses(rs); len(m) == 0 {
+		t.Fatal("the first timings should miss the bars")
+	}
+	var again []string
+	n := RetimeMisses(rs, func(r Result, _ int) Timing {
+		again = append(again, r.Q.ID)
+		if r.Q.ID == "Q70" {
+			return Timing{Cold: 480 * time.Millisecond, Warm: ms(120, 110, 130), WarmCPU: ms(80, 85, 90)}
+		}
+		return Timing{Cold: 150 * time.Millisecond, Warm: ms(31, 30, 29), WarmCPU: ms(22, 21, 23)}
+	})
+	if n != 2 || strings.Join(again, ",") != "Q64,Q70" {
+		t.Fatalf("timed again %d: %v, want Q64 and Q70 only", n, again)
+	}
+	m := strings.Join(Misses(rs), "\n")
+	for _, want := range []string{
+		"Q70 (role or nickname): warm call 120 ms (median of 120/110/130 ms; timed again after the run, first 92 ms (114/50/92)), the bar is < 50 ms",
+		"Q70 (role or nickname): cold call 480 ms (timed again after the run, first 503 ms), the bar is < 300 ms",
+	} {
+		if !strings.Contains(m, want) {
+			t.Errorf("misses do not say %q:\n%s", want, m)
+		}
+	}
+	if strings.Contains(m, "Q64") || strings.Contains(m, "Q01") {
+		t.Errorf("a question fast when timed again still misses:\n%s", m)
+	}
+	if got := rs[1].Lore; got.Warm != 30*time.Millisecond || got.Cold != 150*time.Millisecond || got.WarmCPU != 22*time.Millisecond || got.First == nil || got.First.Cold != 406*time.Millisecond {
+		t.Errorf("Q64 judged timing = warm %v cold %v cpu %v first %+v", got.Warm, got.Cold, got.WarmCPU, got.First)
+	}
+	s := Summarize(rs).Line()
+	for _, want := range []string{"(raw max 226)", "cold max 480 ms", ", retimed 2"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("summary %q does not say %q", s, want)
+		}
+	}
+	rep := Report(RunInfo{}, rs)
+	if !strings.Contains(rep, "| 169/226/100 (cold 406) then 31/30/29 |") || !strings.Contains(rep, "| 30/28/29 |") {
+		t.Errorf("report does not keep both timings:\n%s", rep)
+	}
+}

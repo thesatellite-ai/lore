@@ -258,8 +258,8 @@ func TestBenchRecall(t *testing.T) {
 			walls[k], cpus[k] = warms[k].wall, warms[k].cpu
 		}
 		warm := warms[0]
-		r.Lore.Calls, r.Lore.Cold, r.Lore.Warm, r.Lore.WarmRuns, r.Lore.Chars, r.Lore.Exit = 1, cold.wall, WarmOf(walls), walls, len(warm.out), warm.code
-		r.Lore.ColdCPU, r.Lore.WarmCPU = cold.cpu, WarmOf(cpus)
+		r.Lore.Calls, r.Lore.Chars, r.Lore.Exit = 1, len(warm.out), warm.code
+		r.Lore.SetTiming(Timing{Cold: cold.wall, ColdCPU: cold.cpu, Warm: walls, WarmCPU: cpus})
 		r.Lore.Correct, r.Lore.Missing = Grade(q, warm.out)
 		for _, w := range warms {
 			if w.timedOut {
@@ -302,6 +302,16 @@ func TestBenchRecall(t *testing.T) {
 		r.Grep.Present, r.Grep.Stale = GrepAccuracy(q, all.String())
 		rs = append(rs, r)
 	}
+	// a question that missed a speed bar is timed once more, after the
+	// last question and so outside a burst of load that slowed it
+	// (NeedsRetime, devco:D-879); the bars judge this timing, the report
+	// keeps both. Answers and accuracy stay graded from the first calls.
+	RetimeMisses(rs, func(r Result, i int) Timing {
+		touchStore(t, e, clone, side, bare, len(qs)+i)
+		tm := timeCall(e, r.Q.Lore)
+		t.Logf("%s timed again: cold %d ms, warm %s ms (first cold %d ms, warm %s ms)", r.Q.ID, tm.Cold.Milliseconds(), msList(tm.Warm), r.Lore.Cold.Milliseconds(), runsMS(r.Lore))
+		return tm
+	})
 	boxLoad[1] = BoxLoad()
 
 	tool := "grep (rg is not installed)"
@@ -340,6 +350,18 @@ func storeClone(t *testing.T, home string) string {
 		t.Fatalf("want one clone of store me under ~/.lore/stores, found %v", m)
 	}
 	return m[0]
+}
+
+// timeCall times a question's lore call as the run does: one cold call
+// (the store just changed) and WarmRepeats warm calls after it.
+func timeCall(e *benchEnv, args []string) Timing {
+	cold := e.run(e.limit, args...)
+	tm := Timing{Cold: cold.wall, ColdCPU: cold.cpu}
+	for range WarmRepeats {
+		w := e.run(e.limit, args...)
+		tm.Warm, tm.WarmCPU = append(tm.Warm, w.wall), append(tm.WarmCPU, w.cpu)
+	}
+	return tm
 }
 
 // touchStore changes the store before a question's cold call: one more

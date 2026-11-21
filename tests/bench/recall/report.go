@@ -27,6 +27,65 @@ const (
 // be repeated.
 const WarmRepeats = 3
 
+// Timing is one timing of a question's lore call: the cold call right
+// after the store changed and the WarmRepeats warm calls after it, wall
+// and CPU time (user + system) each.
+type Timing struct {
+	Cold, ColdCPU time.Duration
+	Warm, WarmCPU []time.Duration // in the order they ran
+}
+
+// NeedsRetime says whether a question missed a speed bar (warm or cold)
+// and is timed once more after the run's last question.
+//
+// Why (devco:D-879, bug hunt H-138): the median of three warm calls
+// (D-849) covers one call that waited for a core, but the three calls run
+// back to back, so a burst of load on a shared box that lasts seconds
+// slows all three and the cold call before them. One gate run failed 17
+// speed bars on its last ten questions (warm 88-169 ms, cold 400-512 ms)
+// while each call's CPU time stayed 22-36 ms, and the same binary on the
+// same data answered them in 24-41 ms warm and 101-179 ms cold when timed
+// again. Timing a missed question again minutes later, outside that burst,
+// tells load from a slow lore: a real slowdown is slow both times and
+// still fails, and the report keeps both timings.
+func NeedsRetime(r LoreRun) bool {
+	return r.Warm >= BarWarm || r.Cold >= BarCold
+}
+
+// Retime makes t the timing the bars judge and keeps the one it replaces
+// in First, so the report shows both and the summary's raw max still
+// counts the first calls.
+func (r *LoreRun) Retime(t Timing) {
+	first := Timing{Cold: r.Cold, ColdCPU: r.ColdCPU, Warm: r.WarmRuns, WarmCPU: r.warmCPURuns}
+	r.First = &first
+	r.Cold, r.ColdCPU = t.Cold, t.ColdCPU
+	r.WarmRuns, r.Warm = t.Warm, WarmOf(t.Warm)
+	r.warmCPURuns, r.WarmCPU = t.WarmCPU, WarmOf(t.WarmCPU)
+}
+
+// RetimeMisses times again, with again, every question whose first timing
+// missed a speed bar and makes that timing the one the bars judge
+// (NeedsRetime, Retime); it returns how many it timed again. Answers and
+// accuracy stay graded from the first calls.
+func RetimeMisses(rs []Result, again func(r Result, i int) Timing) int {
+	n := 0
+	for i := range rs {
+		if !NeedsRetime(rs[i].Lore) {
+			continue
+		}
+		rs[i].Lore.Retime(again(rs[i], i))
+		n++
+	}
+	return n
+}
+
+// SetTiming records a question's (first) timing.
+func (r *LoreRun) SetTiming(t Timing) {
+	r.Cold, r.ColdCPU = t.Cold, t.ColdCPU
+	r.WarmRuns, r.Warm = t.Warm, WarmOf(t.Warm)
+	r.warmCPURuns, r.WarmCPU = t.WarmCPU, WarmOf(t.WarmCPU)
+}
+
 // WarmOf is the warm time of a question: the median of its warm calls'
 // wall times (the middle one of three; the upper middle of an even
 // count, so a tie never rounds a slow pair down). Zero for no calls.
@@ -53,10 +112,16 @@ type LoreRun struct {
 	// time shows what the call itself costs (devco D-813). The bars stay
 	// on wall time. WarmCPU is the median of the warm calls' CPU times.
 	WarmCPU, ColdCPU time.Duration
-	Chars            int // output of the first warm run (stdout + stderr)
-	Correct          bool
-	Missing          []string
-	Exit             int
+	// warmCPURuns are the warm calls' CPU times (WarmCPU is their median).
+	warmCPURuns []time.Duration
+	// First is the question's first timing when it missed a speed bar and
+	// was timed again after the run (Retime, NeedsRetime); nil otherwise.
+	// The bars judge the second timing; the report prints both.
+	First   *Timing
+	Chars   int // output of the first warm run (stdout + stderr)
+	Correct bool
+	Missing []string
+	Exit    int
 	// Acc is the accuracy grade of the same call with --json (the ranked
 	// answer items); AccErr says why there is none (the call failed or
 	// its JSON did not read), which fails every accuracy bar.
@@ -98,6 +163,9 @@ type Summary struct {
 	LoreCorrect, GrepCorrect int
 	Harder, HarderOf         int
 	Questions                int
+	// Retimed counts the questions timed again after the run because
+	// their first timing missed a speed bar (NeedsRetime).
+	Retimed int
 	// accuracy (lore ask --json): questions with the answer in the top 3,
 	// with the first item right, with a stale fact in the top 3, with more
 	// than one irrelevant item in the top 3; grep present and stale.
@@ -119,6 +187,9 @@ func Summarize(rs []Result) Summary {
 		s.WarmMax = max(s.WarmMax, r.Lore.Warm)
 		s.WarmRawMax = max(s.WarmRawMax, rawMax(r.Lore))
 		s.ColdMax = max(s.ColdMax, r.Lore.Cold)
+		if r.Lore.First != nil {
+			s.Retimed++
+		}
 		cpu = append(cpu, r.Lore.WarmCPU)
 		s.WarmCPUMax = max(s.WarmCPUMax, r.Lore.WarmCPU)
 		if r.Lore.Correct {
@@ -162,25 +233,32 @@ func Summarize(rs []Result) Summary {
 	return s
 }
 
-// rawMax is the slowest of a question's warm calls (its Warm when the
-// single calls were not kept).
+// rawMax is the slowest of a question's warm calls, those of a first
+// timing it replaced included (its Warm when the single calls were not
+// kept).
 func rawMax(r LoreRun) time.Duration {
 	m := r.Warm
 	for _, w := range r.WarmRuns {
 		m = max(m, w)
+	}
+	if r.First != nil {
+		for _, w := range r.First.Warm {
+			m = max(m, w)
+		}
 	}
 	return m
 }
 
 // Line is the summary line, accuracy first: `recall@3 R/N, top-1 T/N,
 // stale S, noise X, calls L/G, warm p50/max ms (raw max ms), cold max ms,
-// chars L/G, correct L/G of N, harder L/20, warm cpu p50/max ms`. The warm
-// numbers are the questions' medians; raw max is the slowest single call.
+// chars L/G, correct L/G of N, harder L/20, warm cpu p50/max ms, retimed
+// R`. The warm numbers are the questions' medians; raw max is the slowest
+// single call; retimed counts the questions timed again (NeedsRetime).
 func (s Summary) Line() string {
-	return fmt.Sprintf("recall@3 %d/%d, top-1 %d/%d, stale %d, noise %d, calls %d/%d, warm p50/max %d/%d ms (raw max %d), cold max %d ms, chars %d/%d, correct %d/%d of %d, harder %d/%d, warm cpu p50/max %d/%d ms",
+	return fmt.Sprintf("recall@3 %d/%d, top-1 %d/%d, stale %d, noise %d, calls %d/%d, warm p50/max %d/%d ms (raw max %d), cold max %d ms, chars %d/%d, correct %d/%d of %d, harder %d/%d, warm cpu p50/max %d/%d ms, retimed %d",
 		s.Recall, s.Questions, s.Top1, s.Questions, s.Stale, s.Noisy, s.LoreCalls, s.GrepCalls, s.WarmP50.Milliseconds(), s.WarmMax.Milliseconds(), s.WarmRawMax.Milliseconds(), s.ColdMax.Milliseconds(),
 		s.LoreChars, s.GrepChars, s.LoreCorrect, s.GrepCorrect, s.Questions, s.Harder, s.HarderOf,
-		s.WarmCPUP50.Milliseconds(), s.WarmCPUMax.Milliseconds())
+		s.WarmCPUP50.Milliseconds(), s.WarmCPUMax.Milliseconds(), s.Retimed)
 }
 
 // typeTotals is one type's totals.
@@ -290,10 +368,10 @@ func Misses(rs []Result) []string {
 			out = append(out, fmt.Sprintf("%s: %d lore calls, the bar is %d", id, r.Lore.Calls, BarCalls))
 		}
 		if r.Lore.Warm >= BarWarm {
-			out = append(out, fmt.Sprintf("%s: warm call %d ms (median of %s ms), the bar is < %d ms", id, r.Lore.Warm.Milliseconds(), runsMS(r.Lore), BarWarm.Milliseconds()))
+			out = append(out, fmt.Sprintf("%s: warm call %d ms (median of %s ms%s), the bar is < %d ms", id, r.Lore.Warm.Milliseconds(), runsMS(r.Lore), firstWarm(r.Lore), BarWarm.Milliseconds()))
 		}
 		if r.Lore.Cold >= BarCold {
-			out = append(out, fmt.Sprintf("%s: cold call %d ms, the bar is < %d ms", id, r.Lore.Cold.Milliseconds(), BarCold.Milliseconds()))
+			out = append(out, fmt.Sprintf("%s: cold call %d ms%s, the bar is < %d ms", id, r.Lore.Cold.Milliseconds(), firstCold(r.Lore), BarCold.Milliseconds()))
 		}
 		if !r.Lore.Correct {
 			out = append(out, fmt.Sprintf("%s: lore answer wrong: %s", id, strings.Join(cut(r.Lore.Missing, 3), "; ")))
@@ -414,7 +492,7 @@ func Report(info RunInfo, rs []Result) string {
 		if r.Lore.AccErr != "" {
 			misses = append([]string{r.Lore.AccErr}, misses...)
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | `lore %s` | %s | %s | %d | %d | %s | %d | %s | %d | %d | %d | %d | %d | %d | %s | %s |\n", r.Q.ID, r.Q.Type, cell(r.Q.Text), cell(strings.Join(r.Q.Lore, " ")), yes(a.Recall), yes(a.Top1), len(a.Stale), a.Noise, yes(r.Lore.Correct), r.Lore.Warm.Milliseconds(), runsMS(r.Lore), r.Lore.WarmCPU.Milliseconds(), r.Lore.Cold.Milliseconds(), r.Lore.ColdCPU.Milliseconds(), r.Lore.Chars, r.Grep.Calls, r.Grep.Chars, yes(r.Grep.Correct), cell(strings.Join(cut(misses, 3), "; ")))
+		fmt.Fprintf(&b, "| %s | %s | %s | `lore %s` | %s | %s | %d | %d | %s | %d | %s | %d | %d | %d | %d | %d | %d | %s | %s |\n", r.Q.ID, r.Q.Type, cell(r.Q.Text), cell(strings.Join(r.Q.Lore, " ")), yes(a.Recall), yes(a.Top1), len(a.Stale), a.Noise, yes(r.Lore.Correct), r.Lore.Warm.Milliseconds(), runsCell(r.Lore), r.Lore.WarmCPU.Milliseconds(), r.Lore.Cold.Milliseconds(), r.Lore.ColdCPU.Milliseconds(), r.Lore.Chars, r.Grep.Calls, r.Grep.Chars, yes(r.Grep.Correct), cell(strings.Join(cut(misses, 3), "; ")))
 	}
 	return b.String()
 }
@@ -422,14 +500,46 @@ func Report(info RunInfo, rs []Result) string {
 // runsMS prints a question's warm calls in milliseconds, in the order
 // they ran ("31/77/29"); "-" when they were not kept.
 func runsMS(r LoreRun) string {
-	if len(r.WarmRuns) == 0 {
+	return msList(r.WarmRuns)
+}
+
+// msList prints wall times in milliseconds joined by "/" ("-" for none).
+func msList(ds []time.Duration) string {
+	if len(ds) == 0 {
 		return "-"
 	}
-	ms := make([]string, len(r.WarmRuns))
-	for i, w := range r.WarmRuns {
+	ms := make([]string, len(ds))
+	for i, w := range ds {
 		ms[i] = fmt.Sprint(w.Milliseconds())
 	}
 	return strings.Join(ms, "/")
+}
+
+// firstWarm and firstCold name the first timing of a retimed question in
+// a missed-bar line ("" when it was timed once), so a question slow both
+// times shows both.
+func firstWarm(r LoreRun) string {
+	if r.First == nil {
+		return ""
+	}
+	return fmt.Sprintf("; timed again after the run, first %d ms (%s)", WarmOf(r.First.Warm).Milliseconds(), msList(r.First.Warm))
+}
+
+func firstCold(r LoreRun) string {
+	if r.First == nil {
+		return ""
+	}
+	return fmt.Sprintf(" (timed again after the run, first %d ms)", r.First.Cold.Milliseconds())
+}
+
+// runsCell is a question's warm calls for the per-question table: a
+// retimed question shows its first calls and cold time before the ones
+// the bars judge ("169/226/100 (cold 406) then 31/30/29").
+func runsCell(r LoreRun) string {
+	if r.First == nil {
+		return runsMS(r)
+	}
+	return fmt.Sprintf("%s (cold %d) then %s", msList(r.First.Warm), r.First.Cold.Milliseconds(), runsMS(r))
 }
 
 // cell makes s safe in a markdown table cell.
