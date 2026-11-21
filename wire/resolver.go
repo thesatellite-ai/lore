@@ -7,7 +7,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -60,6 +62,11 @@ type refSnapshot struct {
 type located struct {
 	src store.Source
 	r   row.Row
+	// sibling marks a row read from a folder of a personal store the
+	// command did not attach (siblingRows, devco D-793): every such folder
+	// is one level below the attached ones, so two of them naming one
+	// resource are ambiguous as two rows of one store are.
+	sibling bool
 }
 
 // Resolve implements refs.Resolver.
@@ -117,8 +124,81 @@ func (rv *resolver) snapshot() (*refSnapshot, error) {
 			}
 		}
 	}
+	if !eng.IsClient(store.SourceRepo) {
+		rv.siblingRows(ctx, srcs, s)
+	}
 	rv.snap = s
 	return s, nil
+}
+
+// siblingReader is the optional backend upgrade (git and folder backends)
+// that reads one table of every other data folder of the store.
+type siblingReader interface {
+	ReadSiblingTable(ctx context.Context, table row.Table) ([]rowfs.FolderRows, error)
+}
+
+// siblingRows adds to s the resources, kinds and kind fields of the folders
+// of the personal store that srcs does not attach (devco D-793, owner
+// P-12). Why: `lore memory add --to me/journal` opens me/journal only, so a
+// journal note naming a person kept in me/work (${res:person/alice})
+// resolved nothing and got no row_refs line; every folder of the personal
+// store is the same person's, so a reference reaches all of them, the
+// attached folders first. An org store is not widened: its folders are
+// other projects' (the direction rule decides what one may read).
+// A sibling folder that cannot be read is left out, not an error: the
+// write in the attached folder must not fail over a file elsewhere.
+func (rv *resolver) siblingRows(ctx context.Context, srcs []store.Source, s *refSnapshot) {
+	attached := map[store.Source]bool{}
+	for _, src := range srcs {
+		attached[src] = true
+	}
+	done := map[store.Source]bool{} // a store whose siblings are in s (two attached folders share them)
+	for _, src := range srcs {
+		base, ok := personalBase(src)
+		if !ok || done[base] {
+			continue
+		}
+		rd, ok := concrete(rv.st.byName[src]).(siblingReader)
+		if !ok {
+			continue
+		}
+		done[base] = true
+		for _, t := range []struct {
+			table row.Table
+			into  *[]located
+		}{{schema.TableResources, &s.resources}, {schema.TableKinds, &s.kinds}, {schema.TableKindFields, &s.kindFields}} {
+			folders, err := rd.ReadSiblingTable(ctx, t.table)
+			if err != nil {
+				continue
+			}
+			for _, fr := range folders {
+				name := base
+				if fr.Folder != rowfs.FolderRoot {
+					name = store.Source(string(base) + targetSep + fr.Folder)
+				}
+				if attached[name] {
+					continue // its rows are in s already
+				}
+				for _, sr := range fr.Rows {
+					if sr.Deleted {
+						continue
+					}
+					r, err := sr.Decode()
+					if err != nil {
+						continue
+					}
+					*t.into = append(*t.into, located{src: name, r: r, sibling: true})
+				}
+			}
+		}
+	}
+}
+
+// personalBase is the personal store's name when src is it or one of its
+// folders (me, me/<folder>).
+func personalBase(src store.Source) (store.Source, bool) {
+	base, _, _ := strings.Cut(string(src), targetSep)
+	return store.Source(base), base == attach.ReservedMe
 }
 
 // visible reports whether src is a store the resolver may read.
@@ -220,7 +300,7 @@ func (s *refSnapshot) findRes(target, kindName string, byKind bool) (located, st
 		switch {
 		case len(hits) == 0:
 			continue
-		case len(hits) > 1 && hits[0].src == hits[1].src && !byKind:
+		case len(hits) > 1 && (hits[0].src == hits[1].src || hits[0].sibling && hits[1].sibling) && !byKind:
 			return located{}, "", false
 		}
 		if path == "" {
@@ -466,7 +546,17 @@ func (c reexpandCache) Apply(ctx context.Context, source store.Source, rows []st
 	if len(changed) == 0 {
 		return nil
 	}
-	return c.reexpand(ctx, changed, needles)
+	if err := c.reexpand(ctx, changed, needles); err != nil {
+		return err
+	}
+	if _, personal := personalBase(source); personal && slices.ContainsFunc(rows, func(sr store.Row) bool {
+		return sr.Table == schema.TableResources || sr.Table == schema.TableKinds || sr.Table == schema.TableKindFields
+	}) {
+		// the other folders of the personal store read these rows too
+		// (siblingRows): their caches expand again on their next open
+		return c.caches.bumpRefsEpoch(ctx, source)
+	}
+	return nil
 }
 
 // resNeedles are the text a reference to resources row r by its typed

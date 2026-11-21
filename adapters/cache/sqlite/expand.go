@@ -139,33 +139,125 @@ func (c *Cache) ReexpandMatching(ctx context.Context, needles []string) (int, er
 		if st, err = c.current(ctx, tx); err != nil { // another handle may have changed the tables (devco:D-667)
 			return err
 		}
-		for _, p := range st.plans {
-			tq, err := ident(p.def.Name.String())
-			if err != nil {
-				return err
-			}
-			for _, f := range textFields(p) {
-				fq, err := ident(f)
-				if err != nil {
-					return err
-				}
-				for _, needle := range needles {
-					got, err := c.reexpandWhere(ctx, tx, p, f,
-						`SELECT "`+colID+`", `+fq+` FROM `+tq+` WHERE instr(`+fq+`, ?) > 0`, needle)
-					if err != nil {
-						return err
-					}
-					n += got
-				}
-			}
-		}
-		return nil
+		n, err = c.reexpandMatchingTx(ctx, tx, st, needles)
+		return err
 	})
 	if err != nil {
 		return 0, err
 	}
 	c.st = st
 	return n, nil
+}
+
+// reexpandMatchingTx is ReexpandMatching inside tx over the tables of st.
+func (c *Cache) reexpandMatchingTx(ctx context.Context, tx *sql.Tx, st state, needles []string) (int, error) {
+	n := 0
+	for _, p := range st.plans {
+		tq, err := ident(p.def.Name.String())
+		if err != nil {
+			return 0, err
+		}
+		for _, f := range textFields(p) {
+			fq, err := ident(f)
+			if err != nil {
+				return 0, err
+			}
+			for _, needle := range needles {
+				got, err := c.reexpandWhere(ctx, tx, p, f,
+					`SELECT "`+colID+`", `+fq+` FROM `+tq+` WHERE instr(`+fq+`, ?) > 0`, needle)
+				if err != nil {
+					return 0, err
+				}
+				n += got
+			}
+		}
+	}
+	return n, nil
+}
+
+// refStart is the start of every reference in a text field (`${var:…}`,
+// `${res:…}`, `${row:…}`): RefreshRefs re-expands every field holding it.
+const refStart = "${"
+
+// RefreshRefs brings row_refs and row_expanded of this file up to stamp:
+// the caller's reference rules and what they may name (wire: the refs
+// version, bumped whenever what a reference resolves to changes, plus the
+// epoch of the personal store's resources, which a write in another
+// folder moves). The file keeps the stamp its references were last
+// expanded at; when that is stamp nothing is read but that one row (the
+// cheap check a read pays). Otherwise every text field holding a
+// reference is expanded again and the stamp written, in one transaction.
+// Why (devco D-793, owner P-12): rows expanded by an older binary, or
+// before a resource they name arrived in another folder, kept their old
+// row_refs (none) until a manual `lore search rebuild`, so a resource's
+// mentions stayed missing. It returns how many fields were expanded again.
+func (c *Cache) RefreshRefs(ctx context.Context, stamp string) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.usable(); err != nil {
+		return 0, err
+	}
+	have, err := scanRefsStamp(c.db.QueryRowContext(ctx, qRefsStamp))
+	if err != nil || have == stamp {
+		return 0, err
+	}
+	n := 0
+	var st state
+	err = c.inTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		if st, err = c.current(ctx, tx); err != nil {
+			return err
+		}
+		if have, err := scanRefsStamp(txQueryRow(ctx, tx, qRefsStamp)); err != nil || have == stamp {
+			return err // another process refreshed it meanwhile
+		}
+		if n, err = c.reexpandMatchingTx(ctx, tx, st, []string{refStart}); err != nil {
+			return err
+		}
+		return writeRefsStamp(ctx, tx, stamp)
+	})
+	if err != nil {
+		return 0, err
+	}
+	c.st = st
+	return n, nil
+}
+
+// StampRefs records stamp as the file's refs stamp without expanding
+// anything: the writer whose own Apply just re-expanded what a change
+// touched (wire, devco D-793) keeps its file from expanding everything
+// again on its next open.
+func (c *Cache) StampRefs(ctx context.Context, stamp string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.usable(); err != nil {
+		return err
+	}
+	return c.inTx(ctx, func(tx *sql.Tx) error { return writeRefsStamp(ctx, tx, stamp) })
+}
+
+// writeRefsStamp replaces the file's refs stamp inside tx.
+func writeRefsStamp(ctx context.Context, tx *sql.Tx, stamp string) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM "`+tblRefsStamp+`"`); err != nil {
+		return dbErr("stamp refs", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO "`+tblRefsStamp+`" (stamp) VALUES (?)`, stamp); err != nil {
+		return dbErr("stamp refs", err)
+	}
+	return nil
+}
+
+// qRefsStamp reads the refs stamp of a file: NULL when none (a file no
+// binary with RefreshRefs has refreshed), read as "".
+const qRefsStamp = `SELECT max(stamp) FROM "` + tblRefsStamp + `"`
+
+// scanRefsStamp is the stamp qRefsStamp read.
+func scanRefsStamp(r *sql.Row) (string, error) {
+	var v sql.NullString
+	if err := r.Scan(&v); err != nil {
+		return "", dbErr("read refs stamp", err)
+	}
+	return v.String, nil
 }
 
 // reexpandWhere re-expands field f of the rows query (taking arg) returns

@@ -402,6 +402,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err = st.refreshUnlessDeferred(ctx); err != nil {
 		return fail(err)
 	}
+	if err = st.caches.refreshRefs(ctx); err != nil { // refsversion.go: an older binary's references (devco D-793)
+		return fail(err)
+	}
 	// TEAM_PROFILES 6.3 (TP-4): a second email or login of a person writes
 	// as their one actor; the contacts are read from the row files (the
 	// engine is built now), and nothing has been written yet.
@@ -1478,6 +1481,9 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	}
 	scanner.bindEngine(st.eng)
 	if err = st.refreshUnlessDeferred(ctx); err != nil {
+		return fail(err)
+	}
+	if err = st.caches.refreshRefs(ctx); err != nil { // refsversion.go: an older binary's references (devco D-793)
 		return fail(err)
 	}
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil { // TEAM_PROFILES 6.3, as in open

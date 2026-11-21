@@ -55,6 +55,9 @@ const (
 	tblTables   = "_tables"
 	tblRefs     = "row_refs"
 	tblExpanded = "row_expanded"
+	// tblRefsStamp holds the refs stamp the file's row_refs and
+	// row_expanded were last expanded at (RefreshRefs, devco D-793).
+	tblRefsStamp = "_refs_stamp"
 )
 
 // internalDDL creates the internal tables (idempotent).
@@ -67,6 +70,7 @@ var internalDDL = []string{
 	`CREATE TABLE IF NOT EXISTS "` + tblRefs + `" (entity_table TEXT NOT NULL, entity_id TEXT NOT NULL, field TEXT NOT NULL, ref_id TEXT NOT NULL, PRIMARY KEY (entity_table, entity_id, field, ref_id))`,
 	`CREATE INDEX IF NOT EXISTS "ix_row_refs_ref" ON "` + tblRefs + `" (ref_id)`,
 	`CREATE TABLE IF NOT EXISTS "` + tblExpanded + `" (entity_table TEXT NOT NULL, entity_id TEXT NOT NULL, field TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY (entity_table, entity_id, field))`,
+	`CREATE TABLE IF NOT EXISTS "` + tblRefsStamp + `" (stamp TEXT NOT NULL)`,
 	mirrorDDL,
 	mirrorTableIndexDDL,
 }
