@@ -50,18 +50,39 @@ type objectStore struct {
 	mu    sync.Mutex
 	packs []*pack // loaded lazily, reloaded when a lookup misses
 	seen  map[string]bool
-	cache map[string]object
-	// bytes is the content bytes held in cache (a kept store is dropped
-	// past objPoolMaxBytes, objpool.go)
+	cache map[string]*cachedObject
+	// bytes is the content bytes held in cache plus the estimated size of
+	// the tree indexes in trees (a kept store is dropped past
+	// objPoolMaxBytes, objpool.go)
 	bytes int
-	// trees indexes parsed trees by id (treeIndex); nil for one that
-	// does not parse
-	trees map[string]map[string]treeEntry
+	// trees indexes parsed trees by id (treeIndex)
+	trees map[string]*treeIdx
+	// use counts the Sessions that took this store (beginUse); every cached
+	// tree, commit and tree index records the use that last read it, so a
+	// kept store can drop the versions no recent call read (objpool.go,
+	// devco:D-866)
+	use int
+}
+
+// cachedObject is one decoded object in objectStore.cache and the use
+// (objectStore.use) that last read it.
+type cachedObject struct {
+	o    object
+	used int
+}
+
+// treeIdx is one parsed tree's entries by name (nil for a tree that does
+// not parse), its estimated heap size (counted in objectStore.bytes) and
+// the use that last asked for it.
+type treeIdx struct {
+	entries map[string]treeEntry
+	size    int
+	used    int
 }
 
 // newObjectStore opens the object folder dir (and objects/info/alternates).
 func newObjectStore(dir string) (*objectStore, error) {
-	s := &objectStore{dirs: []string{dir}, seen: map[string]bool{}, cache: map[string]object{}, trees: map[string]map[string]treeEntry{}}
+	s := &objectStore{dirs: []string{dir}, seen: map[string]bool{}, cache: map[string]*cachedObject{}, trees: map[string]*treeIdx{}}
 	raw, err := os.ReadFile(filepath.Join(dir, "info", "alternates"))
 	if err == nil {
 		for line := range strings.SplitSeq(string(raw), "\n") {
@@ -96,8 +117,9 @@ const maxDeltaDepth = 10000
 
 // readLocked is read with s.mu held.
 func (s *objectStore) readLocked(id string, depth int) (object, error) {
-	if o, ok := s.cache[id]; ok {
-		return o, nil
+	if c, ok := s.cache[id]; ok {
+		c.used = s.use
+		return c.o, nil
 	}
 	if depth > maxDeltaDepth {
 		return object{}, errUnsupported
@@ -120,7 +142,7 @@ func (s *objectStore) readLocked(id string, depth int) (object, error) {
 	if err != nil {
 		return object{}, err
 	}
-	s.cache[id] = o
+	s.cache[id] = &cachedObject{o: o, used: s.use}
 	s.bytes += len(o.data)
 	return o, nil
 }

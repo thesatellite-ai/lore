@@ -17,6 +17,18 @@ package gitfast
 // when the alternates file changed, or when the objects it decoded hold
 // more than objPoolMaxBytes (devco:D-845: a count of 200k objects let one
 // store keep hundreds of MB in the read server).
+//
+// Every write makes new versions of the trees on its path (the store
+// root, the folder, the folder's table) and a new commit; the next read
+// parses the new table tree and keeps it, and nothing read the old
+// versions again. Kept forever they grew the server ~1.3 MB of live heap
+// per write to a 5,000-row folder until it passed its live-heap limit and
+// exited (devco:D-866). So each Session that takes a kept store starts a
+// new use (beginUse), and the trees, tree indexes and commits no use of
+// the last keepUses read are dropped: what a store keeps is what recent
+// calls read, not every version since the server started. Blobs (the row
+// documents, the expensive part to inflate again) stay under the byte
+// bound alone.
 
 import (
 	"os"
@@ -78,6 +90,7 @@ func openObjectStore(dir string) (s *objectStore, shared bool, err error) {
 	alt := fileStamp(filepath.Join(dir, "info", "alternates"))
 	if k, ok := objPool.stores[dir]; ok {
 		if k.alt == alt && k.s.current() {
+			k.s.beginUse()
 			return k.s, true, nil
 		}
 		k.s.close()
@@ -105,6 +118,33 @@ func (s *objectStore) current() bool {
 		}
 	}
 	return true
+}
+
+// keepUses is how many recent uses of a kept store (Sessions, one per
+// served call) keep the trees, tree indexes and commits they read: enough
+// that calls alternating between a few stores' folders do not parse their
+// trees again, few enough that each write's replaced versions go soon.
+const keepUses = 4
+
+// beginUse starts a new use of a kept store and drops the trees, tree
+// indexes and commits no use of the last keepUses read (devco:D-866).
+func (s *objectStore) beginUse() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.use++
+	stale := s.use - keepUses
+	for id, t := range s.trees {
+		if t.used < stale {
+			delete(s.trees, id)
+			s.bytes -= t.size
+		}
+	}
+	for id, c := range s.cache {
+		if c.o.typ != typeBlob && c.used < stale {
+			delete(s.cache, id)
+			s.bytes -= len(c.o.data)
+		}
+	}
 }
 
 // fileStamp is path's size and modification time ("" when missing).
