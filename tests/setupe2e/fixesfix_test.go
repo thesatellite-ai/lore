@@ -57,7 +57,7 @@ func newFixWorld(t *testing.T, bin string, tools []string) *fixWorld {
 	}
 	w.env = []string{
 		"HOME=" + w.home, "PATH=" + filepath.Dir(bin) + ":/usr/bin:/bin", "TERM=dumb", "LANG=C.UTF-8",
-		"GIT_CONFIG_NOSYSTEM=1", "LORE_NO_UPDATE_CHECK=1", "TMPDIR=" + os.TempDir(),
+		"GIT_CONFIG_NOSYSTEM=1", "LORE_NO_UPDATE_CHECK=1", "TMPDIR=" + os.TempDir(), "LORE_READ_SERVER=0",
 		"GIT_AUTHOR_NAME=e2e", "GIT_AUTHOR_EMAIL=e2e@example.com", "GIT_COMMITTER_NAME=e2e", "GIT_COMMITTER_EMAIL=e2e@example.com",
 	}
 	cfg := "setups:\n  - name: " + fixSetup + "\n    kind: solo\n    default: true\n    folders: [\"" + filepath.Join(w.home, "work") + "/**\"]\n    identity:\n      emails: [e2e@example.com]\n"

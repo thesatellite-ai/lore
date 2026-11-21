@@ -320,6 +320,7 @@ Status: HEALTHY
 
 | Variable | What it does |
 |---|---|
+| `LORE_READ_SERVER` | `0` runs every command in its own process, without the local read server; `1` uses it even where it is off by default (in CI); unset follows the config key `read_server` (see [The local read server](../operations/where-lore-keeps-things.md#the-local-read-server)) |
 | `LORE_NO_UPGRADE_NOTICE` | `1` turns the once-a-day release check off in this shell: no "a new lore release is out" line, and no `auto_upgrade` either (the config keys `upgrade_notice` and `auto_upgrade` do the same for good). The line is never printed in CI, into a pipe or with `--json` anyway |
 | `LORE_VERSION_PIN` | the lore version this shell must use, for example `0.1.18`. It wins over the team pin `lore_version_pin` in `.lore/data/_meta.json`: `lore upgrade` installs that version, `lore upgrade --version` with another one is refused with `E_UPGRADE_PINNED` (unless `--ignore-pin`), and `lore doctor` notes when the running lore is not the pinned one. In CI, `lore upgrade` needs a pin or `--version` |
 

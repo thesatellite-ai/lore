@@ -84,6 +84,7 @@ untrusted_hosts:
   - build-*.client.example
 upgrade_notice: true
 auto_upgrade: false
+read_server: true
 context:
   profiles:
     - name: mytool
@@ -126,6 +127,7 @@ $ lore config check
 | `untrusted_hosts` | none | names of machines the client owns, such as `build-*.client.example`; `lore doctor` warns when your private stores are set up on one of them |
 | `upgrade_notice` | `true` | `false` turns off the once-a-day "a new lore release is out" line |
 | `auto_upgrade` | `false` | `true` upgrades lore instead of printing the notice, when lore was installed with Homebrew or the install script |
+| `read_server` | `true` | `false` turns off the local read server, so every command runs in its own process (see [The local read server](../operations/where-lore-keeps-things.md#the-local-read-server)) |
 | `policies.<key>` | none | a stricter limit for this machine only, for any key `lore policy show` lists (see below) |
 | `context.profiles` | none | your own tool profiles for `lore render`, added after the built-in ones (see below) |
 | `access` | none | how this machine reaches store urls that shared config names in their canonical form: a list of `url` (the prefix shared config uses, scoped to an owner, such as `git@github.com:agency/`) and `via` (the prefix this machine uses instead, such as `git@work-gh:agency/`); see [Reaching stores through your own ssh alias](#reaching-stores-through-your-own-ssh-alias-access) |

@@ -56,3 +56,39 @@ func TestNarrowNouns(t *testing.T) {
 		t.Errorf("full tree: %s", all)
 	}
 }
+
+// TestReadCall (devco:D-833): the read server serves a call only when its
+// words resolve, as cobra resolves them, to one operation that only reads;
+// a bare group runs its default verb; a write, an admin op, help, a flag
+// first, a group with no default or an unknown word is left to a one-shot
+// process.
+func TestReadCall(t *testing.T) {
+	t.Parallel()
+	f := newFake(t)
+	cases := []struct {
+		args []string
+		want string // "" = not served
+	}{
+		{[]string{"memory", "list"}, "memory.list"},
+		{[]string{"memory", "list", "--json", "--limit", "3"}, "memory.list"},
+		{[]string{"memory", "add", "some", "words"}, ""},
+		{[]string{"trash", "purge", "x"}, ""},
+		{[]string{"secrets", "rule", "add"}, ""},
+		{[]string{"secrets", "rule"}, ""}, // its default verb writes
+		{[]string{"memory"}, "memory.list"},
+		{[]string{"memory", "--limit", "3"}, "memory.list"},
+		{[]string{"trash"}, ""}, // no default verb
+		{[]string{"memory", "list", "--help"}, ""},
+		{[]string{"memory", "list", "-h"}, ""},
+		{[]string{"--json", "memory", "list"}, ""},
+		{[]string{"help", "memory"}, ""},
+		{[]string{"nope"}, ""},
+		{nil, ""},
+	}
+	for _, c := range cases {
+		s, ok := ReadCall(f.reg, c.args, map[string]string{"memory": "list", "secrets rule": "add"})
+		if got := map[bool]string{true: s.Name, false: ""}[ok]; got != c.want {
+			t.Errorf("%q: got %q, want %q", c.args, got, c.want)
+		}
+	}
+}

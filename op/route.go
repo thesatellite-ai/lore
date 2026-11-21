@@ -2,7 +2,9 @@ package op
 
 import (
 	"net/http"
+	"slices"
 	"strings"
+	"sync"
 )
 
 // Verbs with a fixed REST mapping (spec 9.3). Any other verb is a POST.
@@ -32,8 +34,14 @@ type Route struct {
 }
 
 // CLIPath returns the CLI words of an operation: "secrets.rule.add" →
-// [secrets rule add]; "repo.set_url" → [repo set-url].
+// [secrets rule add]; "repo.set_url" → [repo set-url]. The words of each
+// name are worked out once per process (cliPaths): every call narrows the
+// command tree over all ~680 operations, and the read server does it for
+// every command it runs (devco:D-833). The caller gets its own copy.
 func CLIPath(name string) []string {
+	if v, ok := cliPaths.Load(name); ok {
+		return slices.Clone(v.([]string))
+	}
 	p, ok := parts(name)
 	if !ok {
 		return nil
@@ -42,8 +50,12 @@ func CLIPath(name string) []string {
 	for i, s := range p {
 		out[i] = strings.ReplaceAll(s, "_", "-")
 	}
-	return out
+	cliPaths.Store(name, out)
+	return slices.Clone(out)
 }
+
+// cliPaths memoises CLIPath by operation name (a pure function of it).
+var cliPaths sync.Map
 
 // PathIDField is the input field the {id} path parameter of a show, edit
 // or delete route fills: the field named "id", else the first positional

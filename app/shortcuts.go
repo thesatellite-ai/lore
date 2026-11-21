@@ -75,31 +75,18 @@ func mountShortcuts(root *cobra.Command) {
 	if mv := find(root, opsrow.Noun, rowMoveVerb); mv != nil {
 		root.AddCommand(shortcutOf(mv, "move", "Move a row to another store (same id; asks first)"))
 	}
-	defaultVerb(root, opslint.Noun, lintRunVerb)
-	defaultVerb(root, opssync.Noun, opssync.VerbRun)        // lore sync ─► sync run
-	defaultVerb(root, opssync.NounLand, opssync.VerbRun)    // lore land ─► land run
-	defaultVerb(root, opssync.NounExplain, opssync.VerbRun) // lore explain <id> ─► explain run (v0.1.17 spelling)
-	if g := defaultVerb(root, opsinfra.NounMachine, machineListVerb); g != nil {
-		g.Aliases = append(g.Aliases, opsinfra.NounMachine+"s")
+	for _, d := range defaultVerbs {
+		g := defaultVerbAt(root, d.path, d.verb)
+		if g == nil || len(d.path) != 1 {
+			continue
+		}
+		switch d.path[0] {
+		case opsinfra.NounMachine:
+			g.Aliases = append(g.Aliases, opsinfra.NounMachine+"s")
+		case opswhere.Noun: // lore where, lore files (plain files sweep 3.2)
+			g.Aliases = append(g.Aliases, opswhere.Alias)
+		}
 	}
-	defaultVerb(root, opstrash.Noun, trashListVerb)
-	defaultVerbAt(root, []string{opssync.Noun, opssync.NounTrash}, trashListVerb) // bare `lore sync trash` lists (DELETION_DESIGN 3.10)
-	defaultVerb(root, opsql.Noun, sqlRunVerb)
-	if g := defaultVerb(root, opswhere.Noun, opswhere.ShowVerb); g != nil { // lore where, lore files (plain files sweep 3.2)
-		g.Aliases = append(g.Aliases, opswhere.Alias)
-	}
-	defaultVerb(root, opswhoami.Noun, opswhoami.ShowVerb)          // CLI_REFERENCE 3.8 (P3-ORG-G-3)
-	defaultVerb(root, opsselfupgrade.Noun, opsselfupgrade.RunVerb) // CLI_REFERENCE 3.5 (P3-UPG-1)
-	defaultVerb(root, opsfix.Noun, opsfix.RunVerb)                 // lore fix (D-ak, D-al)
-	defaultVerb(root, opssearch.Noun, searchRunVerb)               // CLI_REFERENCE 2.5 (P3-MISC-1)
-	defaultVerb(root, opsask.Noun, opsask.RunVerb)                 // lore ask --query "…" (devco D-807)
-	defaultVerb(root, "why-context", "show")                       // CLI_REFERENCE 2.14 (P3-MISC-3)
-	defaultVerb(root, "setup", "run")                              // CLI_REFERENCE 2.14, 3.18 (P3-MISC-4)
-	defaultVerb(root, opscoord.NounInbox, opscoord.InboxVerb)      // bare `lore inbox` (CLI_REFERENCE 2.11, P3-COORD-1)
-	defaultVerb(root, "support-bundle", "run")                     // CLI_REFERENCE 2.11 (P3-MISC-5)
-	defaultVerb(root, "context", "fetch")                          // CLI_REFERENCE 2.14 (P3-MISC-6)
-	defaultVerb(root, "render", "run")                             // CLI_REFERENCE 2.14 (P3-MISC-7)
-	defaultVerb(root, "doctor", "run")                             // CLI_REFERENCE 3.7 (P3-MISC-8)
 	if g := find(root, opsplan.Noun); g != nil {
 		g.AddCommand(&cobra.Command{
 			Use: planApplyVerb, Hidden: true, Args: cobra.ArbitraryArgs, DisableFlagParsing: true,
@@ -109,6 +96,50 @@ func mountShortcuts(root *cobra.Command) {
 			},
 		})
 	}
+}
+
+// defaultVerbEntry is one group whose bare spelling runs one of its verbs.
+type defaultVerbEntry struct {
+	path []string
+	verb string
+}
+
+// defaultVerbs are the groups whose bare `lore <group>` runs a verb (other
+// verbs stay subcommands). mountShortcuts mounts them, and the read server
+// resolves a call through the same table (defaultVerbPaths, D-833), so
+// both agree on which operation a bare group runs.
+var defaultVerbs = []defaultVerbEntry{
+	{[]string{opslint.Noun}, lintRunVerb},
+	{[]string{opssync.Noun}, opssync.VerbRun},        // lore sync ─► sync run
+	{[]string{opssync.NounLand}, opssync.VerbRun},    // lore land ─► land run
+	{[]string{opssync.NounExplain}, opssync.VerbRun}, // lore explain <id> ─► explain run (v0.1.17 spelling)
+	{[]string{opsinfra.NounMachine}, machineListVerb},
+	{[]string{opstrash.Noun}, trashListVerb},
+	{[]string{opssync.Noun, opssync.NounTrash}, trashListVerb}, // bare `lore sync trash` lists (DELETION_DESIGN 3.10)
+	{[]string{opsql.Noun}, sqlRunVerb},
+	{[]string{opswhere.Noun}, opswhere.ShowVerb},            // lore where, lore files (plain files sweep 3.2)
+	{[]string{opswhoami.Noun}, opswhoami.ShowVerb},          // CLI_REFERENCE 3.8 (P3-ORG-G-3)
+	{[]string{opsselfupgrade.Noun}, opsselfupgrade.RunVerb}, // CLI_REFERENCE 3.5 (P3-UPG-1)
+	{[]string{opsfix.Noun}, opsfix.RunVerb},                 // lore fix (D-ak, D-al)
+	{[]string{opssearch.Noun}, searchRunVerb},               // CLI_REFERENCE 2.5 (P3-MISC-1)
+	{[]string{opsask.Noun}, opsask.RunVerb},                 // lore ask --query "…" (devco D-807)
+	{[]string{"why-context"}, "show"},                       // CLI_REFERENCE 2.14 (P3-MISC-3)
+	{[]string{"setup"}, "run"},                              // CLI_REFERENCE 2.14, 3.18 (P3-MISC-4)
+	{[]string{opscoord.NounInbox}, opscoord.InboxVerb},      // bare `lore inbox` (CLI_REFERENCE 2.11, P3-COORD-1)
+	{[]string{"support-bundle"}, "run"},                     // CLI_REFERENCE 2.11 (P3-MISC-5)
+	{[]string{"context"}, "fetch"},                          // CLI_REFERENCE 2.14 (P3-MISC-6)
+	{[]string{"render"}, "run"},                             // CLI_REFERENCE 2.14 (P3-MISC-7)
+	{[]string{"doctor"}, "run"},                             // CLI_REFERENCE 3.7 (P3-MISC-8)
+}
+
+// defaultVerbPaths is defaultVerbs keyed by the group's words joined by a
+// space, for cli.ReadCall.
+func defaultVerbPaths() map[string]string {
+	m := make(map[string]string, len(defaultVerbs))
+	for _, d := range defaultVerbs {
+		m[strings.Join(d.path, " ")] = d.verb
+	}
+	return m
 }
 
 // find returns the command at path, nil when any word is missing.

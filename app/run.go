@@ -85,9 +85,17 @@ func WithSetupUI(ui setupweb.UI) Option { return func(o *options) { o.ui = ui } 
 // cancelled context, Run over os.Args, and os.Exit with its status. It
 // never returns.
 func Main(opts ...Option) {
+	if len(os.Args) == 2 && os.Args[1] == readServerWord {
+		os.Exit(serveReads(opts)) // readserver.go: the local read server the CLI started (D-833)
+	}
 	gcDefaults() // gcdefaults.go: a short-lived CLI collects less often (fastgate:G1a)
 	if isSessionEndHook(os.Args[1:]) {
 		os.Exit(runSessionEnd(os.Args[1:])) // sessionend.go: always 0, silent, time-bounded
+	}
+	// readserver.go (D-833): a read the local read server runs answers from
+	// its warm caches; anything else, or no server, runs here one-shot.
+	if code, ok := callReadServer(os.Args[1:]); ok {
+		os.Exit(code)
 	}
 	// SIGTERM too (owner item 46): `lore fix --all` stops a child that ran
 	// past its limit with SIGTERM, and a cancelled run releases its locks

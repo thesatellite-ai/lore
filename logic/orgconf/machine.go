@@ -50,6 +50,9 @@ type Settings struct {
 	// UpgradeNotice and AutoUpgrade are checked by type only (a bool).
 	UpgradeNotice *bool `yaml:"upgrade_notice,omitempty"`
 	AutoUpgrade   *bool `yaml:"auto_upgrade,omitempty"`
+	// ReadServer (a bool) turns the local read server off with false
+	// (app/readserver.go reads it; devco:D-833).
+	ReadServer *bool `yaml:"read_server,omitempty"`
 }
 
 // OrgSettings are an org entry's overrides validated, not read, here.

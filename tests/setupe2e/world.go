@@ -498,6 +498,7 @@ func (w *World) env(loreDir, apiURL string) []string {
 	e := []string{
 		"PATH=" + filepath.Join(w.Dir, "fakebin") + ":" + loreDir + ":/usr/bin:/bin",
 		"HOME=" + w.Home, "TERM=dumb", "LANG=C.UTF-8", "GIT_CONFIG_NOSYSTEM=1",
+		"LORE_READ_SERVER=0", // D-833: a release build; every command one-shot, no server left in the temp home
 		"LORE_NO_UPDATE_CHECK=1", "LORE_HUMAN=1", "TMPDIR=" + os.TempDir(),
 	}
 	// The gate's Go runtime settings for lore processes (LORE_E2E_GOENV, package e2eenv): they

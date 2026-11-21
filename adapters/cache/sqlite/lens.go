@@ -173,6 +173,11 @@ type Lens struct {
 	only string
 	// tables is LensOptions.Tables (lens_tables.go, D-813).
 	tables []string
+	// poolKey is the lens's key in the process's idle lenses ("" = never
+	// pooled) and files what each attached file was right after its
+	// ATTACH (lenspool.go, D-833: the read server only).
+	poolKey string
+	files   []pooledFile
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -222,6 +227,15 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err := checkSources(sources); err != nil {
 		return nil, err
 	}
+	key := ""
+	if lensReuseOn() { // D-833: the read server keeps a narrowed lens open between commands
+		if k, ok := poolKey(sources, o); ok {
+			if l := takePooled(ctx, k, o); l != nil {
+				return l, nil
+			}
+			key = k
+		}
+	}
 	db, err := sql.Open(driverName, "file::memory:")
 	if err != nil {
 		return nil, dbErr("open lens", err)
@@ -231,7 +245,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, query: o.Query, loadTrash: o.LoadTrash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places, only: o.Only, tables: slices.Clone(o.Tables)}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, query: o.Query, loadTrash: o.LoadTrash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places, only: o.Only, tables: slices.Clone(o.Tables), poolKey: key}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -325,6 +339,7 @@ func (l *Lens) setup(ctx context.Context) error {
 		if _, err = l.conn.ExecContext(ctx, ss.attach, uri); err != nil {
 			return errs.Wrap(errs.DBNotFound, "sqlite lens: attach "+quoteText(s.Name), err)
 		}
+		l.recordFile(ctx, i, abs) // lenspool.go: only for a lens the read server may reuse
 		names, err := l.publicTables(ctx, i)
 		if err != nil {
 			return errs.Prefix("sqlite lens: source "+quoteText(s.Name), err)
@@ -824,14 +839,25 @@ const lensQueryHint = `check the statement; list the tables with lore sql --quer
 // primaryCodeMask keeps the primary result code of an extended one.
 const primaryCodeMask = 0xff
 
-// Close releases the connection; idempotent.
+// Close releases the connection; idempotent. In the read server a pooled
+// lens goes back to the idle lenses instead (lenspool.go, D-833).
 func (l *Lens) Close() error {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	if l.closed {
+		l.mu.Unlock()
 		return nil
 	}
 	l.closed = true
+	l.expand, l.loadTrash = nil, nil // nothing of this command outlives it in a pooled lens
+	l.mu.Unlock()
+	if l.release() {
+		return nil
+	}
+	return l.closeConn()
+}
+
+// closeConn closes the connection and its pool for real.
+func (l *Lens) closeConn() error {
 	return errors.Join(l.conn.Close(), l.db.Close())
 }
 
