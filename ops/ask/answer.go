@@ -635,6 +635,7 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 		}
 		if last != nil {
 			r.Note = fmt.Sprintf("newest: it replaces %s from %s", last.ID, last.At.UTC().Format(dates.DayLayout))
+			r.replaces = last.ID
 		}
 		out = append(out, r)
 	}
@@ -812,6 +813,8 @@ func (o Out) body() string {
 	}
 	var b strings.Builder
 	b.WriteString(o.header())
+	b.WriteString(o.nowLine(rows))
+	about := o.lead > 0
 	runs := 0 // how many runs of rows the answer has
 	for i, it := range o.Ranked {
 		if it.Kind == KindRow && (i == 0 || o.Ranked[i-1].Kind != KindRow) {
@@ -825,6 +828,10 @@ func (o Out) body() string {
 		case KindResource:
 			if o.cards() {
 				b.WriteString(res[it.ID].card(o.asked))
+				continue
+			}
+			if about {
+				b.WriteString(res[it.ID].who())
 				continue
 			}
 			b.WriteString(res[it.ID].text())
@@ -845,6 +852,10 @@ func (o Out) body() string {
 				}
 				fmt.Fprintf(&b, "\nopen tasks (%d):\n", run)
 			}
+			if about {
+				b.WriteString(tsk[it.ID].bare())
+				continue
+			}
 			b.WriteString(tsk[it.ID].line(false))
 		case KindRow:
 			compact := n < o.lead
@@ -852,8 +863,8 @@ func (o Out) body() string {
 				b.WriteString(o.rowsHeader(rowRuns, runs, compact))
 				rowRuns++
 			}
-			if compact {
-				b.WriteString(rows[it.ID].line())
+			if about {
+				b.WriteString(rows[it.ID].facts())
 			} else {
 				b.WriteString(rows[it.ID].text(n - o.lead))
 			}
@@ -882,8 +893,10 @@ func (o Out) rowsHeader(run, runs int, compact bool) string {
 	case o.When != "":
 		return "\nrows dated " + o.When + ", oldest first:\n"
 	case compact:
-		return "\nnewest row of each folder, one line each:\n"
-	case run > 0 || o.lead > 0:
+		return "\nlatest (the newest row of each folder, word for word):\n"
+	case o.lead > 0:
+		return "\nmore rows (word for word):\n"
+	case run > 0:
 		return "\nmore rows, in full:\n"
 	case runs > 1:
 		return "\nnewest row of each folder, in full:\n"
@@ -968,13 +981,7 @@ func (r Resource) text() string {
 // grep line it replaces (status, id, place and the debt on every line,
 // the person's card under them).
 func (t Task) line(debt bool) string {
-	s := t.Title
-	if t.Status != "" && t.Status != schema.TaskStatusTodo {
-		s += " [" + t.Status + "]"
-	}
-	if d := t.debt(); d != "" && !(debt && t.namesOther()) {
-		s += " (" + d + ")"
-	}
+	s := t.summary(debt)
 	if !debt {
 		// a task under another answer (everything about X) is a list item
 		// under its heading and keeps its id on its line, as the rows
@@ -982,6 +989,20 @@ func (t Task) line(debt bool) string {
 		s = "  - " + s + "  " + t.ID
 	}
 	return s + "\n"
+}
+
+// summary is the task's title, its status when it is not plain todo and
+// the debt (left out of a debt answer's line when the title names the
+// other side).
+func (t Task) summary(debt bool) string {
+	s := t.Title
+	if t.Status != "" && t.Status != schema.TaskStatusTodo {
+		s += " [" + t.Status + "]"
+	}
+	if d := t.debt(); d != "" && !(debt && t.namesOther()) {
+		s += " (" + d + ")"
+	}
+	return s
 }
 
 // debt says who owes whom from the person's side: "owed to X" (I owe X),
@@ -1032,39 +1053,134 @@ func (r Row) text(i int) string {
 	return b.String()
 }
 
-// line is one row as an everything-about answer's newest rows print it:
-// its day, its folder and its text (title, then the body's first line) on
-// one line, the body's other lines indented under it, then its id. Why:
-// a small model summarising "everything about X" keeps a one-line fact
-// whole and drops the sentence around a name in a block of text (devco
-// D-822: "watched the match after lunch" was lost from "Saw X about Y").
-func (r Row) line() string {
-	title, body := r.readable()
-	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
-	head := strings.TrimSpace(lines[0])
-	if title != "" && title != body {
-		head = title + ": " + head
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "  - %s (%s): %s", r.At, r.Place, head)
-	for _, l := range lines[1:] {
-		if l = strings.TrimSpace(l); l != "" {
-			b.WriteString("\n      " + l)
-		}
-	}
-	fmt.Fprintf(&b, "  [%s %s]", r.Table, r.ID)
-	if r.Note != "" {
-		b.WriteString("  " + r.Note)
-	}
-	if r.History != "" {
-		b.WriteString("  [" + r.History + "]")
-	}
-	return b.String() + "\n"
-}
-
 // readable is r's title and body as the text answer prints them: the
 // stored text with its resource references read as names when build
 // filled them, else the stored text.
 func (r Row) readable() (string, string) {
 	return cmp.Or(r.readTitle, r.Title), cmp.Or(r.readBody, r.Body)
+}
+
+// nowLine is the line a changed fact leads the answer with: the newest
+// row's text, the day it changed and what it was before (the older row it
+// replaces, when the answer holds it); "" when no row of the answer
+// replaces another. Why (devco D-836, blind agent run H-93): a small
+// model summarising two numbered rows wrote "updated on <day>, previously
+// tuesdays" and lost the row's own "changed to thursdays (was tuesdays)";
+// one line that states the current value first survives the summary.
+func (o Out) nowLine(rows map[string]Row) string {
+	for _, it := range o.Ranked {
+		r, ok := rows[it.ID]
+		if it.Kind != KindRow || !ok || r.replaces == "" {
+			continue
+		}
+		line := "now: " + oneLine(r) + " (changed " + r.At
+		if old, ok := rows[r.replaces]; ok {
+			line += "; before that: " + oneLine(old)
+		}
+		return line + ")\n"
+	}
+	return ""
+}
+
+// oneLine is r's readable text on one line: the title, then the body's
+// lines, joined by spaces.
+func oneLine(r Row) string {
+	return strings.Join(r.factLines(), " ")
+}
+
+// who is one resource as an everything-about answer prints it: a plain
+// "who:" heading with its kind, name and folder, then one line per alias
+// list, field and linked resource, no id (the cited line names it). Why
+// (devco D-836): an id and a nested "linked:" block in the middle of the
+// answer were read as noise by a small model, which then summarised the
+// lines around them too.
+func (r Resource) who() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\nwho: %s %s (%s)\n", r.Kind, r.Name, r.Place)
+	if len(r.Aliases) > 0 {
+		fmt.Fprintf(&b, "  aliases: %s\n", strings.Join(r.Aliases, ", "))
+	}
+	for _, f := range r.Fields {
+		if f.Value == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "  %s: %s", f.Name, f.Value)
+		if f.Was != "" {
+			fmt.Fprintf(&b, " (changed %s, was %s)", f.ChangedAt, f.Was)
+		}
+		b.WriteString("\n")
+	}
+	for _, l := range r.Linked {
+		fmt.Fprintf(&b, "  %s %s (%s)", l.Kind, l.Name, l.Via)
+		if len(l.Fields) > 0 {
+			b.WriteString(": " + strings.Join(l.Fields, ", "))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// bare is one open task as an everything-about answer lists it: a list
+// item with its title, status and debt, no id (the cited line names it).
+func (t Task) bare() string {
+	return "  - " + t.summary(false) + "\n"
+}
+
+// facts is one row as an everything-about answer prints it: one line
+// with its day and folder, then its text word for word in quotes (the day
+// the line already says dropped from the text, its lines joined), then
+// the note or history of a changed fact; no id (the cited line names it).
+// Why (devco D-836, blind agent run H-93): a small model kept "Saw
+// hugo-berg about yarrow" and dropped "sorted old photos in the rain"
+// from "Journal 2026-11-06: sorted old photos in the rain. Saw hugo-berg
+// about yarrow.  [memories mem_…]"; cut into one sentence per line it
+// dropped the activity more often, since that line no longer named the
+// person. The whole row as one quoted line, under a heading that says
+// "word for word", keeps the activity next to the name and reads as a
+// quote to copy, not a list to summarise.
+func (r Row) facts() string {
+	line := fmt.Sprintf("  %s, %s: \"%s\"", r.At, r.Place, oneLine(r))
+	if r.Note != "" {
+		line += "  (" + r.Note + ")"
+	}
+	if r.History != "" {
+		line += "  [" + r.History + "]"
+	}
+	return line + "\n"
+}
+
+// factLines is r's readable title and body, one item per line, with the
+// row's own day dropped where the text repeats it (a leading
+// "Journal <day>:" or a "(<day>)").
+func (r Row) factLines() []string {
+	title, body := r.readable()
+	var out []string
+	add := func(text string) {
+		for _, line := range strings.Split(text, "\n") {
+			if line = dropDay(strings.TrimSpace(line), r.At); line != "" {
+				out = append(out, line)
+			}
+		}
+	}
+	if title != "" && title != body {
+		add(title)
+	}
+	add(strings.TrimRight(body, "\n"))
+	return out
+}
+
+// dropDay removes day from text where it only repeats the day the answer
+// already prints for the row: a leading "<day>: " or "<word> <day>: "
+// (a journal's "Journal 2026-11-06: ") and a " (<day>)". Any other
+// mention of the day stays.
+func dropDay(text, day string) string {
+	if day == "" {
+		return text
+	}
+	if rest, ok := strings.CutPrefix(text, day+":"); ok {
+		text = strings.TrimSpace(rest)
+	} else if i := strings.Index(text, " "+day+":"); i > 0 && !strings.Contains(text[:i], " ") {
+		text = strings.TrimSpace(text[i+len(day)+2:])
+	}
+	return strings.Replace(text, " ("+day+")", "", 1)
 }

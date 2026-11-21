@@ -225,14 +225,30 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "everything about alice-ng")
 		r.OK(t)
 		out := r.Out()
-		line := "  - 2026-11-02 (me/journal): Journal 2026-11-02: baked sourdough. Saw alice-ng about orbit.  [memories mem_"
-		if !strings.Contains(out, "newest row of each folder, one line each:\n") || !strings.Contains(out, line) || strings.Contains(out, "${res:") {
-			t.Errorf("[O D-822] everything about: want the journal row on one line with names, no ${res:…}:\n%s", r)
+		// devco D-836 (bug hunt H-93): plain headings, each row one line
+		// word for word in quotes, the repeated day and every id left
+		// out, so a small model keeps the journal activity
+		lines := "  2026-11-02, me/journal: \"baked sourdough. Saw alice-ng about orbit.\"\n"
+		body, _, _ := strings.Cut(out, "cited: ")
+		if !strings.Contains(out, "\nwho: person alice-ng (") || !strings.Contains(out, "\nlatest (the newest row of each folder, word for word):\n") || !strings.Contains(out, lines) || strings.Contains(out, "${res:") || strings.Contains(body, "mem_") || strings.Contains(body, "res_") {
+			t.Errorf("[O D-822/D-836] everything about: want who:/latest headings, the journal row as one quoted line with names, no ${res:…}, no id before cited:\n%s", r)
 		}
 		j := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "everything about alice-ng", "--json")
 		j.OK(t)
 		if !strings.Contains(j.Out(), "Saw ${res:person/alice-ng} about ${res:project/orbit}.") {
 			t.Errorf("[O D-822] ask --json does not keep the stored text:\n%s", j)
+		}
+	})
+	// devco D-836 (bug hunt H-93): a small model summarising a changed
+	// fact's two rows lost "moved to 55k (was 40k)"; the answer leads with
+	// one "now:" line holding the newest text, the day it changed and what
+	// it was before.
+	s.Step("personal-store/changed-fact-now-line", func() {
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "how much money can orbit spend now")
+		r.OK(t)
+		first, _, _ := strings.Cut(r.Out(), "\n")
+		if !strings.HasPrefix(first, "now: ") || !strings.Contains(first, "moved to 55k (was 40k)") || !strings.Contains(first, "(changed ") || !strings.Contains(first, "before that: ") {
+			t.Errorf("[O D-836] a changed fact does not lead with its now line:\n%s", r)
 		}
 	})
 	// devco:D-826: a warm read opens the folder caches from their stamps

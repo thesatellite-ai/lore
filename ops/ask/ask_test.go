@@ -259,7 +259,7 @@ func TestRankedAnswerFirst(t *testing.T) {
 		}
 	}
 	_, text := ask(t, "everything about alice-ng")
-	for _, h := range []string{"newest row of each folder, one line each:", "open tasks (1):", "more rows, in full:"} {
+	for _, h := range []string{"\nlatest (the newest row of each folder, word for word):\n", "open tasks (1):", "\nmore rows (word for word):\n"} {
 		if !strings.Contains(text, h) {
 			t.Errorf("everything about: no %q in\n%s", h, text)
 		}
@@ -405,19 +405,33 @@ func TestAliasMatch(t *testing.T) {
 	}
 }
 
-// TestAboutLeadLines (devco D-822, bug hunt H-81): a small model
-// summarising "everything about liam-walsh" dropped "watched the match
-// after lunch" from "Journal …: watched the match after lunch. Saw
-// ${res:person/liam-walsh} about ${res:project/indigo}." The newest row of
-// each folder now prints as one line with its day and folder, a reference
-// read as the resource's name; --json keeps the stored text.
+// TestAboutLeadLines (devco D-822, bug hunt H-81; devco D-836, bug hunt
+// H-93): a small model summarising "everything about liam-walsh" dropped
+// "watched the match after lunch" from "Journal …: watched the match
+// after lunch. Saw ${res:person/liam-walsh} about ${res:project/indigo}.",
+// and still dropped "sorted old photos in the rain" when that was one line
+// with the day prefix and the id (and more often when each sentence had
+// its own line). The answer is plain headings (who, latest, open tasks,
+// more rows), each row one line: its day, its folder and its text word
+// for word in quotes, the repeated day and every id left out (the cited
+// line names them), a reference read as the resource's name; --json
+// keeps the stored text.
 func TestAboutLeadLines(t *testing.T) {
 	o, text := ask(t, "everything about alice-ng")
-	for _, want := range []string{
-		"  - 2026-11-20 (me/journal): Journal 2026-11-20: ran along the river. Saw alice-ng about lumen.  [memories mem_j1120]\n",
-		"  - 2026-11-08 (me/work): Met alice-ng about lumen (2026-11-08): talked about the office move round 7.  [memories mem_m1]\n",
-		"\n1. 2026-11-19  memories mem_j1119  (me/journal)\n   Journal 2026-11-19: baked sourdough. Saw alice-ng about lumen.\n",
-	} {
+	want := "\nwho: person alice-ng (me/work)\n  company: acme-co (changed 2026-10-15, was cobalt-co)\n  role: engineer\n" +
+		"  project lumen (owner): company acme-co\n" +
+		"\nlatest (the newest row of each folder, word for word):\n" +
+		"  2026-11-20, me/journal: \"ran along the river. Saw alice-ng about lumen.\"\n" +
+		"  2026-11-08, me/work: \"Met alice-ng about lumen: talked about the office move round 7.\"\n" +
+		"\nopen tasks (1):\n  - send the signed contract #1 to alice-ng (owed to alice-ng)\n" +
+		"\nmore rows (word for word):\n  2026-11-19, me/journal: \"baked sourdough. Saw alice-ng about lumen.\"\n"
+	if !strings.HasPrefix(text, want) {
+		t.Errorf("everything about:\n got %q\nwant it to start %q", text, want)
+	}
+	if body, _, _ := strings.Cut(text, "cited: "); strings.Contains(body, "res_") || strings.Contains(body, "mem_") || strings.Contains(body, "tsk_") {
+		t.Errorf("everything about: an id printed before the cited line\n%s", text)
+	}
+	for _, want := range []string{"ran along the river. Saw alice-ng about lumen.", "Met alice-ng about lumen: talked about the office move round 7."} {
 		if !strings.Contains(text, want) {
 			t.Errorf("everything about: no %q in\n%s", want, text)
 		}
@@ -497,5 +511,46 @@ func TestTypedAnswersCompact(t *testing.T) {
 	d.tasks = append(d.tasks, taskRow{ID: "tsk_6", Place: "me/work", Title: "return the drill #6", Status: "todo", OwedBy: "me", OwedTo: "Huey"})
 	if got, want := build(parseQuestion("what do I owe Huey", now), d, 0, 0).Text(), "return the drill #6 (owed to Huey)\nperson hugo-berg: aliases: Huey\ncited: tsk_6 res_hugo\n"; got != want {
 		t.Errorf("alias debt:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestNowLeadsAChangedFact (devco D-836, bug hunt H-93): a small model
+// summarising the two numbered dentist rows wrote "updated on 2026-11-01,
+// previously tuesdays" and lost "changed to thursdays (was tuesdays)". A
+// row that replaces an older one leads the answer with one line: the
+// newest text, the day it changed and what it was before; an answer with
+// no changed fact has no such line, and --json is unchanged.
+func TestNowLeadsAChangedFact(t *testing.T) {
+	t.Parallel()
+	o, text := ask(t, "what are my dentist appointments now")
+	want := "now: My dentist appointments changed to thursdays (was tuesdays). (changed 2026-11-01; before that: My dentist appointments: tuesdays.)\n"
+	if !strings.HasPrefix(text, want) {
+		t.Errorf("changed fact:\n got %q\nwant it to start %q", text, want)
+	}
+	if o.Rows[0].Note != "newest: it replaces mem_l1 from 2026-05-01" || o.Rows[0].Body != "My dentist appointments changed to thursdays (was tuesdays)." {
+		t.Errorf("--json row changed: %+v", o.Rows[0])
+	}
+	for _, q := range []string{"what did we decide for lumen and why", "what happened on 2026-11-20", "everything about alice-ng"} {
+		if _, text := ask(t, q); strings.Contains(text, "now: ") {
+			t.Errorf("%q: a now line without a changed fact\n%s", q, text)
+		}
+	}
+}
+
+// TestDropDay: the row's own day is dropped from its text only where it
+// repeats the day the answer prints.
+func TestDropDay(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{
+		"Journal 2026-11-06: sorted old photos.": "sorted old photos.",
+		"2026-11-06: sorted old photos.":         "sorted old photos.",
+		"Met a (2026-11-06): talked.":            "Met a: talked.",
+		"Two words 2026-11-06: stays.":           "Two words 2026-11-06: stays.",
+		"Moved from 2026-11-05 to 2026-11-06.":   "Moved from 2026-11-05 to 2026-11-06.",
+		"Journal 2026-11-05: another day stays.": "Journal 2026-11-05: another day stays.",
+	} {
+		if got := dropDay(in, "2026-11-06"); got != want {
+			t.Errorf("dropDay(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

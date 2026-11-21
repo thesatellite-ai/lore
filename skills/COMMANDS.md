@@ -308,6 +308,8 @@ lore ask --query "who is alice-ng"                         # one line: kind, nam
 lore ask --store me --query "what do I owe alice-ng"       # one line per open task owed by me to alice-ng (and "what does alice-ng owe me")
 lore ask --store me --query "what happened last week"      # the journal rows of those days, oldest first
 lore ask --query "what did we decide for orbit and why"    # the best 3 rows in full, newest first
+lore ask --store me --query "everything about alice-ng"   # who:, latest (one quoted line per row), open tasks, more rows; ids only in cited:
+lore ask --store me --query "what is my gym now"          # a changed fact starts with now: <newest> (changed <day>; before that: <older>)
 lore ask --query "everything about alise-ng" --json        # a typo, a nickname or a role finds the resource too
 lore resource alias add --kind person --id robert-kim --alias Bobby --alias CFO   # other names every lookup and ask find it by (alias list / alias remove)
 lore ask --query "status of orbit" --max-chars 8000 --top 5
