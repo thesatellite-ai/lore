@@ -213,6 +213,10 @@ const (
 	// PrefixKnownRepo marks a known_repos row: a repo lore ran in on this
 	// machine (ONBOARDING_DESIGN Q11).
 	PrefixKnownRepo Prefix = "krp"
+	// PrefixTeamContact marks a team_contacts row: one contact of a team,
+	// such as its chat channel (owner org-setup 2026-11-21: a team had
+	// nowhere to keep its Slack channel).
+	PrefixTeamContact Prefix = "tcn"
 )
 
 // allPrefixes is the iteration list of every constant above. Read-only.
@@ -311,6 +315,7 @@ var allPrefixes = [...]Prefix{
 	PrefixInvite,
 	PrefixSetupProgress,
 	PrefixKnownRepo,
+	PrefixTeamContact,
 }
 
 // Prefixes returns a fresh copy of every registered prefix, in declaration order.

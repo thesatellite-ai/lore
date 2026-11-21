@@ -225,6 +225,10 @@ type Team struct {
 	// auditrec), last so the older keys keep their order.
 	CreatedBy string `json:"created_by,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
+	// Contacts are the team's contacts (its chat channel, …; team contact
+	// add), sorted by type with the primary of each type first. Filled by
+	// team show and team list; a write's answer leaves them out.
+	Contacts []TeamContact `json:"contacts,omitempty"`
 }
 
 // TeamWriteOut is a team write's answer.
@@ -318,12 +322,24 @@ func (o TeamListOut) Text() string {
 		if !t.Active {
 			count += removedMark
 		}
-		rows[i] = []string{"@" + t.Handle, t.Name, count}
+		rows[i] = []string{"@" + t.Handle, t.Name, count, primaryContacts(t.Contacts)}
 	}
 	var b strings.Builder
 	writeColumns(&b, rows)
 	b.WriteString(plural.Count(len(o.Teams), "team") + "\n")
 	return b.String()
+}
+
+// primaryContacts is the primary contact of each type, "slack #web-team,
+// email web@acme.example", for the team list line.
+func primaryContacts(cs []TeamContact) string {
+	var out []string
+	for _, c := range cs {
+		if c.Primary {
+			out = append(out, c.Type+" "+c.Value)
+		}
+	}
+	return strings.Join(out, ", ")
 }
 
 // writeColumns writes rows as columns two spaces apart, each as wide as
@@ -379,6 +395,12 @@ func (o TeamShowOut) Text() string {
 		b.WriteString("pending, joins on accepting the invite (" + fmt.Sprint(len(t.Pending)) + "):\n")
 		for _, p := range t.Pending {
 			b.WriteString("  " + p.Email + "  " + p.Invite + "  until " + p.Until + "\n")
+		}
+	}
+	if len(t.Contacts) > 0 {
+		b.WriteString("contacts (" + fmt.Sprint(len(t.Contacts)) + "):\n")
+		for _, c := range t.Contacts {
+			b.WriteString("  " + c.ID + "  " + c.line() + "\n")
 		}
 	}
 	return b.String()
@@ -661,10 +683,15 @@ func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamL
 	if err != nil {
 		return TeamListOut{}, err
 	}
+	contacts, err := teamContactsByID(ctx, r)
+	if err != nil {
+		return TeamListOut{}, err
+	}
 	out := TeamListOut{Teams: []Team{}, Where: r.Where(), label: r.Label()}
 	for _, x := range rows {
 		t := teamOf(x, actors)
 		t.Pending = pending[t.Handle]
+		t.Contacts = contacts[t.ID]
 		if t.Active || in.All {
 			out.Teams = append(out.Teams, t)
 		}
@@ -698,8 +725,13 @@ func teamShow(ctx context.Context, env profilestore.Store, in TeamShowIn) (TeamS
 	if err != nil {
 		return TeamShowOut{}, err
 	}
+	contacts, err := teamContactsByID(ctx, r)
+	if err != nil {
+		return TeamShowOut{}, err
+	}
 	t := teamOf(cur, actors)
 	t.Pending = pending[t.Handle]
+	t.Contacts = contacts[t.ID]
 	return TeamShowOut{Team: t, Where: r.Where()}, nil
 }
 

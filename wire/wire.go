@@ -673,13 +673,14 @@ func Registry(a *App) (*op.Registry, error) {
 	// P3-MISC-3: the context commands; their machinery is Options.Context (wire/context_hosts.go).
 	entries = append(entries, opswhycontext.Ops(a)...)
 	entries = append(entries, opssetup.Ops(a)...)
-	entries = append(entries, opssetup.GuidedOps(a)...)   // ONB 7.1: setup.plan/check/apply/fix/list/show/use/edit/remove/join/repair
-	entries = append(entries, opssetup.DiscoverOps(a)...) // setup.discover: account discovery for the setup page
-	entries = append(entries, opssetup.FolderOps(a)...)   // setup.folders / setup.browse: the Folders step's suggestions and folder browser
-	entries = append(entries, opssetup.ImportOps(a)...)   // setup.import_scan / setup.import: import an existing lore install
-	entries = append(entries, opsteam.Ops(a)...)          // ONB 4.6: team.invite, .list, .revoke, .resend
-	entries = append(entries, opsteam.TeamOps(a)...)      // F18: team.add, .list, .show, .remove, .member.add|remove
-	entries = append(entries, opsrepoinit.Ops(a)...)      // ONB 4.10: lore init as a registry op (repo.init) for the setup page
+	entries = append(entries, opssetup.GuidedOps(a)...)     // ONB 7.1: setup.plan/check/apply/fix/list/show/use/edit/remove/join/repair
+	entries = append(entries, opssetup.DiscoverOps(a)...)   // setup.discover: account discovery for the setup page
+	entries = append(entries, opssetup.FolderOps(a)...)     // setup.folders / setup.browse: the Folders step's suggestions and folder browser
+	entries = append(entries, opssetup.ImportOps(a)...)     // setup.import_scan / setup.import: import an existing lore install
+	entries = append(entries, opsteam.Ops(a)...)            // ONB 4.6: team.invite, .list, .revoke, .resend
+	entries = append(entries, opsteam.TeamOps(a)...)        // F18: team.add, .list, .show, .remove, .member.add|remove
+	entries = append(entries, opsteam.TeamContactOps(a)...) // team.contact.add|edit|remove|list: a team's chat channel, …
+	entries = append(entries, opsrepoinit.Ops(a)...)        // ONB 4.10: lore init as a registry op (repo.init) for the setup page
 	entries = append(entries, opscoord.Ops(a)...)
 	entries = append(entries, opssupportbundle.Ops(a)...)
 	entries = append(entries, contextop.Ops(a)...)

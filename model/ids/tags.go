@@ -159,3 +159,9 @@ type KnownRepo struct{}
 
 // Prefix implements Tag.
 func (KnownRepo) Prefix() Prefix { return PrefixKnownRepo }
+
+// TeamContact tags ids of team_contacts (a team's chat channel, …).
+type TeamContact struct{}
+
+// Prefix implements Tag.
+func (TeamContact) Prefix() Prefix { return PrefixTeamContact }

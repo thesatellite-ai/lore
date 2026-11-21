@@ -116640,6 +116640,863 @@
         }
       }
     },
+    "/v1/team/contacts": {
+      "get": {
+        "operationId": "team.contact.list",
+        "summary": "List the teams' contacts (--handle for one team)",
+        "tags": [
+          "team"
+        ],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "query",
+            "required": false,
+            "description": "one team (@handle or tem_ id); none = every team",
+            "schema": {
+              "type": "string",
+              "description": "one team (@handle or tem_ id); none = every team"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "only this contact type",
+            "schema": {
+              "type": "string",
+              "description": "only this contact type"
+            }
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
+            }
+          },
+          {
+            "name": "created_by",
+            "in": "query",
+            "required": false,
+            "description": "only rows this actor created (act_ id, or unknown for rows from before audit fields)",
+            "schema": {
+              "type": "string",
+              "description": "only rows this actor created (act_ id, or unknown for rows from before audit fields)"
+            }
+          },
+          {
+            "name": "updated_by",
+            "in": "query",
+            "required": false,
+            "description": "only rows this actor changed last (act_ id, or unknown)",
+            "schema": {
+              "type": "string",
+              "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "created_by": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "primary": {
+                            "type": "boolean"
+                          },
+                          "team_handle": {
+                            "type": "string"
+                          },
+                          "team_id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "updated_by": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          },
+                          "value_norm": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "team_id",
+                          "type",
+                          "value",
+                          "value_norm"
+                        ]
+                      }
+                    },
+                    "routed": {
+                      "type": "string",
+                      "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "contacts",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_PURGED, E_REFUSED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "team.contact.add",
+        "summary": "Add a contact to a team: its chat channel, mailing list, … (types from lore contact-type list)",
+        "tags": [
+          "team"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "description": "the team's @handle (or its tem_ id)"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "free text: announcements, on-call, …"
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "free text"
+                  },
+                  "primary": {
+                    "type": "boolean",
+                    "description": "the primary contact of its type (one per type; the first one is primary by default)"
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "a contact type (lore contact-type list): slack, discord, email, website, …"
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "as typed: #web-team, web@acme.example, https://chat.acme.example/web"
+                  }
+                },
+                "required": [
+                  "handle",
+                  "type",
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": {
+                      "type": "object",
+                      "properties": {
+                        "created_by": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "primary": {
+                          "type": "boolean"
+                        },
+                        "team_handle": {
+                          "type": "string"
+                        },
+                        "team_id": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "updated_by": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "value_norm": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "team_id",
+                        "type",
+                        "value",
+                        "value_norm"
+                      ]
+                    },
+                    "verb": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "contact",
+                    "verb",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_CONTACT_TYPE, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_REFUSED, E_SECRET_DETECTED, E_STALE, E_STATUS_CHANGE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/team/contacts/{id}": {
+      "patch": {
+        "operationId": "team.contact.edit",
+        "summary": "Change a team contact's value, label, note or primary flag",
+        "tags": [
+          "team"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the contact's tcn_ id (lore team contact list)",
+            "schema": {
+              "type": "string",
+              "description": "the contact's tcn_ id (lore team contact list)"
+            },
+            "x-lore-field": "id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "description": "free text"
+                  },
+                  "no_primary": {
+                    "type": "boolean",
+                    "description": "no longer the primary"
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "free text"
+                  },
+                  "primary": {
+                    "type": "boolean",
+                    "description": "make it the primary of its type (clears the other)"
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "a new value (checked by its type again)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": {
+                      "type": "object",
+                      "properties": {
+                        "created_by": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "primary": {
+                          "type": "boolean"
+                        },
+                        "team_handle": {
+                          "type": "string"
+                        },
+                        "team_id": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "updated_by": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "value_norm": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "team_id",
+                        "type",
+                        "value",
+                        "value_norm"
+                      ]
+                    },
+                    "verb": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "contact",
+                    "verb",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_CONTACT_TYPE, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_REFUSED, E_SECRET_DETECTED, E_STALE, E_STATUS_CHANGE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/team/contacts/{id}/remove": {
+      "post": {
+        "operationId": "team.contact.remove",
+        "summary": "Remove a team contact (to the trash, restorable)",
+        "tags": [
+          "team"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the contact's tcn_ id",
+            "schema": {
+              "type": "string",
+              "description": "the contact's tcn_ id"
+            },
+            "x-lore-field": "id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "why (kept with the row in the trash)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contact": {
+                      "type": "object",
+                      "properties": {
+                        "created_by": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "primary": {
+                          "type": "boolean"
+                        },
+                        "team_handle": {
+                          "type": "string"
+                        },
+                        "team_id": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "updated_by": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "value_norm": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "team_id",
+                        "type",
+                        "value",
+                        "value_norm"
+                      ]
+                    },
+                    "verb": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "contact",
+                    "verb",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_CONTACT_TYPE, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_REFUSED, E_SECRET_DETECTED, E_STALE, E_STATUS_CHANGE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/team/invites": {
       "get": {
         "operationId": "team.invite.list",
@@ -117174,6 +118031,57 @@
                         "active": {
                           "type": "boolean"
                         },
+                        "contacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "created_by": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "primary": {
+                                "type": "boolean"
+                              },
+                              "team_handle": {
+                                "type": "string"
+                              },
+                              "team_id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "updated_by": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "value_norm": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "team_id",
+                              "type",
+                              "value",
+                              "value_norm"
+                            ]
+                          }
+                        },
                         "created_by": {
                           "type": "string"
                         },
@@ -117418,6 +118326,57 @@
                       "properties": {
                         "active": {
                           "type": "boolean"
+                        },
+                        "contacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "created_by": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "primary": {
+                                "type": "boolean"
+                              },
+                              "team_handle": {
+                                "type": "string"
+                              },
+                              "team_id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "updated_by": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "value_norm": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "team_id",
+                              "type",
+                              "value",
+                              "value_norm"
+                            ]
+                          }
                         },
                         "created_by": {
                           "type": "string"
@@ -117699,6 +118658,57 @@
                           "active": {
                             "type": "boolean"
                           },
+                          "contacts": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "created_by": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "note": {
+                                  "type": "string"
+                                },
+                                "primary": {
+                                  "type": "boolean"
+                                },
+                                "team_handle": {
+                                  "type": "string"
+                                },
+                                "team_id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string"
+                                },
+                                "updated_by": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                },
+                                "value_norm": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "team_id",
+                                "type",
+                                "value",
+                                "value_norm"
+                              ]
+                            }
+                          },
                           "created_by": {
                             "type": "string"
                           },
@@ -117919,6 +118929,57 @@
                       "properties": {
                         "active": {
                           "type": "boolean"
+                        },
+                        "contacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "created_by": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "primary": {
+                                "type": "boolean"
+                              },
+                              "team_handle": {
+                                "type": "string"
+                              },
+                              "team_id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "updated_by": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "value_norm": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "team_id",
+                              "type",
+                              "value",
+                              "value_norm"
+                            ]
+                          }
                         },
                         "created_by": {
                           "type": "string"
@@ -118357,6 +119418,57 @@
                         "active": {
                           "type": "boolean"
                         },
+                        "contacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "created_by": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "primary": {
+                                "type": "boolean"
+                              },
+                              "team_handle": {
+                                "type": "string"
+                              },
+                              "team_id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "updated_by": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "value_norm": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "team_id",
+                              "type",
+                              "value",
+                              "value_norm"
+                            ]
+                          }
+                        },
                         "created_by": {
                           "type": "string"
                         },
@@ -118599,6 +119711,57 @@
                         "active": {
                           "type": "boolean"
                         },
+                        "contacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "created_by": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "primary": {
+                                "type": "boolean"
+                              },
+                              "team_handle": {
+                                "type": "string"
+                              },
+                              "team_id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "updated_by": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "value_norm": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "team_id",
+                              "type",
+                              "value",
+                              "value_norm"
+                            ]
+                          }
+                        },
                         "created_by": {
                           "type": "string"
                         },
@@ -118827,6 +119990,57 @@
                       "properties": {
                         "active": {
                           "type": "boolean"
+                        },
+                        "contacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "created_by": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "primary": {
+                                "type": "boolean"
+                              },
+                              "team_handle": {
+                                "type": "string"
+                              },
+                              "team_id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "updated_by": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "value_norm": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "team_id",
+                              "type",
+                              "value",
+                              "value_norm"
+                            ]
+                          }
                         },
                         "created_by": {
                           "type": "string"
