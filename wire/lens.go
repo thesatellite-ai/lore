@@ -427,7 +427,9 @@ func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, err
 		return opssql.Result{}, err
 	}
 	clientKey, _ := pol.Text(policy.KeyTimeClientKey) // unset = the lens default
-	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Query: r.Query, LoadTrash: loadTrash, TimeClientKey: clientKey, Now: a.Now()}, sc, deleted)
+	// devco D-837: the lens reads and views only the tables the statement
+	// names (a full lens for one naming a derived view, sqlite_* or a pragma).
+	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Query: r.Query, LoadTrash: loadTrash, TimeClientKey: clientKey, Now: a.Now(), Tables: sqlite.QueryTables(r.Query)}, sc, deleted)
 	if err != nil {
 		return opssql.Result{}, err
 	}
