@@ -88,9 +88,12 @@ var v017Prefix = map[string]string{
 
 // v017ID is a 0.1.17-shaped id: prefix, "_", the 32 hex digits of a UUIDv7
 // (lore checks the version), time-ordered like the real ones: the n-th row's
-// timestamp is n seconds after 2026-10-01, so it sorts after the (n-1)-th.
+// timestamp is n seconds after 2025-10-01, so it sorts after the (n-1)-th;
+// like the rows' created_at (V017Repo), it is before every story's clock
+// (journeys.JourneyStart), so a row a story writes is newer than the old
+// repo's rows, as it is on a real machine (devco D-841).
 func v017ID(prefix string, n int) string {
-	const base = 1790812800000 // 2026-10-01T00:00:00Z in Unix ms
+	const base = 1759276800000 // 2025-10-01T00:00:00Z in Unix ms
 	mix := uint64(n) * 0x9e3779b97f4a7c15
 	return fmt.Sprintf("%s_%012x7%03x%x%03x%012x", prefix, base+int64(n)*1000, n&0xfff, 8|(mix>>62), (mix>>48)&0xfff, mix&0xffffffffffff)
 }
@@ -126,7 +129,7 @@ func V017Repo(t testing.TB, dir, name string, shape Shape) V017Project {
 	act := v017ID("act", 1)
 	p := V017Project{ID: prj, Rows: map[string][]string{}}
 	at := func(n int) string {
-		return fmt.Sprintf("2026-10-%02dT%02d:%02d:%02d.000000000Z", 1+n%28, n%24, n%60, (n*7)%60)
+		return fmt.Sprintf("2025-10-%02dT%02d:%02d:%02d.000000000Z", 1+n%28, n%24, n%60, (n*7)%60)
 	}
 	tables := make([]string, 0, len(shape))
 	for tb := range shape {

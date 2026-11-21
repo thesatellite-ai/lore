@@ -118,16 +118,17 @@ func TestNames(t *testing.T) {
 	}
 }
 
-// TestNamesSkipsLeadingFiller (devco D-830): a stop word the terms
-// drop ("the", "a") is not a lead word, so "the session cache holds 5
-// minutes" names "session" like a row opening with the word does, and the
-// newest such row is not pushed out by older rows opening with it; a query
-// of only stop words still needs its own words.
-func TestNamesSkipsLeadingFiller(t *testing.T) {
+// TestNamesCountsLeadingStopWord (devco D-841): a leading stop word is
+// one of the lead words, so "The Pinecrest staging server …" does not
+// name "pinecrest" and the second memory mentioning the client scores
+// below a task whose title holds it (D-830's skip ranked it above, and
+// TestSearchRelevance's "Pinecrest" lost the task from its top 3). A row
+// that only holds the word still comes first among such rows when it is
+// the newest (the "the session cache …" memory of story A).
+func TestNamesCountsLeadingStopWord(t *testing.T) {
 	yes := map[string]string{
-		"session":  "the session cache holds 5 minutes",
-		"alice ng": "The Alice Ng overview",
-		"the who":  "The Who live",
+		"pinecrest": "Pinecrest invoices go out on the first Monday",
+		"the who":   "The Who live",
 	}
 	for q, label := range yes {
 		if !Names(label, Of(q).Terms) {
@@ -135,22 +136,32 @@ func TestNamesSkipsLeadingFiller(t *testing.T) {
 		}
 	}
 	no := map[string]string{
-		"session":  "the cache holds a session",
-		"alice ng": "Lunch with Alice Ng",
+		"pinecrest": "The Pinecrest staging server lives in the ops store",
+		"session":   "the session cache holds 5 minutes",
+		"alice ng":  "The Alice Ng overview",
 	}
 	for q, label := range no {
 		if Names(label, Of(q).Terms) {
 			t.Errorf("Names(%q, %q) = true, want false", label, q)
 		}
 	}
+	w := Of("pinecrest")
+	mems := w.Order([]Item{
+		{Label: "Pinecrest invoices go out on the first Monday of the month.", Matched: 1},
+		{Label: "The Pinecrest staging server lives in the ops store; ask the lead for access.", Matched: 1},
+	}, 10)
+	task := w.Order([]Item{{Label: "Rotate the Pinecrest database password", Matched: 1}}, 10)
+	if mems[1].Score >= task[0].Score {
+		t.Errorf("the second memory mentioning the word scores %.3f, not below the task titled with it (%.3f)", mems[1].Score, task[0].Score)
+	}
 	day := func(d int) time.Time { return time.Date(2026, 11, d, 0, 0, 0, 0, time.UTC) }
 	items := []Item{
-		{Label: "session cache queue deploy", Matched: 1, At: day(1)},
-		{Label: "session cache queue", Matched: 1, At: day(2)},
+		{Label: "worker export invoice router retry token report session cache", Matched: 1, At: day(1)},
+		{Label: "router retry token report session cache queue", Matched: 1, At: day(2)},
 		{Label: "the session cache holds 5 minutes", Matched: 1, At: day(20)},
 	}
 	if got := Of("session").Order(items, 2); got[0].Index != 2 {
-		t.Errorf("the newest row naming the word is not first: %+v", got)
+		t.Errorf("the newest row holding the word is not first: %+v", got)
 	}
 }
 
