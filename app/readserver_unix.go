@@ -81,23 +81,37 @@ var errNotServed = errors.New("read server: not served")
 // (devco:D-838); it exits 1 with readServerLostMsg instead.
 var errServerLost = errors.New("read server: lost while running the command")
 
-// binaryStamp names this lore binary: its path, size, mtime, inode and the
-// version it reports. A server answers only a client with the same stamp,
-// and exits once its own binary changed (an upgrade).
+// binaryStamp names this lore binary: the file it runs from (device and
+// inode), its size, mtime and the version it reports. A server answers
+// only a client with the same stamp, and exits once its own binary changed
+// (an upgrade writes a new file: a new inode, size or mtime).
+//
+// devco:D-864 (issue #94): the stamp names the file, not the path it was
+// started through. On darwin os.Executable is the path the process was
+// started by, so a lore reached through a package manager's symlink and
+// the same file reached through its real path made two stamps for one
+// binary. A copy is another file and still never answers.
 func binaryStamp() string {
 	exe, err := os.Executable()
 	if err != nil {
 		return ""
 	}
-	fi, err := os.Stat(exe)
+	return fileStamp(exe, version)
+}
+
+// fileStamp is binaryStamp of the binary at path reporting version: the
+// same file through any path (a symlink, a hard link) gives the same
+// stamp, another file never does. "" when path cannot be read.
+func fileStamp(path, version string) string {
+	fi, err := os.Stat(path)
 	if err != nil {
 		return ""
 	}
-	ino := uint64(0)
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		ino = st.Ino
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return ""
 	}
-	return exe + "|" + strconv.FormatInt(fi.Size(), 10) + "|" + strconv.FormatInt(fi.ModTime().UnixNano(), 10) + "|" + strconv.FormatUint(ino, 10) + "|" + version
+	return strconv.FormatUint(uint64(st.Dev), 10) + "|" + strconv.FormatUint(st.Ino, 10) + "|" + strconv.FormatInt(fi.Size(), 10) + "|" + strconv.FormatInt(fi.ModTime().UnixNano(), 10) + "|" + version // Dev is int32 on darwin, uint64 on linux
 }
 
 // callReadServer asks the read server to run args. ok is false when the
@@ -368,15 +382,9 @@ func (s *readServer) closedPipe(err error) bool {
 // serveReads is `lore serve-reads`: the server of this lore home until it
 // idles out, its socket goes, or the binary changes. Always exit 0; it
 // prints nothing (its stdio is /dev/null).
-func serveReads(opts []Option) int {
-	o := options{}
-	for _, opt := range opts {
-		opt(&o)
-	}
-	if o.version != "" {
-		version = o.version
-	}
-	setupUI = o.ui
+// Main applied the binary's Options before it called this (applyOptions),
+// so its stamp ends in the same version as every client's.
+func serveReads() int {
 	debug.SetGCPercent(readServerGCPercent)
 	debug.SetMemoryLimit(readServerMemLimit)
 	home, err := lorehome.Resolve()

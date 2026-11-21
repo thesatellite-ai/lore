@@ -44,11 +44,15 @@ import (
 // it would with the release binary.
 const envCLIChild = "LORE_CMDTEST_CHILD"
 
+// envCLIChildVersion is the version a re-executed lore child reports, as a
+// release binary's main passes WithVersion (devco:D-864); unset is "dev".
+const envCLIChildVersion = "LORE_CMDTEST_VERSION"
+
 // TestMain runs the lore command instead of the tests when this binary was
 // started by cliWorld.lore; otherwise the tests.
 func TestMain(m *testing.M) {
 	if os.Getenv(envCLIChild) == "1" {
-		Main() // exits with lore's own status
+		Main(WithVersion(os.Getenv(envCLIChildVersion))) // exits with lore's own status; "" keeps "dev"
 	}
 	// the macOS temp-folder shape on every system (devco D-413): $TMPDIR
 	// is a symlink to the real folder, as macOS /var links to

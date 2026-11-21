@@ -334,3 +334,89 @@ func TestJourneyReadServerStaysFlatAcrossWritesToABigFolder(t *testing.T) {
 		}
 	})
 }
+
+// TestJourneyReadServerAnswersAReleasedLore (devco:D-864, bug hunt H-130,
+// public issue #94): a release build passes its version to the app; the
+// client stamped its call before that version was applied, so its read
+// server declined every read as "another lore binary" and each one ran
+// one-shot. A lore built with a version, reached through a package
+// manager's symlink and through its real path, must have every read
+// served by the one server it started; a copy of the same bytes (another
+// file) is never answered.
+func TestJourneyReadServerAnswersAReleasedLore(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	uma := w.Persona("Uma Reyes", "uma@acme-co.example")
+	lap := uma.Laptop()
+	me := w.Remote("github.com/uma-reyes/lore-me")
+	code := lap.Clone(w.Remote("github.com/acme-co/comet"), "comet")
+	dir := t.TempDir()
+	rel := filepath.Join(dir, "cellar", "lore")
+	if err := os.MkdirAll(filepath.Dir(rel), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-tags", "loretest", "-ldflags", "-s -w -X main.version=0.99.1", "-o", rel, "./cmd/lore")
+	c.Dir = filepath.Join("..", "..")
+	c.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := c.CombinedOutput(); err != nil {
+		t.Fatalf("build a release-shaped lore: %v: %s", err, out)
+	}
+	link := filepath.Join(dir, "bin", "lore")
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(rel, link); err != nil {
+		t.Fatal(err)
+	}
+	w.Step("day1/notes", func() {
+		withBin(t, rel, code, "store", "init", "--name", "me", "--url", me.SSHURL(), "--yes").OK(t)
+		withBin(t, rel, code, "memory", "add", "--body", "Dana reviews the comet deploy checklist on mondays.", "--to", "me/work", "--create", "--yes").OK(t)
+	})
+	w.Step("day1/release-reads-served", func() {
+		q := []string{"ask", "--store", "me", "--query", "who reviews the comet deploy checklist"}
+		oneShot := withBin(t, rel, code, q...).OK(t).Says(t, "Dana reviews")
+		log := filepath.Join(t.TempDir(), "read-server.log")
+		sock := lap.LorePath("run", "read.sock")
+		lap.SetEnv("LORE_READ_SERVER", "1")
+		lap.SetEnv("LORE_TEST_READ_SERVER_LOG", log)
+		defer func() {
+			lap.SetEnv("LORE_READ_SERVER", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_LOG", "")
+			_ = os.Remove(sock) // the server stops once its socket is gone
+		}()
+		withBin(t, link, code, q...).OK(t) // starts the server; runs one-shot itself
+		for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+			if _, err := os.Stat(sock); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("[D-864] no read server listens on %s after a read of lore 0.99.1 started it", sock)
+			}
+		}
+		_ = os.Remove(log)
+		for _, bin := range []string{rel, link, rel, link} {
+			if got := withBin(t, bin, code, q...); got.Stdout != oneShot.Stdout || got.Code != oneShot.Code {
+				t.Errorf("[D-864] served ask through %s differs from one-shot:\nserved: %s\none-shot: %s", bin, got, oneShot)
+			}
+		}
+		if b, _ := os.ReadFile(log); string(b) != strings.Repeat("served\n", 4) {
+			t.Errorf("[D-864] want all 4 reads of the released lore served (symlink and real path alike), the log says:\n%s", b)
+		}
+		cp := filepath.Join(dir, "copy", "lore")
+		if err := os.MkdirAll(filepath.Dir(cp), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(cp, b, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.Remove(log)
+		withBin(t, cp, code, q...).OK(t).Says(t, "Dana reviews")
+		if b, _ := os.ReadFile(log); string(b) != "one-shot\n" {
+			t.Errorf("[D-864] a copy of the binary (another file) must run one-shot, never be answered; the log says:\n%s", b)
+		}
+	})
+}

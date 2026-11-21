@@ -9,4 +9,4 @@ package app
 func callReadServer([]string) (int, bool) { return 0, false }
 
 // serveReads exits at once here: no platform support.
-func serveReads([]Option) int { return 0 }
+func serveReads() int { return 0 }
