@@ -95,7 +95,7 @@ func WithInviteJoin(ctx context.Context, actor string, teams []string) context.C
 // to a team that invite names, every other field unchanged.
 func joinsOwnInvite(ctx context.Context, w engine.GuardedWrite) bool {
 	j, ok := ctx.Value(joinKey{}).(inviteJoin)
-	if !ok || j.actor == "" || w.Before == nil || w.After.Deleted {
+	if !ok || j.actor == "" || w.Before == nil || w.After.Deleted || w.After.Table != schema.TableTeams {
 		return false
 	}
 	if !slices.Contains(j.teams, strings.TrimPrefix(fieldText(*w.Before, "handle"), "@")) {
@@ -137,7 +137,9 @@ func Classify(w engine.GuardedWrite) string {
 	switch {
 	case w.After.Table == schema.TablePolicies:
 		return ChangePolicy
-	case w.After.Table == schema.TableTeams:
+	case w.After.Table == schema.TableTeams, w.After.Table == schema.TableTeamContacts:
+		// A team's contacts are part of the team: only an admin changes
+		// them, like its handle and members.
 		return ChangeTeam
 	case w.Before != nil && CompanyPinned(*w.Before):
 		return ChangePinned

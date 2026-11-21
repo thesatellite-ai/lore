@@ -410,3 +410,20 @@ func pad(s string, n int) string {
 	}
 	return s
 }
+
+// ContactTypes is the effective contact-type list of r: the built-ins with
+// the roster's contact_types rows laid over them. A team's contacts (ops/team
+// team.contact.*) check their type and value against the same list a
+// person's contacts use, so a type added once serves both.
+func ContactTypes(ctx context.Context, r profilestore.Roster) ([]EffectiveType, error) {
+	return loadTypes(ctx, r)
+}
+
+// FindType is name in types, ok false when the list has no such type.
+func FindType(types []EffectiveType, name string) (EffectiveType, bool) { return findType(types, name) }
+
+// TypeForAdd is the live type a new contact may use: unknown or retired is
+// E_CONTACT_TYPE with the line that fixes it.
+func TypeForAdd(types []EffectiveType, name string) (EffectiveType, error) {
+	return typeForAdd(types, name)
+}

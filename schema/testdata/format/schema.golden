@@ -517,6 +517,13 @@ taste_prefs.created_by_actor_id ref
 taste_prefs.project_id ref required
 taste_prefs.scope text
 taste_prefs.tag_ids list[ref]
+team_contacts.label text
+team_contacts.note text
+team_contacts.primary bool
+team_contacts.team_id ref required
+team_contacts.type text required
+team_contacts.value text required
+team_contacts.value_norm text required
 teams.active bool
 teams.display_name text
 teams.handle text required

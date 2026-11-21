@@ -73,3 +73,47 @@ func TestHeldCommitIsNeverPushed(t *testing.T) {
 		t.Errorf("team api as read = %s; want the admin's version", doc)
 	}
 }
+
+// TestMemberTeamContactCommitIsHeld (devco D-867): a team's contacts are
+// an admin's change like its members, so a member's hand-made commit that
+// points @api's chat channel elsewhere is held back by sync and never
+// pushed, with the reason naming the team's contacts.
+func TestMemberTeamContactCommitIsHeld(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	o := newOrgTeam(t)
+	team := teamID(t)
+	_, rest, _ := strings.Cut(teamID(t).String(), "_")
+	contact, err := ids.ParseAny(string(ids.PrefixTeamContact) + "_" + rest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o.h.commit(o.boss.email, map[string]string{
+		orgPath("teams", team): rowJSON("teams", team, map[string]string{"project_id": `"` + o.project.String() + `"`, "handle": `"api"`,
+			"member_actor_ids": `["` + o.boss.actor.String() + `"]`}),
+	})
+	b := orgFolderClone(t, o.h.remote)
+	p := orgPath("team_contacts", contact)
+	body := rowJSON("team_contacts", contact, map[string]string{"team_id": `"` + team.String() + `"`, "type": `"slack"`,
+		"value": `"#not-the-team"`, "value_norm": `"#not-the-team"`, "primary": "true"})
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(b.Dir(), filepath.FromSlash(p))), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(b.Dir(), filepath.FromSlash(p)), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, b.Dir(), "add", "-A")
+	gitT(t, b.Dir(), "commit", "--quiet", "--no-verify", "--author", "max <"+o.max.email+">", "-m", "our channel")
+	rep, err := b.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"team_contacts " + contact.String(), o.max.email, "changes a team's contacts", "kept on this machine, not pushed"} {
+		if !strings.Contains(rep.Held, want) {
+			t.Errorf("sync's hold = %q; want %q in it", rep.Held, want)
+		}
+	}
+	if rep.Pushed {
+		t.Errorf("sync pushed the held commit")
+	}
+}

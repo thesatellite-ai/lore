@@ -257,6 +257,12 @@ var wallTables = map[string]bool{schema.TableProjectMembers: true, schema.TableP
 // a pending invite of theirs names (lore team join).
 var membershipTables = map[string]bool{schema.TableProjectMembers: true, schema.TableTeams: true}
 
+// teamInfoTables are rows about a team that say nothing about who is on
+// it (its chat channel, …, team contact add): still an admin's change, as
+// the local write guard keeps it (profilestore.Classify), so a member's
+// hand-made commit cannot point the team's channel elsewhere either.
+var teamInfoTables = map[string]bool{schema.TableTeamContacts: true}
+
 // gated reports whether table's rows are authority-gated (C35): a
 // stated writer that is not the commit's author holds such a row back,
 // where any other row is read with the author credited.
@@ -969,7 +975,7 @@ func (s *rosterState) refusal(c replayCommit, docOf func(string) (rosterDoc, boo
 	}
 	for _, f := range c.changes {
 		table := tableOfPath(f.path)
-		if (!rosterTables[table] && !membershipTables[table]) || !isRowFile(f.path) {
+		if (!rosterTables[table] && !membershipTables[table] && !teamInfoTables[table]) || !isRowFile(f.path) {
 			continue
 		}
 		old, hadOld := s.docs[f.path]
@@ -1018,6 +1024,8 @@ func (s *rosterState) refusal(c replayCommit, docOf func(string) (rosterDoc, boo
 			if why := s.membershipRefusal(c.author, actor, table, old, hadOld, next, hasNext); why != "" {
 				return why
 			}
+		case schema.TableTeamContacts:
+			return "changes a team's contacts and " + c.author + " is not an admin (only an admin changes the teams)"
 		}
 	}
 	return ""

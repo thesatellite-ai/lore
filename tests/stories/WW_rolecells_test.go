@@ -285,6 +285,16 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 		refused("team member remove", "team", "member", "remove", "--handle", "@"+wubFolder, "--members", "@mo")
 		refused("team rename", "team", "rename", "--handle", "@"+wubFolder, "--to", "@frontend")
 		refused("team remove", "team", "remove", "--handle", "@"+wrcOther)
+		// devco D-867: a team's contacts (its chat channel) are a team
+		// change too: Mo reads them, the admin changes them
+		refused("team contact add", "team", "contact", "add", "--handle", "@"+wubFolder, "--type", "slack", "--value", "#ui-team")
+		r := m.Lore(wc.Dir, "team", "contact", "add", "--handle", "@"+wubFolder, "--type", "slack", "--value", "#ui-team", "--yes").OK(t)
+		tcn := regexp.MustCompile(`tcn_[0-9a-f]+`).FindString(r.Stdout)
+		admin("sync")
+		mo.Lore(mc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "team", "show", "--handle", "@"+wubFolder).OK(t).Says(t, "contacts (1):", "slack  #ui-team  [primary]")
+		refused("team contact remove", "team", "contact", "remove", "--id", tcn)
+		refused("team contact edit", "team", "contact", "edit", "--id", tcn, "--value", "#elsewhere")
 		mo.Lore(mc.Dir, "team", "show", "--handle", "@"+wrcOther).OK(t).Never(t, "@mo")
 		mo.Lore(mc.Dir, "team", "list").OK(t).Says(t, "@"+wubFolder, "@"+wrcOther)
 		// so the add right stays the admin's to give

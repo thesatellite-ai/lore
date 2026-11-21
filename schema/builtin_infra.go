@@ -23,6 +23,18 @@ const (
 	// FieldTeamMembers (O11).
 	JoinTeamMembers = "team_members"
 
+	// TableTeamContacts is one contact of a team: its chat channel, its
+	// mailing list, … (owner org-setup 2026-11-21: people had contacts, a
+	// team had nowhere to keep its Slack channel). The value is checked by
+	// the same contact types as a person's (lore contact-type list); a team
+	// contact is never an identity, so it has no identity flag. It lives
+	// beside the team row, in the roster store.
+	TableTeamContacts = "team_contacts"
+	// FieldTeamContactTeam is the team a team_contacts row belongs to.
+	FieldTeamContactTeam = "team_id"
+	// RelTeamContactTeam is the team_contacts -> teams relation.
+	RelTeamContactTeam = "team"
+
 	// TableMachines is the machine profiles (AGENT_IDENTITY_DESIGN 6.8,
 	// MACHINE PROFILE): one row per machine, in our own shared data only
 	// (org and personal stores), never in a code repo (Q-R3-9) nor a
@@ -52,6 +64,19 @@ func infraDefs() []TableDef {
 			IndexOn("handle"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 			ManyToManyRel(RelTeamMembers, FieldTeamMembers, TableActors, JoinTeamMembers, Cascade),
+		),
+		Table(TableTeamContacts, ids.PrefixTeamContact, Synced(), Noun("team.contact"), Description("one contact of a team: its chat channel, mailing list, …"),
+			Ref(FieldTeamContactTeam, TableTeams, Required()),
+			Text(FieldContactType, Required(), Describe("a contact type name (lore contact-type list)")),
+			Text(FieldContactValue, Required(), Describe("as typed")),
+			Text(FieldContactValueNorm, Required(), Describe("the normalised value; written by lore")),
+			Text(FieldContactLabel, Describe("free text: announcements, on-call, …")),
+			Bool(FieldContactPrimary, Describe("the primary contact of its type")),
+			Text(FieldContactNote),
+			UniqueOn(FieldTeamContactTeam, FieldContactType, FieldContactValueNorm), // natural id (TS-5): first
+			IndexOn(FieldTeamContactTeam),
+			// A removed team keeps its row (team remove), so TombstoneOnly.
+			BelongsToRel(RelTeamContactTeam, FieldTeamContactTeam, TableTeams, TombstoneOnly),
 		),
 		Table(TableMachines, ids.PrefixMachine, Synced(), GlobalKey(), Description("machine profiles: what each machine that writes rows is"),
 			Text(FieldMachineID, Required(), Describe("the full machine id, mch_ + 64 hex (the _w.m stamp)")),

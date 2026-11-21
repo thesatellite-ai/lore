@@ -97,6 +97,7 @@ var deleteExceptions = map[row.Table]deletePath{
 	// (TS-1), which this harness's no-org repo refuses for writes; ended
 	// stints and memberships are kept on purpose (TP-12, TP-14).
 	schema.TableActorContacts:  {none: noRowDelete + "a contact is removed with actor.contact.remove on the org roster store (a no-org repo refuses profile writes, TS-1)"},
+	schema.TableTeamContacts:   {none: noRowDelete + "a team contact is removed with team.contact.remove on the org roster store (a no-org repo refuses roster writes)"},
 	schema.TableActorPeriods:   {none: noRowDelete + "a company stint is ended (actor.offboard) or corrected (actor.period.edit), never deleted (TP-14)"},
 	schema.TableProjectMembers: {none: noRowDelete + "a membership is ended with project.member.remove and kept as history (TP-12)"},
 	schema.TableContactTypes:   {none: noRowDelete + "a contact type is retired (contact_type.edit --retire): contacts store its name (TS-2)"},
