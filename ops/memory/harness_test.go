@@ -14,7 +14,9 @@ import (
 // and compares every human line with v0.1.17's output for the same steps
 // (captured with the 0.1.17 binary, ids replaced): the add line keeps its
 // trailing space, show prints trust with two decimals, a superseded
-// memory stays listed, search prints "<id> <body>".
+// memory stays listed, search prints "<id> <body>". 0.1.18 delta (devco
+// D-820): the superseded memory is marked [history: superseded by …] in
+// list and search, and search lists it after the current one.
 func TestTextMatchesV017(t *testing.T) {
 	h := opstest.New(t)
 	r := h.Must(memory.OpAdd, `{"body":"use pgx not database/sql","kind":"core"}`)
@@ -26,7 +28,7 @@ func TestTextMatchesV017(t *testing.T) {
 		{memory.OpList, ``, "mem_ID [core] use pgx not database/sql\n"},
 		{memory.OpShow, `{"id":"` + m1 + `"}`, "mem_ID\n  kind:   core\n  trust:  0.50\n  source: manual\n\nuse pgx not database/sql\n"},
 		{memory.OpAdd, `{"body":"use pgx v5","supersedes":"` + m1 + `"}`, "✓ mem_ID\n  scope: [project]\n"},
-		{memory.OpList, ``, "mem_ID [core] use pgx not database/sql\nmem_ID [retrieved] use pgx v5\n"},
+		{memory.OpList, ``, "mem_ID [core] use pgx not database/sql [history: superseded by mem_ID]\nmem_ID [retrieved] use pgx v5\n"},
 		{memory.OpArchive, `{"id":"` + m1 + `"}`, "✓ mem_ID archived\n"},
 		{memory.OpUnarchive, `{"id":"` + m1 + `"}`, "✓ mem_ID unarchived\n"},
 	}
@@ -40,7 +42,7 @@ func TestTextMatchesV017(t *testing.T) {
 		}
 	}
 	got := opstest.IDPattern(opstest.Text(h.Must(memory.OpSearch, `{"query":"pgx"}`)))
-	if got != "mem_ID use pgx v5\nmem_ID use pgx not database/sql\n" && got != "mem_ID use pgx not database/sql\nmem_ID use pgx v5\n" {
+	if got != "mem_ID use pgx v5\nmem_ID use pgx not database/sql [history: superseded by mem_ID]\n" {
 		t.Fatalf("search %q", got)
 	}
 	h.Fails(memory.OpAdd, `{"body":"again","supersedes":"`+m1+`"}`, errs.InvalidInput)

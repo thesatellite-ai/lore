@@ -143,6 +143,10 @@ type ListOut struct {
 	Data          []Record `json:"data"`
 	// Notes are the metadata filter's lines (METADATA 3.7, 3.13).
 	Notes []string `json:"notes,omitempty"`
+	// now is when the list was read: a memory whose valid_until is not
+	// after it prints as history (devco D-820); --json already carries
+	// valid_until and superseded_by_id.
+	now time.Time
 }
 
 // Record is one memory in v0.1.17's --json form: the ent Memory struct's
@@ -321,6 +325,9 @@ type SearchHit struct {
 	Row     HitRow  `json:"row"`
 	// Store is set for a hit of a store other than the repo's own.
 	Store store.SourceRef `json:"_source,omitempty,omitzero"`
+	// history marks a hit that is no longer current (schema.RowHistory,
+	// devco D-820) in the text; --json carries the row's own fields.
+	history string
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
 	// Meta / MetaMasked are the row's metadata by name, sensitive values

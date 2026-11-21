@@ -34,6 +34,10 @@ type Item struct {
 	// Answer is what the item presents as the answer, its history left
 	// out: what the stale check reads.
 	Answer string
+	// History marks a row lore says is no longer the current answer
+	// (superseded, past valid_until, replaced by a newer row): it presents
+	// nothing as the answer, so it is never stale and never top-1 right.
+	History bool
 }
 
 // askJSON mirrors the parts of ask.run's JSON output the grade reads (the
@@ -63,11 +67,12 @@ type askJSON struct {
 		OwedTo string `json:"owed_to"`
 	} `json:"tasks"`
 	Rows []struct {
-		ID    string `json:"id"`
-		At    string `json:"at"`
-		Title string `json:"title"`
-		Body  string `json:"body"`
-		Note  string `json:"note"`
+		ID      string `json:"id"`
+		At      string `json:"at"`
+		Title   string `json:"title"`
+		Body    string `json:"body"`
+		Note    string `json:"note"`
+		History string `json:"history"`
 	} `json:"rows"`
 	// Ranked is the reading order (kind resource, task or row + id).
 	Ranked []struct {
@@ -104,6 +109,10 @@ func Items(out []byte) ([]Item, error) {
 	}
 	for _, r := range a.Rows {
 		s := strings.TrimSpace(r.At + " " + r.Title + "\n" + r.Body + "\n" + r.Note)
+		if r.History != "" { // what used to be true: history, not the answer
+			items = append(items, Item{Kind: "row", ID: r.ID, Text: s + "\n" + r.History, History: true})
+			continue
+		}
 		items = append(items, Item{Kind: "row", ID: r.ID, Answer: s, Text: s})
 	}
 	if len(a.Ranked) == 0 {
@@ -190,7 +199,7 @@ func GradeAccuracy(q Question, items []Item) Accuracy {
 	}
 	if len(items) > 0 {
 		first := items[0]
-		a.Top1 = len(staleIn(first)) == 0
+		a.Top1 = len(staleIn(first)) == 0 && !first.History
 		hit := false
 		for _, r := range q.Required {
 			if has(first.Text, r) {

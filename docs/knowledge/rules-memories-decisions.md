@@ -138,7 +138,7 @@ Rows linked by older versions point the wrong way; run `lore doctor --fix` once 
 
 ## Step 6 — Mark a memory as no longer true
 
-`lore memory invalidate --id <id>` stamps the memory with a *valid until* time (the moment it stopped being true) without deleting it. Use it when a fact goes out of date, like an office move.
+`lore memory invalidate --id <id>` stamps the memory with a *valid until* time (the moment it stopped being true) without deleting it. Use it when a fact goes out of date, like an office move. From then on, and for a memory or decision another one superseded, every read that recalls it shows it as history, never as the current answer: `lore ask` and `lore search` list it after the current rows, and `lore ask`, `lore search`, `lore memory list`, `lore memory search` and `lore resource show --with-refs` mark it `[history: valid until <day>]` or `[history: superseded by <id>]` (`history` in the `--json` of ask, search and resource show).
 
 <!-- example: knowledge#invalidate only=2,4 -->
 ```console

@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Human (op.Texter) forms of the memory outputs: v0.1.17's lines from
@@ -79,6 +80,9 @@ func (o ListOut) rowsText() string {
 		if !m.ArchivedAt.IsZero() {
 			badge = " [archived]"
 		}
+		if h := schema.HistoryNote(m.SupersededByID, m.ValidUntil, o.now); h != "" {
+			badge += " [" + h + "]" // devco D-820: an old fact reads as history
+		}
 		fmt.Fprintf(w, "%s [%s] %s%s%s\n", m.ID, m.Kind, cutBody(textcut.OneLine(m.Body)), badge, LabelSuffix(m.Label))
 	}
 	return b.String() + ext.String()
@@ -116,6 +120,10 @@ func (o SearchOut) Text() string {
 	}
 	var b strings.Builder
 	for _, h := range o.Data {
+		if h.history != "" {
+			fmt.Fprintf(&b, "%s %s [%s]\n", h.ID, h.Row.Body, h.history)
+			continue
+		}
 		fmt.Fprintf(&b, "%s %s\n", h.ID, h.Row.Body)
 	}
 	if o.More {

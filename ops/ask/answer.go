@@ -9,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/logic/plural"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // taskRow is one open task as the lens holds it, with its debt metadata
@@ -31,8 +32,12 @@ type textRow struct {
 	// Imported marks a row brought in from a feed (source_kind imported):
 	// noise next to what a person wrote, so it ranks after it.
 	Imported bool
-	// Superseded marks a row another row replaced.
-	Superseded bool
+	// SupersededBy is the id of the row that replaced this one
+	// (superseded_by_id), "" when none.
+	SupersededBy string
+	// ValidUntil is a memory's valid_until: from then on it is history
+	// (lore memory invalidate sets it); zero when unset.
+	ValidUntil time.Time
 	// Day is the row's day metadata (YYYY-MM-DD), "" when none.
 	Day string
 	// Refs are the resources the row's text references (row_refs).
@@ -65,6 +70,50 @@ type scored struct {
 	row     *textRow
 	score   int
 	matched []string
+	// history says why the row is no longer the current answer, "" when
+	// it is current (staleNote, replacedNote).
+	history string
+	// replacedBy is the id of the newer row that replaced this one on the
+	// same thing (markReplaced), "" when none.
+	replacedBy string
+}
+
+// staleNote says why row r is no longer the current answer as lore
+// stores it: superseded by another row, or past its valid_until at now;
+// "" when it is current. Why (devco D-820, owner): a fact that changed
+// must never be handed to an agent as the answer, only as history.
+func staleNote(r *textRow, now time.Time) string {
+	return schema.HistoryNote(r.SupersededBy, r.ValidUntil, now)
+}
+
+// markReplaced marks the rows of all that a newer current row replaced:
+// the same folder and the same topics and words of the question (so the
+// same thing: a budget, a gym, a status) but older. Each points at the
+// newest such row, which says what it replaces. Rows matching nothing but
+// a name are left alone: two rows that only name alice-ng say different
+// things.
+func markReplaced(all []scored) {
+	for i := range all {
+		s := &all[i]
+		if s.history != "" || len(s.matched) == 0 {
+			continue
+		}
+		var newest *scored
+		for j := range all {
+			n := &all[j]
+			if j == i || n.history != "" || n.row.Place != s.row.Place || !slices.Equal(n.matched, s.matched) || !n.row.At.After(s.row.At) {
+				continue
+			}
+			if newest == nil || n.row.At.After(newest.row.At) {
+				newest = n
+			}
+		}
+		if newest == nil {
+			continue
+		}
+		s.history = fmt.Sprintf("history: replaced by %s from %s", newest.row.ID, newest.row.At.UTC().Format(dates.DayLayout))
+		s.replacedBy = newest.row.ID
+	}
 }
 
 // build answers q from d: the matched resources, the open tasks that
@@ -139,7 +188,7 @@ func leadOf(q question, identity bool, o *Out) answerFirst {
 		return leadTasks
 	case !q.window.IsZero() && len(o.Rows) > 0:
 		return leadRows
-	case len(o.Rows) > 0 && len(o.Rows[0].Matched) > 0:
+	case len(o.Rows) > 0 && len(o.Rows[0].Matched) > 0 && o.Rows[0].History == "":
 		// the best row holds what the question asks for, not only the name
 		return leadRows
 	}
@@ -401,7 +450,7 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	if r.Imported {
 		s.score -= 2
 	}
-	if r.Superseded {
+	if r.SupersededBy != "" {
 		s.score -= 3
 	}
 	return s, true
@@ -457,6 +506,24 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 		// that only name the resource would pad the answer
 		all = slices.DeleteFunc(all, func(s scored) bool { return len(s.matched) == 0 })
 	}
+	for i := range all {
+		all[i].history = staleNote(all[i].row, q.now)
+	}
+	markReplaced(all)
+	// history (superseded, expired, replaced) never stands where the
+	// current answer goes: the current rows are picked first, history
+	// only fills what is left of top, marked (devco D-820)
+	var hist []scored
+	cur := slices.DeleteFunc(slices.Clone(all), func(s scored) bool { return s.history != "" })
+	for _, s := range all {
+		if s.history != "" {
+			hist = append(hist, s)
+		}
+	}
+	all = cur
+	if len(all) == 0 {
+		all, hist = hist, nil
+	}
 	var pick []scored
 	taken := map[string]bool{}
 	places := map[string]bool{}
@@ -487,19 +554,28 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 	}
 	slices.SortStableFunc(pick[:lead], byScoreThenNewest)
 	slices.SortStableFunc(pick[lead:], byScoreThenNewest)
+	for _, s := range hist {
+		if len(pick) >= top {
+			break
+		}
+		pick = append(pick, s)
+	}
 	out := make([]Row, 0, len(pick))
 	for _, s := range pick {
-		out = append(out, rowOf(s.row, s.matched))
-	}
-	// a fact that changed: the newest row on the same thing comes first
-	// and says what it replaces
-	if len(pick) > 1 {
-		for _, s := range pick[1:] {
-			if slices.Equal(s.matched, pick[0].matched) && len(s.matched) > 0 && s.row.At.Before(pick[0].row.At) && s.score == pick[0].score {
-				out[0].Note = fmt.Sprintf("newest: it replaces %s from %s", s.row.ID, s.row.At.UTC().Format(dates.DayLayout))
-				break
+		r := rowOf(s.row, s.matched)
+		r.History = s.history
+		// a fact that changed: the newest row on the same thing says
+		// which of the rows shown with it it replaces (the newest of them)
+		var last *textRow
+		for _, h := range pick {
+			if h.replacedBy == s.row.ID && (last == nil || h.row.At.After(last.At)) {
+				last = h.row
 			}
 		}
+		if last != nil {
+			r.Note = fmt.Sprintf("newest: it replaces %s from %s", last.ID, last.At.UTC().Format(dates.DayLayout))
+		}
+		out = append(out, r)
 	}
 	return out, lead
 }
@@ -542,7 +618,9 @@ func windowRows(q question, ms []match, rows []textRow) []Row {
 	})
 	out := make([]Row, 0, len(pick))
 	for _, r := range pick {
-		out = append(out, rowOf(r, nil))
+		row := rowOf(r, nil)
+		row.History = staleNote(r, q.now) // what happened that day stays, marked when no longer true
+		out = append(out, row)
 	}
 	return out
 }
@@ -747,6 +825,9 @@ func (r Row) text(i int) string {
 	fmt.Fprintf(&b, "\n%d. %s  %s %s  (%s)", i+1, r.At, r.Table, r.ID, r.Place)
 	if r.Note != "" {
 		b.WriteString("  " + r.Note)
+	}
+	if r.History != "" {
+		b.WriteString("  [" + r.History + "]")
 	}
 	b.WriteString("\n")
 	if r.Title != "" && r.Title != r.Body {

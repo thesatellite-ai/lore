@@ -187,6 +187,16 @@ func TestItemsReadsAskJSON(t *testing.T) {
 	if !strings.Contains(items[0].Text, "cobalt-co") || strings.Contains(items[0].Answer, "cobalt-co") || !strings.Contains(items[0].Answer, "company: acme-co") {
 		t.Errorf("history: text %q answer %q", items[0].Text, items[0].Answer)
 	}
+	// a row lore marks as history (devco D-820) presents no answer: its
+	// old value is in Text for recall, never in Answer for the stale check
+	hist := strings.Replace(out, `"note":""}]`, `"note":""},{"id":"m0","body":"company: cobalt-co","history":"history: replaced by m1 from 2026-11-03"}]`, 1)
+	hitems, err := Items([]byte(hist))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := hitems[len(hitems)-1]; !h.History || h.Answer != "" || !strings.Contains(h.Text, "cobalt-co") {
+		t.Errorf("history row read as %+v", h)
+	}
 	if _, err := Items([]byte("not json")); err == nil {
 		t.Error("output that is not JSON read as an answer")
 	}
@@ -221,6 +231,15 @@ func TestGradeAccuracy(t *testing.T) {
 	// an old value presented as an answer in the top 3 is stale
 	if a := GradeAccuracy(q, []Item{res, stale}); len(a.Stale) != 1 {
 		t.Errorf("stale row in the top 3 graded %+v", a)
+	}
+	// the same old value marked as history is not stale, and a history
+	// row first is never top-1 right (devco D-820)
+	histItem := Item{Kind: "row", ID: "m0", Text: "company: cobalt-co alice-ng engineer acme-co", History: true}
+	if a := GradeAccuracy(q, []Item{res, histItem}); len(a.Stale) != 0 || !a.Top1 {
+		t.Errorf("history row in the top 3 graded %+v", a)
+	}
+	if a := GradeAccuracy(q, []Item{histItem, res}); a.Top1 {
+		t.Errorf("history row first graded top-1 right %+v", a)
 	}
 	// Need widens recall: seven days in seven rows
 	week := Question{Required: []string{"d1", "d2", "d3", "d4"}, Subject: []string{"2026-11-02"}, Need: 4}
