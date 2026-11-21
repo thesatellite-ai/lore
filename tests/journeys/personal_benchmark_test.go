@@ -206,4 +206,29 @@ func TestJourneySoloPersonalBenchmark(t *testing.T) {
 			}
 		}
 	})
+
+	// --full prints the whole text of the best hits only (devco D-800,
+	// owner P-17): over fifty matching notes it printed every body under
+	// a line that already held a cut of it, more text than grep read for
+	// the same question
+	w.Step("day5/full-prints-the-top-hits-whole", func() {
+		bodies := func(out string) int {
+			n := 0
+			for _, line := range strings.Split(out, "\n") {
+				if strings.HasPrefix(line, "    note") {
+					n++
+				}
+			}
+			return n
+		}
+		for _, p := range places {
+			top := lap.Lore(p.dir, "search", "--store", "me", "--query", "budget", "--limit", "50", "--full").OK(t)
+			if n := bodies(top.Out()); n != 3 || !strings.Contains(top.Out(), "the other 47 show their snippet; add --full-top 50") {
+				t.Errorf("[D-800 %s] search --full over 50 notes printed %d whole texts (want the best 3) or no --full-top note:\n%s", p.name, n, top)
+			}
+			if every := lap.Lore(p.dir, "search", "--store", "me", "--query", "budget", "--limit", "50", "--full-top", "50").OK(t); bodies(every.Out()) != 50 || strings.Contains(every.Out(), "--full-top") {
+				t.Errorf("[D-800 %s] search --full-top 50 did not print all 50 notes whole:\n%s", p.name, every)
+			}
+		}
+	})
 }

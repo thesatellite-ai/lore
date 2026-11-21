@@ -72687,7 +72687,11 @@
                   },
                   "full": {
                     "type": "boolean",
-                    "description": "print each hit's whole text (its body) under its line, not only the snippet; --json adds it as text"
+                    "description": "print the whole text (body) of the best hits under their line instead of the snippet (the top 3, see --full-top); --json adds it as text on those hits"
+                  },
+                  "full_top": {
+                    "type": "integer",
+                    "description": "with --full, how many of the best hits print their whole text (default 3; implies --full); the other hits keep their snippet"
                   },
                   "include_archived": {
                     "type": "boolean",

@@ -46,7 +46,7 @@ dec_7a67…9504 [accepted] We use Stripe for payments
 
 `--json` prints the same hits in a stable shape for scripts and tools: the kind, the id, the score, the snippet with the found words between `<b>` and `</b>`, the row's `title` (a title or name; empty for a rule or memory), a resource's `resource_kind`, and `partial: true` on a hit that holds only some of the words.
 
-The snippet is the text around the found words, about 100 characters. `--full` prints each hit's whole text (a note's body, or the longest field the words were found in) under its line, indented, so `lore search --query "ledger totals" --full` answers in one command; with `--json` the hit carries it as `text`. People, teams and resources never carry `text`: `lore resource show --id <name>` prints a resource whole.
+The snippet is the text around the found words, about 100 characters. `--full` prints the whole text (a note's body, or the longest field the words were found in) of the best 3 hits under their line, indented, in place of the snippet, so `lore search --query "ledger totals" --full` answers in one command; the other hits keep their snippet line, and a note at the end says how many and the flag that prints them whole. `--full-top <n>` sets how many of the best hits print whole and turns `--full` on: `lore search --query "ledger totals" --full-top 10`. With `--json` the same top hits carry it as `text`. People, teams and resources never carry `text`: `lore resource show --id <name>` prints a resource whole.
 
 <!-- example: search#search-json -->
 ```console

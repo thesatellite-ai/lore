@@ -64,6 +64,11 @@ const (
 const (
 	DefaultLimit    = 20
 	DefaultPerTable = 10
+	// DefaultFullTop is how many of the best hits --full prints whole
+	// (devco D-800, owner P-17): every hit's body made `search --full`
+	// read more text than grep on the same question, so the hits past
+	// the top keep their snippet unless --full-top asks for more.
+	DefaultFullTop = 3
 	// BodyMax is the label length of a body-labelled hit (truncBody).
 	BodyMax = 80
 	// lineMax caps one printed hit text (v0.1.17: 100, cut to 97 + "...").
@@ -292,7 +297,10 @@ type RunIn struct {
 	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope (reserved)"`
 	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store)"`
-	Full            bool     `json:"full,omitempty" flag:"full" desc:"print each hit's whole text (its body) under its line, not only the snippet; --json adds it as text"`
+	Full            bool     `json:"full,omitempty" flag:"full" desc:"print the whole text (body) of the best hits under their line instead of the snippet (the top 3, see --full-top); --json adds it as text on those hits"`
+	// FullTop is --full-top (devco D-800): how many of the best hits
+	// --full prints whole; 0 = DefaultFullTop. Giving it turns --full on.
+	FullTop int `json:"full_top,omitempty" flag:"full-top" min:"1" desc:"with --full, how many of the best hits print their whole text (default 3; implies --full); the other hits keep their snippet"`
 	// Born is the --born-branch flag every list shares (D-392).
 	metalist.Born
 	// Since / Until keep rows whose date falls in the window (P-9): the
@@ -327,6 +335,10 @@ type RunOut struct {
 	matched int
 	// limit is the --limit the search ran with, for the cut note.
 	limit int
+	// fullTop / fullCapped are --full's cut (devco D-800): how many hits
+	// print their whole text, and how many more had one and show only
+	// their snippet, for the note that says how to print them.
+	fullTop, fullCapped int
 }
 
 // StatusIn is the input of search.status.
@@ -432,6 +444,12 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if in.Limit <= 0 {
 		in.Limit = DefaultLimit
 	}
+	if in.FullTop > 0 {
+		in.Full = true // --full-top 5 alone means --full for the top 5
+	}
+	if in.FullTop <= 0 {
+		in.FullTop = DefaultFullTop
+	}
 	res, err := env.GlobalSearch(ctx, Request{
 		Query: in.Query, Targets: targets, Limit: in.Limit, PerTable: in.PerTable,
 		IncludeArchived: in.IncludeArchived, IncludeDeleted: in.IncludeDeleted,
@@ -445,9 +463,19 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if hits == nil {
 		hits = []Hit{}
 	}
-	if !in.Full {
-		for i := range hits {
+	capped := 0
+	for i := range hits {
+		if hits[i].Text == "" {
+			continue
+		}
+		switch {
+		case !in.Full:
 			hits[i].Text = "" // D-758: the whole text only on --full
+		case i >= in.FullTop:
+			// D-800: the whole text only for the best hits; the rest keep
+			// their snippet (hits are best first, the trash after them)
+			hits[i].Text = ""
+			capped++
 		}
 	}
 	if me, ok := env.(metashow.Env); ok {
@@ -462,7 +490,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	return RunOut{
 		SchemaVersion: SchemaVersion, Kind: KindGlobal, Count: len(hits),
 		Data:    RunData{Query: in.Query, Count: len(hits), Hits: hits, External: []Hit{}, More: res.More},
-		matched: res.MatchedTables, limit: in.Limit,
+		matched: res.MatchedTables, limit: in.Limit, fullTop: in.FullTop, fullCapped: capped,
 	}, nil
 }
 
@@ -509,21 +537,51 @@ func (o RunOut) Text() string {
 	for _, h := range o.Data.Hits {
 		pretty := hitID(h)
 		body := hitText(h)
+		if h.Text != "" {
+			// D-800: the whole text follows, so the line holds the title
+			// alone: the snippet repeated a cut of the same words
+			body = fullHitTitle(h)
+		}
 		if h.Source.Store != "" {
 			body += "  " + StoreLabel(h.Source)
 		}
 		if h.InTrash {
 			body += "  (in the trash)"
 		}
-		fmt.Fprintf(&b, "%s  %s  %s  (score=%.3f)\n", padRight(h.Entity, typeW), padRight(pretty, idW), body, h.Score)
+		if body = strings.TrimPrefix(body, "  "); body != "" {
+			body += "  "
+		}
+		fmt.Fprintf(&b, "%s  %s  %s(score=%.3f)\n", padRight(h.Entity, typeW), padRight(pretty, idW), body, h.Score)
 		if h.Text != "" {
 			b.WriteString(fullText(h.Text))
 		}
+	}
+	if o.fullCapped > 0 {
+		b.WriteString(fullCapNote(o.fullTop, o.fullCapped))
 	}
 	if o.Data.More {
 		b.WriteString(morehits.Note(n, o.limit))
 	}
 	return b.String()
+}
+
+// fullCapNote is the line a --full search ends with when hits past the
+// top printed only their snippet (devco D-800): how many, and the flag
+// that prints them whole.
+func fullCapNote(top, capped int) string {
+	return fmt.Sprintf("note: the whole text is printed for the best %d %s; the other %d show their snippet; add --full-top %d to print them whole\n",
+		top, plural(top, "hit", "hits"), capped, top+capped)
+}
+
+// fullHitTitle is the line text of a hit printed whole: its title (a
+// resource's name and kind) without the snippet, else nothing, since the
+// whole text follows under the line.
+func fullHitTitle(h Hit) string {
+	title := textcut.Cut(h.Title, titleMax, titleMax-len(textcut.Ellipsis))
+	if title != "" && h.ResourceKind != "" {
+		title += " (" + h.ResourceKind + ")"
+	}
+	return title
 }
 
 // fullIndent indents a --full hit's text under its line.
