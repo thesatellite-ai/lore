@@ -153,6 +153,9 @@ type rosterDoc struct {
 	CreatedByID string `json:"created_by_actor_id"`
 	HLC         string `json:"_hlc"`
 	ProjectID   string `json:"project_id"`
+	// Severity is a rule's or a hotfix's severity: the role rule (devco
+	// D-851) keeps a company must rule or critical/high hotfix an admin's
+	Severity string `json:"severity"`
 	// project and team membership (devco D-328): a membership's roles and
 	// stint, a team's handle and actors, an invite's projects and teams
 	Roles    strList         `json:"roles"`
@@ -839,11 +842,23 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 	// read every roster blob once, up front
 	var names []string
 	seen := map[string]bool{}
+	want := func(sha string) {
+		if !zeroBlob(sha) && sha != "" && !seen[sha] {
+			seen[sha] = true
+			names = append(names, sha)
+		}
+	}
 	for _, c := range commits {
 		for _, f := range c.changes {
-			if isRowFile(f.path) && !zeroBlob(f.newBlob) && !seen[f.newBlob] {
-				seen[f.newBlob] = true
-				names = append(names, f.newBlob)
+			if !isRowFile(f.path) {
+				continue
+			}
+			want(f.newBlob)
+			if pinnable(tableOfPath(f.path)) {
+				// the role rule judges the version a commit replaced
+				// (devco D-851): an incremental replay has not read it
+				want(f.oldBlob)
+				want(a.accepted[f.path])
 			}
 		}
 	}
@@ -880,6 +895,9 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 			credited := false
 			if reason == "" {
 				reason, credited = st.fileRefusal(c, actor, f, docOf)
+			}
+			if reason == "" {
+				reason = st.roleRefusal(c, actor, f, accepted[f.path], docOf)
 			}
 			if reason != "" {
 				a.refused[c.id] = true
@@ -1190,6 +1208,111 @@ func (s *rosterState) fileRefusal(c replayCommit, actor string, f fileChange, do
 		return "", credit
 	}
 	return "written by " + c.author + ", a contractor in this org, outside their projects' folders", false
+}
+
+// pinnable reports whether table's rows can be company pinned (a must
+// rule, a critical/high hotfix: profilestore.CompanyPinned).
+func pinnable(table string) bool {
+	return table == schema.TableRules || table == schema.TableHotfixes
+}
+
+// pinned reports whether d, a row file of table, is company pinned: a
+// live must rule or critical/high hotfix every repo reading its place
+// gets in full (profilestore.CompanyPinned; an L3 adapter cannot import
+// ops).
+func (d rosterDoc) pinned(table string) bool {
+	if d.deleted() {
+		return false
+	}
+	switch table {
+	case schema.TableRules:
+		return d.Severity == schema.RuleSeverityMust
+	case schema.TableHotfixes:
+		return d.Severity == schema.HotfixSeverityCritical || d.Severity == schema.HotfixSeverityHigh
+	}
+	return false
+}
+
+// roleRefusal is the role rule of the write guard (ops/profilestore
+// writeguard.go) applied to a commit made without lore (devco D-851): in
+// a store that holds the org folder every folder is company ground, so a
+// commit whose author is not an admin (or not on the roster at all) may
+// not change a policy, change or remove a company pinned row, or add one
+// (or raise a row to pinned) outside a folder of a team the author is on.
+// Without it a member's plain `git commit` of a must rule, with any
+// created_by it liked, reached every teammate's context as a company
+// must. The author is judged, never the writer the row states: a forged
+// created_by cannot make a row an admin's. acceptedBlob is the version
+// the replay accepted last ("" none); a version whose stamp and content
+// an admin committed before (a conflict settled with --take other, a
+// revert) and a rewrite that leaves the content as it was (a format
+// migration) pass. "" = allowed.
+func (s *rosterState) roleRefusal(c replayCommit, actor string, f fileChange, acceptedBlob string, docOf func(string) (rosterDoc, bool)) string {
+	if s.orgless || !s.hasAdmin() || (actor != "" && s.isAdmin(actor)) {
+		return ""
+	}
+	table := tableOfPath(f.path)
+	if table != schema.TablePolicies && !pinnable(table) {
+		return ""
+	}
+	next, hasNext := docOf(f.newBlob)
+	if zeroBlob(f.newBlob) {
+		hasNext = false
+	}
+	if hasNext && next.UpdatedBy != "" && s.isAdmin(next.UpdatedBy) && s.stampBy(f.path, next.HLC, next.UpdatedBy, next.content) {
+		return "" // an admin's accepted version, carried as it was
+	}
+	who := c.author + " is not an admin"
+	if actor == "" {
+		who = c.author + " is not on the roster"
+	}
+	if table == schema.TablePolicies {
+		return "changes a company policy without lore and " + who
+	}
+	var prevs []rosterDoc
+	for _, sha := range []string{f.oldBlob, acceptedBlob} {
+		if d, ok := docOf(sha); ok && !zeroBlob(sha) {
+			prevs = append(prevs, d)
+		}
+	}
+	for _, p := range prevs {
+		if !p.pinned(table) {
+			continue
+		}
+		if hasNext && next.content == p.content {
+			return "" // the same row, rewritten (a format migration)
+		}
+		return "changes " + pinnedName(table) + " of the company and " + who
+	}
+	if !hasNext || !next.pinned(table) {
+		return ""
+	}
+	if folder, _, ok := rowPlace(f.path); ok && actor != "" && s.onTeamOf(actor, folder) {
+		return "" // a member adds in the folder of a team they are on
+	}
+	return "adds " + pinnedName(table) + " to the company folder, outside a folder of a team the author is on, and " + who
+}
+
+// pinnedName names a pinned row of table in a hold's reason.
+func pinnedName(table string) string {
+	if table == schema.TableHotfixes {
+		return "a critical/high hotfix"
+	}
+	return "a must rule"
+}
+
+// onTeamOf reports whether actor is on an active team whose handle is
+// folder (a member's add right, profilestore callerTeams).
+func (s *rosterState) onTeamOf(actor, folder string) bool {
+	for _, d := range s.byTable(schema.TableTeams) {
+		if strings.TrimPrefix(d.Handle, "@") != folder || d.LeftAt != "" || string(d.Active) == "false" {
+			continue
+		}
+		if d.Members.has(actor) {
+			return true
+		}
+	}
+	return false
 }
 
 // forOrgless is a copy of s's roster for checking a store with no org

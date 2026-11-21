@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/fspath"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -969,6 +970,26 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 			}
 			names = append(names, name)
 			rels[name], roots[name] = rel, p
+		}
+	}
+	if from == "" && auth != nil {
+		// a held removal (a member's `git rm` of a row only an admin may
+		// change, devco D-851): ls-tree no longer lists the file, so a full
+		// read serves its last accepted version from the hold itself
+		listed := make(map[string]bool, len(paths))
+		for _, p := range paths {
+			listed[p] = true
+		}
+		tables := store.TablesOf(ctx)
+		for p := range auth.held {
+			blob := auth.trusted[p]
+			if blob == "" || listed[p] || (hinted && !slices.Contains(tables, row.Table(tableOfPath(p)))) {
+				continue
+			}
+			if rel, ok := b.folder.FileRel(p); ok {
+				names = append(names, blob)
+				rels[blob], roots[blob] = rel, p
+			}
 		}
 	}
 	// round-6 follow-up: a row held back after the cache already took it

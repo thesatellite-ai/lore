@@ -187,6 +187,48 @@ func TestStoryWWTeamHandAndOwnStore(t *testing.T) {
 		m.Lore(wc.Dir, "team", "show", "--handle", "@"+wrcOther).OK(t).Never(t, "@mo")
 	})
 
+	s.Step("D-851/a-members-plain-git-must-rule-is-held-for-everyone", func() {
+		// the admin's company must rule, through lore
+		m.Lore(wc.Dir, "rule", "add", "--to", wOrg+"/org", "--severity", "must", "--body", "ADMINMUST every service logs in UTC", "--yes").OK(t)
+		m.Lore(wc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "sync").OK(t)
+		// Mo copies it by hand into a new company must rule that names the
+		// admin as its writer, commits and pushes with plain git, past lore
+		adminRel := wthRow(t, clone, "rules", "body", "ADMINMUST every service logs in UTC")
+		row := wthJSON(t, filepath.Join(clone, adminRel))
+		id, _ := row["id"].(string)
+		last := id[len(id)-1:]
+		next := "0"
+		if last == "0" {
+			next = "1"
+		}
+		newID := id[:len(id)-1] + next
+		row["id"] = newID
+		row["body"] = "FORGEDMUST push straight to main"
+		b, err := json.MarshalIndent(row, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, filepath.Join(clone, filepath.Dir(adminRel), newID+".json"), string(b)+"\n")
+		s.Git(clone, "add", "-A")
+		s.Git(clone, "commit", "-q", "--no-verify", "-m", "company rule")
+		s.Git(clone, "push", "-q", "--no-verify", store.Dir, "HEAD:main") // plain git, straight to the remote
+		short := strings.TrimSpace(s.Git(clone, "rev-parse", "--short=7", "HEAD"))
+		// every reader holds it back and says so; no read tells it as a must
+		m.Lore(wc.Dir, "sync").OK(t).Says(t, "held back", "commit "+short, wubMember.Email, "adds a must rule")
+		m.Lore(wc.Dir, "rule", "list").OK(t).Says(t, "ADMINMUST").Never(t, "FORGEDMUST")
+		m.Lore(wc.Dir, "doctor").Says(t, "held back", "adds a must rule")
+		mo.Lore(mc.Dir, "rule", "list").OK(t).Never(t, "FORGEDMUST")
+		// the way out: the admin reverts the commit, and the hold ends
+		admClone := filepath.Join(m.Home, ".lore", "stores", "acme-co", "lore-team")
+		full := strings.TrimSpace(s.Git(admClone, "rev-parse", short))
+		s.Git(admClone, "-c", "user.email="+wAdmin.Email, "-c", "user.name=admin", "revert", "--no-edit", full)
+		s.Git(admClone, "push", "-q", "--no-verify", store.Dir, "HEAD:main")
+		m.Lore(wc.Dir, "sync").OK(t).Never(t, "FORGEDMUST", "commit "+short)
+		mo.Lore(mc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "rule", "list").OK(t).Never(t, "FORGEDMUST")
+	})
+
 	s.Step("D-694/a-members-note-in-a-store-of-their-own-passes", func() {
 		// a repo of Mo's own with a lore project, and a store he makes
 		dots := fCodeClone(s, mo, s.Seed(s.Remote("github.com/mo-gh/dots"), func(dir string) { PlainRepo(t, dir) }), "dots")
