@@ -26,6 +26,11 @@ Usage (from the repo root, after tests/docs/run-examples.sh):
   LORE_BIN=/path/to/lore python3 tests/docs/paste.py          # rewrite in place
   LORE_BIN=/path/to/lore python3 tests/docs/paste.py --check  # exit 1 if a block is stale
   LORE_BIN=/path/to/lore python3 tests/docs/paste.py docs/knowledge   # only pages under these paths
+  python3 tests/docs/paste.py --check --examples-only   # example blocks only, no binary needed
+
+--examples-only leaves every help block as it is, so it needs no lore binary: it is the
+check go test runs on every change (internal/repoguard TestDocsExampleBlocksMatchTranscripts),
+which catches an example block edited by hand instead of through its section file.
 
 A block whose transcript or section is missing is reported ("error: …") and left as it
 is; the other pages are still refreshed, and the run exits 1.
@@ -167,7 +172,13 @@ class BlockError(Exception):
     """A marked block that cannot be rendered (missing transcript or section)."""
 
 
+# --examples-only: help blocks are left as they are (rendering them runs the lore binary).
+EXAMPLES_ONLY = "--examples-only" in sys.argv[1:]
+
+
 def render_block(m: re.Match) -> str:
+    if m.group(2) == "help" and EXAMPLES_ONLY:
+        return m.group(0)
     try:
         body = render_example(m.group(3)) if m.group(2) == "example" else render_help(m.group(3))
     except SystemExit as e:

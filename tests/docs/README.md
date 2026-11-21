@@ -17,7 +17,10 @@ LORE_BIN=/path/to/lore tests/docs/run-examples.sh start   # reuse a built binary
 KEEP=1 tests/docs/run-examples.sh start         # keep the worlds to look around
 LORE_BIN=/path/to/lore python3 tests/docs/paste.py          # refresh the pages
 LORE_BIN=/path/to/lore python3 tests/docs/paste.py --check  # fail if a page is stale
+python3 tests/docs/paste.py --check --examples-only        # example blocks only, no binary
 ```
+
+Never edit a pasted block by hand: change the section file, re-run it and paste. The next paste undoes a hand edit, so `go test ./...` runs `paste.py --check --examples-only` for both runners (`internal/repoguard` `TestDocsExampleBlocksMatchTranscripts`, devco:D-843) and fails when an example block differs from its transcript; it leaves the help blocks alone, so it needs no lore binary.
 
 A page marks a block with `<!-- example: <section>#<heading> -->` and `<!-- /example -->`, where the heading is a section's `note` text with dashes for spaces. Options: `only=1,3`, `lines=6`, `keep=REGEX`. `<!-- help: <command> -->` pastes a command's `--help`, and `<!-- errors -->` the error code table.
 
