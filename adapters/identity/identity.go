@@ -10,7 +10,9 @@
 // Resolution, first answer wins (CONFIG_GUIDE 5.1):
 //
 //  1. Inputs.FlagActor, then LORE_ACTOR (inside an org only agent:<label>
-//     actors are accepted; a human key there is ignored with a note);
+//     and bot actors, system:/cron:/plugin:<label>, are accepted; any
+//     other key there is ignored with a note every command prints,
+//     Resolved.ActorNote);
 //  2. the resolved org entry's identity (Inputs.Org), then the active
 //     solo setup's identity (Inputs.Setup, ONBOARDING_DESIGN 3.4: between
 //     the org entry and the top-level identity);
@@ -76,9 +78,27 @@ const (
 	KindSystem = "system"
 )
 
+// Bot kinds: a non-coding actor (a scheduled job, a plugin, an
+// integration) that writes on a person's behalf. Inside an org it must be
+// on the roster with an owner (`lore actor register --kind <kind>`), so
+// every row it writes names the person answerable for it (H-116).
+const (
+	KindCron   = "cron"
+	KindPlugin = "plugin"
+)
+
+// botKinds are the actors.kind values IsBotKind accepts.
+var botKinds = []string{KindSystem, KindCron, KindPlugin}
+
+// IsBotKind reports whether kind is a bot kind (system, cron, plugin).
+func IsBotKind(kind string) bool { return slices.Contains(botKinds, kind) }
+
+// BotKinds are the bot kinds, in the order help text lists them.
+func BotKinds() []string { return slices.Clone(botKinds) }
+
 // knownKinds are the stable-key prefixes that name an actors.kind value
 // (dbent/schema/enums.go ActorKind); anything else reads as human.
-var knownKinds = []string{KindHuman, KindAgent, "hook", "plugin", "cron", "system"}
+var knownKinds = []string{KindHuman, KindAgent, "hook", KindPlugin, KindCron, KindSystem}
 
 // kindSep separates a stable key's kind from its value.
 const kindSep = ":"
@@ -187,6 +207,10 @@ type Resolved struct {
 	// Detection is what agent detection saw (nil when it did not run).
 	// Machine-local: never written into a row (R11, OQ14).
 	Detection *agentdetect.Result
+	// ActorNote says why an explicit --actor/LORE_ACTOR was not used (inside
+	// an org only agent and bot actors are); the open prints it on every
+	// command, so the value is never dropped without a word (H-116).
+	ActorNote string
 	// DeclaredHuman is true when LORE_HUMAN=1 decided.
 	DeclaredHuman bool
 	// Aliases are the person's earlier keys, oldest first (a solo setup's
@@ -386,13 +410,15 @@ func resolveOrg(in Inputs, getenv func(string) string) (Resolved, error) {
 	if actor == "" {
 		actor, step = strings.TrimSpace(getenv(EnvActor)), StepEnv
 	}
+	actorNote := ""
 	if actor != "" {
-		if kindOf(actor) == KindAgent && len(actor) > len(KindAgent+kindSep) {
+		if k := kindOf(actor); (k == KindAgent || IsBotKind(k)) && len(actor) > len(k+kindSep) {
 			r := fromKey(actor, "", step)
 			r.Org = in.Org.Name
 			return r, nil
 		}
-		notes = append(notes, string(step)+" ignored: in "+in.Org.Name+" only agent:<label> actors are accepted; you act as the org identity")
+		actorNote = string(step) + "=" + actor + " ignored: in " + in.Org.Name + " only agent:<label> and bot actors (" + strings.Join(botKinds, ":/") + ":<label>) are accepted; you act as the org identity"
+		notes = append(notes, actorNote)
 	}
 	key := strings.TrimSpace(in.Org.Identity.Key)
 	if key == "" {
@@ -400,7 +426,7 @@ func resolveOrg(in Inputs, getenv func(string) string) (Resolved, error) {
 			WithHint("run `lore identity set --org " + in.Org.Name + " --key human:<your --identity email>`")
 	}
 	r := fromKey(key, in.Org.Identity.Name, StepOrg)
-	r.Kind, r.Org, r.Handle, r.Notes = KindHuman, in.Org.Name, in.Org.Identity.Handle, notes
+	r.Kind, r.Org, r.Handle, r.Notes, r.ActorNote = KindHuman, in.Org.Name, in.Org.Identity.Handle, notes, actorNote
 	return r, nil
 }
 

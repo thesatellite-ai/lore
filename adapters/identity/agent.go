@@ -70,7 +70,9 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 		return agentOf(r, det, ownerShortHex)
 	}
 	if det.CI != nil {
-		return ciOf(det), nil
+		c := ciOf(det)
+		c.ActorNote = r.ActorNote // H-116: an ignored LORE_ACTOR is said under CI too
+		return c, nil
 	}
 	return r, nil
 }
@@ -87,7 +89,7 @@ func agentOf(person Resolved, det agentdetect.Result, width int) (Resolved, erro
 	key := agentAutoKey(ownerID, det.Tool, width)
 	owner := person
 	out := Resolved{StableKey: key, DisplayName: person.DisplayName + " via " + det.Tool, Kind: KindAgent, Step: StepDetected,
-		Org: person.Org, Notes: person.Notes, Agent: key, Label: det.Tool, Owner: &owner, Detection: &det}
+		Org: person.Org, Notes: person.Notes, ActorNote: person.ActorNote, Agent: key, Label: det.Tool, Owner: &owner, Detection: &det}
 	return out, nil
 }
 

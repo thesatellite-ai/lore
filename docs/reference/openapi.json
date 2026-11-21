@@ -2933,7 +2933,7 @@
     "/v1/actors/register": {
       "post": {
         "operationId": "actor.register",
-        "summary": "Put yourself (or, with --kind agent, an agent you own) on the org roster",
+        "summary": "Put yourself (or, with --kind agent|system|cron|plugin, an agent or bot you own) on the org roster",
         "tags": [
           "actor"
         ],
@@ -2946,15 +2946,15 @@
                 "properties": {
                   "kind": {
                     "type": "string",
-                    "description": "human (default) or agent"
+                    "description": "human (default), agent, or a bot: system, cron, plugin (it then writes as LORE_ACTOR=\u003ckind\u003e:\u003clabel\u003e)"
                   },
                   "label": {
                     "type": "string",
-                    "description": "with --kind agent: the session label"
+                    "description": "with --kind agent: the session label; with a bot kind: its name"
                   },
                   "owner": {
                     "type": "string",
-                    "description": "with --kind agent: the owning human as @handle (default: you)"
+                    "description": "with --kind agent or a bot kind: the owning human as @handle (default: you)"
                   }
                 },
                 "additionalProperties": false
@@ -2986,6 +2986,9 @@
                       "type": "string"
                     },
                     "label": {
+                      "type": "string"
+                    },
+                    "owner": {
                       "type": "string"
                     },
                     "via_contact": {

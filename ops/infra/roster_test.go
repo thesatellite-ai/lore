@@ -125,3 +125,42 @@ func TestActorDeactivateHintsOffboard(t *testing.T) {
 		}
 	}
 }
+
+// TestActorRegisterBotKinds (devco:D-868, H-116): the system, cron and
+// plugin kinds the schema defines register a bot with a one-word label and
+// an owner (default the caller); a bot without a label is refused with a
+// hint that names the flag; the line names the owner and the LORE_ACTOR
+// value the bot writes with.
+func TestActorRegisterBotKinds(t *testing.T) {
+	for _, k := range []string{RegisterKindSystem, RegisterKindCron, RegisterKindPlugin} {
+		r := &fakeRoster{}
+		in := ActorRegisterIn{Kind: k, Label: "nightly-sync", Owner: "@ada"}
+		if _, err := actorRegister(context.Background(), r, in); err != nil || r.reg == nil || *r.reg != in {
+			t.Fatalf("%s: reached roster %+v, err %v", k, r.reg, err)
+		}
+		r = &fakeRoster{}
+		_, err := actorRegister(context.Background(), r, ActorRegisterIn{Kind: k})
+		if errs.CodeOf(err) != errs.InvalidInput || r.reg != nil || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "--kind "+k+" --label ") {
+			t.Fatalf("%s without label: %v (hint %q)", k, err, errs.EnvelopeOf(err).Error.Hint)
+		}
+		if !IsBotKind(k) {
+			t.Fatalf("%s is not a bot kind", k)
+		}
+	}
+	for _, k := range []string{RegisterKindHuman, RegisterKindAgent, "hook", ""} {
+		if IsBotKind(k) {
+			t.Fatalf("%q read as a bot kind", k)
+		}
+	}
+	_, err := actorRegister(context.Background(), &fakeRoster{}, ActorRegisterIn{Kind: "team"})
+	if !strings.Contains(err.Error(), "system, cron or plugin") {
+		t.Fatalf("unknown kind names only %v", err)
+	}
+	got := ActorRegisterOut{ID: "act_3", Kind: RegisterKindCron, Label: "nightly-sync", Owner: "Ada (@ada)", Created: true, Where: "agency (agency/org)"}.Text()
+	for _, want := range []string{"✓ act_3 cron nightly-sync registered in the roster of agency (agency/org), owned by Ada (@ada)\n",
+		"LORE_ACTOR=cron:nightly-sync", "names Ada (@ada) as its owner", "lore actor deactivate --handle @nightly-sync"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("text %q lacks %q", got, want)
+		}
+	}
+}

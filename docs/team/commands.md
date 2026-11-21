@@ -212,7 +212,7 @@ Flags:
 ### `lore actor register`
 
 <!-- help: actor register -->
-Put yourself (or, with --kind agent, an agent you own) on the org roster
+Put yourself (or, with --kind agent|system|cron|plugin, an agent or bot you own) on the org roster
 
 ```text
 Usage:
@@ -223,12 +223,14 @@ Examples:
   lore actor register
   # register an agent you own
   lore actor register --kind agent --label agent-frontend --owner @alice
+  # register a nightly job that writes as cron:nightly-sync (you answer for it)
+  lore actor register --kind cron --label nightly-sync
 
 Flags:
       --json           print the result (or the error) as JSON
-      --kind string    human (default) or agent
-      --label string   with --kind agent: the session label
-      --owner string   with --kind agent: the owning human as @handle (default: you)
+      --kind string    human (default), agent, or a bot: system, cron, plugin (it then writes as LORE_ACTOR=<kind>:<label>)
+      --label string   with --kind agent: the session label; with a bot kind: its name
+      --owner string   with --kind agent or a bot kind: the owning human as @handle (default: you)
       --read-only      refuse writes (also LORE_READ_ONLY=1)
       --yes            answer yes to the confirmation without a terminal
 ```
