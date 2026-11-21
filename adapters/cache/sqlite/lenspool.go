@@ -214,6 +214,17 @@ func (l *Lens) release() bool {
 	return true
 }
 
+// Keeps reports whether QueryKept keeps answers on this lens: a pooled,
+// open lens (the read server, devco:D-842). Why: a caller with a choice
+// between one statement naming its input and one that names none reads
+// the second only when it is kept (lore ask's text rows, devco:D-846);
+// read once, the statement filtering in SQL is cheaper.
+func (l *Lens) Keeps() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.poolKey != "" && !l.closed
+}
+
 // QueryKept is QueryTimeout for a statement whose answer depends only on
 // the attached files: no clock, no per-command input, no lore_expand. A
 // pooled lens (the read server, devco:D-842) keeps the answer and hands

@@ -44,7 +44,7 @@ type fileEnv struct {
 	asked []contextop.FetchIn
 }
 
-func (f *fileEnv) AskLens(_ context.Context, _ bool, fn func(q Query) error) error {
+func (f *fileEnv) AskLens(_ context.Context, _ bool, fn func(q Query, keeps bool) error) error {
 	return fn(func(_ context.Context, s string) (opssql.Result, error) {
 		f.stmts = append(f.stmts, s)
 		txt := func(s string) value.Value { v, _ := value.TextOf(s); return v }
@@ -57,7 +57,7 @@ func (f *fileEnv) AskLens(_ context.Context, _ bool, fn func(q Query) error) err
 			// the hotfix the context host also picks: printed once
 			{txt("row"), txt("hotfixes"), txt("hfx_tz"), txt("repo"), txt("Invoices dated a day off"), txt("Use clock.UTC() for the issue date."), txt("2026-11-01T00:00:00.000000000Z"), txt("0"), txt("0")},
 		}}, nil
-	})
+	}, f.keeps)
 }
 
 func (f *fileEnv) ContextHost(context.Context) (contextop.Host, error) { return f, nil }

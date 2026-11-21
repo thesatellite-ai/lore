@@ -398,6 +398,27 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			}
 			same(q+" after a write", r, one)
 		}
+		// devco:D-846 (bug hunt H-103): a served status, decision or date
+		// question picks its rows from the text rows the server keeps (one
+		// statement naming nothing of the question) until a file changes; a
+		// new decision, a memory dated in the window and an edited memory
+		// show in the next served ask, exactly as one-shot prints them.
+		for _, q := range []string{"what did we decide for orbit and why", "what happened on 2026-11-17", "what is the status of orbit"} {
+			ask(q) // kept by the server
+		}
+		ada.Lore(ada.Home, "decision", "add", "--title", "orbit bills yearly", "--body", "orbit moves to yearly billing because churn halves", "--to", to, "--yes").OK(t)
+		ada.Lore(ada.Home, "memory", "add", "--body", "Signed the lease for the quiet studio.", "--at", "2026-11-17", "--to", to, "--yes").OK(t)
+		ada.Lore(ada.Home, "memory", "add", "--body", "Status update orbit: 75 users on the paid plan.", "--at", "2026-11-18", "--to", to, "--yes").OK(t)
+		for q, want := range map[string]string{"what did we decide for orbit and why": "yearly billing because churn halves", "what happened on 2026-11-17": "lease for the quiet studio", "what is the status of orbit": "75 users on the paid plan"} {
+			r := ask(q)
+			ada.SetEnv("LORE_READ_SERVER", "0")
+			one := ask(q)
+			ada.SetEnv("LORE_READ_SERVER", "1")
+			if !strings.Contains(r.Out(), want) {
+				t.Errorf("[O D-846] the served ask %q after a write misses %q (kept text rows outlived their files):\n%s", q, want, r)
+			}
+			same(q+" after a write (text rows)", r, one)
+		}
 		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "1")
 		_ = os.Remove(log)
 		same("a server gone mid-command", ask(qs[1]), oneShot[qs[1]])
