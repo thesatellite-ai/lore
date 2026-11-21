@@ -15,6 +15,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/neardup"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/schema"
@@ -109,8 +110,9 @@ func tableNoun(t row.Table) string {
 	return ""
 }
 
-// MoveNearDuplicates implements opsrow.NearDuplicateFinder: the rows a
-// bulk move (`lore move --from`) would bring into to that repeat a live
+// MoveNearDuplicates implements opsrow.NearDuplicateFinder (and
+// opsmemory's): the rows a move (`lore move --from`, `lore move --id`,
+// `lore memory move`; devco D-854) would bring into to that repeat a live
 // row to already holds, by the rules store adopt lists them by (devco
 // D-724). Read before the move; nothing is written. Only the tables of
 // the moving rows are read (a pair is always one table).
@@ -148,4 +150,16 @@ func (a *App) MoveNearDuplicates(ctx context.Context, moving []row.Row, to store
 		}
 	}
 	return nearDuplicates(changes, have), nil
+}
+
+// TaskSubtree implements opsrow.SubtreeReader: the sub-tasks a one-row
+// `lore move --id <task> --to <to> --with-children` moves with id
+// (engine.TaskSubtree), read before the move so its near-duplicate check
+// covers them (devco D-854). Nothing is written.
+func (a *App) TaskSubtree(ctx context.Context, to store.Source, id ids.AnyID) ([]ids.AnyID, error) {
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return eng.TaskSubtree(ctx, to, id)
 }

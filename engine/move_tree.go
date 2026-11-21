@@ -163,6 +163,15 @@ func (e *Engine) taskDescendants(ctx context.Context, to store.Source, id ids.An
 	return out, nil
 }
 
+// TaskSubtree is the sub-tasks a `lore move --id <task> --with-children`
+// to to would move with id (taskDescendants: every attached place, those
+// already in to left out, parents first). Read before the move so a caller
+// can list what the subtree brings into to (devco D-854: the near-duplicate
+// check of a one-row move covers its sub-tasks too). Nothing is written.
+func (e *Engine) TaskSubtree(ctx context.Context, to store.Source, id ids.AnyID) ([]ids.AnyID, error) {
+	return e.taskDescendants(ctx, e.StoreName(to), id)
+}
+
 // moveChildren moves kids (taskDescendants order) to to after their root
 // moved: each lands in Written.Also and its warnings are prefixed with its
 // id. Interrupted, the error names how many moved; rerunning the parent's

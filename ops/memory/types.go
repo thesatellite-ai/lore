@@ -1,6 +1,7 @@
 package memory
 
 import (
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -98,6 +99,10 @@ type WriteOut struct {
 	Existing bool `json:"existing,omitempty"`
 	// CarriedMeta is how many metadata keys a --supersedes add copied (3.19).
 	CarriedMeta int `json:"carried_meta,omitempty"`
+	// Duplicates are the memories a move brings that repeat a memory --to
+	// already holds (devco D-854, the shape of row.move's): listed, both
+	// kept, never merged.
+	Duplicates []opsstores.NearDuplicate `json:"duplicates,omitempty"`
 	// Human is the v0.1.17 human line(s) the op set for this write (see
 	// Text); never part of --json or REST.
 	Human string `json:"-"`

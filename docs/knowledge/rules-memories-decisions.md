@@ -203,7 +203,7 @@ ERROR: [E_IN_TRASH] mem_28f8…03df is in the trash (deleted by alice on 2026-11
 
 ## Step 9 — Move a memory to another store
 
-A repo can have more stores attached than its own `.lore/data`: a private store for your agency's notes, say, that the client never sees. `lore memory move --id <id> --to <store> --yes` moves the memory there with the same id, and leaves a tombstone in the old place so a stale copy never comes back. `--to` takes a name from `.lore/stores.yaml` (or `repo` for the repo's own store). Here alice makes a folder store first with `lore store init`:
+A repo can have more stores attached than its own `.lore/data`: a private store for your agency's notes, say, that the client never sees. `lore memory move --id <id> --to <store> --yes` moves the memory there with the same id, and leaves a tombstone in the old place so a stale copy never comes back. When the store already holds a memory with the same first line, or one whose body shares most of its words, the move lists the pair (both ids, the command that reads both, the delete that drops one); both stay, lore never merges. `--to` takes a name from `.lore/stores.yaml` (or `repo` for the repo's own store). Here alice makes a folder store first with `lore store init`:
 
 <!-- example: knowledge#memory-move -->
 ```console

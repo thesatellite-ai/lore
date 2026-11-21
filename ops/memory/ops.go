@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"errors"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"slices"
 	"strconv"
 	"strings"
@@ -742,15 +744,33 @@ func (o ops) move(ctx context.Context, in MoveIn) (WriteOut, error) {
 	// sent the person looking on another branch (campaign knowledge
 	// 2026-11-08).
 	// A trashed row falls through: the move answers E_IN_TRASH for it.
-	if src, r, gerr := o.env.Get(ctx, engine.Ref{Table: table, ID: id.Any()}); gerr == nil && !r.Deleted && src == store.Source(in.To) {
-		return WriteOut{}, errs.New(errs.InvalidInput, "memory move: "+id.String()+" is already in store "+in.To).
-			WithHint("name another attached store with --to (`lore store list` shows them)")
+	var dups []opsstores.NearDuplicate
+	if src, r, gerr := o.env.Get(ctx, engine.Ref{Table: table, ID: id.Any()}); gerr == nil && !r.Deleted {
+		if src == store.Source(in.To) {
+			return WriteOut{}, errs.New(errs.InvalidInput, "memory move: "+id.String()+" is already in store "+in.To).
+				WithHint("name another attached store with --to (`lore store list` shows them)")
+		}
+		// D-854: the bulk move's near-duplicate check, read before the
+		// move (after it the memory is in --to, one copy)
+		if f, ok := o.env.(NearDuplicateFinder); ok {
+			if dups, err = f.MoveNearDuplicates(ctx, []row.Row{r}, store.Source(in.To)); err != nil {
+				return WriteOut{}, err
+			}
+		}
 	}
 	w, err := mv.Move(ctx, engine.Ref{Table: table, ID: id.Any()}, store.Source(in.To))
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return withLine(writeOut(store.Source(in.To), w), nil)("moved to " + in.To)
+	out, err := withLine(writeOut(store.Source(in.To), w), nil)("moved to " + in.To)
+	out.Duplicates = dups
+	// the pairs as the bulk move prints them, read in the full place (a
+	// linked folder as <store>/<folder>)
+	place := profilestore.PlaceTo(ctx, o.env, store.Source(in.To))
+	for _, l := range (opsstores.NearDupPrint{Place: place, Suffix: setupSuffix(ctx)}).Lines(dups) {
+		out.Human += l + "\n"
+	}
+	return out, err
 }
 
 // search matches the query against every attached store's cache, keeps the
@@ -940,4 +960,13 @@ func checkKind(k string) error {
 		return nil
 	}
 	return errs.New(errs.InvalidInput, "memory: --kind "+strconv.Quote(k)+" is not one of "+strings.Join(schema.MemoryKinds(), " | "))
+}
+
+// setupSuffix is the " --setup <name>" every printed command of a run
+// with --setup carries ("" without), so each runs where printed.
+func setupSuffix(ctx context.Context) string {
+	if s := strings.TrimSpace(op.SetupOf(ctx)); s != "" {
+		return " --setup " + s
+	}
+	return ""
 }

@@ -139,7 +139,7 @@ store notes folders:
 
 ## Step 5 — Move a note out of the repo
 
-Alice wrote a rule into the repo that belongs in her store. `lore row move --id <id> --to <place>` moves any row and keeps its id; `<place>` is `repo`, `me` (your personal store), `<store>` or `<store>/<folder>`. It asks first, because the row becomes visible to everyone who can open the target. The old copy in `.lore/data` is not deleted: it becomes a *tombstone*, a small file with `"_deleted": true`, so a teammate who pulls also drops the row instead of bringing it back. Commit the tombstone with your next change:
+Alice wrote a rule into the repo that belongs in her store. `lore row move --id <id> --to <place>` moves any row and keeps its id; `<place>` is `repo`, `me` (your personal store), `<store>` or `<store>/<folder>`. It asks first, because the row becomes visible to everyone who can open the target. The old copy in `.lore/data` is not deleted: it becomes a *tombstone*, a small file with `"_deleted": true`, so a teammate who pulls also drops the row instead of bringing it back. When the target already holds a row of the same kind with the same name, or one whose body shares most of its words, the move lists the pair after the ✓ line as `lore move --from` and store adopt do (both ids, the command that reads both and the delete that drops one; with `--with-children` the sub-tasks are checked too); both are kept, lore never merges, and `--json` lists every pair under `duplicates`. Commit the tombstone with your next change:
 
 <!-- example: stores#move-a-row -->
 ```console
