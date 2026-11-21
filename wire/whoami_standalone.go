@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // whoami output words (v0.1.17's).
@@ -106,6 +107,11 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 	lines = withReadsRows(lines, w.whoamiReads(ctx, s)) // whoami_reads.go: the <org>/<folder> this folder reads (D-596)
 	lines = withNoAccessRows(w.opts.Home, s, lines)     // whoami_noaccess.go: org stores this login cannot reach, skipped (D-726)
 	lines = w.withUnknownAudienceRows(ctx, s, lines)    // orgsource_unknownaud.go: org stores of an audience this lore cannot read (D-734)
+	if fail == nil && identity.IsBotKind(id.Kind) && id.Org != "" && (id.Step == identity.StepEnv || id.Step == identity.StepFlag) {
+		if l := w.botOwner(ctx, id); l != "" {
+			lines = append(lines, red.str(l)) // H-116: who answers for a bot actor, or why it cannot write
+		}
+	}
 	if fail == nil {
 		if l := w.identityContact(ctx); l != "" {
 			d.IdentityContact = red.str(strings.TrimPrefix(l, identityContactPrefix))
@@ -119,6 +125,50 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 		d.Error = red.str(errs.EnvelopeOf(serr).Error.Message)
 	}
 	return opswhoami.Out{Data: d, Lines: lines, Fail: fail}, nil
+}
+
+// botOwner is whoami's owner line for a bot actor in an org (H-116):
+// "owner      <name> (@h): every row <key> writes names them", or why its
+// writes are refused, with the register command. The roster is read from
+// the org folder's clone on this machine (no repo open, so it answers in
+// a repo lore is not set up in too), else through the open's own binding
+// (bindBotOwner). "" when neither can tell (whoami never fails on it).
+func (w *standaloneWhoami) botOwner(ctx context.Context, id identity.Resolved) string {
+	none := "owner      none: " + id.StableKey + " is not on the roster of " + id.Org + " with an active owner, so its writes are refused; " + errs.EnvelopeOf(botRefusal(id, "")).Error.Hint
+	if _, folder, ok := orgRosterClone(w.opts.Home, id.Org); ok {
+		bot, found := rosterActorOnDisk(folder, whoamiActorID(id.ActorKey()))
+		if !found || !bot.Active || rosterGone(bot.Status) || bot.OwnerID == "" {
+			return none
+		}
+		owner, ok := rosterActorOnDisk(folder, bot.OwnerID)
+		if !ok || owner.Kind != schema.ActorKindHuman || !owner.Active || rosterGone(owner.Status) {
+			return none
+		}
+		return botOwnerLine(id, owner.Name, owner.Handle)
+	}
+	if w.app == nil {
+		return ""
+	}
+	app := w.app.boundApp()
+	if app == nil {
+		return ""
+	}
+	who, err := app.Who(ctx)
+	if err != nil {
+		return ""
+	}
+	if o := who.Owner; o != nil && o.StableKey != "" {
+		return botOwnerLine(id, o.DisplayName, o.Handle)
+	}
+	return none
+}
+
+// botOwnerLine is whoami's line naming the person who answers for bot id.
+func botOwnerLine(id identity.Resolved, name, handle string) string {
+	if handle != "" {
+		name += " (@" + handle + ")"
+	}
+	return "owner      " + name + ": every row " + id.StableKey + " writes names them"
 }
 
 // identityContact is the TEAM_PROFILES 6.3 line "identity contact:

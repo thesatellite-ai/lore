@@ -34,11 +34,25 @@ const (
 	OpActorDelete     = "actor.delete"
 )
 
-// Actor kinds a registration takes (schema.ActorKinds' human and agent).
+// Actor kinds a registration takes: a person, an agent, or a bot (a
+// non-coding writer such as a nightly job, a plugin or an integration,
+// H-116), each a schema.ActorKinds value.
 const (
-	RegisterKindHuman = "human"
-	RegisterKindAgent = "agent"
+	RegisterKindHuman  = schema.ActorKindHuman
+	RegisterKindAgent  = schema.ActorKindAgent
+	RegisterKindSystem = schema.ActorKindSystem
+	RegisterKindCron   = schema.ActorKindCron
+	RegisterKindPlugin = schema.ActorKindPlugin
 )
+
+// IsBotKind reports whether kind registers a bot: an actor that writes
+// only with a person on the roster answering for it (its owner).
+func IsBotKind(kind string) bool {
+	return kind == RegisterKindSystem || kind == RegisterKindCron || kind == RegisterKindPlugin
+}
+
+// kindsHelp lists the kinds a registration takes, for refusals.
+const kindsHelp = "human (default), agent, system, cron or plugin"
 
 // handleMark prefixes a roster handle in input and output.
 const handleMark = "@"
@@ -63,11 +77,12 @@ type Roster interface {
 // RosterOps are the roster operations bound to r.
 func RosterOps(r Roster) []op.Entry {
 	return []op.Entry{
-		op.Define(op.Spec{Name: OpActorRegister, Summary: "Put yourself (or, with --kind agent, an agent you own) on the org roster", Permission: op.PermWrite, Access: op.AccessWrite,
+		op.Define(op.Spec{Name: OpActorRegister, Summary: "Put yourself (or, with --kind agent|system|cron|plugin, an agent or bot you own) on the org roster", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append([]errs.Code{errs.InvalidInput, errs.NotAStore}, writeErrors...),
 			Examples: []op.Example{
 				{Title: "register yourself", CLI: "lore actor register", Want: "registered in"},
 				{Title: "register an agent you own", CLI: "lore actor register --kind agent --label agent-frontend --owner @alice", Want: "agent agent-frontend registered"},
+				{Title: "register a nightly job that writes as cron:nightly-sync (you answer for it)", CLI: "lore actor register --kind cron --label nightly-sync", Want: "cron nightly-sync registered in the roster of"},
 			}},
 			func(ctx context.Context, in ActorRegisterIn) (ActorRegisterOut, error) {
 				return actorRegister(ctx, r, in)
@@ -103,9 +118,9 @@ func IsRosterOp(name string) bool {
 
 // ActorRegisterIn is the input of actor.register.
 type ActorRegisterIn struct {
-	Kind  string `json:"kind,omitempty" flag:"kind" desc:"human (default) or agent"`
-	Label string `json:"label,omitempty" flag:"label" desc:"with --kind agent: the session label"`
-	Owner string `json:"owner,omitempty" flag:"owner" desc:"with --kind agent: the owning human as @handle (default: you)"`
+	Kind  string `json:"kind,omitempty" flag:"kind" desc:"human (default), agent, or a bot: system, cron, plugin (it then writes as LORE_ACTOR=<kind>:<label>)"`
+	Label string `json:"label,omitempty" flag:"label" desc:"with --kind agent: the session label; with a bot kind: its name"`
+	Owner string `json:"owner,omitempty" flag:"owner" desc:"with --kind agent or a bot kind: the owning human as @handle (default: you)"`
 }
 
 // ActorRegisterOut is the registration.
@@ -115,6 +130,9 @@ type ActorRegisterOut struct {
 	Name   string `json:"display_name"`
 	Handle string `json:"handle,omitempty"`
 	Label  string `json:"label,omitempty"`
+	// Owner is a bot's owner as "Name (@handle)": the person every row the
+	// bot writes names (H-116); empty for people and agents.
+	Owner string `json:"owner,omitempty"`
 	// Created is false when the actor was already registered (refreshed).
 	Created bool `json:"created"`
 	// Where names the roster: "agency (agency/org)" or "this repo"; a
@@ -132,6 +150,12 @@ type ActorRegisterOut struct {
 func (o ActorRegisterOut) Text() string {
 	if o.Kind == RegisterKindAgent {
 		return work.Success + " " + o.ID + " agent " + o.Label + " registered in the roster of " + o.Where + "\n"
+	}
+	if IsBotKind(o.Kind) {
+		// H-116: the bot writes as <kind>:<label>; its rows name the owner.
+		return work.Success + " " + o.ID + " " + o.Kind + " " + o.Label + " registered in the roster of " + o.Where + ", owned by " + o.Owner + "\n" +
+			"  it writes with LORE_ACTOR=" + o.Kind + ":" + o.Label + " set in its environment; every row it writes names " + o.Owner + " as its owner\n" +
+			"  stop it with: lore actor deactivate --handle " + handleMark + o.Label + "\n"
 	}
 	verb := "registered"
 	switch {
@@ -216,12 +240,14 @@ func actorRegister(ctx context.Context, r Roster, in ActorRegisterIn) (ActorRegi
 	case "", RegisterKindHuman:
 		// v0.1.17 ignores --label/--owner without --kind agent.
 		in.Kind, in.Label, in.Owner = RegisterKindHuman, "", ""
-	case RegisterKindAgent:
+	case RegisterKindAgent, RegisterKindSystem, RegisterKindCron, RegisterKindPlugin:
 		if in.Label == "" || strings.ContainsAny(in.Label, labelForbidden) {
-			return ActorRegisterOut{}, errs.New(errs.InvalidInput, "an agent label is one word (no spaces, ':', '/', '@')")
+			return ActorRegisterOut{}, errs.New(errs.InvalidInput, "an "+in.Kind+" label is one word (no spaces, ':', '/', '@')").
+				WithHint("name it with --label, e.g. lore actor register --kind " + in.Kind + " --label nightly-sync")
 		}
 	default:
-		return ActorRegisterOut{}, errs.New(errs.InvalidInput, "--kind is human (default) or agent")
+		return ActorRegisterOut{}, errs.New(errs.InvalidInput, "--kind is "+kindsHelp).
+			WithHint("a nightly job or integration registers as a bot: lore actor register --kind cron --label <name> (it then writes with LORE_ACTOR=cron:<name>)")
 	}
 	return r.ActorRegister(ctx, in)
 }

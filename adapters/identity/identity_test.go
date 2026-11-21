@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -123,6 +124,38 @@ func TestResolveOrg(t *testing.T) {
 	r, err = Resolve(t.Context(), Inputs{Home: t.TempDir(), Config: cfg, Getenv: env(map[string]string{"USER": "u"}), GitEmail: git("me@agency.example")})
 	if err != nil || r.Step != StepOSUser || len(r.Notes) != 1 || !strings.Contains(r.Notes[0], string(StepGit)) || strings.Contains(r.Notes[0], "me@agency") {
 		t.Errorf("org key skipped: %+v %v", r, err)
+	}
+}
+
+// TestResolveOrgBotActors (devco:D-868, H-116): inside an org a bot actor
+// (system:, cron:, plugin:<label>) from LORE_ACTOR or --actor is used like
+// an agent one, never dropped; a value lore does not use there carries an
+// ActorNote (printed on every command), also when a detected coding tool
+// or CI then answers.
+func TestResolveOrgBotActors(t *testing.T) {
+	t.Parallel()
+	org := &Org{Name: "agency", Identity: Entry{Key: "human:me@agency.example", Name: "Me"}}
+	for _, key := range []string{"system:nightly", "cron:nightly", "plugin:importer"} {
+		r, err := Resolve(t.Context(), Inputs{Home: t.TempDir(), Org: org, Getenv: env(map[string]string{EnvActor: key})})
+		if err != nil || r.StableKey != key || r.Step != StepEnv || r.Org != "agency" || !IsBotKind(r.Kind) || r.ActorNote != "" {
+			t.Errorf("%s in org: %+v %v", key, r, err)
+		}
+		r, err = Resolve(t.Context(), Inputs{Home: t.TempDir(), Org: org, FlagActor: key, Getenv: env(nil),
+			Detect: func() (agentdetect.Result, error) { return agentdetect.Result{Tool: "codex"}, nil }})
+		if err != nil || r.StableKey != key || r.Step != StepFlag {
+			t.Errorf("%s in org inside a tool: %+v %v", key, r, err)
+		}
+	}
+	for _, bare := range []string{"system:", "cron:"} {
+		r, err := Resolve(t.Context(), Inputs{Home: t.TempDir(), Org: org, FlagActor: bare, Getenv: env(nil)})
+		if err != nil || r.StableKey != org.Identity.Key || !strings.Contains(r.ActorNote, "ignored") {
+			t.Errorf("%q in org: %+v %v", bare, r, err)
+		}
+	}
+	r, err := Resolve(t.Context(), Inputs{Home: t.TempDir(), Org: org, Getenv: env(map[string]string{EnvActor: "human:eve@x"}),
+		Detect: func() (agentdetect.Result, error) { return agentdetect.Result{Tool: "codex"}, nil }})
+	if err != nil || r.Step != StepDetected || !strings.Contains(r.ActorNote, "LORE_ACTOR=human:eve@x ignored: in agency") {
+		t.Errorf("ignored actor under a detected tool lost its note: %+v %v", r, err)
 	}
 }
 

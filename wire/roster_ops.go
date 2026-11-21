@@ -97,12 +97,22 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 		return opsinfra.ActorRegisterOut{}, err
 	}
 	sp := RosterActor{Kind: schema.ActorKindHuman, StableKey: who.StableKey, Name: who.DisplayName, Handle: defaultRosterHandle(who.Handle, who.StableKey)}
-	if in.Kind == opsinfra.RegisterKindAgent {
+	if in.Kind == opsinfra.RegisterKindAgent || opsinfra.IsBotKind(in.Kind) {
 		owner, oerr := x.rosterOwner(ctx, r, in.Owner, who.StableKey)
 		if oerr != nil {
 			return opsinfra.ActorRegisterOut{}, oerr
 		}
 		sp = RosterActor{Kind: schema.ActorKindAgent, StableKey: agentStableKeyPrefix + in.Label, Name: in.Label, Label: in.Label, OwnerID: owner.ID}
+		if opsinfra.IsBotKind(in.Kind) {
+			// H-116: a bot (system/cron/plugin) writes as <kind>:<label>; its
+			// display name carries its owner, so every row it writes shows
+			// who answers for it.
+			sp = RosterActor{Kind: in.Kind, StableKey: in.Kind + ":" + in.Label, Name: botDisplayName(in.Label, in.Kind, owner), Label: in.Label, OwnerID: owner.ID}
+			ctx = withBotOwner(ctx, rosterShown(owner))
+		}
+		if lerr := x.rosterLabelFree(ctx, r, sp); lerr != nil {
+			return opsinfra.ActorRegisterOut{}, lerr
+		}
 		if owner.StableKey == who.StableKey {
 			// J-15: a contractor's own agent (lore agent start) is part of
 			// their identity on the roster, like their own register; an
@@ -119,7 +129,7 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 // is the roster App): the identity-contact match (people only), the
 // handle check, the row, the push. setup join reuses it (registerCaller).
 func (x *App) registerSpec(ctx context.Context, r rosterAt, sp RosterActor, kind string) (opsinfra.ActorRegisterOut, error) {
-	if kind != opsinfra.RegisterKindAgent {
+	if kind != opsinfra.RegisterKindAgent && !opsinfra.IsBotKind(kind) { // a person ("" from a direct call, as before)
 		if err := x.rosterFresh(ctx, r); err != nil {
 			return opsinfra.ActorRegisterOut{}, err
 		}
@@ -146,7 +156,48 @@ func (x *App) registerSpec(ctx context.Context, r rosterAt, sp RosterActor, kind
 		return opsinfra.ActorRegisterOut{}, err
 	}
 	x.rosterPush(ctx, r)
-	return opsinfra.ActorRegisterOut{ID: id, Kind: kind, Name: sp.Name, Handle: sp.Handle, Label: sp.Label, Created: created, Where: r.shown()}, nil
+	return opsinfra.ActorRegisterOut{ID: id, Kind: kind, Name: sp.Name, Handle: sp.Handle, Label: sp.Label, Owner: botOwnerOf(ctx), Created: created, Where: r.shown()}, nil
+}
+
+// rosterLabelFree refuses an agent or bot label another active agent or
+// bot of another kind holds (H-116): @<label> names it in deactivate,
+// assign and handoff, so cron:nightly and system:nightly would make
+// @nightly name two actors.
+func (x *App) rosterLabelFree(ctx context.Context, r rosterAt, sp RosterActor) error {
+	other, taken, err := x.rosterFind(ctx, r, func(o RosterActor) bool {
+		return o.Active && o.StableKey != sp.StableKey && agentLabelIs(o, sp.Label)
+	})
+	if err != nil || !taken {
+		return err
+	}
+	return errs.New(errs.InvalidInput, "the label "+sp.Label+" is taken on "+r.of()+" by "+other.StableKey+" ("+other.ID+"): @"+sp.Label+" must name one agent or bot").
+		WithHint("pick another label, e.g. lore actor register --kind " + sp.Kind + " --label " + sp.Label + "-" + sp.Kind + " (or stop the other one first: lore actor deactivate --handle @" + sp.Label + ")")
+}
+
+// botDisplayName is a bot's roster display name, "<label> (<kind>, owner
+// <name>)": rows show their writer's display name, so the owner is on
+// every row the bot writes (H-116).
+func botDisplayName(label, kind string, owner RosterActor) string {
+	name := owner.Name
+	if name == "" {
+		name = rosterHandleMark + owner.Handle
+	}
+	return label + " (" + kind + ", owner " + name + ")"
+}
+
+// botOwnerKey carries a bot registration's owner, as rosterShown names
+// it, from ActorRegister to registerSpec's answer.
+type botOwnerKey struct{}
+
+// withBotOwner records owner (rosterShown) for the registration's answer.
+func withBotOwner(ctx context.Context, owner string) context.Context {
+	return context.WithValue(ctx, botOwnerKey{}, owner)
+}
+
+// botOwnerOf is the owner withBotOwner recorded ("" for people and agents).
+func botOwnerOf(ctx context.Context) string {
+	s, _ := ctx.Value(botOwnerKey{}).(string)
+	return s
 }
 
 // rosterFresh brings the local copy of r's org store up to the remote
@@ -564,7 +615,7 @@ func (a *App) personBehind(ctx context.Context, r rosterAt, who identity.Resolve
 // with no person behind it keeps its own id; its writes are refused by
 // rosterCaller.
 func (a *App) rosterPerson(ctx context.Context, st *state, r rosterAt) ids.ID[ids.Actor] {
-	if st.who.Kind != schema.ActorKindAgent {
+	if st.who.Kind != schema.ActorKindAgent && !botWithOwner(st.who) {
 		if w, ok := st.writerOfOrg(r.src); ok {
 			return w.id
 		}
@@ -575,6 +626,13 @@ func (a *App) rosterPerson(ctx context.Context, st *state, r rosterAt) ids.ID[id
 		return st.actor
 	}
 	return p.ID
+}
+
+// botWithOwner reports a bot actor (system/cron/plugin) whose owner the
+// open bound from the roster (bindBotOwner): it acts for that person on
+// the roster, as a coding agent acts for its person (H-116).
+func botWithOwner(who identity.Resolved) bool {
+	return identity.IsBotKind(who.Kind) && who.Owner != nil && who.Owner.StableKey != ""
 }
 
 // orgRosterSource is the "<org>/<org folder>" store OrgStores attaches for
@@ -686,7 +744,7 @@ func (a *App) rosterByHandle(ctx context.Context, r rosterAt, handle string) (Ro
 // h: an agent is registered by label (`lore agent start --label`), so
 // @<label> is how people name it.
 func agentLabelIs(x RosterActor, h string) bool {
-	return x.Kind == schema.ActorKindAgent && x.Handle == "" && x.Label != "" && x.Label == h
+	return (x.Kind == schema.ActorKindAgent || opsinfra.IsBotKind(x.Kind)) && x.Handle == "" && x.Label != "" && x.Label == h
 }
 
 // handleKey is a typed @handle as roster handles are stored: without its

@@ -421,6 +421,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	linkedFolder := func() string { return linkedFolderTargetOf(ctx, opts, st.repoTop) } // D-736: a cleaned linked repo's project row is there
 	st.refuseWritesIfLeft(ctx, opts.Home, attached)                                      // leftgate.go: a removed person writes only to their personal store (B2-12)
 	st.refuseOrgFolderIfContractor(ctx, attached, repoClient, linkedFolder)              // contractorgate.go: a contractor writes only to their client folders (J-15, R-16)
+	st.bindBotOwner(ctx, opts.Home, attached)                                            // botgate.go: a bot actor writes only when the roster names its owner (H-116)
 	st.armLeftHold(opts.Home, attached)                                                  // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
@@ -483,6 +484,9 @@ func (st *state) resolveActor(ctx context.Context, opts Options, notice bool) er
 		st.who = who
 		if who.Detection != nil && who.Detection.Note != "" && opts.Notice != nil && notice {
 			opts.Notice(who.Detection.Note)
+		}
+		if who.ActorNote != "" && opts.Notice != nil && notice {
+			opts.Notice(who.ActorNote) // H-116: an explicit actor lore does not use is said, never dropped
 		}
 	}
 	return nil
@@ -1500,6 +1504,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	}
 	st.refuseWritesIfLeft(ctx, opts.Home, attached)          // leftgate.go: inside a store clone too (B2-25)
 	st.refuseOrgFolderIfContractor(ctx, attached, true, nil) // contractorgate.go (J-15); a store clone has no code repo
+	st.bindBotOwner(ctx, opts.Home, attached)                // botgate.go (H-116), as in open
 	st.armLeftHold(opts.Home, attached)                      // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	// rowState: App.finishOpen reads the formats before the first write
 	if !st.refreshPending {
