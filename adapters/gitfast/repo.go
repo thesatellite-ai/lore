@@ -36,6 +36,9 @@ type repo struct {
 	objOnce sync.Once
 	objs    *objectStore
 	objErr  error
+	// objsShared: objs is kept across Sessions (objpool.go), so Close
+	// leaves it open.
+	objsShared bool
 
 	packedMu  sync.Mutex
 	packedKey string // size+mtime of packed-refs when packed was read
@@ -49,7 +52,7 @@ type packedRef struct {
 
 // objects opens the object store once.
 func (r *repo) objects() (*objectStore, error) {
-	r.objOnce.Do(func() { r.objs, r.objErr = newObjectStore(filepath.Join(r.common, "objects")) })
+	r.objOnce.Do(func() { r.objs, r.objsShared, r.objErr = openObjectStore(filepath.Join(r.common, "objects")) })
 	return r.objs, r.objErr
 }
 

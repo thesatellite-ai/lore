@@ -16,4 +16,4 @@ func readServerIdleFor() time.Duration { return readServerIdle }
 func noteReadServer(string) {}
 
 // readServerTestDie makes the server stop mid-command, in test builds only.
-func readServerTestDie([]string) bool { return false }
+func readServerTestDie([]string) string { return readServerDieNo }

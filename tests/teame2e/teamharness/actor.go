@@ -223,6 +223,15 @@ func (a *Actor) RemoveStoreClones(t testing.TB) {
 }
 
 // env returns the full environment for one command.
+// Environ is the environment each lore run of this actor gets, and Bin
+// the lore binary: a test that runs lore inside a shell pipeline (`lore
+// … | head -c 5`, to see how lore ends on a closed pipe) runs it with
+// these.
+func (a *Actor) Environ() []string { return a.environ(nil) }
+
+// Bin is the lore binary under test.
+func (a *Actor) Bin() string { return a.w.Bin }
+
 func (a *Actor) environ(extra []string) []string {
 	env := a.w.baseEnv(a.Home, a.Name)
 	keys := make([]string, 0, len(a.env))

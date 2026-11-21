@@ -27,12 +27,14 @@ import (
 	"runtime/debug"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/procwalk"
 	"github.com/thesatellite-ai/lore/op"
@@ -63,6 +65,11 @@ const (
 
 // errNotServed is why the CLI runs a command one-shot after asking.
 var errNotServed = errors.New("read server: not served")
+
+// errServerLost is a server gone after it said Running: the command may
+// have printed part of its answer, so the CLI must not run it again
+// (devco:D-838); it exits 1 with readServerLostMsg instead.
+var errServerLost = errors.New("read server: lost while running the command")
 
 // binaryStamp names this lore binary: its path, size, mtime, inode and the
 // version it reports. A server answers only a client with the same stamp,
@@ -105,6 +112,13 @@ func callReadServer(args []string) (code int, ok bool) {
 		return 0, false
 	}
 	code, err = askReadServer(uc, args)
+	if errors.Is(err, errServerLost) {
+		// The command ran in the server and part of its answer may already
+		// show: running it again here would print that part twice.
+		noteReadServer("lost")
+		_, _ = os.Stderr.WriteString(readServerLostMsg)
+		return 1, true
+	}
 	if err != nil {
 		noteReadServer("one-shot")
 		return 0, false
@@ -112,6 +126,10 @@ func callReadServer(args []string) (code int, ok bool) {
 	noteReadServer("served")
 	return code, true
 }
+
+// readServerLostMsg is what the CLI prints when the read server stopped
+// while it ran the command (devco:D-838).
+const readServerLostMsg = "lore: the local read server stopped while it was answering, so the answer above may be cut short; run the command again (LORE_READ_SERVER=0 runs it without the server)\n"
 
 // sockPathMax is the longest socket path a unix socket address holds on
 // every supported system (sun_path: 104 bytes on darwin, 108 on linux,
@@ -203,9 +221,13 @@ func askReadServer(conn *net.UnixConn, args []string) (int, error) {
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
 		return 0, err
 	}
+	running, err := readReplyLine(r)
+	if err != nil || !running.Running {
+		return 0, errNotServed // gone before the command started: nothing printed, run it here
+	}
 	last, err := readReplyLine(r)
 	if err != nil || !last.Served {
-		return 0, errNotServed // the server went away mid-command: run it here
+		return 0, errServerLost // gone mid-command: part of the answer may show already
 	}
 	if last.Pipe {
 		dieOfClosedPipe()
@@ -218,16 +240,26 @@ func askReadServer(conn *net.UnixConn, args []string) (int, error) {
 // whose reader is gone (poll says POLLERR), and the Go runtime ends a
 // process whose write to fd 1 or 2 fails with EPIPE by that signal.
 func dieOfClosedPipe() {
+	for _, fd := range closedStdio() {
+		f := os.Stdout
+		if fd == 2 {
+			f = os.Stderr
+		}
+		_, _ = f.Write([]byte{'\n'})
+	}
+}
+
+// closedStdio is which of stdout (1) and stderr (2) is a pipe whose
+// reader is gone (poll says POLLERR).
+func closedStdio() []int {
+	var closed []int
 	for _, fd := range []int{1, 2} {
 		p := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLOUT}}
 		if n, err := unix.Poll(p, 0); err == nil && n == 1 && p[0].Revents&unix.POLLERR != 0 {
-			f := os.Stdout
-			if fd == 2 {
-				f = os.Stderr
-			}
-			_, _ = f.Write([]byte{'\n'})
+			closed = append(closed, fd)
 		}
 	}
+	return closed
 }
 
 // readReplyLine reads one JSON reply line.
@@ -302,6 +334,25 @@ type readServer struct {
 	// pipes gets SIGPIPE: a write to a client's closed pipe fails with
 	// EPIPE instead of ending the server, and runFor tells the client.
 	pipes chan os.Signal
+	// piped is set by closedPipe when the command's error was that write:
+	// the signal above reaches runFor later, and may come after the
+	// command returned.
+	piped atomic.Bool
+}
+
+// closedPipe is cli.ClosedPipe while the server runs a command: err is a
+// write that hit the client's closed stdout or stderr. It silences both
+// at once, so the command's error line never shows (a one-shot lore is
+// dead at that write); waiting for the SIGPIPE to reach runFor raced the
+// command's own error print (devco:D-838: `lore sql … | head -c 5` served
+// printed "ERROR: [E_INTERNAL] internal error", one-shot nothing).
+func (s *readServer) closedPipe(err error) bool {
+	if !errors.Is(err, syscall.EPIPE) || len(closedStdio()) == 0 {
+		return false
+	}
+	silenceStdio()
+	s.piped.Store(true)
+	return true
 }
 
 // serveReads is `lore serve-reads`: the server of this lore home until it
@@ -350,8 +401,11 @@ func serveReads(opts []Option) int {
 	}
 	s := &readServer{reg: reg, defaults: defaultVerbPaths(), stamp: binaryStamp(), sock: sock, sockID: fileID(sock), listener: ln, idle: readServerIdleFor(), started: time.Now(), pipes: make(chan os.Signal, 1)}
 	signal.Notify(s.pipes, syscall.SIGPIPE)
+	cli.ClosedPipe = s.closedPipe
 	stopLenses := sqlite.EnableLensReuse()
 	defer stopLenses()
+	stopObjects := gitfast.ShareObjectStores() // decoded git objects kept across calls (D-838)
+	defer stopObjects()
 	done := make(chan struct{})
 	go s.watch(done)
 	s.loop()
@@ -455,8 +509,15 @@ func (s *readServer) handle(conn *net.UnixConn) {
 		return // the CLI gave up and runs it itself
 	}
 	_ = conn.SetReadDeadline(time.Time{})
-	if readServerTestDie(req.Env) {
-		os.Exit(0) // test builds only: a server gone mid-command
+	if readServerTestDie(req.Env) == readServerDieBefore {
+		os.Exit(0) // test builds only: a server gone before the command ran
+	}
+	if !reply(readReply{Running: true}) {
+		return
+	}
+	if readServerTestDie(req.Env) == readServerDiePrinting {
+		_, _ = unix.Write(fds[1], []byte(readServerDiePrint))
+		os.Exit(0) // test builds only: a server gone after it printed part of an answer
 	}
 	code, pipe := s.runFor(conn, req, fds)
 	reply(readReply{Served: true, Code: code, Pipe: pipe})
@@ -542,6 +603,7 @@ func (s *readServer) runFor(conn *net.UnixConn, req readRequest, fds []int) (cod
 	for len(s.pipes) > 0 { // a SIGPIPE of an earlier command
 		<-s.pipes
 	}
+	s.piped.Store(false)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() { // the CLI never writes after go: a read returns when it goes away
@@ -566,7 +628,7 @@ func (s *readServer) runFor(conn *net.UnixConn, req readRequest, fds []int) (cod
 	code = run(ctx, req.Args)
 	close(done)
 	_ = conn.SetReadDeadline(time.Now()) // ends the watcher above
-	return code, <-piped
+	return code, <-piped || s.piped.Load()
 }
 
 // silenceStdio points fds 1 and 2 at /dev/null (swapProcess's restore

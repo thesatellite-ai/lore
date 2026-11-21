@@ -369,11 +369,22 @@ func jsonField(v reflect.Value, name string) (reflect.Value, bool) {
 	return reflect.Value{}, false
 }
 
+// ClosedPipe, when set, reports whether err is a write that hit the
+// reader-less pipe of the process's stdout or stderr (`lore sql … | head
+// -c 5`); printError then prints nothing. Only the local read server sets
+// it, while it runs a command for a client (devco:D-838): a one-shot lore
+// is already dead of SIGPIPE at that write, so the served command must
+// not print an error line after it either.
+var ClosedPipe func(err error) bool
+
 // printError writes err in the chosen format and returns its exit status:
 // with --json the spec 9.4 object on stdout, else the human line on stderr,
 // its "ERROR:" and hint coloured by pal (the stderr palette; off = plain).
 func printError(stdout, stderr io.Writer, err error, asJSON bool, pal Palette, cmd string) int {
 	env := errmask.Of(err)
+	if ClosedPipe != nil && ClosedPipe(err) {
+		return env.Error.Exit // a one-shot lore died of SIGPIPE at that write: nothing more shows
+	}
 	if asJSON {
 		// Envelope is a fixed struct of strings and ints: Marshal cannot
 		// fail on it, and a failing writer has nowhere left to report to.
