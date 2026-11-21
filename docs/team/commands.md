@@ -1631,7 +1631,7 @@ Whether a row is live (seen by everyone at once, whatever branch they are on) de
 
 ## Config keys
 
-All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates it and names every problem). Keys under `live`, `lease`, `agents` and `merge_check` may also be set inside one `orgs[]` entry to override the top level for that org. A team can suggest org defaults in its store's `<org_folder>/lore-org.yaml`; for `defaults.client_repos` the store's value wins over a looser personal one.
+All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates it and names every problem). Keys under `live`, `lease`, `agents` and `merge_check` may also be set inside one `orgs[]` entry to override the top level for that org. A team suggests its org entry in its store's `<org_folder>/lore-org.yaml` ([its keys](../reference/config.md#org_folderlore-orgyaml)); where rows go in client repos is the team's `routing.client_repos` policy (`lore policy set --key routing.client_repos --value <kind>=<target> --to <store>/org --yes`), whose value wins over a looser personal `defaults.client_repos`.
 
 <!-- ds:block id=team-config-defaults-amp24fsn -->
 <!-- ds:block id=team-live-kinds-88j26q7s -->
