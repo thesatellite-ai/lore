@@ -25,11 +25,18 @@ import (
 )
 
 // orgMarkForStore is the org name and main store url a new lore-store.yaml
-// of the store at url names: set when an org this machine administers
-// lists url as one of its stores other than the main one, exactly what an
-// admin's sync would name in it later (nameOrgInStores). "", "" otherwise:
-// a member's or a solo store's new marker names no org, as before.
+// of the store at url names: set when an org whose admin this machine's
+// person is on the roster (orgRosterAdmin, H-109) lists url as one of its
+// stores other than the main one, exactly what an admin's sync would name
+// in it later (nameOrgInStores). "", "" otherwise: a member's or a solo
+// store's new marker names no org, as before.
 func orgMarkForStore(ctx context.Context, home, url string) (org, main string) {
+	return orgMarkFor(ctx, home, url, func(org string) bool { return orgRosterAdmin(ctx, home, org) })
+}
+
+// orgMarkFor is orgMarkForStore with the admin question passed in (admin
+// reports whether this machine's person administers the org entry named).
+func orgMarkFor(ctx context.Context, home, url string, admin func(org string) bool) (org, main string) {
 	if home == "" {
 		return "", ""
 	}
@@ -44,7 +51,7 @@ func orgMarkForStore(ctx context.Context, home, url string) (org, main string) {
 	for i := range cfg.Orgs {
 		o := &cfg.Orgs[i]
 		m := o.OrgFolderStore()
-		if m == nil || same(m.URL) || !isOrgAdmin(home, o.Name) {
+		if m == nil || same(m.URL) || !admin(o.Name) {
 			continue
 		}
 		for _, sc := range o.Stores {

@@ -32,11 +32,11 @@ func TestIsOrgAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	for org, want := range map[string]bool{"acme": false, "globex": true, "": false, "initech": false} {
-		if got := isOrgAdmin(home, org); got != want {
-			t.Errorf("isOrgAdmin(%q) = %v, want %v", org, got, want)
+		if got := hasOrgAdminSetup(home, org); got != want {
+			t.Errorf("hasOrgAdminSetup(%q) = %v, want %v", org, got, want)
 		}
 	}
-	if isOrgAdmin(t.TempDir(), "acme") {
+	if hasOrgAdminSetup(t.TempDir(), "acme") {
 		t.Error("a machine without config.yaml is an admin")
 	}
 }

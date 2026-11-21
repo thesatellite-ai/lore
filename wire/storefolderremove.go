@@ -82,8 +82,8 @@ func (a *App) FolderContents(ctx context.Context, name, folderName string) (opss
 		return opsstores.FolderContents{}, cerr // who may remove is read from it: fail closed
 	}
 	place, org := a.removePlace(src, name, dir)
-	if place == placeOrg && !isOrgAdmin(a.opts.Home, org) {
-		return opsstores.FolderContents{}, errs.New(errs.Refused, folderRemoveVerb+": store "+label+" belongs to org "+org+" and only an admin of "+org+" removes its folders; this machine has no admin setup of "+org).
+	if place == placeOrg && !orgRosterAdmin(ctx, a.opts.Home, org) {
+		return opsstores.FolderContents{}, errs.New(errs.Refused, folderRemoveVerb+": store "+label+" belongs to org "+org+" and only an admin of "+org+" removes its folders: "+notOrgAdminWhy(a.opts.Home, org)).
 			WithHint("ask the org admin to run `lore store folder remove --store " + name + " --folder " + folderName + "`")
 	}
 	if a.isOrgFolder(src, folderName) {

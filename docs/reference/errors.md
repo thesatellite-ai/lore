@@ -222,7 +222,7 @@ ERROR: [E_HAS_DEPENDENTS] project delete: mem_28f8…03df (memories.project_id),
 
 | Code | Exit | When | What to do |
 |---|---|---|---|
-| `E_REFUSED` | 23 | the store is the code repo (`repo`), a folder store (`file://`), or neither your personal store nor a store of one of your orgs; or it is an org store and this machine holds no admin setup of that org; or (compact) another copy of the store on this machine holds work not pushed yet | push the code repo with your code; move a folder store to a git url; ask the org admin; run `lore sync` first |
+| `E_REFUSED` | 23 | the store is the code repo (`repo`), a folder store (`file://`), or neither your personal store nor a store of one of your orgs; or it is an org store and your identity in that org holds no admin role on its roster; or (compact) another copy of the store on this machine holds work not pushed yet | push the code repo with your code; move a folder store to a git url; ask the org admin; run `lore sync` first |
 | `E_INVALID_INPUT` | 20 | an unknown key or value, `push_every` under `1m`, `compact_after` under `1d`, `compact=on` without `compact_after`, or a `--before` that is not an age | use `push=now\|batch\|manual`, `push_every=10m`, `compact=on compact_after=30d` |
 | `E_NEEDS_CONFIRM` | 26 | `lore store compact` ran without a terminal and without `--yes` | read the question, then rerun with `--yes` |
 | `E_CONTENDED` | 11 | someone pushed to the store while it was being compacted; nothing changed | run it again |

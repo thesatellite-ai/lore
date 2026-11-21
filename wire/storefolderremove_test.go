@@ -169,8 +169,11 @@ func TestFolderRemoveWithRows(t *testing.T) {
 }
 
 // TestFolderRemoveOrgAdmin: an org store's folders are removed by the
-// org's admin only; this machine without an admin setup of the org is
-// refused naming the org, before anything is asked or removed.
+// org's admin only, the admin role on its roster (H-109): this machine,
+// with a member setup and then an admin setup of the org but no org entry
+// (so no identity the roster could name), is refused naming the org,
+// before anything is asked or removed. The roster admin's remove is
+// TestOrgAdminOpsFollowTheRosterH109's.
 func TestFolderRemoveOrgAdmin(t *testing.T) {
 	t.Parallel()
 	url := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
@@ -204,8 +207,11 @@ func TestFolderRemoveOrgAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := openWith(t, t.TempDir(), Options{Home: home, OrgStores: orgAt(url)})
-	if _, err = removeFolder(t, b, `{"store":"team","folder":"client_x"}`, true); err != nil {
-		t.Fatalf("the org's admin removes it: %v", err)
+	if _, err = removeFolder(t, b, `{"store":"team","folder":"client_x"}`, true); !errs.Has(err, errs.Refused) || !strings.Contains(err.Error(), "only an admin of acme") {
+		t.Fatalf("an admin setup alone removes an org folder: %v, want E_REFUSED (the roster decides)", err)
+	}
+	if _, serr := os.Stat(folderMetaPath(url, "client_x")); serr != nil {
+		t.Fatalf("the refused remove changed the store: %v", serr)
 	}
 }
 

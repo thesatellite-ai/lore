@@ -32,8 +32,8 @@ func (h *standaloneOrg) RemoveStore(ctx context.Context, in opsorgcmd.StoreRemov
 		return opsorgcmd.Report{}, errs.Wrap(errs.InvalidInput, "--url "+in.URL+" is not a store url", err).
 			WithHint("give the store's git url as lore store list shows it, e.g. --url git@github.com:agency/client-notes.git")
 	}
-	if !isOrgAdmin(h.home, in.Org) {
-		return opsorgcmd.Report{}, errs.New(errs.Refused, "org store remove: only an admin of "+in.Org+" retires its stores; this machine has no admin setup of "+in.Org).
+	if !orgRosterAdmin(ctx, h.home, in.Org) {
+		return opsorgcmd.Report{}, errs.New(errs.Refused, "org store remove: only an admin of "+in.Org+" retires its stores: "+notOrgAdminWhy(h.home, in.Org)).
 			WithHint("ask the org admin to run `" + opsorgcmd.StoreRemoveCommand(in.Org, in.URL) + " --push --yes`")
 	}
 	sc := o.OrgFolderStore()

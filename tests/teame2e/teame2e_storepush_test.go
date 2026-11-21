@@ -10,7 +10,7 @@ package teame2e
 //
 //	personal store me   two machines of one person (laptop, desktop),
 //	                    each with ~/.lore/config.yaml personal.store = the url
-//	org store           alice (creates org acme, later an admin setup) and
+//	org store           alice (creates org acme: its admin on the roster) and
 //	                    bob (a member who imported the org)
 
 import (
@@ -98,8 +98,8 @@ func newSPPersonal(t *testing.T, start time.Time) *spPair {
 	return p
 }
 
-// newSPOrg: org acme with store acme_notes; a created it (and is made an
-// admin by spMakeAdmin), b imported it as a member.
+// newSPOrg: org acme with store acme_notes; a created it (so the roster
+// makes a its admin), b imported it as a member.
 func newSPOrg(t *testing.T, start time.Time) *spPair {
 	t.Helper()
 	w := newTeamWorld(t)
@@ -118,33 +118,15 @@ func newSPOrg(t *testing.T, start time.Time) *spPair {
 	return p
 }
 
-// spPushNow sets store to push now from p.ca (an org store needs an admin
-// setup, which it adds once): the compaction tests build their history one
-// pushed commit per write, the opt-in mode (the default, manual, sends a
-// batch on lore sync: C5). The other machine syncs the setting.
+// spPushNow sets store to push now from p.ca (an org store's setting is
+// its admin's: a, the org's creator, on the roster): the compaction tests
+// build their history one pushed commit per write, the opt-in mode (the
+// default, manual, sends a batch on lore sync: C5). The other machine
+// syncs the setting.
 func (p *spPair) spPushNow(t *testing.T, store string) {
 	t.Helper()
-	if store != "me" {
-		spMakeAdmin(t, p.a)
-	}
 	p.ca.MustLore("store", "set", store, "push=now")
 	p.cb.MustLore("sync")
-}
-
-// spMakeAdmin gives a's machine an admin setup of org acme (config.yaml
-// setups: kind admin), the only thing that lets it change the org store's
-// settings or compact it.
-func spMakeAdmin(t *testing.T, a *th.Actor) {
-	t.Helper()
-	path := a.LorePath("config.yaml")
-	b, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := string(b) + "setups:\n  - name: acme-admin\n    kind: admin\n    org: " + spOrg + "\n"
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
 }
 
 // add writes one memory to store through c and returns its id.
@@ -528,8 +510,10 @@ func TestE46_StorePushOrgCompactReplaysMemberWork(t *testing.T) {
 	}
 }
 
-// A machine without an admin setup of the org is refused set and compact,
-// on the CLI and through REST; nothing on the remote changes.
+// A member of the org (bob: no admin role on its roster) is refused set and
+// compact, on the CLI and through REST; nothing on the remote changes. The
+// org's creator (alice) is its admin by the roster with no admin setup on
+// her machine (devco:D-852, H-109: the old check asked for a setup).
 func TestE47_StorePushNonAdminRefused(t *testing.T) {
 	p := newSPOrg(t, spOld)
 	p.add(t, p.ca, spOrgStore, "refusal old one")
@@ -538,11 +522,10 @@ func TestE47_StorePushNonAdminRefused(t *testing.T) {
 	p.b.SetNow(spNow)
 	p.cb.MustLore("sync")
 	before := p.log()
-	for _, c := range []*th.Clone{p.ca, p.cb} { // alice has no admin setup yet; bob is a member
-		c.Lore("store", "set", spOrgStore, "push=batch").Fails(t, spExitRefused, spCodeRefused, "only an admin of "+spOrg)
-		c.Lore("store", "compact", spOrgStore, "--yes").Fails(t, spExitRefused, spCodeRefused, "only an admin of "+spOrg)
-		c.Lore("store", "compact", spOrgStore, "--dry-run").Fails(t, spExitRefused, spCodeRefused)
-	}
+	p.cb.Lore("store", "set", spOrgStore, "push=batch").Fails(t, spExitRefused, spCodeRefused, "only an admin of "+spOrg, "human:bob@example.test", "no admin role on the roster")
+	p.cb.Lore("store", "compact", spOrgStore, "--yes").Fails(t, spExitRefused, spCodeRefused, "only an admin of "+spOrg)
+	p.cb.Lore("store", "compact", spOrgStore, "--dry-run").Fails(t, spExitRefused, spCodeRefused)
+	p.ca.MustLore("store", "compact", spOrgStore, "--dry-run") // the creator, with no admin setup, may
 	api := startAPI(t, p.cb)
 	for _, r := range []apiReply{
 		api.spDo(t, http.MethodPost, "/v1/stores/set", spJSON(t, spSetBody{Store: spOrgStore, Settings: []string{"push=manual"}})),

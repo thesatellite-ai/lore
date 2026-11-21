@@ -62,7 +62,7 @@ ERROR: [E_REFUSED] store set: `repo` is the code repository's own .lore/data; lo
   hint: you push the code repo with your code; `lore live compact` compacts its live rows
 (exit 23)
 bob (work/website)$ lore store set --store agency --settings push=batch
-ERROR: [E_REFUSED] store set: store agency belongs to org agency and only an admin of agency may change its shared settings; this machine has no admin setup of agency
+ERROR: [E_REFUSED] store set: store agency belongs to org agency and only an admin of agency may change its shared settings; human:bob@agency.example (this machine's identity in agency) holds no admin role on the roster of agency
   hint: ask the org admin to run `lore store set --store agency --settings …`; a member cannot override the org's setting locally
 (exit 23)
 alice (work/website)$ lore store set --store me --settings push_every=30s

@@ -193,7 +193,7 @@ func (a *App) confirmOrgMove(ctx context.Context, name, from, raw string) error 
 	if engine.Confirmed(ctx) || op.Confirmed(ctx) || storeaddr.Same(from, raw) { // --yes reaches a run op through the engine, a direct one through op
 		return nil
 	}
-	orgs := adminOrgsNaming(a.opts.Home, from)
+	orgs := adminOrgsNaming(ctx, a.opts.Home, from)
 	if len(orgs) == 0 {
 		return nil
 	}
@@ -207,17 +207,17 @@ func (a *App) confirmOrgMove(ctx context.Context, name, from, raw string) error 
 		WithHint("nothing written; to move it: lore store set-url --name " + name + " --url " + raw + " --yes")
 }
 
-// adminOrgsNaming is every org whose entry lists a store at url and that
-// this machine administers (an admin setup of it): the orgs whose
+// adminOrgsNaming is every org whose entry lists a store at url and whose
+// admin this machine's person is on the roster (orgRosterAdmin): the orgs whose
 // lore-org.yaml a set-url of that store rewrites (moveOrgFiles).
-func adminOrgsNaming(home, url string) []string {
+func adminOrgsNaming(ctx context.Context, home, url string) []string {
 	cfg, _, err := orgcfg.LoadConfig(home)
 	if err != nil || cfg == nil {
 		return nil
 	}
 	var out []string
 	for _, o := range cfg.Orgs {
-		if !isOrgAdmin(home, o.Name) {
+		if !orgRosterAdmin(ctx, home, o.Name) {
 			continue
 		}
 		for _, sc := range o.Stores {
@@ -236,7 +236,7 @@ func adminOrgsNaming(home, url string) []string {
 // a move commit now waits in (or went to) the store.
 func (a *App) moveOrgFiles(ctx context.Context, orgs []string, name string, old []string, raw string) (lines []string, committed bool) {
 	for _, org := range orgs {
-		if !isOrgAdmin(a.opts.Home, org) {
+		if !orgRosterAdmin(ctx, a.opts.Home, org) {
 			// H-12: the org's lore-org.yaml is every member's address of
 			// the store; only an admin of the org changes it (as `lore store
 			// set` does). This machine follows the move all the same.

@@ -1,6 +1,6 @@
 # Story B — the admin, the people and the walls between them
 
-Test: `tests/stories/b_admin_test.go` (`TestStoryBPeople`, `TestStoryBSecrets`).
+Test: `tests/stories/b_admin_test.go` (`TestStoryBPeople`, `TestStoryBSecrets`), `tests/stories/b_orgadmin_test.go` (`TestStoryBOrgAdminIsTheRosterRole`).
 
 ## Who
 
@@ -19,6 +19,7 @@ Cora is the CTO and the admin of the org acme, with a team store on the (fake) G
 6. Day 15: Cora removes Ruth: the output lists her two open tasks and the hand-over line (`lore task reassign --from …`); Cora runs it, both tasks go to Nia, and Ruth shows as left.
 7. Secrets (a fresh org): Cora pastes a token (built at run time by `FakeSecret`) into a memory: the write is refused, and neither the refusal, `memory list`, `search` nor `check leaks --rows` prints the token or its tail; no file in the repo holds it.
 8. Cora commits a config file holding the token: the commit hook blocks it naming the file and prints a ready `lore secrets allow --file <path> --rule <rule> --match-hash sha256:<hash>` line, never the value.
+9. The admin is the roster's role (a fresh org, devco:D-852): Cora starts the org with `lore org create` and no guided setup, so her laptop holds no admin setup; she is the roster's admin and `lore org config set --org acme --key own --add … --yes` changes lore-org.yaml. Nia joins with `lore org import` as a member; her `lore org config set` is refused naming her identity (`human:nia@…`) and that the roster of acme gives her no admin role, and the file keeps Cora's list.
 
 ## What must hold
 
