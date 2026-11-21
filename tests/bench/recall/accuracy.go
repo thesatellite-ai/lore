@@ -3,8 +3,9 @@ package recall
 // accuracy.go — the accuracy bar of the recall gate (owner 2026-11-21:
 // retrieval accuracy comes first, before speed). A question's answer is
 // graded from `lore ask --json`: the structured answer is read as one
-// ranked list (resources, then tasks, then rows, the order lore prints
-// them) and the bar looks at the top of that list, the part an agent
+// ranked list in the reading order lore gives in its ranked list (the
+// order it prints; an older lore without one: resources, then tasks, then
+// rows) and the bar looks at the top of that list, the part an agent
 // reads first. Why a ranked list and not the whole output: an answer that
 // holds the fact somewhere below ten feed rows makes an agent read the
 // noise or stop early; the text grade (Grade) cannot see that.
@@ -68,6 +69,11 @@ type askJSON struct {
 		Body  string `json:"body"`
 		Note  string `json:"note"`
 	} `json:"rows"`
+	// Ranked is the reading order (kind resource, task or row + id).
+	Ranked []struct {
+		Kind string `json:"kind"`
+		ID   string `json:"id"`
+	} `json:"ranked"`
 }
 
 // Items reads `lore ask --json` output as the ranked answer list.
@@ -100,7 +106,26 @@ func Items(out []byte) ([]Item, error) {
 		s := strings.TrimSpace(r.At + " " + r.Title + "\n" + r.Body + "\n" + r.Note)
 		items = append(items, Item{Kind: "row", ID: r.ID, Answer: s, Text: s})
 	}
-	return items, nil
+	if len(a.Ranked) == 0 {
+		return items, nil
+	}
+	byRef := map[[2]string]Item{}
+	for _, it := range items {
+		byRef[[2]string{it.Kind, it.ID}] = it
+	}
+	ranked := make([]Item, 0, len(items))
+	for _, r := range a.Ranked {
+		if it, ok := byRef[[2]string{r.Kind, r.ID}]; ok {
+			ranked = append(ranked, it)
+			delete(byRef, [2]string{r.Kind, r.ID})
+		}
+	}
+	for _, it := range items { // an item the ranked list misses still counts, last
+		if _, ok := byRef[[2]string{it.Kind, it.ID}]; ok {
+			ranked = append(ranked, it)
+		}
+	}
+	return ranked, nil
 }
 
 // Accuracy is one question's grade on the accuracy bar.

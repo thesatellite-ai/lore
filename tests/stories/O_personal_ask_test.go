@@ -18,7 +18,10 @@ import (
 )
 
 // TestStoryOPersonalAsk: one call answers who, typo, nickname, debts,
-// decision in other words, a changed fact and a day (devco D-807).
+// decision in other words, a changed fact and a day (devco D-807); the
+// item that answers the question is read first: the status row before the
+// project, the owed task before the person, the person then their newest
+// journal row for everything about X (devco D-818).
 func TestStoryOPersonalAsk(t *testing.T) {
 	s := New(t, "O")
 	me := s.Remote("github.com/" + oAdminPersonal.Login + "/lore-me")
@@ -91,6 +94,40 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		}
 		if err := json.Unmarshal([]byte(j.Out()), &got); err != nil || len(got.Resources) != 1 || got.Resources[0].Name != "alice-ng" || len(got.Cited) == 0 {
 			t.Errorf("[O D-807] ask --json: %v %+v\n%s", err, got, j)
+		}
+	})
+	s.Step("personal-store/answer-first", func() {
+		type ranked struct {
+			Ranked    []struct{ Kind, ID string }        `json:"ranked"`
+			Rows      []struct{ ID, Body, Place string } `json:"rows"`
+			Tasks     []struct{ ID, Title string }       `json:"tasks"`
+			Resources []struct{ ID, Name string }        `json:"resources"`
+		}
+		first := func(q string) (ranked, string) {
+			r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", q, "--json")
+			r.OK(t)
+			var got ranked
+			if err := json.Unmarshal([]byte(r.Out()), &got); err != nil || len(got.Ranked) == 0 {
+				t.Fatalf("[O D-818] ask --json %q: %v\n%s", q, err, r)
+			}
+			return got, r.Out()
+		}
+		got, out := first("what is the status of orbit")
+		if got.Ranked[0].Kind != "row" || len(got.Rows) == 0 || got.Ranked[0].ID != got.Rows[0].ID || !strings.Contains(got.Rows[0].Body, "Status update orbit") {
+			t.Errorf("[O D-818] the status row is not read first:\n%s", out)
+		}
+		got, out = first("what do I owe Bobby")
+		if got.Ranked[0].Kind != "task" || len(got.Tasks) == 0 || !strings.Contains(got.Tasks[0].Title, "price list") {
+			t.Errorf("[O D-818] the owed task is not read first:\n%s", out)
+		}
+		got, out = first("everything about alice-ng")
+		if len(got.Ranked) < 2 || got.Ranked[0].Kind != "resource" || got.Ranked[1].Kind != "row" {
+			t.Errorf("[O D-818] everything about: not the person then a row:\n%s", out)
+		}
+		text := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "what is the status of orbit")
+		text.OK(t)
+		if st, pr := strings.Index(text.Out(), "Status update orbit"), strings.Index(text.Out(), "project orbit"); st < 0 || pr < 0 || st > pr {
+			t.Errorf("[O D-818] the text prints the project before its status:\n%s", text)
 		}
 	})
 }

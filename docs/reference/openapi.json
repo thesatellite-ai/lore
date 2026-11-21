@@ -5949,7 +5949,7 @@
                   "properties": {
                     "cited": {
                       "type": "array",
-                      "description": "the id of every resource, task and row in the answer",
+                      "description": "the id of every item in the answer, in reading order",
                       "items": {
                         "type": "string"
                       }
@@ -5965,6 +5965,26 @@
                     "query": {
                       "type": "string",
                       "description": "the question as asked"
+                    },
+                    "ranked": {
+                      "type": "array",
+                      "description": "every item of the answer in reading order, the one that answers the question first: a status or decision row before its project, the owed tasks before the person, the person then the newest row of each folder for everything about X",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "description": "resource, task or row: the list (resources, tasks, rows) that holds the item"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "id"
+                        ]
+                      }
                     },
                     "resources": {
                       "type": "array",
@@ -6160,6 +6180,7 @@
                     "resources",
                     "tasks",
                     "rows",
+                    "ranked",
                     "cited"
                   ]
                 }

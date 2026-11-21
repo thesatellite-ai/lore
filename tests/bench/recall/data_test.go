@@ -190,6 +190,16 @@ func TestItemsReadsAskJSON(t *testing.T) {
 	if _, err := Items([]byte("not json")); err == nil {
 		t.Error("output that is not JSON read as an answer")
 	}
+	// the ranked list is the reading order (devco D-818): a status row
+	// before its project, an item it misses still counted last
+	ranked := strings.Replace(out, `"cited":[]`, `"ranked":[{"kind":"row","id":"m1"},{"kind":"resource","id":"r1"}],"cited":[]`, 1)
+	items, err = Items([]byte(ranked))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 3 || items[0].ID != "m1" || items[1].ID != "r1" || items[2].ID != "t1" {
+		t.Fatalf("ranked items %+v", items)
+	}
 }
 
 // TestGradeAccuracy checks each accuracy bar on a ranked answer: recall in
