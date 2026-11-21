@@ -5089,6 +5089,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -6178,6 +6225,46 @@
                         ]
                       }
                     },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
                     "tasks": {
                       "type": "array",
                       "description": "the open tasks that answer it: for what do I owe X / what does X owe me every open one owed that way, else the open tasks of the resources it names",
@@ -6212,6 +6299,13 @@
                           "status",
                           "place"
                         ]
+                      }
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "when": {
@@ -7885,6 +7979,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -11610,6 +11751,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -14277,6 +14465,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -16128,6 +16363,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -21157,6 +21439,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -23212,6 +23541,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -25867,6 +26243,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -32156,6 +32579,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -40510,6 +40980,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -45467,6 +45984,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -48562,6 +49126,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -50326,6 +50937,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -55200,6 +55858,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -70902,6 +71607,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -73953,6 +74705,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -84572,6 +85371,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -90133,6 +90979,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -101585,6 +102478,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -106570,6 +107510,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -113003,6 +113990,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -116866,6 +117900,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -121768,6 +122849,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -123282,6 +124410,53 @@
                     },
                     "schema_version": {
                       "type": "integer"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [

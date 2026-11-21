@@ -149,6 +149,10 @@ $ lore task search --query pricing
 tsk_162d…9666 [in_progress] Fix the typo on the pricing page
 $ lore task search --query invoice
 (no matches)
+  searched: repo (task)
+  read as: words: invoice
+  try: lore search --query "invoice"
+  try: lore ask --query "invoice"
 $ lore task search --query invoice --all
 tsk_2ad3…f891 [done] Send the invoice reminder before Friday's demo
 ```

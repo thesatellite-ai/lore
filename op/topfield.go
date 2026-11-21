@@ -26,6 +26,9 @@ const RoutedField = "routed"
 // addition to the operation's own fields.
 type topText struct {
 	name, text string
+	// raw is the field's JSON value when it is no string (an object or a
+	// list, WithTopJSON); nil for a text field.
+	raw json.RawMessage
 }
 
 // WithTopText returns r whose JSON form also carries the top-level text
@@ -37,6 +40,18 @@ func (r Result) WithTopText(name, text string) Result {
 		return r
 	}
 	r.top = append(slices.Clone(r.top), topText{name: name, text: text})
+	return r
+}
+
+// WithTopJSON returns r whose JSON form also carries the top-level field
+// name = raw, a JSON value that is no plain string (devco D-821: an empty
+// search's "searched" object and "try" list). An empty raw, or a name the
+// output already has, leaves the JSON as is, as WithTopText does.
+func (r Result) WithTopJSON(name string, raw json.RawMessage) Result {
+	if len(raw) == 0 || slices.ContainsFunc(r.fields, func(f FieldInfo) bool { return f.Name == name }) {
+		return r
+	}
+	r.top = append(slices.Clone(r.top), topText{name: name, raw: slices.Clone(raw)})
 	return r
 }
 
@@ -53,9 +68,11 @@ func (r Result) spliceTop(b []byte) ([]byte, error) {
 		if err != nil {
 			return nil, errs.Wrap(errs.Internal, "op: encode result field", err)
 		}
-		v, err := json.Marshal(t.text)
-		if err != nil {
-			return nil, errs.Wrap(errs.Internal, "op: encode result field", err)
+		v := []byte(t.raw)
+		if v == nil {
+			if v, err = json.Marshal(t.text); err != nil {
+				return nil, errs.Wrap(errs.Internal, "op: encode result field", err)
+			}
 		}
 		if i > 0 {
 			out.WriteByte(',')

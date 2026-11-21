@@ -40,6 +40,11 @@ alice (work/website)$ lore search --query WhatsApp --json
 ### archived
 alice (work/website)$ lore search --query payments --tables memory
 (no matches)
+  searched: repo (memory)
+  read as: words: payments
+  try: lore search --query "payments"
+  try: lore ask --query "payments"
+  try: lore search --query "payments" --include-archived
 alice (work/website)$ lore search --query payments --tables memory --include-archived
 Found 1 hit for "payments" across 1 entity type:
 
@@ -150,3 +155,7 @@ task      tsk_76bd560aff0771fab8457dbfa9823f10  Send the invoice reminder before
 ### no results
 alice (work/website)$ lore search --query pineapple
 (no matches)
+  searched: repo (every kind)
+  read as: words: pineapple
+  try: lore ask --query "pineapple"
+  try: lore search --query "pineapple" --include-archived

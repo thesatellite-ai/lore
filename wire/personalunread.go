@@ -69,7 +69,7 @@ func topFieldsOf(entries []op.Entry) func(op.Spec) []op.FieldInfo {
 		if personalUnreadSpec(spec, withStore[spec.Name]) {
 			out = append(out, personalUnreadInfo)
 		}
-		return out
+		return append(out, emptySearchFields(spec)...) // emptysearch.go (devco:D-821)
 	}
 }
 

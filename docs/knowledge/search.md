@@ -84,6 +84,11 @@ Archived rows are left out unless you ask for them with `--include-archived`.
 # alice, in website
 $ lore search --query payments --tables memory
 (no matches)
+  searched: repo (memory)
+  read as: words: payments
+  try: lore search --query "payments"
+  try: lore ask --query "payments"
+  try: lore search --query "payments" --include-archived
 $ lore search --query payments --tables memory --include-archived
 Found 1 hit for "payments" across 1 entity type:
 memory  mem_2ad3…f891  Old payments page is gone  (score=0.850)
@@ -226,7 +231,7 @@ note: the core rebuilds a store's whole cache; --kind memory included
 - **Quote what the shell would change.** `lore search --query 'invoi*'` with quotes; without them the shell may turn `*` into file names first.
 - <!-- ds:block id=search-defaults-z8rpj5sv --> **Limits.** By default each kind gives at most 10 hits (`--per-table`) and the merged list stops at 20 (`--limit`); `--limit` alone raises both, so `lore search --query budget --limit 100` lists up to 100 hits of one kind. A cut list says so: it starts `Showing the best 10 hits` instead of `Found`, ends with `note: more rows match than the 10 listed (the best first); add --limit 100 to list more`, and `--json` carries `"more": true`; every `<kind> search` (`lore memory search`, `lore task search`, `lore rule search`, `lore comment search` and the rest) ends with the same note and `--json` `"more": true` when its `--limit` cut it, counting only rows in its scope. A common word in a big project can push the row you want off the list: add a second word, narrow with `--tables`, or raise `--limit`.
 - **Chinese, Japanese, Korean and emoji.** Every Chinese, Japanese or Korean character is a word of its own in the index, so a word inside a sentence with no spaces is found (`lore search --query 迁移` finds 数据库迁移规则), and so is a Korean word with a particle attached. Each emoji is a word too: `lore search --query 🚀` finds rows holding it, 👍 also finds 👍🏽, and 👩‍💻 finds that joined emoji. A cache built by an older lore is rebuilt on the first search after the upgrade.
-- **"(no matches)" is not an error.** The command exits 0; check the words, or add `--include-archived` or `--all-repos`.
+- **"(no matches)" is not an error, and it says what to try.** The command exits 0. Under the empty line, `lore search`, every `lore <kind> search` and `lore ask` (whose empty answer is `(no answer)`) say what they read and what to run next: `searched:` the stores and folders read and the kinds, `read as:` the words the query was read as (for `lore ask` also the question type and the dates it read), and one to three `try:` lines, each a command that runs where it is printed (the same `--store`; the whole store a folder belongs to; `--store me` when your personal store's folders were not read; every kind for a `<kind> search`; the query without `--tables`, `--since` or `--until`; `--all` for `lore task search`; `lore ask` for a search and `lore search` for an ask; `--include-archived`). In `--json` the same is in the top-level fields `searched` (`stores`, `kinds`, `words`, `type`, `dates`) and `try` (a list of commands); both are absent when something was found.
 - **Your personal store's folders are read only when you name them.** A search or list that names no store reads the store of the folder it runs in, never the folders of your personal store (notes written with `--to me/<folder>`). When such a read finds nothing and your personal store has folders, it says so under its answer (`note: your personal store's folders (me/alpha) were not read; add --store me to the same command to read them`; in `--json` the field `personal_unread`), and outside a repo the refusal's hint starts with `add --store me to read your personal store`. `--store me` reads every folder of your personal store from any folder.
 
 ## Related

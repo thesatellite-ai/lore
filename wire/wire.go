@@ -1029,7 +1029,11 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	err = fitHomeHint(ctx, e, err)            // hintflags.go (devco:D-539)
 	err = a.personalStoreHint(ctx, e, d, err) // personalunread.go (devco:D-771)
 	if err == nil {
+		empty := emptyResult(res)
 		res = a.noteUnreadPersonal(ctx, e, d, res) // personalunread.go (devco:D-771)
+		if empty {
+			res = a.noteEmptySearch(ctx, e, d, res) // emptysearch.go (devco:D-821)
+		}
 	}
 	err = a.goneRowAnswer(ctx, e, d, err) // rowgone.go (devco:D-590)
 	err = purgedAsDeclared(e, err)        // rowgone.go: E_PURGED only where declared

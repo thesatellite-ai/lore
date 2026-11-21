@@ -26,6 +26,9 @@ func TestWithTopTextSplicesTheField(t *testing.T) {
 		{"empty object", Result{v: reflect.ValueOf(bare{})}.WithTopText(RoutedField, "acme/sync"), `{"routed":"acme/sync"}`},
 		{"no text", Result{v: reflect.ValueOf(bare{})}.WithTopText(RoutedField, ""), `{}`},
 		{"own field wins", Result{v: reflect.ValueOf(out{Items: []string{}, Routed: "x/y"}), fields: []FieldInfo{{Name: "items"}, {Name: RoutedField}}}.WithTopText(RoutedField, "acme/sync"), `{"items":[],"routed":"x/y"}`},
+		// devco D-821: an object or list value (an empty search's searched / try)
+		{"json values", Result{v: reflect.ValueOf(bare{})}.WithTopJSON("searched", []byte(`{"stores":["repo"]}`)).WithTopJSON("try", []byte(`["lore ask"]`)), `{"searched":{"stores":["repo"]},"try":["lore ask"]}`},
+		{"no json", Result{v: reflect.ValueOf(bare{})}.WithTopJSON("try", nil), `{}`},
 	}
 	for _, c := range cases {
 		b, err := c.r.JSON()
