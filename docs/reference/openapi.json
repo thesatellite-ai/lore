@@ -6223,6 +6223,10 @@
                           "body": {
                             "type": "string"
                           },
+                          "full_chars": {
+                            "type": "integer",
+                            "description": "set when the row is longer than --max-chars: body is then only the part that answers the question (… marks text left out) and this is the whole body's length; lore show --id \u003cid\u003e prints it whole"
+                          },
                           "history": {
                             "type": "string",
                             "description": "set when the row is no longer the current answer, read it as history: superseded by \u003cid\u003e, valid until \u003cday\u003e, or replaced by \u003cid\u003e from \u003cday\u003e (a newer row of the same folder on the same thing)"

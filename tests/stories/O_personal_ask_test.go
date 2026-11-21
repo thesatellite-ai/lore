@@ -534,4 +534,41 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		sql("SELECT name FROM pragma_table_info('tasks') WHERE name = 'title'", "title")
 		sql("SELECT t.title FROM tasks_all t, \"resources_all\" r WHERE r.name = 'robert-kim' AND t.title LIKE '%price list%'", "send the price list")
 	})
+	// devco:D-859 (bug hunt H-127, public issue #86): a best row longer
+	// than --max-chars (a design note) printed nothing: "(no answer)" and
+	// "2 more items left out", the short row that fit dropped too. The
+	// best row is printed cut to the part that answers the question,
+	// marked with its whole length and the command that prints it whole,
+	// and the short row under it still prints.
+	s.Step("personal-store/long-best-row-is-cut-not-dropped", func() {
+		var doc strings.Builder
+		doc.WriteString("# Platform design notes\n\n")
+		for i, topic := range []string{"Request routing", "Session handling", "Search indexing", "Email delivery", "Operations", "Feature flags", "Image resizing", "Audit trail", "Rate limiting"} {
+			doc.WriteString("## " + topic + "\n\n")
+			if i == 4 {
+				doc.WriteString("The nightly backup of the billing database runs at 03:15 UTC on host vault-seven.\n\n")
+				continue
+			}
+			doc.WriteString(strings.Repeat("This part of the design covers "+topic+" in plain terms, reviewed in a sprint, kept as it is, with every follow-up written down in the tracker. ", 5) + "\n\n")
+		}
+		add := ada.Lore(ada.Home, "memory", "add", "--body", doc.String(), "--to", to, "--yes", "--json")
+		add.OK(t)
+		id := regexp.MustCompile(`mem_[0-9a-f]{20,}`).FindString(add.Out())
+		ada.Lore(ada.Home, "memory", "add", "--body", "Deploys go out on Tuesdays after the database backup check passes.", "--to", to, "--yes").OK(t)
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when does the nightly backup of the billing database run")
+		r.OK(t)
+		out := r.Out()
+		cmd := "lore show --id " + id + " prints it whole"
+		for _, want := range []string{"03:15 UTC on host vault-seven", "the whole row is ", cmd, "Deploys go out on Tuesdays"} {
+			if id == "" || !strings.Contains(out, want) {
+				t.Errorf("[O D-859] the long best row is not printed cut with the short row under it: no %q in\n%s", want, out)
+			}
+		}
+		if strings.Contains(out, "(no answer)") || strings.Contains(out, "left out") {
+			t.Errorf("[O D-859] the answer drops what matched:\n%s", out)
+		}
+		if show := ada.Lore(ada.Home, "show", "--id", id); !strings.Contains(show.Out(), "## Rate limiting") {
+			t.Errorf("[O D-859] the printed `lore show --id %s` does not print the row whole:\n%s", id, show)
+		}
+	})
 }

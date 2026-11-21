@@ -185,7 +185,12 @@ type Row struct {
 	// replaced by a newer row of the same folder on the same thing. Such
 	// a row ranks after every current row and an agent reads it as what
 	// used to be true.
-	History string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
+	// FullChars is set on a row longer than the answer's --max-chars
+	// (devco D-859): Body is then only the part of it that answers the
+	// question, with … where text was left out, and FullChars is the
+	// whole body's length (lore show --id prints it).
+	FullChars int    `json:"full_chars,omitempty" desc:"set when the row is longer than --max-chars: body is then only the part that answers the question (… marks text left out) and this is the whole body's length; lore show --id <id> prints it whole"`
+	History   string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
 	// readTitle and readBody are Title and Body as the text answer prints
 	// them: each ${res:…} naming a resource the ask read replaced by the
 	// resource's name (refs.Readable, devco D-822). --json keeps the
@@ -257,7 +262,11 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	}
 	// a row the file's context already printed is not printed twice
 	d.rows = slices.DeleteFunc(d.rows, func(r textRow) bool { return picked[r.ID] })
-	out := build(q, d, in.Top, maxChars-len(text))
+	// the rows get what the file's context left, at least 1: build reads
+	// 0 or less as "no --max-chars" (4000), which let a context that
+	// filled a small cap be followed by 4000 characters of rows; the best
+	// row is still printed, cut (devco D-859)
+	out := build(q, d, in.Top, max(maxChars-len(text), 1))
 	out.File, out.Context, out.note, out.maxChars = q.file, text, note, maxChars
 	out.Applies = applied
 	if out.Applies == nil {
