@@ -178,9 +178,17 @@ func AgentReport(info AgentRunInfo, rs []AgentResult) string {
 // MergeSection puts section into report: in place of an earlier blind
 // agent run section, else appended after the report.
 func MergeSection(report, section string) string {
-	if i := strings.Index(report, agentBegin); i >= 0 {
-		if j := strings.Index(report[i:], agentEnd); j >= 0 {
-			rest := strings.TrimPrefix(report[i+j+len(agentEnd):], "\n")
+	return MergeBetween(report, section, agentBegin, agentEnd)
+}
+
+// MergeBetween puts section (which starts with begin and ends with end)
+// into report: in place of the text between an earlier begin and end,
+// else appended after the report. Another gate's report shares it (the
+// coding gate's trap run section in tmp/bench/coding.md).
+func MergeBetween(report, section, begin, end string) string {
+	if i := strings.Index(report, begin); i >= 0 {
+		if j := strings.Index(report[i:], end); j >= 0 {
+			rest := strings.TrimPrefix(report[i+j+len(end):], "\n")
 			return report[:i] + section + rest
 		}
 		return report[:i] + section

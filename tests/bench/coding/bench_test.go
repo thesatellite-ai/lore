@@ -93,26 +93,28 @@ func addArgs(r Row) []string {
 	return a
 }
 
-// writeRepo makes the repo with every task's file, runs lore init and
-// writes the rows; it returns row id → key.
-func writeRepo(t *testing.T, e *env) map[string]string {
+// writeFiles writes files into dir and commits them in a new git repo.
+func writeFiles(t *testing.T, e *env, files map[string]string) {
 	t.Helper()
-	files := map[string]bool{"README.md": true}
-	for _, tk := range Tasks() {
-		files[tk.File] = true
-	}
-	for f := range files {
+	for f, body := range files {
 		p := filepath.Join(e.repo, filepath.FromSlash(f))
 		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(p, []byte("// "+f+"\n"), 0o600); err != nil {
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	e.git("init", "-q", "-b", "main")
 	e.git("add", "-A")
 	e.git("commit", "-q", "-m", "orbit")
+}
+
+// writeRepo makes the repo with files, runs lore init and writes the
+// rows; it returns row id → key.
+func writeRepo(t *testing.T, e *env, files map[string]string) map[string]string {
+	t.Helper()
+	writeFiles(t, e, files)
 	e.must("init", "--name", "orbit", "--target", "codex")
 	keyOf := map[string]string{}
 	for _, r := range Rows() {
@@ -130,6 +132,56 @@ func writeRepo(t *testing.T, e *env) map[string]string {
 		keyOf[got.ID] = r.Key
 	}
 	return keyOf
+}
+
+// runDir is the run's folder: LORE_BENCH_DIR emptied, or a temp folder.
+func runDir(t *testing.T) string {
+	t.Helper()
+	dir := os.Getenv(envDir)
+	if dir == "" {
+		return t.TempDir()
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// loreBin is LORE_BENCH_BIN, or ./cmd/lore built into dir/bin.
+func loreBin(t *testing.T, root, dir string) string {
+	t.Helper()
+	bin := os.Getenv(envBin)
+	if bin == "" {
+		bin = filepath.Join(dir, "bin", "lore")
+		build := exec.Command("go", "build", "-o", bin, "./cmd/lore")
+		build.Dir, build.Env = root, append(os.Environ(), "CGO_ENABLED=0")
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("build lore: %v\n%s", err, out)
+		}
+	}
+	bin, _ = filepath.Abs(bin)
+	return bin
+}
+
+// newEnv makes home (with the gate's person's git identity) and repo, and
+// runs lore and git there as that person.
+func newEnv(t *testing.T, bin, home, repo string) *env {
+	t.Helper()
+	for _, d := range []string{home, repo} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[user]\n\tname = Pia Holm\n\temail = pia@notes.example\n[init]\n\tdefaultBranch = main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tmp := os.Getenv("TMPDIR")
+	if tmp == "" {
+		tmp = os.TempDir()
+	}
+	return &env{t: t, bin: bin, repo: repo, env: []string{
+		"HOME=" + home, "PATH=" + filepath.Dir(bin) + ":/usr/local/bin:/usr/bin:/bin", "TMPDIR=" + tmp, "NO_COLOR=1", "LANG=C.UTF-8",
+	}}
 }
 
 // repoRoot is the module root (the folder holding go.mod).
@@ -157,44 +209,15 @@ func TestBenchCoding(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := repoRoot(t)
-	dir := os.Getenv(envDir)
-	if dir == "" {
-		dir = t.TempDir()
-	} else if err := os.RemoveAll(dir); err != nil {
-		t.Fatal(err)
-	}
-	bin := os.Getenv(envBin)
-	if bin == "" {
-		bin = filepath.Join(dir, "bin", "lore")
-		build := exec.Command("go", "build", "-o", bin, "./cmd/lore")
-		build.Dir, build.Env = root, append(os.Environ(), "CGO_ENABLED=0")
-		if out, err := build.CombinedOutput(); err != nil {
-			t.Fatalf("build lore: %v\n%s", err, out)
-		}
-	}
-	bin, _ = filepath.Abs(bin)
-	home, repo := filepath.Join(dir, "home"), filepath.Join(dir, "orbit")
-	for _, d := range []string{home, repo} {
-		if err := os.MkdirAll(d, 0o750); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[user]\n\tname = Pia Holm\n\temail = pia@notes.example\n[init]\n\tdefaultBranch = main\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	tmp := os.Getenv("TMPDIR")
-	if tmp == "" {
-		tmp = os.TempDir()
-	}
-	e := &env{t: t, bin: bin, repo: repo, env: []string{
-		"HOME=" + home, "PATH=" + filepath.Dir(bin) + ":/usr/local/bin:/usr/bin:/bin", "TMPDIR=" + tmp, "NO_COLOR=1", "LANG=C.UTF-8",
-	}}
-	keyOf := writeRepo(t, e)
+	dir := runDir(t)
+	bin := loreBin(t, root, dir)
+	e := newEnv(t, bin, filepath.Join(dir, "home"), filepath.Join(dir, "orbit"))
+	keyOf := writeRepo(t, e, StubFiles())
 	version, _ := e.lore("--version")
 
 	// the always-on must-rules reach the agent through the rendered file
 	e.must("render")
-	rendered, err := os.ReadFile(filepath.Join(repo, ".lore", "LORE.md"))
+	rendered, err := os.ReadFile(filepath.Join(e.repo, ".lore", "LORE.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +250,12 @@ func TestBenchCoding(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(report), 0o600); err != nil {
+	// the trap run's section (task bench:agent) stays
+	old, err := os.ReadFile(filepath.Clean(path))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(KeepTrapSection(string(old), report)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("report: %s\nsummary: %s", path, Summary(ts, arms))

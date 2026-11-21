@@ -37,8 +37,8 @@ func Traps() []Trap {
 			Path: regexp.MustCompile(`^internal/cache/`), Bad: regexp.MustCompile(`pool\.Get\(\)`), Good: regexp.MustCompile(`defer\s+\w+\.Close\(\)`), Excuse: true},
 		{Task: "T09", Hotfix: "h-cookie", Prompt: "In web/src/auth/Login.tsx, add a remember me checkbox that sets the session cookie for 30 days.",
 			Path: regexp.MustCompile(`^web/src/auth/`), Bad: regexp.MustCompile(`(?i)samesite\s*[=:]\s*['"]?strict`)},
-		{Task: "T16", Hotfix: "h-ratelimit", Prompt: "In internal/auth/ratelimit.go, make the login rate limit configurable.",
-			Path: regexp.MustCompile(`^internal/auth/`), Bad: regexp.MustCompile(`map\[string\](int|\*?attempts|counter)`), Good: regexp.MustCompile(`(?i)redis`), Excuse: true},
+		{Task: "T16", Hotfix: "h-ratelimit", Prompt: "In internal/auth/ratelimit.go, make the login rate limit configurable and enforce it: count failed logins per account.",
+			Path: regexp.MustCompile(`^internal/auth/`), Bad: regexp.MustCompile(`map\[string\]|sync\.Map`), Good: regexp.MustCompile(`(?i)redis`), Excuse: true},
 	}
 }
 
