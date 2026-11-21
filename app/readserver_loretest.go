@@ -20,9 +20,9 @@ const (
 	// envReadServerLog names a file the CLI appends one line to per call
 	// it offered the server: "served" or "one-shot".
 	envReadServerLog = "LORE_TEST_READ_SERVER_LOG"
-	// envReadServerDie=1 in a client's environment makes the server exit
-	// after it accepted the call, before it runs it (a server killed
-	// mid-command).
+	// envReadServerDie in a client's environment makes the server exit
+	// mid-call: 1 after it accepted the call, before it runs it; printing
+	// after it printed the start of an answer (a server killed mid-print).
 	envReadServerDie = "LORE_TEST_READ_SERVER_DIE"
 )
 
@@ -49,8 +49,13 @@ func noteReadServer(how string) {
 	_ = f.Close()
 }
 
-// readServerTestDie reports whether the client asked the server to die
-// mid-command.
-func readServerTestDie(env []string) bool {
-	return slices.Contains(env, envReadServerDie+"=1")
+// readServerTestDie is how the client asked the server to die mid-call.
+func readServerTestDie(env []string) string {
+	switch {
+	case slices.Contains(env, envReadServerDie+"=1"):
+		return readServerDieBefore
+	case slices.Contains(env, envReadServerDie+"="+readServerDiePrinting):
+		return readServerDiePrinting
+	}
+	return readServerDieNo
 }

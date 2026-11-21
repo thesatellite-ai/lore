@@ -365,6 +365,23 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		if b, _ := os.ReadFile(log); string(b) != "one-shot\n" {
 			t.Errorf("[O D-833] the call whose server died should run one-shot, the log says:\n%s", b)
 		}
+		// devco:D-838 (bug hunt H-95): a server killed after it printed the
+		// start of an answer must not make the CLI run the command again
+		// (the start would show twice): the CLI exits 1 and says so.
+		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "")
+		_ = os.Remove(sock)                                                  // the dead server's
+		_ = os.Remove(filepath.Join(ada.Home, ".lore", "run", "read.start")) // a start was asked for under 30 s ago
+		ask(qs[0])                                                           // starts a new server
+		started()
+		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "printing")
+		_ = os.Remove(log)
+		r := ask(qs[1])
+		if r.Stdout != "the start of an answer\n" || r.Code != 1 || !strings.Contains(r.Stderr, "the local read server stopped while it was answering") || !strings.Contains(r.Stderr, "LORE_READ_SERVER=0") {
+			t.Errorf("[O D-838] a server killed mid-print: want the start printed once, exit 1 and the reason; got:\n%s", r)
+		}
+		if b, _ := os.ReadFile(log); string(b) != "lost\n" {
+			t.Errorf("[O D-838] the call whose server died mid-print must not run again one-shot, the log says:\n%s", b)
+		}
 	})
 	s.Step("personal-store/sql-reads-the-tables-it-names", func() {
 		// D-837: lore sql builds views only for the tables a statement

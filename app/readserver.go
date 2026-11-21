@@ -68,8 +68,9 @@ const (
 	readServerLock    = "read.lock"
 	readServerStart   = "read.start"
 	readServerRestart = 30 * time.Second
-	// readServerProto is the request format; a server answers only its own.
-	readServerProto = 1
+	// readServerProto is the request format; a server answers only its own
+	// (2: the server says Running before it runs the command, D-838).
+	readServerProto = 2
 )
 
 // readRequest is what the CLI sends the server for one command.
@@ -84,17 +85,34 @@ type readRequest struct {
 }
 
 // readReply is the server's answer: first Accepted (or Served false with
-// Why), then, after the CLI says go, Served with the exit code.
+// Why), then, after the CLI says go, Running just before the command
+// runs, then Served with the exit code.
 type readReply struct {
-	Accepted bool   `json:"accepted,omitempty"`
-	Served   bool   `json:"served,omitempty"`
-	Code     int    `json:"code"`
-	Why      string `json:"why,omitempty"`
+	Accepted bool `json:"accepted,omitempty"`
+	// Running: the command starts now, so part of its answer may reach the
+	// client's stdout or stderr from here on. A server lost after Running
+	// must never make the CLI run the command again (the start of the
+	// answer would print twice, devco:D-838); lost before it, nothing was
+	// printed and the CLI runs the command itself.
+	Running bool   `json:"running,omitempty"`
+	Served  bool   `json:"served,omitempty"`
+	Code    int    `json:"code"`
+	Why     string `json:"why,omitempty"`
 	// Pipe: a write to the client's stdout or stderr hit a closed pipe
 	// (`lore ask | head -1`); the CLI then ends by SIGPIPE as a one-shot
 	// lore would.
 	Pipe bool `json:"pipe,omitempty"`
 }
+
+// How a test build's server dies mid-call (readServerTestDie): before it
+// runs the command, or after it printed readServerDiePrint, the start of
+// an answer. A release build never dies on purpose.
+const (
+	readServerDieNo       = ""
+	readServerDieBefore   = "before"
+	readServerDiePrinting = "printing"
+	readServerDiePrint    = "the start of an answer\n"
+)
 
 // readServerCandidates are the first words of the commands the CLI offers
 // to the server, and readServerVerbs the later words that make a call a

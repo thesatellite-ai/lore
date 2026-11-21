@@ -143,7 +143,7 @@ func (s *Session) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, r := range s.repos {
-		if r != nil && r.objs != nil {
+		if r != nil && r.objs != nil && !r.objsShared {
 			r.objs.close()
 		}
 	}

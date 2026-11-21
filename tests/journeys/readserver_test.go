@@ -11,6 +11,7 @@ package journeys
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -82,5 +83,79 @@ func TestJourneyReadServerAnswersInTheCallersFolder(t *testing.T) {
 			t.Errorf("want each read served and the write not offered, the log says:\n%s", b)
 		}
 		lap.LoreIn(code, "search", "fridays").OK(t).Says(t, "comet ships on fridays only")
+	})
+}
+
+// TestJourneyReadServerEndsLikeOneShotOnAClosedPipe (devco:D-838, H-90
+// LEFT 3): `lore sql … | head -c 5` reads five bytes and closes the pipe.
+// A one-shot lore dies of SIGPIPE at its next write (exit 141 in bash,
+// nothing on stderr); a served read must end the same way, print nothing
+// more, and leave the server serving the next read.
+func TestJourneyReadServerEndsLikeOneShotOnAClosedPipe(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	uma := w.Persona("Uma Reyes", "uma@acme-co.example")
+	lap := uma.Laptop()
+	me := w.Remote("github.com/uma-reyes/lore-me")
+	w.Step("day1/many-notes", func() {
+		lap.Lore(lap.Home, "store", "init", "--name", "me", "--url", me.SSHURL(), "--yes").OK(t)
+		lap.Lore(lap.Home, "store", "folder", "add", "me", "work").OK(t)
+		for _, b := range []string{"comet beta has 4 teams.", "comet ships on fridays.", "comet builds with make release."} {
+			lap.Lore(lap.Home, "memory", "add", "--body", b, "--to", "me/work", "--yes").OK(t)
+		}
+	})
+	// pipe runs `lore sql --store me --query <big> | head -c 5` under bash
+	// and returns what head printed, lore's stderr and both exit codes.
+	pipe := func() (string, string, string) {
+		t.Helper()
+		script := `"$LORE_UNDER_TEST" sql --store me --query "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i < 200000) SELECT i FROM n" 2>"$ERR_FILE" | head -c 5; s=("${PIPESTATUS[@]}"); echo; echo "${s[@]}"`
+		errFile := filepath.Join(t.TempDir(), "stderr")
+		cmd := exec.Command("bash", "-c", script)
+		cmd.Dir = lap.Home
+		cmd.Env = append(lap.Environ(), "LORE_UNDER_TEST="+lap.Bin(), "ERR_FILE="+errFile)
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("bash pipeline: %v\n%s", err, out)
+		}
+		lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+		stderr, _ := os.ReadFile(errFile)
+		return strings.Join(lines[:len(lines)-1], "\n"), string(stderr), lines[len(lines)-1]
+	}
+	w.Step("day1/closed-pipe-served-as-one-shot", func() {
+		oneOut, oneErr, oneCodes := pipe()
+		if oneCodes != "141 0" || oneErr != "" {
+			t.Fatalf("one-shot `lore sql … | head -c 5`: exit codes %q, stderr %q; want \"141 0\" and nothing", oneCodes, oneErr)
+		}
+		log := filepath.Join(t.TempDir(), "read-server.log")
+		sock := lap.LorePath("run", "read.sock")
+		lap.SetEnv("LORE_READ_SERVER", "1")
+		lap.SetEnv("LORE_TEST_READ_SERVER_LOG", log)
+		defer func() {
+			lap.SetEnv("LORE_READ_SERVER", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_LOG", "")
+			_ = os.Remove(sock) // the server stops once its socket is gone
+		}()
+		lap.Lore(lap.Home, "search", "comet").OK(t) // starts the server
+		for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+			if _, err := os.Stat(sock); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no read server listens on %s", sock)
+			}
+		}
+		_ = os.Remove(log)
+		for range 3 {
+			out, errs, codes := pipe()
+			if out != oneOut || errs != oneErr || codes != oneCodes {
+				t.Errorf("served `lore sql … | head -c 5` ends unlike one-shot:\nserved:   out %q stderr %q codes %q\none-shot: out %q stderr %q codes %q", out, errs, codes, oneOut, oneErr, oneCodes)
+			}
+		}
+		lap.Lore(lap.Home, "search", "fridays").OK(t).Says(t, "comet ships on fridays")
+		// A piped call dies of SIGPIPE before it logs "served"; one that ran
+		// one-shot would have logged "one-shot" first.
+		if b, _ := os.ReadFile(log); string(b) != "served\n" {
+			t.Errorf("want the three piped reads served (no one-shot line) and the read after them served, the log says:\n%s", b)
+		}
 	})
 }
