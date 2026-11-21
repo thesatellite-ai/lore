@@ -37,6 +37,11 @@ tasks:
     cmds:
       - task: lore:bench:recall
 
+  bench:agent:
+    desc: alias → lore:bench:agent — the blind agent run (lore agent vs grep agent, starts real agents; section in tmp/bench/recall.md)
+    cmds:
+      - task: lore:bench:agent
+
   upgrade:
     desc: update every Go dependency of the root module
     cmds:

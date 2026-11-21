@@ -141,7 +141,23 @@ func repoRoot(t *testing.T) string {
 	}
 }
 
-func TestBenchRecall(t *testing.T) {
+// prepared is a loaded run: the store written, the tree on disk, the
+// first read done. TestBenchRecall and TestBenchAgent share it.
+type prepared struct {
+	root, dir, home, tree, side, bare string
+	ds                                *Dataset
+	e                                 *benchEnv
+	seed                              uint64
+	useRG                             bool
+	started                           time.Time
+	load                              time.Duration
+	version                           string
+}
+
+// prepare reads the environment knobs, writes the store and the tree and
+// makes the first read (every folder's cache built from nothing).
+func prepare(t *testing.T) *prepared {
+	t.Helper()
 	started := time.Now()
 	root := repoRoot(t)
 	now := time.Now().UTC()
@@ -220,6 +236,12 @@ func TestBenchRecall(t *testing.T) {
 	_, _, first := e.lore("search", "--store", "me", "--query", "warmup")
 	t.Logf("store loaded in %s; the next read (search) %d ms", load.Round(time.Millisecond), first.Milliseconds())
 
+	return &prepared{root: root, dir: dir, home: home, tree: tree, side: side, bare: bare, ds: ds, e: e, seed: seed, useRG: useRG, started: started, load: load, version: version}
+}
+
+func TestBenchRecall(t *testing.T) {
+	p := prepare(t)
+	root, home, tree, side, bare, ds, e, seed, useRG, started, load, version := p.root, p.home, p.tree, p.side, p.bare, p.ds, p.e, p.seed, p.useRG, p.started, p.load, p.version
 	qs := ds.Questions(useRG)
 	clone := storeClone(t, home)
 	var rs []Result

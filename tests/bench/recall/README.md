@@ -84,6 +84,41 @@ recall@3 R/70, top-1 T/70, stale S, noise X, calls L/G, warm p50/max ms, cold ma
 
 stale counts the questions with a stale fact in the top 3, noise the questions with more than one irrelevant item there.
 
+## The blind agent run
+
+`task bench:agent` asks every question of two agents on one small model (`claude-haiku-4-5`) and grades their final answers automatically against the question's facts with `GradeAnswer`, the same grade for both agents. It starts real agents and costs money, so it never runs in `task check` or on push; the release script runs it.
+
+- The lore agent starts in the person's home folder with `skills/SKILL.md` appended to its system prompt and the Bash tool; the `lore` first on its PATH is the measured binary as the bench's person. It is told to start with `lore ask --query "<the question>"` and to use other documented lore read commands only when that is not enough.
+- The grep agent starts in the markdown tree's root with the Bash tool and rg, grep, cat, ls, find, head.
+- Both are told today's (pinned) date and to quote the facts verbatim; neither is given anything of a question's expected facts (`TestAgentPromptsBlind` holds that). The agent CLI runs bare (no hooks, memory, CLAUDE.md discovery or skills of the machine), with the arm's deny rules; a command outside the arm's tools (any non-lore command for the lore agent, lore for the grep agent), a failed or stopped run, or an answer from another model than asked counts as wrong.
+- `GradeAnswer` grades the facts, not the wording: a required fact counts when the answer holds its text or every word of it that carries meaning (case, markdown and punctuation ignored, `elena-ruiz` matches "Elena Ruiz", "owes you" matches "owes me"), so an agent that rewrites "ulrich-brandt owes me the board deck #61" as "ulrich-brandt owes you: the board deck (task #61)" is right, one that names #16 is not; a forbidden (stale or done) fact counts as written, unless the current value is stated too.
+- Per question and arm it records right or wrong (and what was missing), the shell commands, tokens in (uncached + cache write + cache read) and out, cost and wall time.
+
+The bar (owner 2026-11-21): the lore agent gets at least as many right as the grep agent on the normal set and more on the harder set (when the grep agent gets every harder question right there is nothing left to beat, so equal and full passes); every run finishes. Every run's answer, commands, tokens and time are kept next to the report as `<report>-agent.json` (e.g. `tmp/bench/recall-agent.json`), so a miss can be read, and a grader change checked, without running the agents again:
+
+```sh
+LORE_BENCH_AGENT_ANSWERS=$PWD/tmp/bench/recall-agent.json LORE_BENCH_NOW=<the run's now> go test -tags bench -count=1 -run '^TestBenchAgentRegrade$' -v ./tests/bench/recall/
+```
+
+The section `## Blind agent run` goes into `tmp/bench/recall.md` between its own markers, replacing the previous run's section, so it can run before or after `task bench:recall`.
+
+```sh
+LORE_BENCH_AGENT='claude' task bench:agent
+LORE_BENCH_AGENT_ONLY=Q01,Q36 task bench:agent   # a few questions only
+```
+
+| variable | default | what it does |
+|---|---|---|
+| `LORE_BENCH_AGENT` | `claude` | the command that starts a Claude Code compatible CLI (split at spaces; the harness appends `-p <question> --bare --tools Bash --model ... --output-format stream-json ...`), e.g. a wrapper that picks the account |
+| `LORE_BENCH_AGENT_MODEL` | `claude-haiku-4-5` | the model both agents run on |
+| `LORE_BENCH_AGENT_JOBS` | `4` | agents at a time |
+| `LORE_BENCH_AGENT_TIMEOUT` | `5m` | one agent run is stopped after this (counts as wrong) |
+| `LORE_BENCH_AGENT_TURNS` | `12` | the agent's turn limit |
+| `LORE_BENCH_AGENT_ONLY` | every question | comma-separated question ids to ask |
+| `LORE_BENCH_AGENT_ANSWERS` | unset | for `TestBenchAgentRegrade`: a saved `<report>-agent.json` to grade again with today's grader (no agent, no store, no cost; same `LORE_BENCH_SEED` and `LORE_BENCH_NOW` as the run) |
+
+The data, `LORE_BENCH_NOW`, `LORE_BENCH_SEED`, `LORE_BENCH_DIR` and `LORE_BENCH_REPORT` work as for the scripted run.
+
 ## Not in the gate yet
 
 The bench is report-only until it passes: it is not in `task check` or the release script. When it passes, add `task bench:recall` (or its `go test -tags bench` line) to the gate steps.
