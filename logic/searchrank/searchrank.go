@@ -8,10 +8,20 @@
 //	  ─▶ topic words [deploy orbit] (querywords.Terms: stop words out)
 //	  ─▶ FTS5: ("deploy" OR "orbit") NOT friday   — a row needs one word, not all
 //	  ─▶ per word: which rows hold it (same FTS5 stemming) ─▶ matched count per row
-//	  ─▶ score = (matched + 0.6·title share + 0.3/(1+bm25 rank)) / (words+1)
+//	  ─▶ order: words held, then names (the title or first line opens with
+//	     the words), then title share, then newest first among rows whose
+//	     title or first line holds every word, then bm25
+//	  ─▶ score = (matched + 0.25·names + 0.45·title share + 0.25/(1+rank)) / (words+1)
 //
 // One more matched word always outranks any title or rank bonus (the
 // bonus stays under 1), and the score means the same in every kind.
+//
+// A row that names the words (devco D-791, owner P-18) is what a person
+// asking "who is alice ng" wants first: an overview row "Alice Ng
+// (person) — CFO …" or the resource alice_ng, not a long meeting note
+// whose first line happens to mention her too. Among rows whose title or
+// first line names or holds every word equally, the newest comes first,
+// so a fact that changed answers with its newest value.
 //
 // A query written in FTS5 syntax ("phrase", prefix*, AND / OR / NOT,
 // column filters) is run as written: every hit matched the whole query.
@@ -23,6 +33,8 @@ package searchrank
 import (
 	"sort"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/logic/querywords"
@@ -30,8 +42,9 @@ import (
 
 // Score weights (see the package comment); their sum stays under 1.
 const (
-	scoreTitle = 0.6
-	scoreRank  = 0.3
+	scoreNames = 0.25
+	scoreTitle = 0.45
+	scoreRank  = 0.25
 )
 
 // Words is the free text of one search as the ranking reads it.
@@ -207,15 +220,56 @@ func plain(q string, r *strings.Replacer) string {
 	return strings.Join(words, " ")
 }
 
-// Score is a hit's relevance in [0, 1): matched of the words' n, the
-// share of the words its title holds, and its bm25 rank in its kind.
-// With no words (conditions only) every hit matched all there was.
-func Score(matched, n int, titleShare float64, rank int) float64 {
+// Score is a hit's relevance in [0, 1): matched of the words' n, whether
+// its title or first line names the words (Names), the share of the
+// words its title holds, and its rank in its kind. With no words
+// (conditions only) every hit matched all there was.
+func Score(matched, n int, names bool, titleShare float64, rank int) float64 {
 	if n == 0 {
 		matched = 0
 	}
 	bonus := scoreTitle*titleShare + scoreRank/float64(1+rank)
+	if names {
+		bonus += scoreNames
+	}
 	return (float64(matched) + bonus) / float64(n+1)
+}
+
+// Names reports whether label opens with terms: its first words (as many
+// as the terms have, punctuation, '_' and '-' splitting words) hold every
+// term, in any order. "Alice Ng (person) — CFO" and the resource name
+// alice_ng name "alice ng"; "Lunch with Alice Ng" holds the words but does
+// not name them (devco D-791, owner P-18).
+func Names(label string, terms []string) bool {
+	if label == "" || len(terms) == 0 {
+		return false
+	}
+	k := len(strings.FieldsFunc(strings.Join(terms, " "), notWordRune))
+	if k == 0 {
+		return false
+	}
+	return querywords.Coverage(leadWords(label, k), terms) == len(terms)
+}
+
+// notWordRune splits words as the index does: anything but a letter or a
+// digit ('*' too, so a prefix term counts as one word).
+func notWordRune(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }
+
+// leadWords is label up to the end of its k-th word (the whole label
+// when it has fewer); querywords.Coverage splits a snake_case name into
+// its words the same way.
+func leadWords(label string, k int) string {
+	in, n := false, 0
+	for i, r := range label {
+		w := !notWordRune(r)
+		if in && !w {
+			if n++; n == k {
+				return label[:i]
+			}
+		}
+		in = w
+	}
+	return label
 }
 
 // TitleShare is the share of terms title holds (0 without terms or title).
@@ -228,10 +282,13 @@ func TitleShare(title string, terms []string) float64 {
 
 // Item is one hit of a table before ordering: Label names it (its title,
 // else the start of its body), Matched is how many topic words it holds
-// (read only for a Natural query; any other hit held every word).
+// (read only for a Natural query; any other hit held every word), At is
+// the day it is about (schema.RowDate; zero when unknown), which orders
+// rows whose label holds every word equally newest first.
 type Item struct {
 	Label   string
 	Matched int
+	At      time.Time
 }
 
 // Ranked is one ordered hit: Index into the items, its Score, and
@@ -243,12 +300,15 @@ type Ranked struct {
 }
 
 // Order orders one table's items (given in bm25 order) by words held,
-// then title share, keeping bm25 order within a tie, cut to limit, each
-// scored (Score).
+// then whether the label names the words (Names), then title share, then
+// newest first among items whose label names or holds every word (a
+// changed fact answers with its newest value), keeping bm25 order within
+// a tie, cut to limit, each scored (Score).
 func (w Words) Order(items []Item, limit int) []Ranked {
 	n := len(w.Terms)
 	matched := make([]int, len(items))
 	share := make([]float64, len(items))
+	names := make([]bool, len(items))
 	idx := make([]int, len(items))
 	for i, it := range items {
 		matched[i] = n
@@ -256,21 +316,29 @@ func (w Words) Order(items []Item, limit int) []Ranked {
 			matched[i] = it.Matched
 		}
 		share[i] = TitleShare(it.Label, w.Terms)
+		names[i] = Names(it.Label, w.Terms)
 		idx[i] = i
 	}
 	sort.SliceStable(idx, func(x, y int) bool {
 		a, b := idx[x], idx[y]
-		if matched[a] != matched[b] {
+		switch {
+		case matched[a] != matched[b]:
 			return matched[a] > matched[b]
+		case names[a] != names[b]:
+			return names[a]
+		case share[a] != share[b]:
+			return share[a] > share[b]
+		case (names[a] || share[a] == 1) && !items[a].At.IsZero() && !items[b].At.IsZero():
+			return items[a].At.After(items[b].At)
 		}
-		return share[a] > share[b]
+		return false
 	})
 	out := make([]Ranked, 0, min(len(idx), limit))
 	for rank, i := range idx {
 		if rank == limit {
 			break
 		}
-		out = append(out, Ranked{Index: i, Score: Score(matched[i], n, share[i], rank), Partial: w.Natural && matched[i] < n})
+		out = append(out, Ranked{Index: i, Score: Score(matched[i], n, names[i], share[i], rank), Partial: w.Natural && matched[i] < n})
 	}
 	return out
 }

@@ -19,7 +19,7 @@ import (
 // meta key:value, resource field:value), keeping their order as rank.
 func scoreInOrder(hits []opssearch.Hit, terms []string) {
 	for i := range hits {
-		hits[i].Score = searchrank.Score(len(terms), len(terms), searchrank.TitleShare(hits[i].Title, terms), i)
+		hits[i].Score = searchrank.Score(len(terms), len(terms), searchrank.Names(hits[i].Title, terms), searchrank.TitleShare(hits[i].Title, terms), i)
 	}
 }
 

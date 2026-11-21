@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -127,7 +128,7 @@ func rankHits(ctx context.Context, env RankEnv, table row.Table, w searchrank.Wo
 		if title == "" {
 			title = field(r, labelName)
 		}
-		items[i] = searchrank.Item{Label: searchrank.Label(title, field(r, fieldBody)), Matched: Held(w, matched[h.ID], text.String())}
+		items[i] = searchrank.Item{Label: searchrank.Label(title, field(r, fieldBody)), Matched: Held(w, matched[h.ID], text.String()), At: schema.RowDate(r)}
 	}
 	ranked := w.Order(items, limit)
 	out := make([]Hit, len(ranked))
