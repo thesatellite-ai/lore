@@ -647,31 +647,82 @@ func (a *App) ftsOnly(ctx context.Context, t opssearch.Target, f ftsFilter) (fun
 	return func(string) bool { return true }, nil
 }
 
-// repoRows is t's repo-store rows by id.
-func repoRows(ctx context.Context, eng *engine.Engine, t opssearch.Target) (map[string]row.Row, error) {
-	list, err := eng.List(ctx, store.SourceRepo, t.Table)
-	if err != nil {
-		return nil, err
+// condHit is one row a condition query over a `<table>_all` view found,
+// loaded from its own store and kept by the search scope.
+type condHit struct {
+	id  string
+	src store.Source
+	r   row.Row
+}
+
+// condHits turns the (source, id) cells of a condition query (search's
+// metadata and resource field conditions) into rows of t, each read from
+// the store the lens labelled it with and kept by sc: --store, then the
+// repo's project/repo scope for repo rows and the archived/date filters
+// for every row. Why every store: the conditions read the repo's rows
+// only, so `day:2026-11-20` or `status:open` found nothing in a store
+// folder (a personal store's adopted journal) while the same words did
+// (devco D-796). Each store's rows are listed once, on its first hit.
+func (a *App) condHits(ctx context.Context, eng *engine.Engine, t opssearch.Target, sc searchScope, cells [][]value.Value) ([]condHit, error) {
+	names := a.lensSourceNames(eng)
+	rows := map[store.Source]map[string]row.Row{}
+	out := make([]condHit, 0, len(cells))
+	for _, c := range cells {
+		if len(c) < 2 {
+			continue
+		}
+		src, ok := names[c[0].String()]
+		if !ok || !sc.fromStore(src) {
+			continue // a label of no attached store (a deleted-rows copy), or --store
+		}
+		byID, ok := rows[src]
+		if !ok {
+			list, err := eng.List(ctx, src, t.Table)
+			if err != nil {
+				return nil, err
+			}
+			byID = make(map[string]row.Row, len(list))
+			for _, r := range list {
+				byID[r.ID.String()] = r
+			}
+			rows[src] = byID
+		}
+		id := c[1].String()
+		r, ok := byID[id]
+		if !ok {
+			continue // gone since the cache was refreshed
+		}
+		if (src == store.SourceRepo && !sc.keeps(t, r)) || (src != store.SourceRepo && !sc.keepsStoreRow(t, r)) {
+			continue
+		}
+		out = append(out, condHit{id: id, src: src, r: r})
 	}
-	rows := make(map[string]row.Row, len(list))
-	for _, r := range list {
-		rows[r.ID.String()] = r
+	return out, nil
+}
+
+// condHitOf is the search hit of h, labelled with its store when it is
+// not the repo's (as a full-text hit of a store row is).
+func (a *App) condHitOf(t opssearch.Target, h condHit) opssearch.Hit {
+	hit := hitOf(t, h.id, "", h.r)
+	if h.src != store.SourceRepo {
+		hit.Source = a.DescribeSource(h.src)
 	}
-	return rows, nil
+	return hit
 }
 
 // searchResourceFields is the resources entry when the query has field
-// conditions: this repo's resources whose fields equal every condition,
-// narrowed to the full-text hits of text when not empty.
+// conditions: the resources of every attached store (--store: that one)
+// whose fields equal every condition, narrowed to the full-text hits of
+// text when not empty.
 func (a *App) searchResourceFields(ctx context.Context, eng *engine.Engine, t opssearch.Target, conds []resourceCond, text string, sc searchScope, perTable int) ([]opssearch.Hit, error) {
-	q := `SELECT r.id FROM resources_all r WHERE r.source = ` + sqlText(string(store.SourceRepo))
+	q := `SELECT DISTINCT r.source, r.id, r.name FROM resources_all r WHERE 1`
 	var said []string
 	for _, c := range conds {
 		q += ` AND EXISTS (SELECT 1 FROM kind_fields_all f WHERE f.kind_id = r.kind AND f.name = ` + sqlText(c.field) +
 			` AND lower(CAST(json_extract(r.fields, '$."' || f.id || '".v') AS TEXT)) = lower(` + sqlText(c.value) + `))`
 		said = append(said, saidValue(c.field, c.value, c.sensitive))
 	}
-	q += ` ORDER BY r.name`
+	q += ` ORDER BY r.name, r.id, r.source`
 	// OV34/OV39-SENSCOND: match on the real value (unmasked lens); only the
 	// id comes back and the label masks a sensitive term's value.
 	res, err := a.SQL(ctx, opssql.Request{Query: q, ShowSensitive: true, Timeout: opssql.DefaultTimeout})
@@ -682,22 +733,20 @@ func (a *App) searchResourceFields(ctx context.Context, eng *engine.Engine, t op
 	if err != nil {
 		return nil, err
 	}
-	rows, err := repoRows(ctx, eng, t)
+	found, err := a.condHits(ctx, eng, t, sc, res.Rows)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]opssearch.Hit, 0, perTable)
-	for _, cells := range res.Rows {
-		if len(out) == perTable || len(cells) == 0 {
+	for _, f := range found {
+		if len(out) == perTable {
 			break
 		}
-		id := cells[0].String()
-		r, ok := rows[id]
-		if !ok || !sc.fromStore(store.SourceRepo) || !sc.keeps(t, r) || !only(id) {
+		if !only(f.id) {
 			continue
 		}
-		h := hitOf(t, id, "", r)
-		h.Body = searchField(r, "name") + "  (field " + strings.Join(said, ", ") + ")"
+		h := a.condHitOf(t, f)
+		h.Body = searchField(f.r, "name") + "  (field " + strings.Join(said, ", ") + ")"
 		out = append(out, h)
 	}
 	return out, nil
@@ -781,11 +830,13 @@ func searchKeySensitive(name string, sensitive map[string]bool) bool {
 }
 
 // searchMetaTable is one table's entry when the query has metadata
-// conditions: this repo's rows matching every condition through row_meta,
-// narrowed by the query's free text (narrow; negated words leave rows out).
+// conditions: the rows of every attached store (--store: that one)
+// matching every condition through row_meta, narrowed by the query's free
+// text (narrow; negated words leave rows out).
 func (a *App) searchMetaTable(ctx context.Context, eng *engine.Engine, t opssearch.Target, conds []metaquery.Term, sensitive map[string]bool, narrow ftsFilter, sc searchScope, perTable int) ([]opssearch.Hit, error) {
-	q := `SELECT DISTINCT r.entity_id FROM row_meta_all r WHERE r.source = ` + sqlText(string(store.SourceRepo)) +
-		` AND r.entity_table = ` + sqlText(t.Table.String()) + ` AND r.item_idx = -1`
+	// every attached store's rows (condHits keeps --store and the scope)
+	q := `SELECT DISTINCT r.source, r.entity_id FROM row_meta_all r WHERE r.entity_table = ` + sqlText(t.Table.String()) +
+		` AND r.item_idx = -1`
 	for _, c := range conds {
 		// P2-META-9: repo:<name>:… names a repo; search reads only this
 		// repo's rows, so another repo's name matches nothing here.
@@ -824,7 +875,7 @@ func (a *App) searchMetaTable(ctx context.Context, eng *engine.Engine, t opssear
 		q += ` AND ` + exists + ` (SELECT 1 FROM row_meta_all x WHERE x.source = r.source AND x.entity_table = r.entity_table` +
 			` AND x.entity_id = r.entity_id AND x.key_name = ` + sqlText(c.Name()) + ` AND ` + match + `)`
 	}
-	q += ` ORDER BY r.entity_id`
+	q += ` ORDER BY r.entity_id, r.source`
 	res, err := a.SQL(ctx, opssql.Request{Query: q, ShowSensitive: true, Timeout: opssql.DefaultTimeout})
 	if err != nil {
 		if errs.Has(err, errs.InvalidInput) {
@@ -839,21 +890,19 @@ func (a *App) searchMetaTable(ctx context.Context, eng *engine.Engine, t opssear
 	if err != nil {
 		return nil, err
 	}
-	rows, err := repoRows(ctx, eng, t)
+	found, err := a.condHits(ctx, eng, t, sc, res.Rows)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]opssearch.Hit, 0, perTable)
-	for _, cells := range res.Rows {
-		if len(out) == perTable || len(cells) == 0 {
+	for _, f := range found {
+		if len(out) == perTable {
 			break
 		}
-		id := cells[0].String()
-		r, ok := rows[id]
-		if !ok || !sc.fromStore(store.SourceRepo) || !sc.keeps(t, r) || !only(id) {
+		if !only(f.id) {
 			continue
 		}
-		h := hitOf(t, id, "", r)
+		h := a.condHitOf(t, f)
 		label := h.Body
 		if label == "" {
 			label = h.Fallback
