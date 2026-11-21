@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
@@ -94,7 +95,7 @@ type Actors interface {
 type ListIn struct {
 	// By is always an actor (XQ8): an act_ id or @handle.
 	By    op.ActorRef `json:"by,omitempty" flag:"by" desc:"only batches by this actor (@handle, stable key or act_ id)"`
-	Since string      `json:"since,omitempty" flag:"since" desc:"only batches since a date (YYYY-MM-DD) or a duration (36h, 7d)"`
+	Since string      `json:"since,omitempty" flag:"since" desc:"only batches since a date (YYYY-MM-DD or a date phrase: yesterday, 2 days ago, last week) or a duration (36h, 7d)"`
 	Kind  string      `json:"kind,omitempty" flag:"kind" desc:"only batches of this kind: task | meta | delete | resource | import | secrets | archive"`
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
@@ -343,7 +344,10 @@ func sinceOf(s string, now time.Time) (time.Time, error) {
 	if d, err := time.ParseDuration(s); err == nil && d >= 0 {
 		return now.Add(-d), nil
 	}
-	return time.Time{}, errs.New(errs.InvalidInput, "batch list: --since "+strconv.Quote(s)+": want a date (YYYY-MM-DD) or a duration (36h, 7d)")
+	if at, ok := dateflag.SinceAt(now, s); ok {
+		return at, nil
+	}
+	return time.Time{}, errs.New(errs.InvalidInput, "batch list: --since "+strconv.Quote(s)+": want a date (YYYY-MM-DD or a date phrase: 2 days ago, last week) or a duration (36h, 7d)")
 }
 
 // actorOf resolves --by to an act_ id string ("" = no filter).

@@ -22,7 +22,7 @@ func WindowOf(since, until *Result) Window {
 	if until != nil {
 		w.End = until.At.Add(time.Nanosecond)
 		if until.Day {
-			w.End = until.At.AddDate(0, 0, 1)
+			w.End = until.LastDay().AddDate(0, 0, 1)
 		}
 	}
 	return w

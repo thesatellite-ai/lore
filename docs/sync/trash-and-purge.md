@@ -147,7 +147,7 @@ mem_2537…6bbb [retrieved] The demo is on Friday at 10.
 ```
 <!-- /example -->
 
-`lore trash list` takes filters: `--type memories`, `--by @handle`, `--since 7d`, `--reason <text>`, `--search <text>`, `--batch <bat_id>`, `--to <store>`, `--born-branch <branch>` (rows created on that code branch), and `--limit` / `--page` for long lists. `--from-history` lists rows that were purged or deleted for good, read from git history; `lore trash show --id <id> --from-history` shows such a row's last content, but it never comes back.
+`lore trash list` takes filters: `--type memories`, `--by @handle`, `--since 7d` (or a date or date phrase: `--since 2026-01-31`, `--since "2 days ago"`, `--since "last week"`), `--reason <text>`, `--search <text>`, `--batch <bat_id>`, `--to <store>`, `--born-branch <branch>` (rows created on that code branch), and `--limit` / `--page` for long lists. `--from-history` lists rows that were purged or deleted for good, read from git history; `lore trash show --id <id> --from-history` shows such a row's last content, but it never comes back.
 
 ## Step 5 — Undo a bulk delete
 

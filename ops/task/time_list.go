@@ -120,7 +120,7 @@ func (o ops) timeQueryOf(ctx context.Context, in ListIn, sort []string) (timeQue
 	if q.since, err = dayText(clk, "worked-since", in.WorkedSince); err != nil {
 		return q, nil, err
 	}
-	if q.until, err = dayText(clk, "worked-until", in.WorkedUntil); err != nil {
+	if q.until, err = untilText(clk, "worked-until", in.WorkedUntil); err != nil {
 		return q, nil, err
 	}
 	for _, d := range []struct {

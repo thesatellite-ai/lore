@@ -9,7 +9,11 @@
 //	  ├─ YYYY-MM-DD | RFC3339                      → as given
 //	  ├─ today|tomorrow|yesterday                  → Now's day in Loc
 //	  ├─ <wd> | this <wd> | next <wd>              → Monday-based weeks
+//	  ├─ last <wd> | N <wd>s ago                   → the past ones (H-63)
 //	  ├─ in N d|w|m|y (or days/weeks/months/years) → month ends clamp
+//	  ├─ N d|w|m|y ago (or a day/week/… ago)       → back from today (H-63)
+//	  ├─ this|last week, this|last month           → a span: At is its
+//	  │    first day, Last its last (an --until bound takes Last)
 //	  ├─ eow|end of week, eom|end of month
 //	  └─ <mon> <d> | <d> <mon>                     → past = next year (noted)
 //
@@ -30,7 +34,7 @@ import (
 const DayLayout = "2006-01-02"
 
 // Forms is the list of accepted forms, printed with every refusal.
-const Forms = `YYYY-MM-DD, today, tomorrow, yesterday, mon…sun, this fri, next fri, in 3d / 2w / 1m / 1y (or "in 3 days"), eow / end of week, eom / end of month, nov 20 / 20 nov, any of these + HH:MM, or an RFC3339 datetime`
+const Forms = `YYYY-MM-DD, today, tomorrow, yesterday, mon…sun, this fri, next fri, last fri, 2 fridays ago, in 3d / 2w / 1m / 1y (or "in 3 days"), 2 days ago / 3w ago / a month ago, this week / last week / this month / last month (the first day; as --until the last day), eow / end of week, eom / end of month, nov 20 / 20 nov, any day + HH:MM, or an RFC3339 datetime`
 
 // Clock is the injected "now": the instant, the zone it is read in, and
 // the policy week end (tasks.week_end, default Friday).
@@ -49,6 +53,11 @@ type Result struct {
 	// Note is set when the phrase was read in a way worth saying
 	// ("nov 2 is past: 2027-11-02").
 	Note string
+	// Last is midnight UTC of the last day of a span phrase ("last week",
+	// "this month"; At is its first day), zero for every other phrase.
+	// H-63: a span is one date where a flag takes one (its first day),
+	// and the whole span as a --since/--until pair (WindowOf reads Last).
+	Last time.Time
 }
 
 // Text is the stored form: YYYY-MM-DD or RFC3339 UTC.
@@ -57,6 +66,15 @@ func (r Result) Text() string {
 		return r.At.Format(DayLayout)
 	}
 	return r.At.UTC().Format(time.RFC3339)
+}
+
+// LastDay is the last day an upper bound (--until) means: a span's last
+// day ("--until last week" keeps all of last week, H-63), else At.
+func (r Result) LastDay() time.Time {
+	if !r.Last.IsZero() {
+		return r.Last
+	}
+	return r.At
 }
 
 // Error is a refused phrase; Why says what is wrong with it.
@@ -75,6 +93,10 @@ var (
 	// (`tomorrow + 09:00`, I-8): it is optional
 	reClock = regexp.MustCompile(`^(.*?)\s+(?:\+\s*)?([01]?\d|2[0-3]):([0-5]\d)$`)
 	reIn    = regexp.MustCompile(`^in\s*(\d{1,4})\s*(d|w|m|y|days?|weeks?|months?|years?)$`)
+	// H-63: "2 days ago", "3w ago", "a month ago"
+	reAgo = regexp.MustCompile(`^(\d{1,4}|an?)\s*(d|w|m|y|days?|weeks?|months?|years?)\s+ago$`)
+	// H-63: "2 fridays ago", "a friday ago"
+	reWdAgo = regexp.MustCompile(`^(\d{1,3}|an?)\s+([a-z]+?)s?\s+ago$`)
 	reSlash = regexp.MustCompile(`^\d{1,4}[/.]\d{1,2}([/.]\d{1,4})?$`)
 	reDay   = regexp.MustCompile(`^\d{1,2}$`)
 	reISO   = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
@@ -120,6 +142,13 @@ func Parse(raw string, c Clock) (Result, error) {
 		hh, _ = strconv.Atoi(m[2])
 		mm, _ = strconv.Atoi(m[3])
 		in, hasClock = m[1], true
+	}
+	if first, last, ok := span(in, c.Now.In(loc)); ok {
+		if hasClock {
+			return bad("a week or a month takes no time of day")
+		}
+		return Result{At: first, Day: true, Last: last,
+			Note: in + " is " + first.Format("Mon "+DayLayout) + " to " + last.Format("Mon "+DayLayout)}, nil
 	}
 	y, mo, d, note, ok := day(in, c.Now.In(loc), c.WeekEnd)
 	if !ok && reISO.MatchString(in) {
@@ -189,6 +218,34 @@ func LocalTime(y int, mo time.Month, d, hh, mm int, loc *time.Location) (time.Ti
 	return at, offsetAt(at) - before
 }
 
+// span resolves the span phrases (H-63): this/last week (Monday-based,
+// like this/next <wd>) and this/last month, as their first and last day.
+func span(in string, now time.Time) (first, last time.Time, ok bool) {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	monday := today.AddDate(0, 0, -((int(today.Weekday()) + 6) % 7))
+	month := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
+	switch in {
+	case "this week":
+		return monday, monday.AddDate(0, 0, 6), true
+	case "last week":
+		return monday.AddDate(0, 0, -7), monday.AddDate(0, 0, -1), true
+	case "this month":
+		return month, month.AddDate(0, 1, -1), true
+	case "last month":
+		return month.AddDate(0, -1, 0), month.AddDate(0, 0, -1), true
+	}
+	return time.Time{}, time.Time{}, false
+}
+
+// count reads the N of an "N … ago" phrase: digits, or "a"/"an" for one.
+func count(s string) int {
+	if s == "a" || s == "an" {
+		return 1
+	}
+	n, _ := strconv.Atoi(s)
+	return n
+}
+
 // day resolves the date part; on refusal note may carry the reason.
 func day(in string, now time.Time, weekEnd time.Weekday) (int, time.Month, int, string, bool) {
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
@@ -214,6 +271,37 @@ func day(in string, now time.Time, weekEnd time.Weekday) (int, time.Month, int, 
 			n = 7
 		}
 		return ret(today.AddDate(0, 0, n))
+	}
+	if rest, ok := strings.CutPrefix(in, "last "); ok {
+		// H-63: the most recent <wd> before today (on a Friday, "last
+		// fri" is a week ago)
+		wd, ok := weekdays[rest]
+		if !ok {
+			return 0, 0, 0, "", false
+		}
+		return ret(lastWeekday(today, wd, 1))
+	}
+	if m := reWdAgo.FindStringSubmatch(in); m != nil {
+		if wd, ok := weekdays[m[2]]; ok {
+			n := count(m[1])
+			if n == 0 {
+				return 0, 0, 0, "0 " + m[2] + "s ago is not a day; use today or last " + m[2], false
+			}
+			return ret(lastWeekday(today, wd, n))
+		}
+	}
+	if m := reAgo.FindStringSubmatch(in); m != nil {
+		n := count(m[1])
+		switch m[2][0] {
+		case 'd':
+			return ret(today.AddDate(0, 0, -n))
+		case 'w':
+			return ret(today.AddDate(0, 0, -7*n))
+		case 'm':
+			return ret(AddMonths(today, -n))
+		default:
+			return ret(AddMonths(today, -12*n))
+		}
 	}
 	if w, rest, ok := strings.Cut(in, " "); ok && (w == "this" || w == "next") {
 		wd, ok := weekdays[rest]
@@ -269,6 +357,16 @@ func day(in string, now time.Time, weekEnd time.Weekday) (int, time.Month, int, 
 		return t2.Year(), t2.Month(), t2.Day(), in + " is past this year: " + t2.Format(DayLayout), true
 	}
 	return ret(t)
+}
+
+// lastWeekday is the n-th wd before today, never today itself: n=1 is
+// "last fri", n=2 "2 fridays ago" (the friday a week before that).
+func lastWeekday(today time.Time, wd time.Weekday, n int) time.Time {
+	back := (int(today.Weekday()) - int(wd) + 7) % 7
+	if back == 0 {
+		back = 7
+	}
+	return today.AddDate(0, 0, -back-7*(n-1))
 }
 
 // AddMonths adds n months, clamping to the last day of the target month

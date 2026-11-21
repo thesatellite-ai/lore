@@ -37,3 +37,21 @@ func TestSinceOf(t *testing.T) {
 		}
 	}
 }
+
+// TestSinceOfPhrase (H-63): trash --since reads the date phrases of every
+// other --since, as that day at local midnight ("2 days ago" was refused).
+func TestSinceOfPhrase(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.Local) // Sat
+	for in, want := range map[string]time.Time{
+		"2 days ago": time.Date(2026, 10, 1, 0, 0, 0, 0, time.Local),
+		"yesterday":  time.Date(2026, 10, 2, 0, 0, 0, 0, time.Local),
+		"last week":  time.Date(2026, 9, 21, 0, 0, 0, 0, time.Local),
+		"last wed":   time.Date(2026, 9, 30, 0, 0, 0, 0, time.Local),
+	} {
+		got, err := sinceOf(in, now)
+		if err != nil || !got.Equal(want) {
+			t.Errorf("%q: got %v err %v, want %v", in, got, err, want)
+		}
+	}
+}

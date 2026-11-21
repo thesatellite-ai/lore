@@ -40,6 +40,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
@@ -93,7 +94,7 @@ type Env interface {
 type ListIn struct {
 	Type   string      `json:"type,omitempty" flag:"type" desc:"only rows of this table (tasks, memories, …)"`
 	By     op.ActorRef `json:"by,omitempty" flag:"by" desc:"only rows deleted by this actor (@handle, stable key or act_ id)"`
-	Since  string      `json:"since,omitempty" flag:"since" desc:"only rows deleted since a date (YYYY-MM-DD) or a duration (36h, 7d)"`
+	Since  string      `json:"since,omitempty" flag:"since" desc:"only rows deleted since a date (YYYY-MM-DD or a date phrase: yesterday, 2 days ago, last week) or a duration (36h, 7d)"`
 	Reason string      `json:"reason,omitempty" flag:"reason" desc:"only rows whose delete reason holds this text"`
 	Batch  string      `json:"batch,omitempty" flag:"batch" desc:"only rows of this batch (bat_…)"`
 	To     string      `json:"to,omitempty" flag:"to" alias:"store" desc:"only rows of this store (repo, me, an attached store name)"`
@@ -933,6 +934,9 @@ func sinceOf(s string, now time.Time) (time.Time, error) {
 	}
 	d, err := durationOf(s)
 	if err != nil {
+		if at, ok := dateflag.SinceAt(now, s); ok {
+			return at, nil
+		}
 		return time.Time{}, err
 	}
 	return now.Add(-d), nil
@@ -949,8 +953,8 @@ func durationOf(s string) (time.Duration, error) {
 	if d, err := time.ParseDuration(s); err == nil && d >= 0 {
 		return d, nil
 	}
-	return 0, errs.New(errs.InvalidInput, "trash: "+strconv.Quote(s)+": want a duration (36h, 180d) or a date (YYYY-MM-DD)").
-		WithHint("write it as 7d, 36h or 2026-01-31")
+	return 0, errs.New(errs.InvalidInput, "trash: "+strconv.Quote(s)+": want a duration (36h, 180d), a date (YYYY-MM-DD) or a date phrase (2 days ago, last week)").
+		WithHint("write it as 7d, 36h, 2026-01-31 or \"2 days ago\"")
 }
 
 // Text implements op.Texter.
