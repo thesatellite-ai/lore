@@ -247,7 +247,7 @@ func whereKind(dir bool) string {
 
 // whatOpenStamp starts the description of a cache file's open stamp
 // (<file>.db.stamp, adapters/cache/sqlite/stamp.go).
-const whatOpenStamp = "the open stamp beside a cache file (what a read needs to open it without parsing its schema; only a command that writes the cache writes it): "
+const whatOpenStamp = "the open stamp beside a cache file (what a read needs to open it without parsing its schema; a command that writes the cache writes it, and so does the first read after lore is upgraded or reinstalled): "
 
 // whereHomeWhat is e's description of rel, with the stores and repos a
 // cache file serves.

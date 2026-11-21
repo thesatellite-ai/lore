@@ -103,6 +103,11 @@ type Cache struct {
 	// stamped is what the files looked like when this handle last wrote
 	// its stamp (stamp.go stampHolds: Close then needs no restamp).
 	stamped stampedFiles
+	// adoptStamp is true when the file's stamp was stale only because
+	// another lore binary wrote it (stampOtherBinary): a full open that
+	// finds the file current writes the stamp for this binary
+	// (devco:D-865, stamp.go).
+	adoptStamp bool
 }
 
 var _ store.Cache = (*Cache)(nil)
@@ -169,7 +174,8 @@ func openFile(ctx context.Context, path string, reg *schema.Registry, exp Expand
 		return nil, openErr("cache", path, err)
 	}
 	db.SetMaxOpenConns(1)
-	if st, ok := readStamp(path, reg); ok {
+	st, fit := readStamp(path, reg)
+	if fit == stampCurrent {
 		// devco:D-826: a current stamp: no connection, no schema parse
 		// until something needs more than the cursors (ensureInit)
 		return &Cache{db: db, base: reg, exp: exp, writes: fileWrites{path: path, free: free}, lazy: &st}, nil
@@ -177,7 +183,7 @@ func openFile(ctx context.Context, path string, reg *schema.Registry, exp Expand
 	if err := connectBusy(ctx, db); err != nil {
 		return nil, errors.Join(explainOpen(path, openErr("cache", path, err), free), db.Close())
 	}
-	c := &Cache{db: db, base: reg, exp: exp, writes: fileWrites{path: path, free: free}}
+	c := &Cache{db: db, base: reg, exp: exp, writes: fileWrites{path: path, free: free}, adoptStamp: fit == stampOtherBinary}
 	if err := c.init(ctx); err != nil {
 		return nil, errors.Join(explainOpen(path, err, free), db.Close())
 	}
@@ -247,10 +253,17 @@ func (c *Cache) init(ctx context.Context) error {
 			return err
 		}
 		if ok {
-			// devco:D-839: a read never writes the stamp (a dry run writes
-			// nothing under the lore home); the process that committed to
-			// the file stamps it again after its close (Close, restamp)
+			// devco:D-839: a read never writes the stamp of a file that
+			// changed since it (a dry run writes nothing under the lore
+			// home); the process that committed to the file stamps it again
+			// after its close (Close, restamp). devco:D-865: a stamp stale
+			// only because another lore binary wrote it is written again
+			// for this one, or no read after an upgrade is ever warm.
 			c.st = st
+			if c.adoptStamp {
+				c.adoptStamp = false
+				c.writeStamp(ctx)
+			}
 			return nil
 		}
 	}

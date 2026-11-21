@@ -3,6 +3,7 @@ package sqlite
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -238,4 +239,97 @@ func TestStampCloseNeedsNoReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("last connection", "c5", 1, w.Close)
+}
+
+// stampAsOtherBinary rewrites path's stamp as if another lore binary (the
+// one an upgrade replaced) had written it: only its executable part
+// changes.
+func stampAsOtherBinary(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(stampPath(path))
+	if err != nil {
+		t.Fatalf("no stamp to age: %v", err)
+	}
+	var st fileStamp
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	st.Exe = "/opt/old/lore|1234|5678"
+	if raw, err = json.Marshal(st); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stampPath(path), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// TestStampReadAdoptsOtherBinarysStamp (devco:D-865, public issue #95):
+// after an upgrade or reinstall every stamp names the old executable. The
+// first read does the full open, and when the file is exactly what the
+// stamp says (nothing wrote it since) it stamps the file for this binary,
+// so the next read is warm without waiting for a write to each folder.
+// A file that also changed since its stamp keeps the stale stamp (a read
+// never stamps a changed file: devco:D-839).
+func TestStampReadAdoptsOtherBinarysStamp(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	path := filepath.Join(f.dir, "a.db")
+	c := f.open("a.db")
+	f.apply(c, "s1", "c1", f.memory(newMem(), newPrj(), "one"))
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stampAsOtherBinary(t, path)
+
+	r := f.open("a.db")
+	if r.lazy != nil {
+		t.Fatal("opened from a stamp another binary wrote")
+	}
+	if cur, err := r.Cursor(f.ctx, "s1"); err != nil || cur != "c1" {
+		t.Fatalf("first read after the upgrade: cursor %q, %v", cur, err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r = f.open("a.db")
+	if r.lazy == nil {
+		t.Fatal("the second read after an upgrade still did the full open: the first read left the old binary's stamp")
+	}
+	if cur, err := r.Cursor(f.ctx, "s1"); err != nil || cur != "c1" {
+		t.Fatalf("second read: cursor %q, %v", cur, err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Another binary's stamp on a file that changed since: left as it is.
+	want := stampAsOtherBinary(t, path)
+	dsn, err := fileDSN(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := sql.Open(driverName, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.ExecContext(f.ctx, `UPDATE "`+tblCursors+`" SET cursor = 'moved' WHERE source = 's1'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := other.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r = f.open("a.db")
+	if r.lazy != nil {
+		t.Fatal("opened from a stale stamp")
+	}
+	if cur, err := r.Cursor(f.ctx, "s1"); err != nil || cur != "moved" {
+		t.Fatalf("read of the changed file: cursor %q, %v", cur, err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(stampPath(path)); err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("a read restamped a file that changed since its stamp (err %v)", err)
+	}
 }

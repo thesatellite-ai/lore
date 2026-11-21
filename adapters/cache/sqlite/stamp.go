@@ -27,12 +27,24 @@ package sqlite
 // the main file, so a stamp never needs removing before a write: it just
 // stops matching. Missing, unreadable or stale, it costs a full open.
 //
-// Only a process that committed to the file writes its stamp (devco:D-839):
+// A process that committed to the file writes its stamp (devco:D-839):
 // after each commit, and again after its close, because closing the last
 // connection folds the WAL into the main file and so makes the stamp of the
-// last commit stale. A read, a dry run included, never writes one: it only
-// reads the stamp, and a stale one costs it the full open until the next
-// write stamps the file again.
+// last commit stale. A read, a dry run included, never writes a stamp for a
+// file that changed since its stamp, nor one where none is: a stale one
+// costs it the full open until the next write stamps the file again.
+//
+// One exception (devco:D-865, public issue #95): a stamp that is stale only
+// because another lore binary wrote it (an upgrade or reinstall replaced
+// the executable; the file, its WAL, the layout and the registry are all
+// still what the stamp names) is rewritten by the read that had to do the
+// full open anyway, once that open found the file in this code's layout
+// with nothing to change. Without it no read after an upgrade ever found a
+// current stamp, so every read paid the full open of every folder cache
+// (~40-80 ms a served ask) until each folder got a write, and folders
+// nothing changes stayed slow for good. The rewrite only puts this binary's
+// name on what the stamp already said about an unchanged file: the stamp
+// lives in lore's cache folder, never in user data.
 
 import (
 	"context"
@@ -143,29 +155,48 @@ func fileState(path string) (main, wal string, ok bool) {
 	return main, wal, true
 }
 
-// readStamp returns path's stamp when it is current for reg (the list on
-// top of this file); ok false otherwise.
-func readStamp(path string, reg *schema.Registry) (fileStamp, bool) {
+// stampFit is how a file's stamp stands against this process (readStamp).
+type stampFit int
+
+const (
+	// stampStale: missing, unreadable, or the file, layout or registry
+	// changed since it was written; a read leaves it as it is.
+	stampStale stampFit = iota
+	// stampOtherBinary: everything the stamp names still holds except the
+	// executable (an upgrade or reinstall replaced it): the read that does
+	// the full open writes it again for this binary (devco:D-865).
+	stampOtherBinary
+	// stampCurrent: the read opens from the stamp without connecting.
+	stampCurrent
+)
+
+// readStamp returns path's stamp and how it fits this process and reg
+// (the list on top of this file); the stamp is usable only when the fit
+// is stampCurrent.
+func readStamp(path string, reg *schema.Registry) (fileStamp, stampFit) {
 	raw, err := os.ReadFile(stampPath(path))
 	if err != nil {
-		return fileStamp{}, false
+		return fileStamp{}, stampStale
 	}
 	var st fileStamp
 	if json.Unmarshal(raw, &st) != nil {
-		return fileStamp{}, false
+		return fileStamp{}, stampStale
 	}
 	exe := exeID()
-	if st.Format != stampFormat || st.Layout != layoutVersion || st.DDL != ddlStamp() || exe == "" || st.Exe != exe || st.Reg != regID(reg) {
-		return fileStamp{}, false
+	if st.Format != stampFormat || st.Layout != layoutVersion || st.DDL != ddlStamp() || exe == "" || st.Exe == "" || st.Reg != regID(reg) {
+		return fileStamp{}, stampStale
 	}
 	main, wal, ok := fileState(path)
 	if !ok || main != st.File || wal != st.WAL {
-		return fileStamp{}, false
+		return fileStamp{}, stampStale
+	}
+	if st.Exe != exe {
+		return fileStamp{}, stampOtherBinary
 	}
 	if st.Cursors == nil {
 		st.Cursors = map[string]string{}
 	}
-	return st, true
+	return st, stampCurrent
 }
 
 // writeStamp records c's current cursors and refs stamp beside its file.
