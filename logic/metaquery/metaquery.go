@@ -230,15 +230,16 @@ func Excluded(terms []Term) string {
 	return strings.Join(neg, " OR ")
 }
 
-// negPrefix marks a negated search term.
-const negPrefix = "-"
+// NegPrefix marks a negated search term (searchrank.Plain writes it back
+// in front of each negated word of a refused query it re-reads).
+const NegPrefix = "-"
 
 // Negated reports whether a term as written is a negation ("-friday",
 // -"on call") and returns the term without its '-'. A lone "-", "--x" and
 // "- x" are not negations; a '-' inside a word never is.
 func Negated(w string) (string, bool) {
-	rest, ok := strings.CutPrefix(w, negPrefix)
-	if !ok || rest == "" || strings.HasPrefix(rest, negPrefix) {
+	rest, ok := strings.CutPrefix(w, NegPrefix)
+	if !ok || rest == "" || strings.HasPrefix(rest, NegPrefix) {
 		return w, false
 	}
 	return rest, true

@@ -1,6 +1,7 @@
 package searchrank
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -146,5 +147,54 @@ func TestOrderNewestNamingFirst(t *testing.T) {
 	got = w.Order(items, 10)
 	if got[0].Index != 1 || got[1].Index != 0 || got[2].Index != 2 || got[3].Index != 3 || got[4].Index != 4 {
 		t.Errorf("order %+v: want the newest status row, the older one, the older row naming orbit status, then bm25 order", got)
+	}
+}
+
+// TestPlainReadsRefusedSyntax (devco D-798, P-14): a query FTS5 refuses
+// for a stray parenthesis, quote, brace, ^ or dangling operator around
+// words is read again as its plain words: no FTS5 syntax is left in the
+// retry, its topic words are the words typed, and a negation stays a
+// negation. Plain text needs no second reading; syntax with no topic word
+// (`(`, `"`, `AND`, `a OR`) keeps FTS5's refusal (D-475).
+func TestPlainReadsRefusedSyntax(t *testing.T) {
+	for _, c := range []struct {
+		q     string
+		terms []string
+	}{
+		{`alice (person)`, []string{"alice", "person"}},
+		{`orbit)`, []string{"orbit"}},
+		{`(acme`, []string{"acme"}},
+		{`"unclosed`, []string{"unclosed"}},
+		{`rate^`, []string{"rate"}},
+		{`{orbit} launch`, []string{"orbit", "launch"}},
+		{`orbit AND`, []string{"orbit"}},
+		{`orbit OR (`, []string{"orbit"}},
+		{`NEAR(orbit`, []string{"orbit"}},
+		{`alice: (lead)`, []string{"alice", "lead"}},
+		{`orbit* (x`, []string{"orbit", "x"}},
+	} {
+		w := Of(c.q)
+		p, ok := w.Plain()
+		if !ok {
+			t.Errorf("%q: no plain reading, want %v", c.q, c.terms)
+			continue
+		}
+		if p.Syntax {
+			t.Errorf("%q: plain reading %+v still FTS5 syntax", c.q, p)
+		}
+		if strings.Join(p.Terms, " ") != strings.Join(c.terms, " ") {
+			t.Errorf("%q: plain terms %v, want %v", c.q, p.Terms, c.terms)
+		}
+		if again, ok := p.Plain(); ok {
+			t.Errorf("%q: plain reading read again as %+v", c.q, again)
+		}
+	}
+	if p, ok := Of(`alice (person) -orbit`).Plain(); !ok || !strings.Contains(p.FTS, `NOT "orbit"`) {
+		t.Errorf("negation lost: %+v %v", p, ok)
+	}
+	for _, q := range []string{`(`, `"`, `*`, `AND`, `a OR`, `NEAR(`, `a AND`, `NOT`, `the (`, "how do we deploy orbit", "c++"} {
+		if p, ok := Of(q).Plain(); ok {
+			t.Errorf("%q: plain reading %+v, want none", q, p)
+		}
 	}
 }
