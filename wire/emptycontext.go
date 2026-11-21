@@ -56,7 +56,7 @@ func (a *App) noteEmptyContext(ctx context.Context, storeName string, res op.Res
 	if s.Words == nil {
 		s.Words = []string{}
 	}
-	return withEmptyNote(res, s, contextTries(r, storeName, a.contextPersonalUnread(ctx, storeName)))
+	return withEmptyNote(ctx, res, s, contextTries(r, storeName, a.contextPersonalUnread(ctx, storeName)))
 }
 
 // contextPersonalUnread reports whether a plain `lore search` from here

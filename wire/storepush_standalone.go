@@ -144,6 +144,10 @@ type storePush struct {
 	// (reachOnline, reachOffline; reachUnknown without one): sayWaiting
 	// says the waiting commits again when it changed.
 	reach string
+	// unreachable: this command reads the local copy because the remote
+	// did not answer (its fetch failed, or it backs off after a failure
+	// a moment ago); every read names it (stalecopy.go, devco:D-853).
+	unreachable bool
 }
 
 var (
@@ -234,18 +238,42 @@ func (b *storePush) begin(ctx context.Context) {
 	if r := requestOf(ctx); r != b.req {
 		b.req, b.fetched, b.earlier, b.pushFailed = r, false, store.SyncReport{}, false
 		b.push, b.compacted, b.waitSaid, b.reach, b.localSaid = nil, false, false, reachUnknown, false
+		b.unreachable = false
 	}
 }
 
 // refresh syncs the store once per command before its first read when
-// the fetch is due; offline or failed, the command reads the local copy.
-// A store whose writes are held fetches without pushing, unless a batch
-// is due or the command needs the remote current (batch mode).
+// the fetch is due; offline or failed, the command reads the local copy
+// and every read of it says so (noteStale).
 func (b *storePush) refresh(ctx context.Context) {
 	if fetchDeferred(ctx) {
 		return // open before the pick-up of hand edits (handedit.go): no merge yet
 	}
 	b.begin(ctx)
+	b.refreshOnce(ctx)
+	b.noteStale(ctx)
+}
+
+// noteStale records in ctx that this command reads the store's local
+// copy because its remote did not answer, with the copy's last good
+// fetch (stalecopy.go, devco:D-853). Every read records it, not only the
+// first: the first read of a command can run before the command's own
+// record is in ctx.
+func (b *storePush) noteStale(ctx context.Context) {
+	if !b.unreachable {
+		return
+	}
+	at := time.Time{}
+	if b.stateDir != "" {
+		at = live.FetchStamp(b.stateDir)
+	}
+	noteStaleCopy(ctx, cloneStoreName(b.name), at)
+}
+
+// refreshOnce is refresh's decision, made once per command. A store
+// whose writes are held fetches without pushing, unless a batch is due
+// or the command needs the remote current (batch mode).
+func (b *storePush) refreshOnce(ctx context.Context) {
 	if b.fetched {
 		return
 	}
@@ -270,6 +298,7 @@ func (b *storePush) refresh(ctx context.Context) {
 		// fetch, no retried push, so an offline command never waits for the
 		// network's timeout again; `lore sync` always tries (devco:U-6)
 		b.backingOff = true
+		b.unreachable = true // devco:D-853: the read takes the local copy
 		if readRun(ctx) || opsmigrate.NoPushAsked(ctx) || opsmigrate.InCommand(ctx) {
 			// the remote was out of reach a moment ago: a read still names
 			// the commits that wait and how they are sent (devco:D-387)
@@ -333,6 +362,7 @@ func (b *storePush) refresh(ctx context.Context) {
 	}
 	if rep.Offline {
 		b.markUnreachable(in.Now)
+		b.unreachable = true // devco:D-853
 	}
 	if err != nil || rep.Offline || b.stateDir == "" {
 		return
@@ -473,6 +503,7 @@ func (b *storePush) pushNow(ctx context.Context) {
 		b.note("pushing failed")
 	case rep.Offline:
 		b.markUnreachable(b.res.now())
+		b.unreachable = true // devco:D-853: a read after it takes the local copy
 		b.note(b.offlineWhy(rep))
 	case len(rep.Refused) > 0:
 		if own, _ := splitHeld(rep.Refused); len(own) == 0 {

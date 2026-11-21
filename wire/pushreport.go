@@ -179,6 +179,13 @@ func (b *storePush) readRefresh(ctx context.Context, in live.FetchInputs, autopu
 		if err != nil || rep.Offline {
 			b.reach = reachOffline
 		}
+		if rep.Offline {
+			// devco:D-853: the read takes the local copy and says so; the
+			// failure stamp makes the next commands back off (devco:U-6)
+			// instead of waiting for the network again, as a write's does
+			b.unreachable = true
+			b.markUnreachable(in.Now)
+		}
 	}
 	b.readWaiting(ctx, in, autopush)
 }

@@ -68,6 +68,10 @@ type emptySearched struct {
 	Path    string   `json:"path,omitempty"`
 	Folders []string `json:"folders,omitempty"`
 	Topic   string   `json:"topic,omitempty"`
+	// stale is the stores read from a local copy because their remote
+	// did not answer (stalecopy.go, devco:D-853): named under the
+	// searched line; --json has them as the top-level "unreachable".
+	stale []staleCopy
 }
 
 // emptySearchInfo declares the two fields for the OpenAPI document.
@@ -165,12 +169,14 @@ func (a *App) noteEmptySearch(ctx context.Context, e op.Entry, d op.Decoder, res
 		return res
 	}
 	s := a.searchedOf(ctx, q)
-	return withEmptyNote(res, s, a.emptyTries(ctx, q, s))
+	return withEmptyNote(ctx, res, s, a.emptyTries(ctx, q, s))
 }
 
 // withEmptyNote is res with s and try under its empty line and as the
-// top-level --json fields searched and try.
-func withEmptyNote(res op.Result, s emptySearched, try []string) op.Result {
+// top-level --json fields searched and try; the stores ctx read from a
+// stale copy are named under the searched line (devco:D-853).
+func withEmptyNote(ctx context.Context, res op.Result, s emptySearched, try []string) op.Result {
+	s.stale = staleSearched(staleCopiesOf(ctx), s.Stores)
 	sj, serr := json.Marshal(s)
 	tj, terr := json.Marshal(try)
 	if serr != nil || terr != nil {
@@ -362,6 +368,7 @@ func emptySearchLines(s emptySearched, try []string) string {
 		stores = strings.Join(s.Stores, ", ")
 	}
 	b.WriteString("  searched: " + stores + " (" + strings.Join(s.Kinds, ", ") + ")\n")
+	b.WriteString(staleCopyLines(s.stale)) // devco:D-853: never a stale copy listed as searched without a word
 	var read []string
 	if s.Path != "" {
 		at := "globs"
