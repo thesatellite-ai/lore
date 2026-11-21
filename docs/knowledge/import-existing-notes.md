@@ -57,7 +57,7 @@ Search for a word from the old file, then render: the memory is found by `lore s
 # alice, in website
 $ lore search --query invoices
 Found 1 hit for "invoices" across 1 entity type:
-memory  mem_2e0c…0b6d  The client pays invoices on the first Monday of the month.  (score=0.950)
+memory  mem_2e0c…0b6d  The client pays invoices on the first Monday of the month.  (score=0.850)
 $ lore render >/dev/null && grep -c 'Ask the client before changing any price' .lore/LORE.md
 1
 ```
