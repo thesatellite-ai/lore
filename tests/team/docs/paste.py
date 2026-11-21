@@ -24,6 +24,10 @@ Usage (from the repo root, after tests/team/docs/run-examples.sh):
 
   LORE_BIN=/path/to/lore python3 tests/team/docs/paste.py          # rewrite in place
   LORE_BIN=/path/to/lore python3 tests/team/docs/paste.py --check  # exit 1 if a block is stale
+  python3 tests/team/docs/paste.py --check --examples-only   # example and errors blocks only, no binary needed
+
+--examples-only leaves every help block as it is, so it needs no lore binary: it is the
+check go test runs on every change (internal/repoguard TestDocsExampleBlocksMatchTranscripts).
 
 Row ids are shortened (tsk_01a19d82ec2f7ba5968210b0efbee6fe → tsk_01a1…e6fe) and the
 noise every fresh clone prints once (cache build, backups) is dropped; nothing else
@@ -193,10 +197,12 @@ def render_errors() -> str:
 
 def main() -> int:
     check = "--check" in sys.argv[1:]
+    # --examples-only: help blocks are left as they are (rendering them runs the lore binary).
+    examples_only = "--examples-only" in sys.argv[1:]
     stale = []
     for page in sorted(DOCS.rglob("*.md")):
         text = page.read_text()
-        new = BLOCK.sub(lambda m: m.group(1) + (render_example(m.group(3)) if m.group(2) == "example" else render_help(m.group(3))) + m.group(5), text)
+        new = BLOCK.sub(lambda m: m.group(0) if (m.group(2) == "help" and examples_only) else m.group(1) + (render_example(m.group(3)) if m.group(2) == "example" else render_help(m.group(3))) + m.group(5), text)
         new = ERRORS.sub(lambda m: m.group(1) + render_errors() + m.group(3), new)
         if new != text:
             stale.append(page.relative_to(REPO))

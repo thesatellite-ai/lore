@@ -103,6 +103,7 @@ untrusted_hosts:
   - build-*.client.example
 upgrade_notice: true
 auto_upgrade: false
+read_server: true
 context:
   profiles:
     - name: mytool
