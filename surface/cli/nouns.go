@@ -105,8 +105,9 @@ func nounDocs() map[string]NounDoc {
 		"repo":           {Short: "Manage repos within a project"},
 		"resource": {
 			Short: "Infrastructure facts: servers, domains, accounts and the refs between them",
-			Long:  "A resource is a row of a kind (server, domain, …) with typed fields. <name> accepts a bare name, a qualified name <place>:<kind>/<name> (<place> is repo, org, a project folder or a store's name, as resource add prints it), the short form <kind>/<name>, or an id (res_…). Resources are branch-only: there is no --live.",
+			Long:  "A resource is a row of a kind (server, domain, …) with typed fields. <name> accepts a bare name, a qualified name <place>:<kind>/<name> (<place> is repo, org, a project folder or a store's name, as resource add prints it), the short form <kind>/<name>, an id (res_…), or one of its aliases (lore resource alias add). Resources are branch-only: there is no --live.",
 		},
+		"resource alias": {Short: "Other names of a resource: nicknames, full names, roles (add, remove, list)"},
 		"resource field": {Short: "Fields of a resource kind (add, edit, rename, retype, remove)"},
 		"resource kind":  {Short: "Resource kinds (add, edit, rename, show)"},
 		"row":            {Short: "Any row by id: show it, or move it to another store"},

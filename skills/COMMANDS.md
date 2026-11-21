@@ -309,6 +309,7 @@ lore ask --store me --query "what do I owe alice-ng"       # open tasks owed by 
 lore ask --store me --query "what happened last week"      # the journal rows of those days, oldest first
 lore ask --query "what did we decide for orbit and why"    # the best 3 rows in full, newest first
 lore ask --query "everything about alise-ng" --json        # a typo, a nickname or a role finds the resource too
+lore resource alias add --kind person --id robert-kim --alias Bobby --alias CFO   # other names every lookup and ask find it by (alias list / alias remove)
 lore ask --query "status of orbit" --max-chars 8000 --top 5
 ```
 

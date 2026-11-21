@@ -341,6 +341,7 @@ repos.project_id ref required
 repos.split_from ref
 repos.tag_ids list[ref]
 repos.urls json
+resources.aliases list[text]
 resources.archived_at datetime
 resources.check_note text
 resources.checked_by text

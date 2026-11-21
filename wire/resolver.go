@@ -287,15 +287,21 @@ func (s *refSnapshot) findRes(target, kindName string, byKind bool) (located, st
 		if key == "" {
 			continue
 		}
+		// by name first, by an alias only when no name matched (devco D-817)
 		var hits []located
-		for _, l := range s.resources {
-			if fieldText(l.r, fieldResArchived) != "" || !opssettings.ResourceNamed(l.src, l.r, key, kn) {
-				continue
+		for _, named := range []func(store.Source, row.Row, string, func(string) string) bool{opssettings.ResourceNamed, opssettings.ResourceAliased} {
+			for _, l := range s.resources {
+				if fieldText(l.r, fieldResArchived) != "" || !named(l.src, l.r, key, kn) {
+					continue
+				}
+				if byKind && kindNameOf(s, fieldText(l.r, fieldResKind)) != kindName {
+					continue
+				}
+				hits = append(hits, l)
 			}
-			if byKind && kindNameOf(s, fieldText(l.r, fieldResKind)) != kindName {
-				continue
+			if len(hits) > 0 {
+				break
 			}
-			hits = append(hits, l)
 		}
 		switch {
 		case len(hits) == 0:
@@ -519,8 +525,12 @@ func (c reexpandCache) Apply(ctx context.Context, source store.Source, rows []st
 		case schema.TableResources:
 			if n := fieldText(r, fieldName); n != "" {
 				// ${res:<name>…} and, after the snapshot is fresh, the
-				// <kind>/<name> forms (resNeedles, devco D-764)
+				// <kind>/<name> forms (resNeedles, devco D-764); each alias
+				// the same way (devco D-817)
 				needles = append(needles, "${res:"+n)
+				for _, a := range aliasForms(r) {
+					needles = append(needles, "${res:"+a)
+				}
 				named = append(named, r)
 			}
 		case schema.TableKinds:
@@ -571,9 +581,30 @@ func resNeedles(s *refSnapshot, r row.Row) []string {
 		return nil
 	}
 	out := []string{kid + "/" + n}
+	kn := ""
 	if s != nil {
-		if kn := kindNameOf(s, kid); kn != "" {
+		if kn = kindNameOf(s, kid); kn != "" {
 			out = append(out, kn+"/"+n)
+		}
+	}
+	for _, a := range aliasForms(r) { // <kind>/<alias> (devco D-817)
+		out = append(out, kid+"/"+a)
+		if kn != "" {
+			out = append(out, kn+"/"+a)
+		}
+	}
+	return out
+}
+
+// aliasForms are the texts a reference to resources row r by an alias
+// may hold: each alias as written and in lower case (an alias matches in
+// any case, the needle search does not; devco D-817).
+func aliasForms(r row.Row) []string {
+	var out []string
+	for _, a := range value.ItemStrings(r.Fields[schema.FieldResourceAliases]) {
+		out = append(out, a)
+		if l := strings.ToLower(a); l != a {
+			out = append(out, l)
 		}
 	}
 	return out

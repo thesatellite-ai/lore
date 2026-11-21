@@ -197,7 +197,7 @@ func isIdentity(text string) bool {
 // owns). brief keeps only the name line (a debt question).
 func resourceOf(m match, all []resourceRow, brief bool) Resource {
 	r := m.res
-	out := Resource{ID: r.ID, Kind: r.Kind, Name: r.Name, Place: r.Place, Match: m.how, Fields: []Field{}, Linked: []Linked{}}
+	out := Resource{ID: r.ID, Kind: r.Kind, Name: r.Name, Place: r.Place, Match: m.how, Aliases: r.Aliases, Fields: []Field{}, Linked: []Linked{}}
 	if brief {
 		return out
 	}
@@ -211,14 +211,19 @@ func resourceOf(m match, all []resourceRow, brief bool) Resource {
 		}
 		out.Fields = append(out.Fields, fo)
 	}
-	name := strings.ToLower(r.Name)
+	// a field that names it by its name or an alias links (company:
+	// Acme for acme-co with the alias Acme)
+	names := []string{strings.ToLower(r.Name)}
+	for _, a := range r.Aliases {
+		names = append(names, strings.ToLower(strings.TrimSpace(a)))
+	}
 	for i := range all {
 		o := &all[i]
 		if o.ID == r.ID {
 			continue
 		}
 		for _, f := range o.Fields {
-			if strings.ToLower(strings.TrimSpace(f.Value)) != name {
+			if !slices.Contains(names, strings.ToLower(strings.TrimSpace(f.Value))) {
 				continue
 			}
 			l := Linked{ID: o.ID, Kind: o.Kind, Name: o.Name, Via: f.Name}
@@ -251,7 +256,10 @@ func dayOf(s string) string {
 func tasksFor(q question, ms []match, ts []taskRow) []Task {
 	names, ids := map[string]bool{}, map[string]bool{}
 	for _, m := range ms {
-		names[strings.ToLower(m.res.Name)], ids[m.res.ID] = true, true
+		for _, n := range m.res.names() { // owed_to Bobby is owed to robert-kim
+			names[n] = true
+		}
+		ids[m.res.ID] = true
 	}
 	linked := func(t taskRow, relation string) bool {
 		for _, r := range t.Refs {
@@ -291,11 +299,28 @@ func tasksFor(q question, ms []match, ts []taskRow) []Task {
 // its text names one, or it references one.
 func subjectOf(r *textRow, toks map[string]bool, ms []match) bool {
 	for _, m := range ms {
-		if toks[strings.ToLower(m.res.Name)] || slices.Contains(r.Refs, m.res.ID) {
+		if slices.Contains(r.Refs, m.res.ID) {
 			return true
+		}
+		for _, n := range m.res.names() {
+			if allWords(toks, n) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// allWords reports whether every word of name (one, or an alias's
+// several) is in toks.
+func allWords(toks map[string]bool, name string) bool {
+	ws := strings.Fields(name)
+	for _, w := range ws {
+		if !toks[w] {
+			return false
+		}
+	}
+	return len(ws) > 0
 }
 
 // tokensOf is the word set of a row's text.
@@ -378,9 +403,12 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 // namesResource reports whether word w is (a typo of) a matched name.
 func namesResource(w string, ms []match) bool {
 	for _, m := range ms {
-		n := strings.ToLower(m.res.Name)
-		if w == n || osa(w, n) <= typoBudget(w) {
-			return true
+		for i, n := range m.res.names() {
+			// an alias (names()[1:]) is a typo only from four letters on:
+			// cto is not the alias CFO
+			if w == n || ((i == 0 || len([]rune(w)) >= 4) && osa(w, n) <= typoBudget(w)) {
+				return true
+			}
 		}
 	}
 	return false
@@ -658,6 +686,9 @@ func (o Out) rowsHeader(run, runs int) string {
 func (r Resource) text() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n%s %s  %s  (%s)\n", r.Kind, r.Name, r.ID, r.Place)
+	if len(r.Aliases) > 0 {
+		fmt.Fprintf(&b, "  aliases: %s\n", strings.Join(r.Aliases, ", "))
+	}
 	for _, f := range r.Fields {
 		if f.Value == "" {
 			continue

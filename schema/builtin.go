@@ -43,6 +43,8 @@ const (
 	// FieldResourceHistory is a resource row's capped field-change history
 	// (RESOURCES 3.22; the git log of the row file is the full record).
 	FieldResourceHistory = "history"
+	// FieldResourceAliases is resources.aliases (devco D-817).
+	FieldResourceAliases = "aliases"
 	RelTags              = "tags"
 )
 
@@ -439,6 +441,11 @@ func coreDefs() []TableDef {
 			// replaced_by is the resource that took this one's place: `resource
 			// repoint` archives the old row with it (RESOURCES 3.20); show prints it.
 			Ref("replaced_by", TableResources),
+			// aliases are the other names it is known by: nicknames, full
+			// names, roles (`lore resource alias add`, devco D-817); every
+			// name lookup and lore ask match them when no name does.
+			List(FieldResourceAliases, value.KindText, MergeBy(MergeSetUnion),
+				Describe("other names it is known by (nicknames, full names, roles); a lookup by one finds it")),
 			// fields: {fld_…: {name, v, strict?, sensitive?}}, merged entry by
 			// entry (RESOURCES 3.13, R4, RQ5).
 			JSON("fields", MergeBy(MergeEntriesByID)),

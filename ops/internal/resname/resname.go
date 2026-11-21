@@ -6,6 +6,7 @@
 //
 //	key ─▶ Forms (bare | <kind>/<name> | <place>:<kind>/<name>)
 //	    ─▶ Matches (id, bare name, or kind + name + place agree)
+//	    ─▶ no name matched: ByAlias (an alias, any case: Bobby, the CFO)
 //	    ─▶ 0 hits: the caller's not-found; 1: the row;
 //	       2+: Ambiguous (E_RESOURCE_AMBIGUOUS naming the qualified names)
 //
@@ -39,6 +40,9 @@ const (
 	// FieldKind and FieldName are the resources row fields read here.
 	FieldKind = "kind"
 	FieldName = "name"
+	// FieldAliases is resources.aliases: the other names a resource is
+	// known by (nicknames, full names, roles; devco D-817).
+	FieldAliases = "aliases"
 	// fieldKindName is kinds.name.
 	fieldKindName = "name"
 )
@@ -93,11 +97,14 @@ func PlaceMatches(src store.Source, place string) bool {
 type Candidate struct {
 	ID, KindID, Name string
 	Src              store.Source
+	// Aliases are its other names (resources.aliases): a key that names
+	// no resource by its name resolves through them (ByAlias).
+	Aliases []string
 }
 
 // Of is the Candidate of a resources row held in src.
 func Of(src store.Source, r row.Row) Candidate {
-	return Candidate{ID: r.ID.String(), KindID: str(r, FieldKind), Name: str(r, FieldName), Src: src}
+	return Candidate{ID: r.ID.String(), KindID: str(r, FieldKind), Name: str(r, FieldName), Src: src, Aliases: value.ItemStrings(r.Fields[FieldAliases])}
 }
 
 // Matches reports whether c is named by key (its id, its bare name, or one
@@ -112,6 +119,28 @@ func Matches(c Candidate, key string, forms []Key, kindName func(id string) stri
 		}
 		if f.Place == "" || PlaceMatches(c.Src, f.Place) {
 			return true
+		}
+	}
+	return false
+}
+
+// ByAlias reports whether key names c through one of its aliases: the
+// bare alias or <kind>/<alias> (<place>:<kind>/<alias>), letter case
+// ignored ("bobby" finds the alias Bobby). Callers try it only when no
+// resource matched by id or name (Matches), so a name always wins over an
+// alias and an alias never makes a name ambiguous (devco D-817).
+func ByAlias(c Candidate, key string, forms []Key, kindName func(id string) string) bool {
+	for _, a := range c.Aliases {
+		if strings.EqualFold(a, key) {
+			return true
+		}
+		for _, f := range forms {
+			if !strings.EqualFold(f.Name, a) || (f.Kind != c.KindID && f.Kind != kindName(c.KindID)) {
+				continue
+			}
+			if f.Place == "" || PlaceMatches(c.Src, f.Place) {
+				return true
+			}
 		}
 	}
 	return false
@@ -132,6 +161,27 @@ func Ambiguous(key string, hits []Candidate, kindName func(id string) string) *e
 	}
 	return errs.New(errs.ResourceAmbiguous, quote(key)+" matches "+strconv.Itoa(len(hits))+" resources: "+strings.Join(names, ", ")).
 		WithHint("name it by its qualified name (" + strings.Join(names, " or ") + ") or its res_ id")
+}
+
+// Pick is the candidates key names: those it names by id or name
+// (Matches), else those it names by an alias (ByAlias). The one two-pass
+// rule every resolver of a resource name shares (devco D-817).
+func Pick(cs []Candidate, key string, forms []Key, kindName func(id string) string) []Candidate {
+	var hits []Candidate
+	for _, c := range cs {
+		if Matches(c, key, forms, kindName) {
+			hits = append(hits, c)
+		}
+	}
+	if len(hits) > 0 {
+		return hits
+	}
+	for _, c := range cs {
+		if ByAlias(c, key, forms, kindName) {
+			hits = append(hits, c)
+		}
+	}
+	return hits
 }
 
 // Lister reads a table of one attached store.
@@ -172,19 +222,19 @@ func Find(ctx context.Context, env Lister, srcs []store.Source, key, kindID stri
 		return Candidate{}, false, err
 	}
 	forms := Forms(key)
-	var hits []Candidate
+	var live []Candidate
 	for _, src := range srcs {
 		rows, err := env.List(ctx, src, schema.TableResources)
 		if err != nil {
 			return Candidate{}, false, err
 		}
 		for _, r := range rows {
-			c := Of(src, r)
-			if !r.Deleted && (kindID == "" || c.KindID == kindID) && Matches(c, key, forms, kindName) {
-				hits = append(hits, c)
+			if c := Of(src, r); !r.Deleted && (kindID == "" || c.KindID == kindID) {
+				live = append(live, c)
 			}
 		}
 	}
+	hits := Pick(live, key, forms, kindName)
 	switch len(hits) {
 	case 0:
 		return Candidate{}, false, nil

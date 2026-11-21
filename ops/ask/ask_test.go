@@ -287,7 +287,7 @@ func (f *fakeEnv) AskLens(_ context.Context, _ bool, fn func(q Query) error) err
 		txt := func(s string) value.Value { v, _ := value.TextOf(s); return v }
 		if strings.Contains(s, "resources_all") {
 			return opssql.Result{Rows: [][]value.Value{
-				{txt("res"), txt("res_alice"), txt("me/work"), txt("person"), txt("alice-ng"), txt(`{"fld_1":{"name":"role","v":"engineer"}}`), txt(""), txt("")},
+				{txt("res"), txt("res_alice"), txt("me/work"), txt("person"), txt("alice-ng"), txt(`{"fld_1":{"name":"role","v":"engineer"}}`), txt(""), txt(""), txt(`["Ally"]`)},
 			}}, nil
 		}
 		return opssql.Result{Rows: [][]value.Value{
@@ -306,10 +306,10 @@ func TestRunOneLens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(env.stmts) != 2 || !strings.Contains(env.stmts[1], "'%alice-ng%'") {
+	if len(env.stmts) != 2 || !strings.Contains(env.stmts[1], "'%alice-ng%'") || !strings.Contains(env.stmts[1], "'%ally%'") {
 		t.Fatalf("statements: %q", env.stmts)
 	}
-	if len(out.Resources) != 1 || out.Resources[0].Fields[0].Value != "engineer" || len(out.Rows) != 1 {
+	if len(out.Resources) != 1 || out.Resources[0].Fields[0].Value != "engineer" || len(out.Rows) != 1 || strings.Join(out.Resources[0].Aliases, ",") != "Ally" {
 		t.Fatalf("out: %+v", out)
 	}
 	if _, err := run(context.Background(), env, RunIn{Query: "  "}); err == nil {
@@ -353,5 +353,53 @@ func TestDateQuestionReadsDaysOnce(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("the day metadata is read %d time(s), want 1: %q", n, env.stmts)
+	}
+}
+
+// TestAliasMatch (devco D-817): an alias (lore resource alias add) names a
+// resource as its name does: one word, a several-word alias in a row, a
+// typo of one through the trigram index; a note that says the alias is
+// about the resource, a task owed to the alias is owed to it, and a short
+// alias is never a typo target (cto is not the CFO).
+func TestAliasMatch(t *testing.T) {
+	t.Parallel()
+	d := fixture(t)
+	for i := range d.resources {
+		switch d.resources[i].Name {
+		case "robert-kim":
+			d.resources[i].Aliases = []string{"Robbie", "Robert Kim"}
+		case "hugo-berg":
+			d.resources[i].Aliases = []string{"CFO-in-chief", "Huey"}
+		}
+	}
+	d.rows = append(d.rows, textRow{Table: "memories", ID: "mem_r1", Place: "me/work", Body: "Lunch with Robbie (2026-11-12): he wants the deck by friday.", At: day(t, "2026-11-12")})
+	d.tasks = append(d.tasks, taskRow{ID: "tsk_4", Place: "me/work", Title: "return the ladder #4", Status: "todo", OwedBy: "me", OwedTo: "Huey", Created: "2026-11-04"})
+	cases := []struct {
+		q, res, how string
+		want        []string
+	}{
+		{"who is Robbie", "robert-kim", MatchAlias, []string{"aliases: Robbie, Robert Kim", "designer"}},
+		{"who is Robert Kim", "robert-kim", MatchAlias, nil},
+		{"who is Robie", "robert-kim", MatchTypo, nil},
+		{"who is Hueyy", "hugo-berg", MatchTypo, nil},
+		{"what about robbie lately", "robert-kim", MatchAlias, []string{"Lunch with Robbie"}},
+		{"what do I owe Huey", "hugo-berg", MatchAlias, []string{"return the ladder #4"}},
+		{"who is robert-kim", "robert-kim", MatchName, nil},
+	}
+	for _, c := range cases {
+		o := build(parseQuestion(c.q, now), d, 0, 0)
+		text := o.Text()
+		if len(o.Resources) == 0 || o.Resources[0].Name != c.res || o.Resources[0].Match != c.how {
+			t.Errorf("%q: resources %+v, want %s by %s\n%s", c.q, o.Resources, c.res, c.how, text)
+			continue
+		}
+		for _, w := range c.want {
+			if !strings.Contains(text, w) {
+				t.Errorf("%q: missing %q in\n%s", c.q, w, text)
+			}
+		}
+	}
+	if ms := matchResources(parseQuestion("who is the cto", now), d.resources); len(ms) != 0 && ms[0].how != MatchField {
+		t.Errorf("cto matched %s by %s", ms[0].res.Name, ms[0].how)
 	}
 }

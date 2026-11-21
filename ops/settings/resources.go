@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/filter"
+	"github.com/thesatellite-ai/lore/logic/fuzzyname"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/sortspec"
@@ -261,6 +262,9 @@ type Resource struct {
 	UpdatedAt string `json:"updated_at,omitempty"`
 	CreatedBy string `json:"created_by,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
+	// Aliases are its other names (resource alias add, devco D-817); a
+	// lookup by one finds it.
+	Aliases []string `json:"aliases,omitempty"`
 	// types are the value types by field name, for the text forms only
 	// (shown): JSON keeps Values in the stored form (#22b).
 	types map[string]value.Kind
@@ -303,6 +307,9 @@ func (o ResOut) mainText() string {
 	r := o.Data
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s  %s  %s:%s/%s\n", r.ID, r.Kind, r.Store, r.Kind, r.Name)
+	if len(r.Aliases) > 0 {
+		fmt.Fprintf(&b, "  aliases: %s\n", strings.Join(r.Aliases, ", "))
+	}
 	keys := make([]string, 0, len(r.Values))
 	for k := range r.Values {
 		keys = append(keys, k)
@@ -621,7 +628,7 @@ func (o ops) resourceOps() []op.Entry {
 			Errors: append(slices.Clone(writeErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "check every database resource", CLI: "lore resource check --kind database"}}}, o.resCheck),
 		op.Define(op.Spec{Name: OpResStale, Summary: "Resources whose last_checked is older than --days, or never set", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors, Examples: []op.Example{{Title: "resources not checked for 90 days", CLI: "lore resource stale --days 90"}}}, o.resStale),
-	}, append(append(append(o.resourceIOOps(), o.graphOps()...), o.maintOps()...), o.historyOps()...)...) // history, report (resources_history.go); import, export, repoint, clone (resources_io.go); graph, impact (resources_graph.go)
+	}, append(append(append(append(o.resourceIOOps(), o.graphOps()...), o.maintOps()...), o.historyOps()...), o.aliasOps()...)...) // alias add|remove|list (resources_alias.go); history, report (resources_history.go); import, export, repoint, clone (resources_io.go); graph, impact (resources_graph.go)
 }
 
 // fieldEntry is one entry of a resource's `fields` object, the stored
@@ -977,14 +984,28 @@ func (o ops) resourceIn(ctx context.Context, key, kindID string, only store.Sour
 		return located{}, err
 	}
 	forms := resname.Forms(key)
-	match := func(l located) bool {
+	// by id or name first; an alias (Bobby, the CFO) only when no name
+	// matched, so a name always wins (resname.Pick, devco D-817)
+	inScope := func(l located) bool {
 		c := resname.Of(l.Src, l.Row)
-		return (only == "" || l.Src == only) && (kindID == "" || c.KindID == kindID) && resname.Matches(c, key, forms, kindName)
+		return (only == "" || l.Src == only) && (kindID == "" || c.KindID == kindID)
 	}
+	byName := func(l located) bool {
+		return inScope(l) && resname.Matches(resname.Of(l.Src, l.Row), key, forms, kindName)
+	}
+	byAlias := func(l located) bool {
+		return inScope(l) && resname.ByAlias(resname.Of(l.Src, l.Row), key, forms, kindName)
+	}
+	match := func(l located) bool { return byName(l) || byAlias(l) }
 	var hits []located
-	for _, l := range rows {
-		if match(l) {
-			hits = append(hits, l)
+	for _, by := range []func(located) bool{byName, byAlias} {
+		for _, l := range rows {
+			if by(l) {
+				hits = append(hits, l)
+			}
+		}
+		if len(hits) > 0 {
+			break
 		}
 	}
 	switch {
@@ -999,6 +1020,10 @@ func (o ops) resourceIn(ctx context.Context, key, kindID string, only store.Sour
 			// (`lore sync peek …`, TestNotFoundHintForEveryCoreNoun).
 			return located{}, nf
 		}
+		if near := nearNames(rows, key, inScope, kindName); len(near) > 0 && !strings.HasPrefix(key, string(ids.PrefixResource)+"_") {
+			// a typo of a name or an alias (devco D-817): say which
+			return located{}, nf.WithHint("did you mean " + strings.Join(near, " or ") + "? name it exactly, as <kind>/<name>, or by its res_ id")
+		}
 		return located{}, nf.WithHint("name it as <kind>/<name> or by its res_ id; lore resource list --kind <kind> prints them")
 	case len(hits) > 1:
 		cs := make([]resname.Candidate, len(hits))
@@ -1008,6 +1033,39 @@ func (o ops) resourceIn(ctx context.Context, key, kindID string, only store.Sour
 		return located{}, resname.Ambiguous(key, cs, kindName)
 	}
 	return hits[0], nil
+}
+
+// nearNames are the resources of rows (those keep accepts) whose name or
+// alias is a letter or two off key, closest first, as <kind>/<name>
+// (with the alias it is near): a not-found lookup names them so a typo
+// is one step from the right resource (devco D-817).
+func nearNames(rows []located, key string, keep func(located) bool, kindName func(id string) string) []string {
+	idx := fuzzyname.New()
+	for i, l := range rows {
+		if !keep(l) {
+			continue
+		}
+		idx.Add(text(l.Row, rName), i)
+		for _, a := range texts(l.Row, rAliases) {
+			idx.Add(a, i)
+		}
+	}
+	_, bare, _ := strings.Cut(key, resname.KindSep)
+	if bare == "" {
+		bare = key
+	}
+	var out []string
+	for _, h := range idx.Near(bare, fuzzyname.Budget(bare)) {
+		l := rows[h.Owner]
+		s := kindName(text(l.Row, rKind)) + resname.KindSep + text(l.Row, rName)
+		if !strings.EqualFold(h.Term, text(l.Row, rName)) {
+			s += " (alias " + h.Term + ")"
+		}
+		if !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // resourceLabel is a resource id's "<kind> <name>" (the id when unseen).
@@ -1296,7 +1354,7 @@ func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
 		CheckedBy: text(r.Row, rCheckedBy), CheckNote: text(r.Row, rCheckNote), Conflicts: o.conflictsView(d, stored, show), ReplacedBy: o.successor(ctx, r),
 		Quarantine: quarantineOf(d, stored),
 		CreatedAt:  auditStamp(r.Row.CreatedAt), UpdatedAt: auditStamp(r.Row.UpdatedAt),
-		CreatedBy: auditrec.Of(r.Row).CreatedBy, UpdatedBy: auditrec.Of(r.Row).UpdatedBy, types: d.types()}, nil
+		CreatedBy: auditrec.Of(r.Row).CreatedBy, UpdatedBy: auditrec.Of(r.Row).UpdatedBy, Aliases: texts(r.Row, rAliases), types: d.types()}, nil
 }
 
 // auditStamp is an envelope time as RFC 3339 UTC ("" when unset).
