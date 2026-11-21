@@ -123,7 +123,8 @@ vars:
     stories-ww-writes 4   test:stories:ww:writes PARALLEL=12
     stories-ww-stand  4   test:stories:ww:stand PARALLEL=12
     stories-ww        3   test:stories:ww PARALLEL=6
-    stories-ao        4   test:stories:ao PARALLEL=8
+    stories-an        4   test:stories:an PARALLEL=8
+    stories-o         4   test:stories:o PARALLEL=8
     stories           4   test:stories:rest PARALLEL=8
     journey-teamlead  3   test:journeys:teamlead PARALLEL=2
     journey-solo      2   test:journeys:solo PARALLEL=4
@@ -702,11 +703,22 @@ tasks:
   # time: stories-ao takes the stories A to O after TestStory (about 1270 s of tests, the
   # owner-shape story O the longest), stories (the catch-all) the W stories but WW, the
   # harness and guard tests, and every story added later under another name.
-  test:stories:ao:
-    desc: "Stories A to O after TestStory (bug hunt J, landings BL, dev company A-I, owner shape O, ...): the first of the two catch-all parts"
+  # The A-to-O part then hit its 15 m limit in the gate of dev 218fb420 while the box's load
+  # averaged 154 (devco D-806): not a slowdown of the code (the binary before that round ran
+  # the same story O just as slowly at that load), the part had simply grown to two gates'
+  # worth of story O at a load the gate meets most days, so it runs as two steps: stories-an
+  # (A to N, landings BL the largest) and stories-o (owner shape O alone).
+  test:stories:an:
+    desc: "Stories A to N after TestStory (bug hunt J, landings BL, dev company A-I, ...): the first of the catch-all parts"
     cmds:
       - task: test:stories:part
-        vars: {PART: ao, FILTER: "-run '^TestStory[A-O]'", PARALLEL: "{{.PARALLEL}}"}
+        vars: {PART: an, FILTER: "-run '^TestStory[A-N]'", PARALLEL: "{{.PARALLEL}}"}
+
+  test:stories:o:
+    desc: "Story O (the owner-shaped machine: personal, team and linked stores on one box) alone: the second of the catch-all parts"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: o, FILTER: "-run '^TestStoryO'", PARALLEL: "{{.PARALLEL}}"}
 
   test:stories:rest:
     desc: "Every story no other part runs (the catch-all of the gate's stories parts): the W stories but WW, the harness and guard tests, and every story added later under another name"
