@@ -148,7 +148,7 @@ func (r *repo) resolve(expr string) resolved {
 	if path == "" {
 		return resolved{id: id, typ: typeTree, found: true, ok: true, treePath: true}
 	}
-	eid, etyp, found, ok := lookupPath(objs, o.data, path)
+	eid, etyp, found, ok := lookupPath(objs, id, o.data, path)
 	if !ok {
 		return notOK
 	}
@@ -240,22 +240,20 @@ func parseTree(data []byte) ([]treeEntry, bool) {
 	return out, true
 }
 
-// lookupPath walks a slash path down from a tree.
-func lookupPath(objs *objectStore, tree []byte, path string) (id, typ string, found, ok bool) {
+// lookupPath walks a slash path down from the tree treeID (its content
+// tree). Each tree is parsed once per object store (treeIndex): a
+// `cat-file --batch` of 5,000 "<commit>:<folder>/<table>/<id>.json" names
+// parsed the 5,000-entry table tree again for every name, which was most
+// of a 4 s read of a big store folder (devco D-790).
+func lookupPath(objs *objectStore, treeID string, tree []byte, path string) (id, typ string, found, ok bool) {
 	parts := strings.Split(path, "/")
 	for i, part := range parts {
-		entries, pok := parseTree(tree)
+		entries, pok := objs.treeIndex(treeID, tree)
 		if !pok {
 			return "", "", false, false
 		}
-		var hit *treeEntry
-		for k := range entries {
-			if entries[k].name == part {
-				hit = &entries[k]
-				break
-			}
-		}
-		if hit == nil {
+		hit, in := entries[part]
+		if !in {
 			return "", "", false, true
 		}
 		if i == len(parts)-1 {
@@ -268,9 +266,36 @@ func lookupPath(objs *objectStore, tree []byte, path string) (id, typ string, fo
 		if err != nil {
 			return "", "", false, false
 		}
-		tree = o.data
+		treeID, tree = hit.id, o.data
 	}
 	return "", "", false, false
+}
+
+// treeIndex is the tree treeID's entries by name, parsed from data on the
+// first ask and kept: an object id names one content forever, so the
+// index never goes stale. ok is false for a tree that does not parse. A
+// name git lists twice (a broken tree) keeps its first entry, as the
+// linear search before it did.
+func (s *objectStore) treeIndex(treeID string, data []byte) (map[string]treeEntry, bool) {
+	s.mu.Lock()
+	idx, hit := s.trees[treeID]
+	s.mu.Unlock()
+	if hit {
+		return idx, idx != nil
+	}
+	entries, ok := parseTree(data)
+	if ok {
+		idx = make(map[string]treeEntry, len(entries))
+		for _, e := range entries {
+			if _, dup := idx[e.name]; !dup {
+				idx[e.name] = e
+			}
+		}
+	}
+	s.mu.Lock()
+	s.trees[treeID] = idx // nil: does not parse
+	s.mu.Unlock()
+	return idx, ok
 }
 
 // cutAncestry strips trailing first-parent steps ("~", "~N", "^", "^1")

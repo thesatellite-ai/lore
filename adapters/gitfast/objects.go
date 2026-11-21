@@ -51,11 +51,14 @@ type objectStore struct {
 	packs []*pack // loaded lazily, reloaded when a lookup misses
 	seen  map[string]bool
 	cache map[string]object
+	// trees indexes parsed trees by id (treeIndex); nil for one that
+	// does not parse
+	trees map[string]map[string]treeEntry
 }
 
 // newObjectStore opens the object folder dir (and objects/info/alternates).
 func newObjectStore(dir string) (*objectStore, error) {
-	s := &objectStore{dirs: []string{dir}, seen: map[string]bool{}, cache: map[string]object{}}
+	s := &objectStore{dirs: []string{dir}, seen: map[string]bool{}, cache: map[string]object{}, trees: map[string]map[string]treeEntry{}}
 	raw, err := os.ReadFile(filepath.Join(dir, "info", "alternates"))
 	if err == nil {
 		for line := range strings.SplitSeq(string(raw), "\n") {

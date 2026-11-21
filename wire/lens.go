@@ -334,9 +334,16 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 
 // sqlOnce is SQL over the stores attached now.
 func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, error) {
-	trashRows, err := a.lensTrash(ctx, !r.ShowSensitive) // DELETION 3.2: the cache keeps no trashed row
-	if err != nil {
-		return opssql.Result{}, err
+	// DELETION 3.2: the cache keeps no trashed row, so the trash table is
+	// filled from the row files, which reads every row of every store:
+	// only for a query that can name it. `select 1` on a store with a
+	// 5,000-row folder paid that read on every call (devco D-790).
+	var trashRows []sqlite.TrashRow
+	if queryNamesTrash(r.Query) {
+		var err error
+		if trashRows, err = a.lensTrash(ctx, !r.ShowSensitive); err != nil {
+			return opssql.Result{}, err
+		}
 	}
 	var deleted string
 	if r.IncludeDeleted {
@@ -366,4 +373,13 @@ func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, err
 		return opssql.Result{}, qerr
 	}
 	return opssql.Result{Columns: res.Columns, Rows: res.Rows, Internal: a.placeLabels(extra)}, nil
+}
+
+// queryNamesTrash reports whether the SQL text q can read the trash table
+// (sqlite.ViewTrash): every way to name a table (bare, "quoted", `ticked`,
+// [bracketed], any case) has the name in its text, and a lens query cannot
+// build a table name at run time. A query that does not name it reads an
+// empty trash table, which it never looks at.
+func queryNamesTrash(q string) bool {
+	return strings.Contains(strings.ToLower(q), sqlite.ViewTrash)
 }

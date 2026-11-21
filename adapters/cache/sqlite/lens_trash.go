@@ -34,6 +34,11 @@ type TrashRow struct {
 // viewTrash is the name `lore sql` reads the trash by (DELETION 2.9).
 const viewTrash = "trash"
 
+// ViewTrash is viewTrash for the caller that fills LensOptions.Trash:
+// it reads the trash only for a query that names this table
+// (QueryNamesTrash), since listing it reads every row file of every store.
+const ViewTrash = viewTrash
+
 // createTrash creates and fills the trash table (columns in the order of
 // DELETION 3.2, plus source and dependent).
 func (l *Lens) createTrash(ctx context.Context) error {
