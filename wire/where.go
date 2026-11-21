@@ -211,6 +211,9 @@ func whereHome(home string, uses map[string]*cacheUse, all bool) ([]opswhere.Ent
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
+		if !d.IsDir() && strings.HasSuffix(rel, sqlite.StampSuffix) {
+			return nil // a cache file's open stamp is part of that file (devco:D-826), listed with it
+		}
 		e, ok := matchHome(rel, d.IsDir())
 		switch {
 		case ok:
@@ -252,7 +255,7 @@ func whereHomeWhat(e homeEntry, rel string, uses map[string]*cacheUse) string {
 	if !isCache {
 		return e.What
 	}
-	for _, suf := range []string{"-wal", "-shm"} {
+	for _, suf := range []string{"-wal", "-shm", sqlite.StampSuffix} {
 		cacheRel = strings.TrimSuffix(cacheRel, suf)
 	}
 	c := uses[cacheRel]

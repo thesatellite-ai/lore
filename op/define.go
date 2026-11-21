@@ -32,7 +32,13 @@ type Entry interface {
 type Op[In, Out any] struct {
 	spec Spec
 	run  func(context.Context, In) (Out, error)
-	in   []FieldInfo
+	// in and page are read from In's tags on first use (inShape), not in
+	// Define: a command line mounts and decodes one operation, and reading
+	// every operation's input types was ~13 ms of every lore process
+	// (devco:D-826). wire's TestRegistryShapes reads every registered
+	// operation's input and output, so a bad tag still fails the build.
+	inOnce sync.Once
+	in     []FieldInfo
 	// out is read from Out's tags on first use (outFields), not in Define:
 	// only an invoked operation and the OpenAPI document need it, and
 	// reading every operation's output types was ~half of the registry
@@ -45,19 +51,20 @@ type Op[In, Out any] struct {
 	// check refuses a bad input before anything opens (Checks); nil = none.
 	check func(In) error
 	// page cuts a list's rows to --limit / --page (page.go); nil when In
-	// does not embed PageFlags.
+	// does not embed PageFlags. Read with in (inShape).
 	page *pageShape
 }
 
 var _ Entry = (*Op[struct{}, struct{}])(nil)
 
-// Define builds an operation from its spec and typed run function. It reads
-// In's struct tags once (arg, flag, json, desc, ui) and panics on an
-// invalid name or input tag: those are programmer errors that must stop
-// the binary at startup, never surface to a user at run time. Out's tags
-// are read on first use (OutputFields, Invoke) and panic the same way;
-// wire's TestRegistryOutputShapes reads every registered operation's
-// output so a bad output tag still fails the build, not a user's run.
+// Define builds an operation from its spec and typed run function. It
+// panics on an invalid name or a nil run function at once. In's struct
+// tags (arg, flag, json, desc, ui) and Out's are read on first use
+// (InputFields, Decode, Invoke, OutputFields) and panic there on a bad
+// tag: those are programmer errors, and wire's TestRegistryShapes reads
+// every registered operation's input and output so a bad tag fails the
+// build, never a user's run (devco:D-826: reading every operation's tags
+// at startup cost every lore process ~13 ms for the one it runs).
 func Define[In, Out any](spec Spec, run func(context.Context, In) (Out, error)) *Op[In, Out] {
 	if !ValidName(spec.Name) {
 		panic(tagError{fmt.Sprintf("op.Define: invalid operation name %q (want noun.verb, snake_case)", spec.Name)})
@@ -65,13 +72,15 @@ func Define[In, Out any](spec Spec, run func(context.Context, In) (Out, error)) 
 	if run == nil {
 		panic(tagError{"op.Define(" + spec.Name + "): nil run function"})
 	}
-	sh := shapeOf(spec.Name, reflect.TypeFor[In](), reflect.TypeFor[Out]())
-	return &Op[In, Out]{
-		spec: spec,
-		run:  run,
-		in:   slices.Clone(sh.in),
-		page: sh.page,
-	}
+	return &Op[In, Out]{spec: spec, run: run}
+}
+
+// inShape reads In's fields and paging shape on the first call.
+func (o *Op[In, Out]) inShape() {
+	o.inOnce.Do(func() {
+		sh := shapeOf(o.spec.Name, reflect.TypeFor[In](), reflect.TypeFor[Out]())
+		o.in, o.page = slices.Clone(sh.in), sh.page
+	})
 }
 
 // opShape is what Define reads from an operation's In and Out types (the
@@ -142,13 +151,17 @@ func (o *Op[In, Out]) outFields() []FieldInfo {
 func (o *Op[In, Out]) Spec() Spec { return o.spec }
 
 // InputFields implements Entry.
-func (o *Op[In, Out]) InputFields() []FieldInfo { return o.in }
+func (o *Op[In, Out]) InputFields() []FieldInfo {
+	o.inShape()
+	return o.in
+}
 
 // OutputFields implements Entry.
 func (o *Op[In, Out]) OutputFields() []FieldInfo { return o.outFields() }
 
 // Decode implements Entry.
 func (o *Op[In, Out]) Decode(d Decoder) (Input, error) {
+	o.inShape()
 	ptr := reflect.New(reflect.TypeFor[In]())
 	if err := d.Decode(ptr.Elem(), o.in); err != nil {
 		return Input{}, err
@@ -171,6 +184,7 @@ func (o *Op[In, Out]) Invoke(ctx context.Context, in Input) (Result, error) {
 	if !ok {
 		return Result{}, errs.New(errs.Internal, "op: input type mismatch for "+o.spec.Name)
 	}
+	o.inShape()
 	var pf PageFlags
 	if o.page != nil {
 		var err error

@@ -277,7 +277,9 @@ func run(ctx context.Context, args []string) int {
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
 	// setupweb.go: setup.run / join / repair returning a WebStart open the page (ONB 5.1).
-	root := cli.Build(app.Registry(), newPageRunner(app, org, home, runner, args), cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette), cli.WithArgs(args), cli.WithActorNamer(app.ActorNamer))
+	// devco:D-826: a call whose words name one noun's commands mounts only
+	// that noun's operations (cli.NarrowNouns); help and the rest get all.
+	root := cli.Build(app.Registry(), newPageRunner(app, org, home, runner, args), cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette), cli.WithArgs(args), cli.WithActorNamer(app.ActorNamer), cli.WithNouns(cli.NarrowNouns(app.Registry(), args)))
 	root.Version = version
 	addRootFlags(root, flags)
 	hosthooks.Install(root, runner)

@@ -83,6 +83,9 @@ type config struct {
 	// actorNamer names actor ids in human output (WithActorNamer; nil =
 	// ids as stored).
 	actorNamer func(context.Context) func(string) string
+	// nouns, when set, limits Mount to the operations under these first
+	// words (WithNouns, narrow.go; devco:D-826).
+	nouns []string
 }
 
 // WithArgs injects the raw arguments the binary runs the tree with (the
@@ -162,7 +165,12 @@ func Build(reg *op.Registry, runner op.Runner, opts ...Option) *cobra.Command {
 // a pure group (no Run) is reused.
 func Mount(root *cobra.Command, reg *op.Registry, runner op.Runner, opts ...Option) error {
 	cfg := newConfig(opts)
-	entries := reg.Entries()
+	var entries []op.Entry
+	for _, e := range reg.Entries() {
+		if cfg.mounts(e) {
+			entries = append(entries, e)
+		}
+	}
 	for _, e := range entries {
 		if err := checkMount(root, e); err != nil {
 			return err

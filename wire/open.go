@@ -224,6 +224,18 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 
 	st.caches = newCaches()
+	// AGENT_IDENTITY 6.1 / OQ9: a detected agent whose 6-hex key another
+	// owner already holds uses 10 hex; its store reads start now and run
+	// beside the cache opens below (devco:D-826), settled before the
+	// engine stamps anything with the actor. Every failure from here on
+	// waits for them first, so the backends never close under them.
+	backends := map[store.Source]store.Backend{store.SourceRepo: repoBackend}
+	for _, o := range attached {
+		backends[o.Name] = o.Backend
+	}
+	settled := st.startSettleAgentKey(ctx, backends)
+	failOpen := fail
+	fail = func(err error) (*state, error) { return failOpen(errors.Join(err, settled())) }
 	// SQ3 / VARS ARE DATA: var, res and row references resolve from the row
 	// files (wire/resolver.go); st.eng is read lazily, set below.
 	rv := newResolver(st)
@@ -312,17 +324,12 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		_ = sqlite.RecordUse(cacheRoot, st.repoTop, uses)
 	}
 
-	backends := map[store.Source]store.Backend{store.SourceRepo: repoBackend}
 	st.folders = map[store.Source]string{}
 	for _, o := range attached {
-		backends[o.Name] = o.Backend
 		st.folders[o.Name] = o.Folder
 	}
 	st.byName = backends
-	// AGENT_IDENTITY 6.1 / OQ9: a detected agent whose 6-hex key another
-	// owner already holds uses 10 hex; settled now that the stores are
-	// open, before the engine stamps anything with the actor.
-	if err = st.settleAgentKey(ctx, backends); err != nil {
+	if err = settled(); err != nil {
 		return fail(err)
 	}
 	// read after settleAgentKey, which may lengthen an agent's key (OQ9)
@@ -1416,14 +1423,16 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	exp := refs.Expander{Resolver: rv}
 	st.byName = map[store.Source]store.Backend{}
 	st.folders = map[store.Source]string{}
-	if err = openDetachedCaches(ctx, opts.Home, st.caches, attached, reg, exp); err != nil {
-		return fail(err)
-	}
 	for _, o := range attached {
 		st.byName[o.Name] = o.Backend
 		st.folders[o.Name] = o.Folder
 	}
-	if err = st.settleAgentKey(ctx, st.byName); err != nil {
+	// devco:D-826: the agent key's store reads run beside the cache opens
+	settled := st.startSettleAgentKey(ctx, st.byName)
+	if err = openDetachedCaches(ctx, opts.Home, st.caches, attached, reg, exp); err != nil {
+		return fail(errors.Join(err, settled()))
+	}
+	if err = settled(); err != nil {
 		return fail(err)
 	}
 	scanner, err := newScanner(ctx, st.byName, withRepoGitleaks(""), withFolders(st.folders), withLazyBuild()) // SECRETS 3.8, P3-SEC-5

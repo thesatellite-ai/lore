@@ -92,16 +92,22 @@ func (r Result) spliceTop(b []byte) ([]byte, error) {
 // for each operation: the output fields the composition root adds to an
 // operation's result (WithTopText) beyond its own, for the OpenAPI
 // document. r itself is unchanged (a Registry stays immutable).
+//
+// fields must be a pure function of the spec: it is asked on each
+// TopFields call (devco:D-826), never once for every operation up front.
 func (r *Registry) WithTopFields(fields func(Spec) []FieldInfo) *Registry {
-	c := &Registry{byName: r.byName, names: r.names, top: map[string][]FieldInfo{}}
-	for _, n := range r.names {
-		if fs := fields(r.byName[n].Spec()); len(fs) > 0 {
-			c.top[n] = fs
-		}
-	}
-	return c
+	return &Registry{byName: r.byName, names: r.names, top: fields}
 }
 
 // TopFields are the output fields the composition root adds to the
 // operation name's result (WithTopFields); nil for none.
-func (r *Registry) TopFields(name string) []FieldInfo { return r.top[name] }
+func (r *Registry) TopFields(name string) []FieldInfo {
+	e, ok := r.byName[name]
+	if !ok || r.top == nil {
+		return nil
+	}
+	if fs := r.top(e.Spec()); len(fs) > 0 {
+		return fs
+	}
+	return nil
+}

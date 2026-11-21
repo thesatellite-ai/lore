@@ -187,8 +187,11 @@ func (s *Session) configSnapshot(ctx context.Context, inv invocation) (*configSn
 	}
 	r := s.repoFor(inv.dir)
 	persistAt := ""
-	if r != nil {
-		persistAt = s.configPersistPath(inv.dir, cflagsKey)
+	// devco:D-826: a folder outside every repository keeps its snapshot
+	// too (only the global and system files and the binary then decide
+	// it); it is used only while git still finds no repository there.
+	if r != nil || s.noRepoAt(inv.dir) {
+		persistAt = s.configPersistPath(inv.dir, cflagsKey, r == nil)
 		if snap, ok := loadPersistedConfig(persistAt); ok && persistAt != "" {
 			snap.dir, snap.cflagsKey = inv.dir, cflagsKey
 			s.mu.Lock()

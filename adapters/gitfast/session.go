@@ -51,6 +51,8 @@ type Session struct {
 
 	mu    sync.Mutex
 	repos map[string]*repo // discovery dir -> repo (nil: not readable here)
+	// noRepo: discovery dir -> git finds no repository there (noRepoAt)
+	noRepo map[string]bool
 	// immutable holds answers that depend only on object ids.
 	immutable map[string]Reply
 	// configs holds `config --list -z --show-scope` per dir + -c options.
@@ -89,6 +91,11 @@ func (s *Session) SetCacheDir(dir string) {
 type Reply struct {
 	Out  []byte
 	Code int
+	// Stderr is what git prints on standard error for this answer: empty
+	// for the quiet answers (an unset key, a missing ref), git's own
+	// message for "not a git repository" (noRepoReply), so an error built
+	// around it reads as before.
+	Stderr string
 }
 
 // ctxKey keys the Session in a context.
@@ -99,7 +106,7 @@ const EnvOff = "LORE_GIT_FAST"
 
 // New makes an empty Session.
 func New() *Session {
-	return &Session{repos: map[string]*repo{}, immutable: map[string]Reply{}, configs: map[string]*configSnap{}, disabled: os.Getenv(EnvOff) == "0"}
+	return &Session{repos: map[string]*repo{}, noRepo: map[string]bool{}, immutable: map[string]Reply{}, configs: map[string]*configSnap{}, disabled: os.Getenv(EnvOff) == "0"}
 }
 
 // With returns ctx carrying s.
@@ -144,6 +151,22 @@ func (s *Session) Close() {
 }
 
 // repoFor discovers (once) the repository dir is in.
+// noRepoAt reports, once per folder, whether git finds no repository at
+// or above dir (noRepoAbove).
+func (s *Session) noRepoAt(dir string) bool {
+	s.mu.Lock()
+	none, seen := s.noRepo[dir]
+	s.mu.Unlock()
+	if seen {
+		return none
+	}
+	none = noRepoAbove(dir)
+	s.mu.Lock()
+	s.noRepo[dir] = none
+	s.mu.Unlock()
+	return none
+}
+
 func (s *Session) repoFor(dir string) *repo {
 	s.mu.Lock()
 	r, seen := s.repos[dir]
@@ -228,6 +251,9 @@ func (s *Session) Answer(ctx context.Context, dir string, args, env []string, st
 	}
 	r := s.repoFor(inv.dir)
 	if r == nil {
+		if inv.sub == "rev-parse" && needsRepo(inv.args) && s.noRepoAt(inv.dir) {
+			return noRepoReply(), true // devco:D-826: a read outside any repo starts no git
+		}
 		return Reply{}, false
 	}
 	if persistable(inv, stdin) {
@@ -301,7 +327,7 @@ func (s *Session) noteWriteEnd() {
 
 // clone copies a reply so no caller can change a kept answer.
 func clone(r Reply) Reply {
-	return Reply{Out: append([]byte(nil), r.Out...), Code: r.Code}
+	return Reply{Out: append([]byte(nil), r.Out...), Code: r.Code, Stderr: r.Stderr}
 }
 
 // execGit runs git for the Session's own reads (the config snapshot).

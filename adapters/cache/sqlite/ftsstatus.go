@@ -31,6 +31,9 @@ func (c *Cache) FTSCounts(ctx context.Context, source store.Source, table row.Ta
 	if err := c.usable(); err != nil {
 		return FTSCount{}, err
 	}
+	if err := c.ensureInit(ctx); err != nil {
+		return FTSCount{}, err
+	}
 	p, ok := c.st.plans[table]
 	if !ok {
 		return FTSCount{}, errs.New(errs.NotFound, "sqlite cache: no table "+quoteText(table.String()))

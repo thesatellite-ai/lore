@@ -51,7 +51,7 @@ func gitRunEnv(ctx context.Context, env []string, args ...string) (string, error
 		// gitfast (devco:D-418): answered from the repository files; a
 		// non-zero status is a quiet "no" (git printed nothing either)
 		if rep.Code != 0 {
-			return string(rep.Out), fmt.Errorf("orgcfg: git %s: %w: %s", strings.Join(args, " "), &gitfast.ExitError{Code: rep.Code}, "")
+			return string(rep.Out), fmt.Errorf("orgcfg: git %s: %w: %s", strings.Join(args, " "), &gitfast.ExitError{Code: rep.Code}, rep.Stderr)
 		}
 		return string(rep.Out), nil
 	}

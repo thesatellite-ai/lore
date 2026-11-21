@@ -133,7 +133,7 @@ func TestPageFlagsRowsField(t *testing.T) {
 			t.Fatalf("Define of an unpageable output: recover() = %v", r)
 		}
 	}()
-	op.Define(op.Spec{Name: "thing.list"}, func(context.Context, pageIn) (noRows, error) { return noRows{}, nil })
+	_ = op.Define(op.Spec{Name: "thing.list"}, func(context.Context, pageIn) (noRows, error) { return noRows{}, nil }).InputFields()
 }
 
 func errText(r any) string {

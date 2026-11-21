@@ -953,8 +953,11 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	rels := make(map[string]string, len(paths))
 	roots := make(map[string]string, len(paths)) // name ─▶ root-relative path (creditRow)
 	// R-5/R-6/R-18: a change no one with authority made is read as its
-	// last accepted version, or not at all (authority.go)
-	auth, _ := b.authorityOf(ctx, h)
+	// last accepted version, or not at all (authority.go); the holds,
+	// trusted blobs and credits are all this read uses, so the saved row
+	// view serves it (devco:D-826: no decode of the whole replay when the
+	// cache is current)
+	auth, _ := b.rowAuthorityOf(ctx, h)
 	for _, p := range paths {
 		if rel, ok := b.folder.FileRel(p); ok {
 			name := h + ":" + p

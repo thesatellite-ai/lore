@@ -42,9 +42,13 @@ func configEnv() string {
 }
 
 // standardConfigFiles are the files git reads for r whether or not they
-// exist (a new one must invalidate a kept snapshot).
+// exist (a new one must invalidate a kept snapshot); r nil is a folder
+// outside every repository (no repository files).
 func standardConfigFiles(r *repo) []string {
-	files := []string{filepath.Join(r.common, "config"), filepath.Join(r.gitDir, "config.worktree")}
+	var files []string
+	if r != nil {
+		files = append(files, filepath.Join(r.common, "config"), filepath.Join(r.gitDir, "config.worktree"))
+	}
 	if bin, err := exec.LookPath("git"); err == nil {
 		files = append(files, bin)
 	}
@@ -77,11 +81,18 @@ func statOf(p string) (string, bool) {
 }
 
 // configPersistPath is where dir's snapshot is kept ("" = nowhere).
-func (s *Session) configPersistPath(dir, cflagsKey string) string {
+// noRepo names the snapshot of a folder outside every repository apart
+// from the one of a repository made there later: the plain folder's
+// fingerprint has no repository config file to change.
+func (s *Session) configPersistPath(dir, cflagsKey string, noRepo bool) string {
 	if s.cacheDir == "" {
 		return ""
 	}
-	h := sha256.Sum256([]byte("config\x00" + dir + "\x00" + cflagsKey))
+	kind := "config"
+	if noRepo {
+		kind = "config-norepo"
+	}
+	h := sha256.Sum256([]byte(kind + "\x00" + dir + "\x00" + cflagsKey))
 	return filepath.Join(s.cacheDir, "config-"+hex.EncodeToString(h[:]))
 }
 

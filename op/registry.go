@@ -15,20 +15,22 @@ import (
 type Registry struct {
 	byName map[string]Entry
 	names  []string
-	// top holds the output fields the composition root adds per operation
-	// (WithTopFields, topfield.go); nil when it adds none.
-	top map[string][]FieldInfo
+	// top answers the output fields the composition root adds per
+	// operation (WithTopFields, topfield.go); nil when it adds none. Asked
+	// per call, not filled for every operation up front: it may read an
+	// operation's input fields, which every lore process would then pay
+	// for every operation (devco:D-826).
+	top func(Spec) []FieldInfo
 }
 
 // NewRegistry validates entries together and returns every problem at once:
 // duplicate names, unknown error codes, a closed-set field holding a value
-// outside its set, a Confirm.When that names no bool input, two
-// operations on one REST route, and the word rules of checkWords (XQ8 --by
-// is an actor, XQ9 no root-level import/export).
+// outside its set, and the word rule of checkWords (XQ9 no root-level
+// import/export). What needs the input fields (Confirm.When, XQ8 --by,
+// REST routes) is CheckFields (devco:D-826).
 func NewRegistry(entries ...Entry) (*Registry, error) {
 	r := &Registry{byName: make(map[string]Entry, len(entries))}
 	var problems []error
-	routes := map[string]string{}
 	for _, e := range entries {
 		s := e.Spec()
 		if _, dup := r.byName[s.Name]; dup {
@@ -39,19 +41,44 @@ func NewRegistry(entries ...Entry) (*Registry, error) {
 		r.names = append(r.names, s.Name)
 		problems = append(problems, checkSpec(e)...)
 		problems = append(problems, checkWords(e)...)
-		if rt, ok := RouteOf(s, e.InputFields()); ok {
-			key := rt.Method + " " + rt.Path
-			if other, clash := routes[key]; clash {
-				problems = append(problems, errors.New(s.Name+": route "+key+" also used by "+other))
-			}
-			routes[key] = s.Name
-		}
 	}
 	slices.Sort(r.names)
 	if len(problems) > 0 {
 		return nil, errs.Wrap(errs.ConfigInvalid, "op: invalid operation registry", errors.Join(problems...))
 	}
 	return r, nil
+}
+
+// CheckFields refuses (E_CONFIG_INVALID) what NewRegistry cannot see
+// without reading every operation's input fields: a Confirm.When naming
+// no bool input, a --by flag that is not an actor (XQ8), and two
+// operations on one REST route (RouteOf). Why not in NewRegistry
+// (devco:D-826): reading every input cost every lore process ~13 ms for
+// the one command it runs. The REST surface checks when it mounts the
+// routes, and wire's TestRegistryFields keeps any of these failing the
+// build.
+func (r *Registry) CheckFields() error {
+	var problems []error
+	routes := map[string]string{}
+	for _, n := range r.names {
+		e := r.byName[n]
+		problems = append(problems, checkConfirmWhen(e)...)
+		problems = append(problems, checkByFlag(e)...)
+		rt, ok := RouteOf(e.Spec(), e.InputFields())
+		if !ok {
+			continue
+		}
+		key := rt.Method + " " + rt.Path
+		if other, clash := routes[key]; clash {
+			problems = append(problems, errors.New(n+": route "+key+" also used by "+other))
+			continue
+		}
+		routes[key] = n
+	}
+	if len(problems) > 0 {
+		return errs.Wrap(errs.ConfigInvalid, "op: invalid operation registry", errors.Join(problems...))
+	}
+	return nil
 }
 
 // checkSpec validates one entry's spec.
@@ -82,18 +109,21 @@ func checkSpec(e Entry) []error {
 	if s.Local && (s.Confirm.Always || s.Confirm.When != "") {
 		p = append(p, errors.New(s.Name+": a local operation cannot ask up front (only Confirm.MayAsk)"))
 	}
-	if s.Confirm.When != "" {
-		found := false
-		for _, f := range e.InputFields() {
-			if f.Name == s.Confirm.When && f.Type == TypeBool {
-				found = true
-			}
-		}
-		if !found {
-			p = append(p, errors.New(s.Name+": confirm.when "+s.Confirm.When+" is not a bool input field"))
+	return p
+}
+
+// checkConfirmWhen refuses a Confirm.When that names no bool input field.
+func checkConfirmWhen(e Entry) []error {
+	s := e.Spec()
+	if s.Confirm.When == "" {
+		return nil
+	}
+	for _, f := range e.InputFields() {
+		if f.Name == s.Confirm.When && f.Type == TypeBool {
+			return nil
 		}
 	}
-	return p
+	return []error{errors.New(s.Name + ": confirm.when " + s.Confirm.When + " is not a bool input field")}
 }
 
 // Lookup returns the operation named name.

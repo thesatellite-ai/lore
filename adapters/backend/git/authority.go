@@ -633,6 +633,43 @@ func (b *Backend) authorityOf(ctx context.Context, head string) (*authority, err
 	return a, nil
 }
 
+// rowAuthorityOf is what a row read at head needs of the replay
+// (heldBlob, creditRow): the replay this process already holds, else the
+// row view saved with it (loadRowView, devco:D-826: no decode of the whole
+// roster replay for one row), else the replay itself (authorityOf).
+func (b *Backend) rowAuthorityOf(ctx context.Context, head string) (*authority, error) {
+	if b.mode != modeClone || head == "" {
+		return nil, nil
+	}
+	authorityCache.Lock()
+	a := authorityCache.byWork[b.work]
+	authorityCache.Unlock()
+	orgHead := b.rosterHead(ctx)
+	if a != nil && a.head == head && a.orgHead == orgHead {
+		return a, nil
+	}
+	rowViews.Lock()
+	v := rowViews.byWork[b.work]
+	rowViews.Unlock()
+	if v != nil && v.head == head && v.orgHead == orgHead {
+		return v, nil
+	}
+	if v = b.loadRowView(head, orgHead); v != nil {
+		rowViews.Lock()
+		rowViews.byWork[b.work] = v
+		rowViews.Unlock()
+		return v, nil
+	}
+	return b.authorityOf(ctx, head)
+}
+
+// rowViews keeps each clone's loaded row view (loadRowView) for the
+// process: every folder of a clone and every row read asks for it.
+var rowViews = struct {
+	sync.Mutex
+	byWork map[string]*authority
+}{byWork: map[string]*authority{}}
+
 // replayFromDisk is the replay at head from the one kept on disk
 // (loadAuthority): as is when it was made at head, or carried on over the
 // commits after it when head only added plain commits on top

@@ -24,8 +24,9 @@ func defineWith[In any](name string) Entry {
 		func(context.Context, In) (noOut, error) { return noOut{}, nil })
 }
 
-// TestWordRules: NewRegistry refuses a non-actor --by (XQ8) and a
-// root-level import/export command (XQ9); the allowed shapes pass.
+// TestWordRules: CheckFields refuses a non-actor --by (XQ8) and
+// NewRegistry a root-level import/export command (XQ9); the allowed
+// shapes pass.
 func TestWordRules(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -41,7 +42,7 @@ func TestWordRules(t *testing.T) {
 		{"importer noun", defineWith[noIn]("importer.list"), ""},
 	}
 	for _, c := range cases {
-		_, err := NewRegistry(c.entry)
+		err := checkAll(c.entry)
 		switch {
 		case c.want == "" && err != nil:
 			t.Errorf("%s: refused: %v", c.name, err)
@@ -52,4 +53,13 @@ func TestWordRules(t *testing.T) {
 	if f := defineWith[byActor]("task.time").InputFields(); !f[0].Actor || f[1].Actor {
 		t.Errorf("Actor flags: %+v", f)
 	}
+}
+
+// checkAll is every registry check: NewRegistry's, then CheckFields'.
+func checkAll(entries ...Entry) error {
+	r, err := NewRegistry(entries...)
+	if err != nil {
+		return err
+	}
+	return r.CheckFields()
 }

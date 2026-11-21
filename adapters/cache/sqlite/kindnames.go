@@ -20,6 +20,9 @@ func (c *Cache) KindNames(ctx context.Context) (map[string]string, error) {
 	if err := c.usable(); err != nil {
 		return nil, err
 	}
+	if err := c.ensureInit(ctx); err != nil {
+		return nil, err
+	}
 	out := map[string]string{}
 	if _, ok := c.st.plans[row.Table(schema.TableKinds)]; !ok {
 		return out, nil

@@ -58,15 +58,20 @@ var personalUnreadInfo = op.FieldInfo{
 // can carry it. A Spec does not list its input, so the --store readers are
 // collected from the entries first.
 func topFieldsOf(entries []op.Entry) func(op.Spec) []op.FieldInfo {
-	withStore := map[string]bool{}
+	byName := make(map[string]op.Entry, len(entries))
 	for _, e := range entries {
-		if takesStore(e) {
-			withStore[e.Spec().Name] = true
-		}
+		byName[e.Spec().Name] = e
+	}
+	// devco:D-826: whether an operation takes --store reads its input
+	// fields, so it is asked for the operation at hand only, never for
+	// every operation at startup.
+	withStore := func(name string) bool {
+		e, ok := byName[name]
+		return ok && takesStore(e)
 	}
 	return func(spec op.Spec) []op.FieldInfo {
 		out := routedTopFields(spec)
-		if personalUnreadSpec(spec, withStore[spec.Name]) {
+		if orgReadOp(spec) && personalUnreadSpec(spec, withStore(spec.Name)) {
 			out = append(out, personalUnreadInfo)
 		}
 		return append(out, emptySearchFields(spec)...) // emptysearch.go (devco:D-821)
