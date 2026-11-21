@@ -56,6 +56,23 @@ func dayText(c dates.Clock, flag, raw string) (string, error) {
 	return r.Text(), nil
 }
 
+// untilText is dayText for an upper bound (--until, --worked-until): a
+// span phrase gives its last day, so "--until last week" keeps the whole
+// week (H-63).
+func untilText(c dates.Clock, flag, raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", nil
+	}
+	r, _, err := parseDate(c, flag, raw)
+	if err != nil {
+		return "", err
+	}
+	if !r.Day {
+		return r.At.In(c.Loc).Format(dates.DayLayout), nil
+	}
+	return r.LastDay().Format(dates.DayLayout), nil
+}
+
 // noteLines prints the date notes, one indented line each.
 func noteLines(notes []string) string {
 	var b strings.Builder

@@ -573,7 +573,7 @@ Every switch (a flag that takes no value, such as `--force`) also has an off for
 | `E_CONTACT_TYPE` | 20 | `bad_input` | 400 | an unknown or retired contact type, a value that fails the type's check, or --identity on a type that is not an identity type; see lore contact-type list |
 | `E_CONTENDED` | 11 | `coordination` | 409 | every claim attempt lost a race; retry after a short wait |
 | `E_CYCLE` | 19 | `guard` | 403 | the write would create a cycle |
-| `E_DATE` | 20 | `bad_input` | 400 | a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days |
+| `E_DATE` | 20 | `bad_input` | 400 | a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days, 2 days ago, last week |
 | `E_DB_CORRUPT` | 23 | `refused` | 409 | the local cache holds a record lore cannot read; delete its cache file under ~/.lore/cache/repo/ (`lore where` names it): the next command rebuilds it from the row files |
 | `E_DB_LOCKED` | 23 | `refused` | 409 | another lore process is holding the DB write lock |
 | `E_DB_NOT_FOUND` | 23 | `refused` | 409 | DB file does not exist at the configured path |

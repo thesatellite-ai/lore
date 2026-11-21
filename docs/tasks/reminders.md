@@ -16,7 +16,7 @@ Alice (an agency developer) keeps the dates for the client's website, `github.co
 
 ## Step 1 — Add reminders
 
-`--due` is required. It reads dates the way every lore date flag does: a day (`YYYY-MM-DD`), a full time (RFC 3339), or a phrase such as `tomorrow`, `fri`, `in 3d` or `eom`, with a clock time if you want one (`tomorrow 09:00`; `tomorrow + 09:00` reads the same) (lore prints the day it stored for a phrase). `--recurrence` makes it repeat.
+`--due` is required. It reads dates the way every lore date flag does: a day (`YYYY-MM-DD`), a full time (RFC 3339), or a phrase such as `tomorrow`, `fri`, `in 3d`, `eom`, `2 days ago`, `last fri` or `last week` (a week or month is its first day), with a clock time if you want one (`tomorrow 09:00`; `tomorrow + 09:00` reads the same) (lore prints the day it stored for a phrase). `--recurrence` makes it repeat.
 
 <!-- example: tasks#reminder -->
 ```console

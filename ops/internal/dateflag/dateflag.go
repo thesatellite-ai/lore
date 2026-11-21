@@ -25,7 +25,7 @@ const DefaultWeekEnd = time.Friday
 
 // Hint is the example every refused date flag shows.
 func Hint(flag string) string {
-	return "e.g. --" + flag + " 2026-12-01, or a phrase: tomorrow, fri, in 3d"
+	return "e.g. --" + flag + " 2026-12-01, or a phrase: tomorrow, fri, in 3d, 2 days ago, last week"
 }
 
 // Clock is the phrase clock: env's wall clock, the local zone, and
@@ -98,6 +98,22 @@ func Window(c dates.Clock, since, until string) (dates.Window, error) {
 			WithHint("give the earlier date to --since, e.g. --since 2026-03-01 --until 2026-03-31")
 	}
 	return w, nil
+}
+
+// SinceAt reads raw as a lower bound with the phrase table, for the
+// --since flags that also take a duration (trash, batch list): a day is
+// its local midnight, a datetime itself. ok is false outside the table
+// (H-63: "--since 2 days ago" was refused there while every other
+// --since read it).
+func SinceAt(now time.Time, raw string) (at time.Time, ok bool) {
+	r, err := dates.Parse(raw, dates.Clock{Now: now, Loc: time.Local, WeekEnd: DefaultWeekEnd})
+	if err != nil {
+		return time.Time{}, false
+	}
+	if !r.Day {
+		return r.At, true
+	}
+	return time.Date(r.At.Year(), r.At.Month(), r.At.Day(), 0, 0, 0, 0, time.Local), true
 }
 
 // LocalClock is the phrase clock in the machine's zone with the default

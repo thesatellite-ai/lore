@@ -394,7 +394,7 @@ var table = map[Code]entry{
 	TreeDepth:             {class: ClassRefused, desc: "the sub-task tree would be deeper than tasks.max_depth"},
 	TreeWidth:             {class: ClassRefused, desc: "a parent task would have more direct sub-tasks than tasks.max_children"},
 	HasOpenChildren:       {class: ClassRefused, desc: "claim of a parent task with open sub-tasks without --coordinate"},
-	Date:                  {class: ClassBadInput, desc: "a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days"},
+	Date:                  {class: ClassBadInput, desc: "a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days, 2 days ago, last week"},
 	Recur:                 {class: ClassBadInput, desc: "a recurrence rule lore does not understand; give e.g. every week, every month on last, every! 3 days, … until 2027-03-31"},
 	Template:              {class: ClassRefused, desc: "a task template is invalid or its arguments are missing or unknown"},
 	OpenItems:             {class: ClassRefused, desc: "done of a task with unticked checklist items without --tick-all or --force"},

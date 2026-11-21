@@ -326,7 +326,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 	if err != nil {
 		return TimeOut{}, err
 	}
-	until, err := dayText(clk, "until", in.Until)
+	until, err := untilText(clk, "until", in.Until)
 	if err != nil {
 		return TimeOut{}, err
 	}

@@ -6234,10 +6234,10 @@
             "name": "since",
             "in": "query",
             "required": false,
-            "description": "only batches since a date (YYYY-MM-DD) or a duration (36h, 7d)",
+            "description": "only batches since a date (YYYY-MM-DD or a date phrase: yesterday, 2 days ago, last week) or a duration (36h, 7d)",
             "schema": {
               "type": "string",
-              "description": "only batches since a date (YYYY-MM-DD) or a duration (36h, 7d)"
+              "description": "only batches since a date (YYYY-MM-DD or a date phrase: yesterday, 2 days ago, last week) or a duration (36h, 7d)"
             }
           },
           {
@@ -116506,10 +116506,10 @@
             "name": "since",
             "in": "query",
             "required": false,
-            "description": "only rows deleted since a date (YYYY-MM-DD) or a duration (36h, 7d)",
+            "description": "only rows deleted since a date (YYYY-MM-DD or a date phrase: yesterday, 2 days ago, last week) or a duration (36h, 7d)",
             "schema": {
               "type": "string",
-              "description": "only rows deleted since a date (YYYY-MM-DD) or a duration (36h, 7d)"
+              "description": "only rows deleted since a date (YYYY-MM-DD or a date phrase: yesterday, 2 days ago, last week) or a duration (36h, 7d)"
             }
           },
           {

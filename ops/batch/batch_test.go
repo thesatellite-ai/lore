@@ -71,7 +71,9 @@ func TestListFilters(t *testing.T) {
 	if _, err = o.list(ctx, ListIn{Kind: "bogus"}); !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("bad kind: %v", err)
 	}
-	if _, err = o.list(ctx, ListIn{Since: "yesterday"}); !errs.Has(err, errs.InvalidInput) {
+	// "yesterday" is a date phrase every --since reads (H-63); a word
+	// outside the table is still refused
+	if _, err = o.list(ctx, ListIn{Since: "soonish"}); !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("bad since: %v", err)
 	}
 }
