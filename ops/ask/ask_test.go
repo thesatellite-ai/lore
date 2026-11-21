@@ -279,10 +279,14 @@ func TestCapKeepsReadingOrder(t *testing.T) {
 	}
 }
 
-// fakeEnv answers the two statements of an ask from canned rows.
-type fakeEnv struct{ stmts []string }
+// fakeEnv answers the two statements of an ask from canned rows; keeps
+// is what its lens says about keeping answers (the read server's lens).
+type fakeEnv struct {
+	stmts []string
+	keeps bool
+}
 
-func (f *fakeEnv) AskLens(_ context.Context, _ bool, fn func(q Query) error) error {
+func (f *fakeEnv) AskLens(_ context.Context, _ bool, fn func(q Query, keeps bool) error) error {
 	return fn(func(_ context.Context, s string) (opssql.Result, error) {
 		f.stmts = append(f.stmts, s)
 		txt := func(s string) value.Value { v, _ := value.TextOf(s); return v }
@@ -292,27 +296,35 @@ func (f *fakeEnv) AskLens(_ context.Context, _ bool, fn func(q Query) error) err
 			}}, nil
 		}
 		return opssql.Result{Rows: [][]value.Value{
-			{txt("row"), txt("memories"), txt("mem_1"), txt("me/work"), txt(""), txt("Met alice-ng about lumen."), txt("2026-11-01T00:00:00.000000000Z"), txt("0"), txt(""), txt("")},
+			{txt("row"), txt("memories"), txt("mem_1"), txt("me/work"), txt(""), txt("Met alice-ng about lumen."), txt("2026-11-01T00:00:00.000000000Z"), txt("0"), txt(""), txt(""), txt(" met alice-ng about lumen.")},
 		}}, nil
-	})
+	}, f.keeps)
 }
 
 // TestRunOneLens: run reads through one lens: the typed statement, then
-// the rows statement naming the matched resource; a blank question is
+// the rows statement naming the matched resource; on a lens that keeps
+// answers (the read server) the text statement naming nothing of the
+// question instead, kept across calls (devco:D-846); a blank question is
 // refused.
 func TestRunOneLens(t *testing.T) {
 	t.Parallel()
+	for _, keeps := range []bool{false, true} {
+		env := &fakeEnv{keeps: keeps}
+		out, err := run(context.Background(), env, RunIn{Query: "everything about alice-ng"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(env.stmts) != 2 {
+			t.Fatalf("keeps %v: statements: %q", keeps, env.stmts)
+		}
+		if named := strings.Contains(env.stmts[1], "'%alice-ng%'") && strings.Contains(env.stmts[1], "'%ally%'"); named == keeps || FileOnly(env.stmts[1]) != keeps {
+			t.Fatalf("keeps %v: rows statement %q", keeps, env.stmts[1])
+		}
+		if len(out.Resources) != 1 || out.Resources[0].Fields[0].Value != "engineer" || len(out.Rows) != 1 || strings.Join(out.Resources[0].Aliases, ",") != "Ally" {
+			t.Fatalf("keeps %v: out: %+v", keeps, out)
+		}
+	}
 	env := &fakeEnv{}
-	out, err := run(context.Background(), env, RunIn{Query: "everything about alice-ng"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(env.stmts) != 2 || !strings.Contains(env.stmts[1], "'%alice-ng%'") || !strings.Contains(env.stmts[1], "'%ally%'") {
-		t.Fatalf("statements: %q", env.stmts)
-	}
-	if len(out.Resources) != 1 || out.Resources[0].Fields[0].Value != "engineer" || len(out.Rows) != 1 || strings.Join(out.Resources[0].Aliases, ",") != "Ally" {
-		t.Fatalf("out: %+v", out)
-	}
 	if _, err := run(context.Background(), env, RunIn{Query: "  "}); err == nil {
 		t.Fatal("a blank question was not refused")
 	}

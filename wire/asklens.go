@@ -16,7 +16,7 @@ import (
 // `--store repo`: the repo's own rows alone (lensScope, devco D-799); any
 // other --store is routed before the op runs (RunIn.RoutedStore). The lens
 // exposes only the tables ask reads (opsask.LensTables, devco D-813).
-func (a *App) AskLens(ctx context.Context, repoOnly bool, fn func(q opsask.Query) error) error {
+func (a *App) AskLens(ctx context.Context, repoOnly bool, fn func(q opsask.Query, keeps bool) error) error {
 	return a.withExtra(a.lensFolders(ctx), func() error {
 		l, _, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: true, Now: a.Now(), Tables: opsask.LensTables}, lensScope{RepoOnly: repoOnly}, "")
 		if err != nil {
@@ -32,7 +32,7 @@ func (a *App) AskLens(ctx context.Context, repoOnly bool, fn func(q opsask.Query
 				return opssql.Result{}, qerr
 			}
 			return opssql.Result{Columns: res.Columns, Rows: res.Rows}, nil
-		})
+		}, l.Keeps())
 		if cerr := l.Close(); ferr == nil && cerr != nil {
 			return errs.Wrap(errs.Internal, "wire: close the lens", cerr)
 		}

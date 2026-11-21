@@ -57,9 +57,13 @@ type Query func(ctx context.Context, sql string) (opssql.Result, error)
 // Invariant: AskLens opens one read-only lens over every store the call
 // reads (the sql lens, sensitive values masked; repoOnly: the repo's own
 // rows alone, `--store repo`), runs fn with it and closes it; fn may run
-// several statements, all on the same lens.
+// several statements, all on the same lens. keeps says the lens keeps the
+// answer of a FileOnly statement across calls (the read server's pooled
+// lens, devco:D-842): ask then reads the statements that name nothing of
+// the question and picks rows in Go; without it a statement that picks
+// them in SQL is the cheaper single read (devco:D-846).
 type Env interface {
-	AskLens(ctx context.Context, repoOnly bool, fn func(q Query) error) error
+	AskLens(ctx context.Context, repoOnly bool, fn func(q Query, keeps bool) error) error
 }
 
 // RunIn is the input of ask.run.
@@ -224,7 +228,7 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	}
 	q := parseQuestion(in.Query, opclock.Now(env).UTC())
 	var d data
-	err := env.AskLens(ctx, in.Store == string(store.SourceRepo), func(run Query) error {
+	err := env.AskLens(ctx, in.Store == string(store.SourceRepo), func(run Query, keeps bool) error {
 		var lerr error
 		if d.resources, d.tasks, lerr = loadTyped(ctx, run); lerr != nil {
 			return lerr
@@ -233,7 +237,7 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 		if q.owe != oweNone || (isIdentity(q.text) && len(ms) > 0) {
 			return nil // answered by resources and tasks
 		}
-		d.rows, lerr = loadRows(ctx, run, q, ms)
+		d.rows, lerr = loadRows(ctx, run, q, ms, keeps)
 		return lerr
 	})
 	if err != nil {
@@ -271,15 +275,6 @@ func cell(v value.Value) string {
 	return v.String()
 }
 
-// sqlText quotes s as an SQL string literal.
-func sqlText(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
-
-// sqlLike is a LIKE pattern finding s anywhere (ESCAPE '\').
-func sqlLike(s string) string {
-	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-	return sqlText("%" + r.Replace(strings.ToLower(s)) + "%")
-}
-
 // LensTables are the tables the statements of ask read (each through its
 // "<table>_all" view): the lens is built with these alone (devco D-813),
 // so a call does not read and view the other tables of every cache.
@@ -301,8 +296,11 @@ FROM knowledge_refs_all kr WHERE kr.src_table = 'tasks' AND kr.dst_table = 'reso
 // FileOnly reports whether statement's answer depends only on the cache
 // files the lens reads (no clock, no per-call input), so a long-lived
 // process may keep it until a file changes (devco:D-842: the read server
-// keeps typedSQL's answer, read by every question, across calls).
-func FileOnly(statement string) bool { return statement == typedSQL }
+// keeps typedSQL's answer, read by every question, across calls; devco:D-846
+// adds textSQL and daysSQL, which name no word or day of the question).
+func FileOnly(statement string) bool {
+	return statement == typedSQL || statement == textSQL || statement == daysSQL
+}
 
 // loadTyped reads the resources and the open tasks.
 func loadTyped(ctx context.Context, run Query) ([]resourceRow, []taskRow, error) {
@@ -441,33 +439,43 @@ func historyOf(s string) []historyEntry {
 	return out
 }
 
-// textTables are the tables ask reads rows from, with the SQL of their
-// title and text.
+// daysSQL reads every row's day metadata. It names no day, so it is
+// clock-free and input-free and the read server keeps its answer until a
+// cache file changes (FileOnly, devco:D-846). Read once on its own:
+// row_meta_all reads every row's metadata JSON, and as a subquery of each
+// text table's arm it ran once per table (devco D-813).
+const daysSQL = "SELECT entity_id, value_text FROM row_meta_all WHERE key_name = 'day' AND item_idx >= 0"
+
 // loadDays reads the rows whose day metadata falls in [since, end) (days
-// as YYYY-MM-DD): row id → its day, and the ids quoted for an IN list.
-// Read once on its own: row_meta_all reads every row's metadata JSON, and
-// as a subquery of each text table's arm it ran once per table (devco
-// D-813: a date question cost ~350 ms of its ~700 ms there).
-func loadDays(ctx context.Context, run Query, since, end string) (map[string]string, []string, error) {
-	res, err := run(ctx, "SELECT entity_id, value_text FROM row_meta_all WHERE key_name = 'day' AND item_idx >= 0 AND value_text >= "+sqlText(since)+" AND value_text < "+sqlText(end))
+// as YYYY-MM-DD): row id → its day; for a row with several day items the
+// last one read wins. A lens that keeps answers (keeps) reads daysSQL and
+// the window is applied here; any other reads only the window's items
+// (one read: filtering in SQL is cheaper than handing every item over).
+// Both compare the day as text (NULL is no day), so they pick the same
+// items.
+func loadDays(ctx context.Context, run Query, since, end string, keeps bool) (map[string]string, error) {
+	stmt := daysSQL
+	if !keeps {
+		stmt += " AND value_text >= " + sqlText(since) + " AND value_text < " + sqlText(end)
+	}
+	res, err := run(ctx, stmt)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	days := map[string]string{}
-	var ids []string
 	for _, row := range res.Rows {
-		if len(row) < 2 {
+		if len(row) < 2 || row[1] == nil {
 			continue
 		}
-		id := cell(row[0])
-		if _, seen := days[id]; !seen {
-			ids = append(ids, sqlText(id))
+		if day := row[1].String(); !keeps || day >= since && day < end {
+			days[cell(row[0])] = day
 		}
-		days[id] = cell(row[1])
 	}
-	return days, ids, nil
+	return days, nil
 }
 
+// textTables are the tables ask reads rows from, with the SQL of their
+// title, text, date and valid-until columns.
 var textTables = []struct{ table, title, body, extra, until string }{
 	{"memories", "''", "m.body", "m.valid_at", "m.valid_until"},
 	{"decisions", "m.title", "m.body", "NULL", "NULL"},
@@ -478,10 +486,91 @@ var textTables = []struct{ table, title, body, extra, until string }{
 	{"hotfixes", "m.title", "m.body", "NULL", "NULL"},
 }
 
+// Columns of a text statement line: kind ('row' or 'ref'), then for a row
+// its table, id, place, title, text, date (COALESCE(extra, created_at)),
+// imported, superseded-by, valid-until and the lowered "title text" the
+// words are found in (NULL when the title or the text is NULL, which no
+// word matches, as LIKE on NULL does not); for a ref its entity table,
+// entity id and the resource id it references.
+const (
+	colKind, colTable, colID, colPlace, colTitle, colBody, colAt, colImported, colSuperseded, colUntil, colLower = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+	colRefID                                                                                                     = 3
+	textCols                                                                                                     = 11
+)
+
+// textStatement is the statement reading the text tables' rows that pass
+// cond (SQL with %T, %B and %V for each table's title, text and date; ""
+// for every live row) and the row_refs lines naming one of refIDs (quoted;
+// nil for every line, empty for none). Every arm has the textCols
+// columns.
+func textStatement(cond string, refIDs []string) string {
+	var parts []string
+	for _, t := range textTables {
+		var where []string
+		if cond != "" {
+			where = append(where, "("+strings.NewReplacer("%T", t.title, "%B", t.body, "%V", "COALESCE("+t.extra+", m.created_at)").Replace(cond)+")")
+		}
+		imported := "0"
+		if t.table == "memories" {
+			imported = "(m.source_kind = 'imported')"
+		}
+		superseded := "''"
+		if t.table != "incidents" {
+			superseded = "COALESCE(m.superseded_by_id, '')"
+			where = append(where, "m.archived_at IS NULL")
+		}
+		stmt := "SELECT 'row', '" + t.table + "', m.id, m.place, COALESCE(" + t.title + ", ''), COALESCE(" + t.body + ", ''), COALESCE(" + t.extra + ", m.created_at), " + imported + ", " + superseded + ", COALESCE(" + t.until + ", ''), lower(" + t.title + " || ' ' || " + t.body + ")" +
+			" FROM " + t.table + "_all m"
+		if len(where) > 0 {
+			stmt += " WHERE " + strings.Join(where, " AND ")
+		}
+		parts = append(parts, stmt)
+	}
+	refs := "SELECT 'ref', entity_table, entity_id, ref_id, '', '', '', 0, '', '', NULL FROM row_refs_all"
+	switch {
+	case refIDs == nil:
+	case len(refIDs) == 0:
+		refs += " WHERE 0"
+	default:
+		refs += " WHERE ref_id IN (" + strings.Join(refIDs, ", ") + ")"
+	}
+	return strings.Join(append(parts, refs), "\nUNION ALL ")
+}
+
+// textSQL reads every live row of the text tables and every row_refs
+// line: no word, id or day of the question in it, so it is clock-free and
+// input-free and the read server keeps its answer until a cache file
+// changes (FileOnly). Why (devco:D-846): the per-question statement (a
+// LIKE per word over every text table, compiled with the question's
+// literals) cost ~13 ms of every warm served status, decision or date
+// question.
+var textSQL = textStatement("", nil)
+
+// likeText is the text a row must contain to hold word w, as
+// `lower(title || ' ' || text) LIKE '%<lower(w)>%'` decides it: SQLite's
+// lower() folds ASCII only and LIKE folds ASCII case only, so the row's
+// lowered text must contain strings.ToLower(w) byte for byte.
+func likeText(w string) string { return strings.ToLower(w) }
+
+// sqlText quotes s as an SQL string literal.
+func sqlText(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
+// sqlLike is a LIKE pattern finding s anywhere (ESCAPE '\').
+func sqlLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return sqlText("%" + r.Replace(strings.ToLower(s)) + "%")
+}
+
 // loadRows reads the rows that can answer q: rows holding a word of the
 // question, a topic word or a matched resource's name, rows referencing a
-// matched resource, and for a date question the rows of its window.
-func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow, error) {
+// matched resource, and for a date question the rows of its window. A lens
+// that keeps answers (keeps: the read server) reads textSQL, kept across
+// calls, and the rows are picked here; any other runs one statement that
+// picks them in SQL (one read: SQLite's scan is cheaper than handing every
+// row over). rowFilter.answers decides as that statement does
+// (TestTextRowsMatchTheLikeStatement compares the two), so both give the
+// same rows in the same order (nearest store first).
+func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool) ([]textRow, error) {
 	var terms []string
 	for _, m := range ms {
 		terms = append(terms, m.res.Name)
@@ -494,93 +583,135 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 			terms = append(terms, t.row...)
 		}
 	}
-	var ids []string
-	for _, m := range ms {
-		ids = append(ids, sqlText(m.res.ID))
+	f := rowFilter{pats: make([]string, 0, len(terms)), ids: map[string]bool{}, win: !q.window.IsZero()}
+	for _, t := range terms {
+		f.pats = append(f.pats, likeText(t))
 	}
-	var conds []string
+	var conds, refIDs []string
 	for _, t := range terms {
 		conds = append(conds, "lower(%T || ' ' || %B) LIKE "+sqlLike(t)+` ESCAPE '\'`)
 	}
-	if len(ids) > 0 {
-		conds = append(conds, "m.id IN (SELECT entity_id FROM row_refs_all WHERE ref_id IN ("+strings.Join(ids, ", ")+"))")
+	for _, m := range ms {
+		f.ids[m.res.ID] = true
+		refIDs = append(refIDs, sqlText(m.res.ID))
 	}
-	win := !q.window.IsZero()
-	var days map[string]string
-	if win {
+	if len(refIDs) > 0 {
+		conds = append(conds, "m.id IN (SELECT entity_id FROM row_refs_all WHERE ref_id IN ("+strings.Join(refIDs, ", ")+"))")
+	}
+	// with a window and a matched resource the window decides; the
+	// resource filter runs in Go (answer.go)
+	f.byText = !f.win || len(ms) == 0
+	if f.win {
 		// days as YYYY-MM-DD: a stored date (2026-11-02T00:00:00.000000000Z)
 		// sorts after its day and before the next one
-		since, end := q.window.Since.Format(time.DateOnly), q.window.End.Format(time.DateOnly)
-		var dayIDs []string
+		f.since, f.end = q.window.Since.Format(time.DateOnly), q.window.End.Format(time.DateOnly)
 		var err error
-		if days, dayIDs, err = loadDays(ctx, run, since, end); err != nil {
+		if f.days, err = loadDays(ctx, run, f.since, f.end, keeps); err != nil {
 			return nil, err
 		}
 		dayCond := "0"
-		if len(dayIDs) > 0 {
+		if len(f.days) > 0 {
+			var dayIDs []string
+			for id := range f.days {
+				dayIDs = append(dayIDs, sqlText(id))
+			}
+			slices.Sort(dayIDs)
 			dayCond = "m.id IN (" + strings.Join(dayIDs, ", ") + ")"
 		}
-		conds = append(conds, "(%V >= "+sqlText(since)+" AND %V < "+sqlText(end)+")", dayCond)
-		if len(ms) > 0 {
-			conds = conds[len(conds)-2:] // the window decides; the resource filter runs in Go
+		win := []string{"(%V >= " + sqlText(f.since) + " AND %V < " + sqlText(f.end) + ")", dayCond}
+		if f.byText {
+			conds = append(conds, win...)
+		} else {
+			conds = win
 		}
 	}
 	if len(conds) == 0 {
 		return nil, nil
 	}
-	var parts []string
-	for _, t := range textTables {
-		where := strings.NewReplacer("%T", t.title, "%B", t.body, "%V", "COALESCE("+t.extra+", m.created_at)").Replace(strings.Join(conds, " OR "))
-		imported := "0"
-		if t.table == "memories" {
-			imported = "(m.source_kind = 'imported')"
+	stmt := textSQL
+	if !keeps {
+		if refIDs == nil {
+			refIDs = []string{} // no ref lines: no resource matched
 		}
-		superseded := "''"
-		if t.table != "incidents" {
-			superseded = "COALESCE(m.superseded_by_id, '')"
-		}
-		archived := ""
-		if t.table != "incidents" {
-			archived = " AND m.archived_at IS NULL"
-		}
-		parts = append(parts, "SELECT 'row', '"+t.table+"', m.id, m.place, COALESCE("+t.title+", ''), COALESCE("+t.body+", ''), COALESCE("+t.extra+", m.created_at), "+imported+", "+superseded+", COALESCE("+t.until+", '')"+
-			" FROM "+t.table+"_all m WHERE ("+where+")"+archived)
-	}
-	stmt := strings.Join(parts, "\nUNION ALL ")
-	if len(ids) > 0 {
-		stmt += "\nUNION ALL SELECT 'ref', entity_table, entity_id, ref_id, '', '', '', 0, '', '' FROM row_refs_all WHERE ref_id IN (" + strings.Join(ids, ", ") + ")"
+		stmt = textStatement(strings.Join(conds, " OR "), refIDs)
 	}
 	res, err := run(ctx, stmt)
 	if err != nil {
 		return nil, err
 	}
-	var out []textRow
-	at := map[string]int{}
 	refs := map[string][]string{}
 	for _, row := range res.Rows {
-		if len(row) < 10 {
+		if len(row) < textCols || cell(row[colKind]) != "ref" || keeps && !f.ids[cell(row[colRefID])] {
 			continue
 		}
-		c := make([]string, len(row))
-		for i, v := range row {
-			c[i] = cell(v)
+		ent := cell(row[colID])
+		refs[ent] = append(refs[ent], cell(row[colRefID]))
+	}
+	f.refs = refs
+	var out []textRow
+	at := map[string]int{}
+	for _, row := range res.Rows {
+		if len(row) < textCols || cell(row[colKind]) != "row" {
+			continue
 		}
-		switch c[0] {
-		case "row":
-			if _, dup := at[c[2]]; dup {
-				continue // nearest store first
-			}
-			at[c[2]] = len(out)
-			t, _ := time.Parse(time.RFC3339Nano, c[6])
-			until, _ := time.Parse(time.RFC3339Nano, c[9])
-			out = append(out, textRow{Table: c[1], ID: c[2], Place: c[3], Title: c[4], Body: c[5], At: t, Imported: c[7] == "1", SupersededBy: c[8], ValidUntil: until})
-		case "ref":
-			refs[c[2]] = append(refs[c[2]], c[3])
+		id := cell(row[colID])
+		if keeps && !f.answers(row, id) {
+			continue // a one-shot statement picked its rows in SQL
 		}
+		if _, dup := at[id]; dup {
+			continue // nearest store first
+		}
+		at[id] = len(out)
+		t, _ := time.Parse(time.RFC3339Nano, cell(row[colAt]))
+		until, _ := time.Parse(time.RFC3339Nano, cell(row[colUntil]))
+		out = append(out, textRow{Table: cell(row[colTable]), ID: id, Place: cell(row[colPlace]), Title: cell(row[colTitle]), Body: cell(row[colBody]), At: t, Imported: cell(row[colImported]) == "1", SupersededBy: cell(row[colSuperseded]), ValidUntil: until})
 	}
 	for i := range out {
 		out[i].Refs = refs[out[i].ID]
-		out[i].Day = days[out[i].ID]
+		out[i].Day = f.days[out[i].ID]
 	}
 	return out, nil
+}
+
+// rowFilter is what decides that a text row can answer a question: the
+// lowered words (pats), the matched resources (ids) and the rows that
+// reference one (refs), whether words decide (byText), and a date
+// question's window [since, end) with its day metadata (days).
+type rowFilter struct {
+	pats       []string
+	ids        map[string]bool
+	refs       map[string][]string
+	byText     bool
+	win        bool
+	since, end string
+	days       map[string]string
+}
+
+// answers reports whether a text statement row can answer: by text
+// (byText) its lowered text holds one of pats or it references a matched
+// resource; for a date question its date falls in [since, end) or its day
+// metadata does.
+func (f *rowFilter) answers(row []value.Value, id string) bool {
+	if f.byText {
+		if low := row[colLower]; low != nil {
+			text := low.String()
+			for _, p := range f.pats {
+				if strings.Contains(text, p) {
+					return true
+				}
+			}
+		}
+		if _, ok := f.refs[id]; ok {
+			return true
+		}
+	}
+	if f.win {
+		if at := cell(row[colAt]); at >= f.since && at < f.end {
+			return true
+		}
+		if _, ok := f.days[id]; ok {
+			return true
+		}
+	}
+	return false
 }
