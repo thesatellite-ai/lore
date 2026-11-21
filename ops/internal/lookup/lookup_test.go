@@ -80,10 +80,16 @@ var nameOrID = map[string]bool{
 // Over a real roster, an unknown or purged contact is E_NOT_FOUND and a
 // removed (trashed) one E_IN_TRASH with the restore hint: pinned in
 // ops/profile TestContactLookupTrashMatrix and wire
-// TestProfileRosterContactInTrash.
+// TestProfileRosterContactInTrash; a team contact's (tcn_) the same way in
+// ops/team TestTeamContactTrashLookup. Every lookup op on the org roster
+// (profilestore.IsDirect) must be listed here
+// (TestRosterLookupsListEveryDirectLookup): the team contact ops were added
+// without a line and the matrix failed in the full gate only (devco D-882).
 var rosterLookups = map[string]ids.Prefix{
-	profilestore.OpContactEdit:   ids.PrefixActorContact,
-	profilestore.OpContactRemove: ids.PrefixActorContact,
+	profilestore.OpContactEdit:       ids.PrefixActorContact,
+	profilestore.OpContactRemove:     ids.PrefixActorContact,
+	profilestore.OpTeamContactEdit:   ids.PrefixTeamContact,
+	profilestore.OpTeamContactRemove: ids.PrefixTeamContact,
 }
 
 // changeFields are the fields an edit is given so that its "nothing to
@@ -202,6 +208,32 @@ func TestLookupIDMatrix(t *testing.T) {
 		t.Fatalf("only %d lookup ops found: the registry walk is broken", n)
 	}
 	t.Logf("%d lookup ops × %d malformed + %d well-formed ids", n, len(malformed), len(wellFormed))
+}
+
+// TestRosterLookupsListEveryDirectLookup (devco D-882): every lookup op
+// that runs on the org roster (profilestore.IsDirect) is in rosterLookups,
+// and every rosterLookups line is such an op. The matrix expects E_REFUSED
+// for those in its no-org repo (TS-1); an op missing from the list was
+// expected to answer E_NOT_FOUND there and failed only in the full gate's
+// slow matrix, after landing. This check is fast and names the line to add.
+func TestRosterLookupsListEveryDirectLookup(t *testing.T) {
+	h := opstest.New(t)
+	seen := map[string]bool{}
+	for _, e := range h.App.Registry().Entries() {
+		name := e.Spec().Name
+		if !isLookup(e) || !profilestore.IsDirect(name) {
+			continue
+		}
+		seen[name] = true
+		if _, ok := rosterLookups[name]; !ok {
+			t.Errorf("%s is a lookup op on the org roster (profilestore.IsDirect) but not in rosterLookups: add it with the id prefix it takes", name)
+		}
+	}
+	for name := range rosterLookups {
+		if !seen[name] {
+			t.Errorf("rosterLookups names %s, which is no registered lookup op on the org roster", name)
+		}
+	}
 }
 
 // TestBadIDMalformedOfTheRightKind (devco:L-9): an id with the expected

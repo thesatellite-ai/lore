@@ -34,9 +34,11 @@ func TestLoreDirIgnoredMemoSkipsGit(t *testing.T) {
 	}
 	path := os.Getenv("PATH")
 	t.Setenv("PATH", t.TempDir()) // no git: only the memo can answer
+	loreDirIgnoredSeen.Clear()    // a new process: nothing remembered in memory (D-882), only the memo file
 	if !LoreDirIgnoredMemo(ctx, root, memo, inputs) {
 		t.Fatal("second ask: the memo did not answer; it asked git again")
 	}
+	loreDirIgnoredSeen.Clear()
 	if LoreDirIgnored(ctx, root) {
 		t.Fatal("without git the plain check must read as not ignored (test premise)")
 	}

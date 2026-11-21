@@ -39,12 +39,27 @@ import (
 // private to this machine. A root that is not in a git checkout, has no
 // .lore folder, or a git that fails reads as not ignored (lore then
 // behaves as before).
+//
+// The answer is remembered in this process (loreDirIgnoredSeen) under the
+// size and mtime of the files git decides it from, so the callers of one
+// command (render's pointer and stamp, doctor's sync and .gitignore
+// checks, the hook wiring) share one `git check-ignore` (devco D-882).
 func LoreDirIgnored(ctx context.Context, root string) bool {
 	if fi, err := os.Stat(filepath.Join(root, loreDirName)); err != nil || !fi.IsDir() {
 		return false
 	}
+	key := ignoreInputsKey(root, localIgnoreInputs(root))
+	if v, ok := loreDirIgnoredSeen.Load(key); ok {
+		if ignored, isBool := v.(bool); isBool {
+			return ignored
+		}
+	}
 	_, err := gitRun{dir: root, args: []string{"check-ignore", "-q", "--", loreDirName}}.output(ctx)
-	return err == nil // exit 0: ignored; 1: not ignored; 128: not a checkout
+	ignored := err == nil // exit 0: ignored; 1: not ignored; 128: not a checkout
+	if err == nil || gitSaidNo(err) {
+		loreDirIgnoredSeen.Store(key, ignored) // a git that failed otherwise is asked again
+	}
+	return ignored
 }
 
 // LoreDirIgnoredMemo is LoreDirIgnored remembered in memoFile (devco

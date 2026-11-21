@@ -85,6 +85,13 @@ func TestLookupInTrashMatrix(t *testing.T) {
 						if !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --id "+id) {
 							t.Errorf("%s %s: %v: no restore hint", name, id, err)
 						}
+					case rosterLookups[name] == def.Prefix && errs.Has(err, errs.Refused):
+						// a lookup on the org roster given its own kind of id
+						// in this no-org repo: refused before any lookup
+						// (TS-1, as in TestLookupIDMatrix). team_contacts is
+						// not NeverClient, so the harness can trash one; over
+						// a real roster the trashed id is E_IN_TRASH (ops/team
+						// TestTeamContactTrashLookup), devco D-882.
 					case errs.Has(err, errs.NotFound):
 					case errs.Has(err, errs.InvalidID):
 						// another table's id given to this op: B-ERRS-1 (the
@@ -99,7 +106,7 @@ func TestLookupInTrashMatrix(t *testing.T) {
 	slices.Sort(names) // subtests finish in any order
 	var never []string
 	for _, n := range names {
-		if !hits[n] && !trashExempt[n] {
+		if _, roster := rosterLookups[n]; !hits[n] && !trashExempt[n] && !roster {
 			never = append(never, n)
 		}
 	}
@@ -110,18 +117,17 @@ func TestLookupInTrashMatrix(t *testing.T) {
 
 // trashExempt are lookup ops the matrix cannot reach with a trashed row of
 // their own table: the table is never trashed here (actors are never
-// deleted; projects and repos are refused while they hold rows; team
-// profile rows live only in the org roster, which this no-org repo
-// harness has none of: rosterLookups), the id is
+// deleted; projects and repos are refused while they hold rows), the id is
 // not a row id (batch, time entry, machine), the table has a required
 // polymorphic ref Seed cannot fill (comments, links), the input's --to is
 // the row's own store (moves: engine.Move answers E_IN_TRASH through
-// deletedErr), or the op lives in ops/settings (its own owner).
+// deletedErr), or the op lives in ops/settings (its own owner). The
+// lookups on the org roster (rosterLookups) are exempt through that list:
+// this no-org repo refuses them before any lookup (TS-1).
 var trashExempt = map[string]bool{
 	"actor.show": true, "project.archive": true, "project.delete": true, "project.show": true, "project.unarchive": true,
 	"repo.archive": true, "repo.delete": true, "repo.unarchive": true,
 	"batch.show": true, "task.time.edit": true, "task.time.rm": true, "machine.show": true,
-	"actor.contact.edit": true, "actor.contact.remove": true,
 	"comment.delete": true, "link.remove": true, "memory.move": true, "row.move": true,
 	"meta.delete": true, "meta.edit": true, "resource.archive": true, "resource.check": true, "resource.delete": true,
 	"resource.edit": true, "resource.show": true, "secrets.allow.rm": true, "secrets.show": true, "vars.rm": true, "vars.show": true,

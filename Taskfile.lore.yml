@@ -126,6 +126,7 @@ vars:
     stories-an        4   test:stories:an PARALLEL=8
     stories-bl        4   test:stories:bl PARALLEL=8
     stories-o         4   test:stories:o PARALLEL=8
+    stories-oz        4   test:stories:oz PARALLEL=8
     stories-wuct      4   test:stories:wuct PARALLEL=8
     stories           4   test:stories:rest PARALLEL=8
     journey-teamlead  3   test:journeys:teamlead PARALLEL=2
@@ -736,7 +737,8 @@ tasks:
   # averaged 154 (devco D-806): not a slowdown of the code (the binary before that round ran
   # the same story O just as slowly at that load), the part had simply grown to two gates'
   # worth of story O at a load the gate meets most days, so it runs as two steps: stories-an
-  # (A to N, landings BL the largest) and stories-o (owner shape O alone).
+  # (A to N, landings BL the largest) and stories-o (owner shape O alone; since devco D-882
+  # stories-o and stories-oz).
   # Counted at the slowdown that same gate measured (devco D-811: the stories parts that are
   # many tests ran about 3.4 times their count, story WW's matrices about 1.5), stories-an and
   # the catch-all were still over 70 % of their limit (the catch-all ran 891 s of its 900), so
@@ -754,11 +756,22 @@ tasks:
       - task: test:stories:part
         vars: {PART: bl, FILTER: "-run '^TestStoryBL'", PARALLEL: "{{.PARALLEL}}"}
 
+  # Story O grew to 66 tests (about 12 of its 15 minutes counted at the gate's slowdown, devco
+  # D-882), so it runs in two steps by measured time: stories-o the O stories A to N
+  # (TestStoryOActor… to TestStoryONo…), stories-oz every other O story (the owner shape
+  # TestStoryOOwnerShape, the personal store, the team store, …, and every O story added later
+  # under a name past N).
   test:stories:o:
-    desc: "Story O (the owner-shaped machine: personal, team and linked stores on one box) alone: the second of the catch-all parts"
+    desc: "Story O (the owner-shaped machine: personal, team and linked stores on one box), its stories A to N (TestStoryOA… to TestStoryON…): the first of story O's two parts"
     cmds:
       - task: test:stories:part
-        vars: {PART: o, FILTER: "-run '^TestStoryO'", PARALLEL: "{{.PARALLEL}}"}
+        vars: {PART: o, FILTER: "-run '^TestStoryO[A-N]'", PARALLEL: "{{.PARALLEL}}"}
+
+  test:stories:oz:
+    desc: "Story O's every other story (the owner shape TestStoryOOwnerShape, the personal and team stores, every O story not named A to N): the second of story O's two parts"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: oz, FILTER: "-run '^TestStoryO' -skip '^TestStoryO[A-N]'", PARALLEL: "{{.PARALLEL}}"}
 
   test:stories:wuct:
     desc: "The W stories WU and WCT (the use and count passes from every place a person stands): a catch-all part of their own"
