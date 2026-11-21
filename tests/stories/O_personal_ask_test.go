@@ -334,7 +334,7 @@ func TestStoryOPersonalAsk(t *testing.T) {
 	// exit code), show a write made between two asks, and when it dies
 	// mid-command the command still answers, one-shot.
 	s.Step("personal-store/read-server-answers-as-one-shot", func() {
-		qs := []string{"who is alise-ng", "what do I owe Bobby", "how much money can orbit spend now", "what happened on 2026-11-02", "everything about alice-ng"}
+		qs := []string{"who is alise-ng", "what do I owe Bobby", "how much money can orbit spend now", "what happened on 2026-11-02", "everything about alice-ng", "where does alice-ng work now"}
 		ask := func(q string) teamharness.Result { return ada.Lore(ada.Home, "ask", "--store", "me", "--query", q) }
 		oneShot := map[string]teamharness.Result{}
 		for _, q := range qs {
@@ -420,6 +420,23 @@ func TestStoryOPersonalAsk(t *testing.T) {
 				t.Errorf("[O D-846] the served ask %q after a write misses %q (kept text rows outlived their files):\n%s", q, want, r)
 			}
 			same(q+" after a write (text rows)", r, one)
+		}
+		// devco:D-847 (bug hunt H-104): an everything-about answer splits
+		// each row into words once and tests every topic against that set;
+		// a changed company and a new row holding a budget word show in the
+		// next served "where does X work now", exactly as one-shot prints it.
+		ask("where does alice-ng work now") // kept by the server
+		ada.Lore(ada.Home, "resource", "edit", "--id", "alice-ng", "--set", "company=lantern-co", "--store", to, "--yes").OK(t)
+		ada.Lore(ada.Home, "memory", "add", "--body", "Lunch with alice-ng: the lantern-co move has a budget of 3k.", "--at", "2026-11-19", "--to", to, "--yes").OK(t)
+		for _, want := range []string{"lantern-co", "the lantern-co move has a budget of 3k"} {
+			r := ask("where does alice-ng work now")
+			ada.SetEnv("LORE_READ_SERVER", "0")
+			one := ask("where does alice-ng work now")
+			ada.SetEnv("LORE_READ_SERVER", "1")
+			if !strings.Contains(r.Out(), want) {
+				t.Errorf("[O D-847] the served ask %q after a write misses %q:\n%s", "where does alice-ng work now", want, r)
+			}
+			same("where does alice-ng work now after a write (one word split per row)", r, one)
 		}
 		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "1")
 		_ = os.Remove(log)
