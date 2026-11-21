@@ -82,7 +82,7 @@ func TestJourneyLinkedOwnRepoGetsItsNotes(t *testing.T) {
 
 	w.Step("day1/context-finds-the-folder-rows", func() {
 		mira.LoreIn(sync, "context", "--for-prompt", "restart the worker after a backend change").OK(t).
-			Says(t, "worker does not hot-reload").Never(t, "nothing in the store applies here")
+			Says(t, "worker does not hot-reload").Never(t, "(no rows apply here)")
 	})
 
 	w.Step("day1/render-writes-the-private-notes", func() {

@@ -13,7 +13,7 @@ Resources are branch-only: they are written to `.lore/data` and shared through g
 Every subcommand:
 
 <!-- help: resource -->
-A resource is a row of a kind (server, domain, …) with typed fields. <name> accepts a bare name, a qualified name <place>:<kind>/<name> (<place> is repo, org, a project folder or a store's name, as resource add prints it), the short form <kind>/<name>, or an id (res_…). Resources are branch-only: there is no --live.
+A resource is a row of a kind (server, domain, …) with typed fields. <name> accepts a bare name, a qualified name <place>:<kind>/<name> (<place> is repo, org, a project folder or a store's name, as resource add prints it), the short form <kind>/<name>, an id (res_…), or one of its aliases (lore resource alias add). Resources are branch-only: there is no --live.
 
 ```text
 Usage:
@@ -23,6 +23,7 @@ Usage:
 Available Commands:
   add         Add a resource of a kind
   adopt       Move another place's resource kind and field rows into this place (ids kept)
+  alias       Other names of a resource: nicknames, full names, roles (add, remove, list)
   archive     Archive a resource (refs stay; new refs are refused)
   check       Stamp last_checked: a person or agent looked and the facts are right
   clone       Add a resource with another resource's values (--set overrides)

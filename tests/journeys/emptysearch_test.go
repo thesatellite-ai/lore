@@ -8,7 +8,8 @@ package journeys
 // "(no matches)" (ask: one fixed sentence) and nothing more, so the agent
 // gave up. Now every empty answer says what it searched, how it read the
 // question and what to try, and each printed command runs where it was
-// printed and finds the note.
+// printed and finds the note. lore context with nothing applying says the
+// same (devco:D-824, H-83).
 
 import (
 	"strings"
@@ -38,6 +39,11 @@ func TestJourneyEmptySearchSaysWhatToTry(t *testing.T) {
 			{[]string{"search", "--query", "kubernetes migration"}, []string{"(no matches)", "  searched: ", "  read as: words: kubernetes, migration", `  try: lore search --query "kubernetes migration" --store me`}},
 			{[]string{"memory", "search", "--query", "kubernetes"}, []string{"(no matches)", "(memory)", `  try: lore memory search --query "kubernetes" --store me`}},
 			{[]string{"ask", "--query", "what is blocking the kubernetes migration"}, []string{"(no answer)", "  searched: ", `  try: lore ask --query "what is blocking the kubernetes migration" --store me`}},
+			// devco:D-824 (H-83): lore context with nothing applying, the
+			// same lines; it never reads the personal store, so the first
+			// try is the search that does
+			{[]string{"context", "--for-prompt", "kubernetes migration"}, []string{"(no rows apply here)", "  searched: repo (rule, hotfix, ", "  read as: words: kubernetes, migration", `  try: lore search --query "kubernetes migration" --store me`}},
+			{[]string{"context", "--for-file", "ops/kubernetes/migration.yaml"}, []string{"(no rows apply here)", "  read as: path: ops/kubernetes/migration.yaml (globs", "words: kubernetes, migration", `  try: lore search --query "kubernetes migration" --store me`, "  try: lore rule list"}},
 		} {
 			out := lap.LoreIn(code, c.args...).OK(t).Says(t, c.says...).Out()
 			tries := 0

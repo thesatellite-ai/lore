@@ -59,7 +59,7 @@ func TestJourneyRenderNoRepoFileAgrees(t *testing.T) {
 		// render names lore context as the way agents read the client's
 		// notes: it must really serve the linked folder's rows.
 		mira.LoreIn(shop, "context", "--for-prompt", "may we log card numbers").OK(t).
-			Says(t, "Never log card numbers.").Never(t, "nothing in the store applies here")
+			Says(t, "Never log card numbers.").Never(t, "(no rows apply here)")
 	})
 
 	w.Step("day1/linked-own-repo-says-how-a-tool-gets-its-notes", func() {

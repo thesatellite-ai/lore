@@ -29,6 +29,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/searchrank"
 	"github.com/thesatellite-ai/lore/op"
 	opsask "github.com/thesatellite-ai/lore/ops/ask"
+	contextop "github.com/thesatellite-ai/lore/ops/context"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	"github.com/thesatellite-ai/lore/store"
@@ -62,6 +63,11 @@ type emptySearched struct {
 	Words  []string `json:"words"`
 	Type   string   `json:"type,omitempty"`
 	Dates  string   `json:"dates,omitempty"`
+	// lore context (devco D-824): the file it matched, the folder scopes
+	// covering it, or the topic
+	Path    string   `json:"path,omitempty"`
+	Folders []string `json:"folders,omitempty"`
+	Topic   string   `json:"topic,omitempty"`
 }
 
 // emptySearchInfo declares the two fields for the OpenAPI document.
@@ -72,6 +78,9 @@ var emptySearchInfo = []op.FieldInfo{
 		{Name: "words", Type: op.TypeStrings, Required: true, Desc: "the words the query was read as (question words and filler left out)"},
 		{Name: "type", Type: op.TypeString, Desc: "ask: how the question was read (who is, what I owe, a date, decision, status, words)"},
 		{Name: "dates", Type: op.TypeString, Desc: "the dates read from the question or from --since / --until"},
+		{Name: "path", Type: op.TypeString, Desc: "context --for-file: the path matched against globs, folder scopes and rows naming it"},
+		{Name: "folders", Type: op.TypeStrings, Desc: "context --for-file: the folder scopes covering the path, innermost first"},
+		{Name: "topic", Type: op.TypeString, Desc: "context --topic: the topic read"},
 	}},
 	{Name: TryField, Type: op.TypeStrings, Desc: "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)"},
 }
@@ -83,7 +92,7 @@ func emptySearchSpec(spec op.Spec) bool {
 		return false
 	}
 	switch spec.Name {
-	case opssearch.OpRun, opsask.OpRun:
+	case opssearch.OpRun, opsask.OpRun, contextop.OpFetch:
 		return true
 	}
 	_, verb, ok := strings.Cut(spec.Name, ".")
@@ -143,11 +152,19 @@ func (a *App) noteEmptySearch(ctx context.Context, e op.Entry, d op.Decoder, res
 			q.until = tv.Text
 		}
 	}
+	if q.op == contextop.OpFetch {
+		return a.noteEmptyContext(ctx, q.store, res) // emptycontext.go (devco:D-824)
+	}
 	if q.query == "" {
 		return res
 	}
 	s := a.searchedOf(ctx, q)
-	try := a.emptyTries(ctx, q, s)
+	return withEmptyNote(res, s, a.emptyTries(ctx, q, s))
+}
+
+// withEmptyNote is res with s and try under its empty line and as the
+// top-level --json fields searched and try.
+func withEmptyNote(res op.Result, s emptySearched, try []string) op.Result {
 	sj, serr := json.Marshal(s)
 	tj, terr := json.Marshal(try)
 	if serr != nil || terr != nil {
@@ -340,9 +357,22 @@ func emptySearchLines(s emptySearched, try []string) string {
 	}
 	b.WriteString("  searched: " + stores + " (" + strings.Join(s.Kinds, ", ") + ")\n")
 	var read []string
-	if len(s.Words) > 0 {
+	if s.Path != "" {
+		at := "globs"
+		if len(s.Folders) > 0 {
+			at += "; folder scopes " + strings.Join(s.Folders, ", ")
+		}
+		read = append(read, "path: "+s.Path+" ("+at+"; rows naming it or its folder)")
+	}
+	if s.Topic != "" {
+		read = append(read, "topic: "+s.Topic)
+	}
+	switch {
+	case len(s.Words) > 0:
 		read = append(read, "words: "+strings.Join(s.Words, ", "))
-	} else {
+	case s.Path != "":
+		read = append(read, "no topic word in the path (its names are generic)")
+	case s.Topic == "":
 		read = append(read, "no word to search for")
 	}
 	if s.Type != "" {

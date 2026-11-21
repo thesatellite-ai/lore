@@ -77,6 +77,9 @@ type contextFlags struct {
 	forFile, topic, forPrompt, hook string
 	forTask                         string
 	maxBytes                        int
+	// store is --store: the "more:" command reads the same store, so it
+	// runs where it is printed (devco D-824)
+	store string
 }
 
 // Fetch implements contextop.Host: `lore context` is the operation
@@ -86,7 +89,7 @@ func (h *Host) Fetch(ctx context.Context, in contextop.FetchIn, hookIn io.Reader
 	defer func() { err = h.hostError(err) }()
 	f := &contextFlags{internal: in.Internal, topics: in.Topics, hookStdin: in.HookStdin, sessionStart: in.SessionStart,
 		withMeta: in.Meta, table: in.Table, search: in.Search, forFile: in.ForFile, topic: in.Topic,
-		forPrompt: in.ForPrompt, hook: in.Hook, forTask: in.ForTask, maxBytes: in.MaxBytes}
+		forPrompt: in.ForPrompt, hook: in.Hook, forTask: in.ForTask, maxBytes: in.MaxBytes, store: in.Store}
 	return h.contextAnswer(ctx, f, hookIn)
 }
 
@@ -159,6 +162,9 @@ func (h *Host) contextAnswer(ctx context.Context, f *contextFlags, stdin io.Read
 			return contextop.Answer{}, err
 		}
 	}
+	if res.more != "" && f.store != "" {
+		res.more += " --store " + f.store
+	}
 	maxB := f.maxBytes
 	if maxB <= 0 {
 		maxB = contextDefaultMax
@@ -168,7 +174,34 @@ func (h *Host) contextAnswer(ctx context.Context, f *contextFlags, stdin io.Read
 	// answers both forms, so the usage count takes the rows the text
 	// printed (a --json caller gets every pick, as before).
 	h.recordUsage(ctx, printed)
-	return answerOf(text, res.picks)
+	a, err := answerOf(text, res.picks)
+	if err != nil || len(res.picks) > 0 || res.read == nil {
+		return a, err
+	}
+	// devco D-824: nothing applies; say what was read (the composition
+	// root prints it with the next commands, wire/emptysearch.go)
+	if a.Read, err = h.contextReading(ctx, *res.read); err != nil {
+		return contextop.Answer{}, err
+	}
+	return a, nil
+}
+
+// contextReading is r with the stores and kinds a row fetch reads (the
+// sources and tables of loadKnowledge).
+func (h *Host) contextReading(ctx context.Context, r contextop.Reading) (*contextop.Reading, error) {
+	srcs, err := h.contextSources(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r.Stores = make([]string, 0, len(srcs))
+	for _, s := range srcs {
+		r.Stores = append(r.Stores, string(s))
+	}
+	r.Kinds = make([]string, 0, len(contextKinds))
+	for _, k := range contextKinds {
+		r.Kinds = append(r.Kinds, k.kind)
+	}
+	return &r, nil
 }
 
 // answerOf is text with data encoded for --json. data is a list (the
@@ -208,6 +241,10 @@ type contextResult struct {
 	// SessionStart always-on rules, devco D-494); the hook adds it to its
 	// cap so they always go in full.
 	always int
+	// read is how a row mode read its question (path, folders, words,
+	// topic), said when nothing applies (devco D-824); nil for a mode
+	// that has no such answer (--for-task always holds the task)
+	read *contextop.Reading
 }
 
 // fit fits the picks under maxBytes, grouped under section headers, and
@@ -226,7 +263,7 @@ func (r contextResult) fit(maxBytes int) (string, []string) {
 		pieces = append(pieces, contextfit.Piece{ID: p.ID, Full: p.full, Line: p.line})
 	}
 	if len(pieces) == 0 {
-		return head + "(nothing in the store applies here; try `lore search --query \"<keywords>\"`)\n", nil
+		return head + contextop.NothingApplies + "\n", nil
 	}
 	got := contextfit.Pick(pieces, maxBytes-len(head), contextMoreReserve)
 	s := head + got.Text
@@ -483,7 +520,8 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 	if len(cand) > contextNotesMax || len(words) > 0 {
 		more = "lore search --query \"" + strings.Join(words, " ") + "\""
 	}
-	return contextResult{title: rel, picks: picks, more: more}, nil
+	read := &contextop.Reading{Path: rel, Folders: slices.Clone(fs.chain), Words: words}
+	return contextResult{title: rel, picks: picks, more: more, read: read}, nil
 }
 
 // contextForTopic returns every row tagged name.
@@ -521,7 +559,7 @@ func (h *Host) contextForTopic(ctx context.Context, name string) (contextResult,
 		}
 	}
 	sortPicks(picks)
-	return contextResult{title: "topic " + name, picks: picks}, nil
+	return contextResult{title: "topic " + name, picks: picks, read: &contextop.Reading{Topic: name}}, nil
 }
 
 // contextForPrompt returns rows matching the prompt's words, best first.
@@ -570,7 +608,7 @@ func (h *Host) contextForPrompt(ctx context.Context, text string) (contextResult
 	if len(words) > 0 {
 		more = "lore search --query \"" + strings.Join(words, " ") + "\""
 	}
-	return contextResult{title: "the prompt", picks: picks, more: more}, nil
+	return contextResult{title: "the prompt", picks: picks, more: more, read: &contextop.Reading{Words: words}}, nil
 }
 
 // contextForFileAndPrompt is --for-file with --for-prompt (devco D-815):
@@ -599,6 +637,13 @@ func (h *Host) contextForFileAndPrompt(ctx context.Context, p, text string) (con
 	}
 	sortPicks(res.picks)
 	res.title += " and the prompt"
+	if res.read != nil && pr.read != nil {
+		for _, w := range pr.read.Words {
+			if !slices.Contains(res.read.Words, w) {
+				res.read.Words = append(res.read.Words, w)
+			}
+		}
+	}
 	if res.more == "" {
 		res.more = pr.more
 	}

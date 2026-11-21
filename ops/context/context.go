@@ -77,6 +77,28 @@ type Answer struct {
 	Text string
 	// Data is the --json "data" value, encoded (nil for a hook).
 	Data []byte
+	// Read is what a row fetch (--for-file, --for-prompt, --topic) read
+	// when nothing applied, nil otherwise: the composition root prints it
+	// under the empty line with what to run next (devco D-824).
+	Read *Reading
+}
+
+// NothingApplies is the line a row fetch prints when nothing applies. It
+// had a "<keywords>" placeholder in a try command that ran nowhere; what
+// was read and the next commands now follow it (devco D-824, as an empty
+// search since D-821).
+const NothingApplies = "(no rows apply here)"
+
+// Reading is what an empty row fetch read, so the answer can say it: the
+// stores and kinds, and how it read the file (its path, the folder scopes
+// covering it, its topic words), the prompt (its words) or the topic.
+type Reading struct {
+	Stores  []string
+	Kinds   []string
+	Path    string
+	Folders []string
+	Words   []string
+	Topic   string
 }
 
 // Host is the machinery behind lore context, supplied by the binary.
@@ -128,6 +150,7 @@ type FetchOut struct {
 	Data []FetchItem `json:"data,omitempty" desc:"the picks, the topic index (--topics) or the internal rows (--internal: id, table, _source and the row's own fields)"`
 	raw  RawJSON
 	text string
+	read *Reading
 }
 
 // FetchItem is one item of data: a pick (id, kind, why, bytes, meta) or a
@@ -162,7 +185,7 @@ func (o FetchOut) MarshalJSON() ([]byte, error) {
 // decoded into Data (a host whose JSON does not fit is E_INTERNAL, never a
 // silent empty list); --internal rows stay only in raw.
 func fetchOutOf(in FetchIn, a Answer) (FetchOut, error) {
-	out := FetchOut{raw: a.Data, text: a.Text}
+	out := FetchOut{raw: a.Data, text: a.Text, read: a.Read}
 	if len(a.Data) == 0 || in.Internal {
 		return out, nil
 	}
@@ -174,6 +197,15 @@ func fetchOutOf(in FetchIn, a Answer) (FetchOut, error) {
 
 // Text implements op.Texter.
 func (o FetchOut) Text() string { return o.text }
+
+// EmptyRead is what the fetch read when nothing applied; ok is false for
+// an answer that holds rows, or a mode that reads no rows (devco D-824).
+func (o FetchOut) EmptyRead() (r Reading, ok bool) {
+	if o.read == nil {
+		return Reading{}, false
+	}
+	return *o.read, true
+}
 
 // Ops returns the context operation bound to env, for op.NewRegistry.
 func Ops(env Env) []op.Entry {

@@ -5098,6 +5098,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -5105,12 +5112,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -6233,6 +6248,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -6240,12 +6262,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -7988,6 +8018,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -7995,12 +8032,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -11760,6 +11805,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -11767,12 +11819,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -13678,6 +13738,68 @@
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
+                    },
+                    "searched": {
+                      "type": "object",
+                      "description": "on an empty answer: what was searched (absent otherwise)",
+                      "properties": {
+                        "dates": {
+                          "type": "string",
+                          "description": "the dates read from the question or from --since / --until"
+                        },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "kinds": {
+                          "type": "array",
+                          "description": "the kinds of rows searched (every kind, or the ones named)",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
+                        "stores": {
+                          "type": "array",
+                          "description": "the stores and folders read",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "ask: how the question was read (who is, what I owe, a date, decision, status, words)"
+                        },
+                        "words": {
+                          "type": "array",
+                          "description": "the words the query was read as (question words and filler left out)",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "stores",
+                        "kinds",
+                        "words"
+                      ]
+                    },
+                    "try": {
+                      "type": "array",
+                      "description": "on an empty answer: 1-3 next commands, each runnable where it was printed (absent otherwise)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -14474,6 +14596,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -14481,12 +14610,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -16372,6 +16509,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -16379,12 +16523,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -21448,6 +21600,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -21455,12 +21614,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -23550,6 +23717,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -23557,12 +23731,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -26252,6 +26434,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -26259,12 +26448,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -32588,6 +32785,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -32595,12 +32799,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -40989,6 +41201,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -40996,12 +41215,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -45993,6 +46220,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -46000,12 +46234,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -49135,6 +49377,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -49142,12 +49391,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -50946,6 +51203,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -50953,12 +51217,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -55867,6 +56139,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -55874,12 +56153,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -71616,6 +71903,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -71623,12 +71917,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -74714,6 +75016,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -74721,12 +75030,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -85380,6 +85697,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -85387,12 +85711,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -90988,6 +91320,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -90995,12 +91334,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -102487,6 +102834,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -102494,12 +102848,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -107519,6 +107881,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -107526,12 +107895,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -113999,6 +114376,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -114006,12 +114390,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -117909,6 +118301,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -117916,12 +118315,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -122858,6 +123265,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -122865,12 +123279,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",
@@ -124419,6 +124841,13 @@
                           "type": "string",
                           "description": "the dates read from the question or from --since / --until"
                         },
+                        "folders": {
+                          "type": "array",
+                          "description": "context --for-file: the folder scopes covering the path, innermost first",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "kinds": {
                           "type": "array",
                           "description": "the kinds of rows searched (every kind, or the ones named)",
@@ -124426,12 +124855,20 @@
                             "type": "string"
                           }
                         },
+                        "path": {
+                          "type": "string",
+                          "description": "context --for-file: the path matched against globs, folder scopes and rows naming it"
+                        },
                         "stores": {
                           "type": "array",
                           "description": "the stores and folders read",
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "topic": {
+                          "type": "string",
+                          "description": "context --topic: the topic read"
                         },
                         "type": {
                           "type": "string",

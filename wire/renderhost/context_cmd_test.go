@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	contextop "github.com/thesatellite-ai/lore/ops/context"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -193,11 +195,24 @@ func TestContextPlanner(t *testing.T) {
 		}
 	}
 
-	// Nothing applies: the search hint, no rows.
-	none := contextFlags{forPrompt: "zzqx"}
+	// Nothing applies: the empty line, no rows, and what was read (devco
+	// D-824: no try command with a "<keywords>" placeholder; the
+	// composition root prints the reading with commands that run).
+	none := contextFlags{forPrompt: "zzqx kafka"}
 	ans, err = h.contextAnswer(ctx, &none, nil)
-	if err != nil || !strings.Contains(ans.Text, "(nothing in the store applies here") || len(picksOf(t, ans.Data)) != 0 {
+	if err != nil || !strings.HasSuffix(ans.Text, "\n"+contextop.NothingApplies+"\n") || strings.Contains(ans.Text, "<") || len(picksOf(t, ans.Data)) != 0 {
 		t.Fatalf("nothing applies: %q %v", ans.Text, err)
+	}
+	if r := ans.Read; r == nil || strings.Join(r.Words, " ") != "zzqx kafka" || len(r.Stores) == 0 || !slices.Contains(r.Kinds, "rule") || !slices.Contains(r.Kinds, "hotfix") {
+		t.Fatalf("nothing applies to the prompt: want its words, stores and kinds read, got %+v", ans.Read)
+	}
+	nofile := contextFlags{forFile: "zzqx/kafka/consumer.txt"}
+	if ans, err = h.contextAnswer(ctx, &nofile, nil); err != nil || ans.Read == nil || ans.Read.Path != "zzqx/kafka/consumer.txt" || strings.Join(ans.Read.Words, " ") != "zzqx kafka consumer" {
+		t.Fatalf("nothing applies to the file: want its path and words read, got %+v %v\n%s", ans.Read, err, ans.Text)
+	}
+	// an answer holding rows carries no reading
+	if ans, err = h.contextAnswer(ctx, &contextFlags{forPrompt: "ledger storage"}, nil); err != nil || len(picksOf(t, ans.Data)) == 0 || ans.Read != nil {
+		t.Fatalf("an answer with rows carries a reading: %+v", ans.Read)
 	}
 }
 
