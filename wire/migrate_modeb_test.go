@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -153,7 +152,7 @@ func TestModeBMigration(t *testing.T) {
 		t.Fatalf("run: %+v, want the dry run's count %d", got, wantRows)
 	}
 	for _, c := range []struct{ table, id string }{{schema.TableProjects, modeBProject}, {schema.TableMemories, modeBMemA}, {schema.TableMemories, modeBMemB}} {
-		f := rowFile(t, filepath.Join(storeDir, rowfs.StoreDataDir, c.table, c.id+".json"))
+		f := rowFile(t, filepath.Join(storeDir, "infra", c.table, c.id+".json"))
 		if string(f["_v"]) != "2" || len(f["_hlc"]) == 0 {
 			t.Fatalf("%s/%s is not a _v 2 row: %v", c.table, c.id, f)
 		}
@@ -296,7 +295,7 @@ func TestMigrateRollbackAndUnlockWriteNoMachineRows(t *testing.T) {
 	// a v0.1.17 row file in the shared store: the next run rewrites it,
 	// so its journal has the store as a place a rollback restores
 	const v1Mem = "mem_01a1a5aca7f57659be7320c5f4b70a04"
-	v1Path := filepath.Join(storeDir, rowfs.StoreDataDir, schema.TableMemories, v1Mem+".json")
+	v1Path := filepath.Join(storeDir, "infra", schema.TableMemories, v1Mem+".json")
 	if err := os.WriteFile(v1Path, v1Doc(t, schema.TableMemories, map[string]any{"id": v1Mem, "body": "the backups run at noon", "kind": "retrieved", "project_id": modeBProject, "source_kind": "manual"}), 0o600); err != nil {
 		t.Fatal(err)
 	}

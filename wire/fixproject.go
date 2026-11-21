@@ -314,6 +314,9 @@ func (a *App) fixMigrateStep(ctx context.Context, top string, dry, teamLock bool
 		return st, false
 	}
 	_, modeB := FindModeBPointer(top)
+	if !modeB {
+		_, modeB = modeBHealNeeded(top) // devco D-855: an older conversion left it with no project
+	}
 	// personal rows left in a 0.1.17 folder of the local personal store
 	// after its flatten are a migrate step too (personal_store_flatten)
 	orphans := false

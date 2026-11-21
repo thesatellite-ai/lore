@@ -154,6 +154,9 @@ func (V017ModeB) ExportModeB(ctx context.Context, pointerPath string) (_ ModeBEx
 	if err != nil {
 		return ModeBExport{}, err
 	}
+	if out.Project, err = v017ProjectDoc(ctx, db, reg, ptr.ProjectID); err != nil {
+		return ModeBExport{}, err
+	}
 	picked, err := modeBPickRows(ctx, db, reg.Tables(), ptr.ProjectID)
 	if err != nil {
 		return ModeBExport{}, err
@@ -169,6 +172,30 @@ func (V017ModeB) ExportModeB(ctx context.Context, pointerPath string) (_ ModeBEx
 		return ModeBExport{}, err
 	}
 	return out, nil
+}
+
+// v017ProjectDoc is the project's own row of the shared lore.db as a
+// `_v: 1` document. Why (devco D-855): pass 1 picks rows by their
+// project_id column, which the projects table has none of, so the
+// conversion used to move every note but the project itself; the repo
+// then had no project and every plain add and render failed E_NOT_FOUND.
+func v017ProjectDoc(ctx context.Context, db *sql.DB, reg *schema.Registry, projectID string) ([]byte, error) {
+	def, ok := reg.Table(schema.TableProjects)
+	if !ok {
+		return nil, errs.New(errs.Internal, "migrate: the projects table is not defined")
+	}
+	cols, err := v017Columns(ctx, db, v017ProjectsTable)
+	if err != nil {
+		return nil, err
+	}
+	docs, err := v017ReadDocs(ctx, db, def, cols, `"`+row.KeyID+`" = ?1`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if len(docs) != 1 {
+		return nil, errs.New(errs.NotFound, "migrate: project "+projectID+" is not in the shared lore.db")
+	}
+	return docs[0].raw, nil
 }
 
 // readModeBPointerFile parses lore.yaml or the older lore.toml, without

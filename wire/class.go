@@ -42,7 +42,7 @@ func (a *App) RepoClassNote(ctx context.Context) (string, error) {
 // store's class, never the repo store's by default (TEAM-030 add then
 // agrees with an edit of the same row). A named target is StoreClass's.
 func (a *App) CreateClass(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (direction.Class, error) {
-	if target == "" && a.opts.DefaultTarget != nil {
+	if target == "" && (a.opts.DefaultTarget != nil || a.convertedModeBRepo(ctx)) {
 		st, err := a.state(ctx)
 		if err != nil {
 			return "", err

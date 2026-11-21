@@ -102,7 +102,7 @@ func TestModeBRetiredOnRelease(t *testing.T) {
 	storeDir := filepath.Join(shared, "stores", "infra")
 	code, out, errOut := w.lore(t, repo, "migrate", "run", "--dry-run", "--json")
 	dry := decode(out)
-	if code != 0 || dry.Count != 1 || !strings.Contains(out, mbMemA) || strings.Contains(out, mbMemB) {
+	if code != 0 || dry.Count != 2 || !strings.Contains(out, mbMemA) || !strings.Contains(out, mbProjA) || strings.Contains(out, mbMemB) {
 		t.Fatalf("dry run: exit %d\n%s\n%s", code, out, errOut)
 	}
 	if _, serr := os.Stat(storeDir); !os.IsNotExist(serr) {
@@ -116,7 +116,7 @@ func TestModeBRetiredOnRelease(t *testing.T) {
 	if got := decode(out); code != 0 || got.Count != dry.Count || len(got.Steps) != len(dry.Steps) {
 		t.Fatalf("run: exit %d\n%s\n%s", code, out, errOut)
 	}
-	raw, err := os.ReadFile(filepath.Clean(filepath.Join(storeDir, "_store", "memories", mbMemA+".json")))
+	raw, err := os.ReadFile(filepath.Clean(filepath.Join(storeDir, "infra", "memories", mbMemA+".json")))
 	if err != nil || !strings.Contains(string(raw), `"_v": 2`) {
 		t.Fatalf("memory row file: %v\n%s", err, raw)
 	}
@@ -133,6 +133,12 @@ func TestModeBRetiredOnRelease(t *testing.T) {
 	code, out, errOut = w.lore(t, repo, "memory", "list", "--store", wire.ModeBStoreName)
 	if code != 0 || !strings.Contains(out, mbMemA) {
 		t.Fatalf("memory list --store shared: exit %d\n%s\n%s", code, out, errOut)
+	}
+	// devco D-855: the repo is linked to the project folder, so a plain
+	// add (no --to) lands there instead of failing "no lore project"
+	code, out, errOut = w.lore(t, repo, "memory", "add", "--body", "written after the conversion")
+	if code != 0 || !strings.Contains(out, "["+wire.ModeBStoreName+"/infra]") {
+		t.Fatalf("plain memory add after the conversion: exit %d\n%s\n%s", code, out, errOut)
 	}
 	code, out, errOut = w.lore(t, repo, "migrate", "run", "--json")
 	if again := decode(out); code != 0 || again.Count != 0 || len(again.Steps) != 0 {
