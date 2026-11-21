@@ -83,8 +83,34 @@ func (a *App) lensPlaces(st *state) map[string]string {
 		if name == store.SourceRepo {
 			continue
 		}
-		ref, _ := a.sourcePlace(name)
-		out[string(name)] = strings.Trim(opssearch.StoreLabel(ref), "[]")
+		out[string(name)] = a.lensLabel(name)
+	}
+	return out
+}
+
+// lensLabel is the `source` column value of store name's rows in the lens
+// (lensPlaces): the readable place, "acme/web" for a folder.
+func (a *App) lensLabel(name store.Source) string {
+	ref, _ := a.sourcePlace(name)
+	return strings.Trim(opssearch.StoreLabel(ref), "[]")
+}
+
+// lensSourceNames maps the lens's `source` column back to the engine's
+// store names, so a query that finds row ids through a `<table>_all` view
+// (search's metadata and resource field conditions) can load each row
+// from its own store. Why: the column is a label (D-685), not a store
+// name; reading every hit from the repo store dropped the rows of every
+// other store (devco D-796). Two entries on one place are read once by
+// the lens, under the first name, and map to that name here.
+func (a *App) lensSourceNames(eng *engine.Engine) map[string]store.Source {
+	out := map[string]store.Source{string(store.SourceRepo): store.SourceRepo}
+	for _, name := range eng.Stores() {
+		if name == store.SourceRepo {
+			continue
+		}
+		if l := a.lensLabel(name); out[l] == "" {
+			out[l] = name
+		}
 	}
 	return out
 }
