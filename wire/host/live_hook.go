@@ -964,7 +964,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		if liveDisabled() && !skipLiveRun(run) {
 			h.wireWithoutLive(ctx, run) // devco D-224: rows are branch files git merges
 		}
-		return next(ctx)
+		return h.guardSetup(ctx, run, next) // the setup noun skips the live session (liveSkip)
 	}
 	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun, still: liveStill(run), ci: ciRun(run)}
 	if fetchAlways[spec.Name] {

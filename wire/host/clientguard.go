@@ -29,8 +29,21 @@ package host
 //     tracked folder): a change there is a change to the client's files,
 //     which lore never makes, `lore fix --tracked-hooks` included (D-730).
 //
-// A teammate's clone gets the blocks when they run the link there
-// (`lore whoami` says the guards are off until then).
+// A member's setup in their clone installs the same blocks there (devco
+// D-802), and unlike the link it fails closed:
+//
+//	setup apply / join / fix / repair in a client repo with no .lore/
+//	   ─▶ before the step: guard missing and lore may not write it
+//	      (shared or tracked hooks folder, a hook file outside the
+//	      clone) ─▶ E_REFUSED naming why and the step that fixes it;
+//	      nothing of the setup step runs
+//	   ─▶ after the step (a join step may only now make the clone a
+//	      linked client repo): install the missing blocks; a failed
+//	      write ─▶ E_REFUSED naming `lore doctor --fix`
+//
+// A clone made another way (a plain git clone after setup) gets the
+// blocks when the link or `lore doctor --fix` runs there (`lore whoami`
+// says the guards are off until then).
 
 import (
 	"context"
@@ -39,8 +52,11 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsorg "github.com/thesatellite-ai/lore/ops/orgcmd"
+	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -48,6 +64,15 @@ import (
 // a linked client repo with no .lore/ (doctor --fix and fix install it
 // through doctorClientGuard).
 var clientGuardOps = map[string]bool{opsorg.OpLink: true, opslink.OpAdd: true}
+
+// clientGuardSetupOps are the setup operations that make a member's clone
+// ready (devco D-802, owner: a member's setup or join installs the guard
+// in the clone itself): run in a client repo with no .lore/, they install
+// the guard there and stop when it cannot be installed (requireClientGuard),
+// so a member never works in an unguarded clone without being told.
+// setup.run is not one: it sets no repo up (repo_setup.go), its page runs
+// these operations.
+var clientGuardSetupOps = map[string]bool{opssetup.OpApply: true, opssetup.OpJoin: true, opssetup.OpFix: true, opssetup.OpRepair: true}
 
 // clientGuardHookNames are the hooks the client guard needs, in install
 // order: commit-msg checks each commit, pre-push the commits a push sends
@@ -173,42 +198,125 @@ func (h *liveHost) installClientGuard(ctx context.Context, opName string) {
 		h.line("lore: could not install the leak guard in this clone: " + err.Error())
 		return
 	}
-	for _, msg := range h.wireClientGuard(ctx, p) {
+	done, problems := h.wireClientGuard(ctx, p)
+	for _, msg := range problems {
 		h.line("lore: " + msg)
+	}
+	if done != "" {
+		h.line("lore: " + done)
 	}
 }
 
-// wireClientGuard writes the guard's missing blocks into p's hooks folder
-// and marks the clone a client repo; the lines say what was written or
-// why not. It writes nothing into a shared or tracked hooks folder.
-func (h *liveHost) wireClientGuard(ctx context.Context, p clientGuardPlace) []string {
+// clientGuardStopped is the refusal of a setup operation in a client repo
+// whose guard is off and could not be installed: why, then the way out.
+// next is the command that installs it once the cause is gone, as its
+// words (none when the reason already names the lines to add).
+func clientGuardStopped(why string, next ...string) error {
+	msg := "setup stopped: the client repo leak guard is off in this clone and lore could not install it, so commits and pushes here would not be checked for internal notes: " + why
+	e := errs.New(errs.Refused, msg)
+	if len(next) == 0 {
+		return e.WithHint("then run the same lore setup command again")
+	}
+	return e.WithHint("run `"+strings.Join(next, " ")+"` in this clone, then the same lore setup command again").WithNext(next[0], next[1:]...)
+}
+
+// clientGuardFixCommand installs the guard in a clone with no .lore/ once
+// lore may write its hooks folder (doctorClientGuard), as its words.
+var clientGuardFixCommand = []string{"lore", "doctor", "--fix"}
+
+// guardSetup runs next, a setup operation (clientGuardSetupOps) between
+// two requireClientGuard checks (devco D-802): the first stops the step
+// before it writes anything when the clone is already a client repo whose
+// guard lore cannot install, the second installs it in a clone the step
+// only now made one (the join step fetched the org store that links its
+// remote). Any other operation, and a dry run, is next as it is.
+func (h *liveHost) guardSetup(ctx context.Context, run *Run, next Next) (op.Result, error) {
+	name := run.Entry.Spec().Name
+	if !clientGuardSetupOps[name] || dryRun(run) {
+		return next(ctx)
+	}
+	if err := h.requireClientGuard(ctx, name); err != nil {
+		return op.Result{}, err
+	}
+	res, err := next(ctx)
+	if err != nil {
+		return res, err
+	}
+	if gerr := h.requireClientGuard(ctx, name); gerr != nil {
+		return op.Result{}, gerr
+	}
+	return res, nil
+}
+
+// requireClientGuard installs the guard in the clone at h.cfg.WorkDir for
+// a setup operation (clientGuardSetupOps) and fails closed: nil outside a
+// client repo with no .lore/ and in a clone already guarded; E_REFUSED
+// (clientGuardStopped) when lore may not write the hooks folder (shared or
+// tracked: the lines to add), may not write a hook file, or a write
+// failed. Run before the operation (nothing of it runs when the guard
+// cannot go on) and after it (a join step may only then make the clone a
+// linked client repo).
+func (h *liveHost) requireClientGuard(ctx context.Context, opName string) error {
+	if !clientGuardSetupOps[opName] {
+		return nil
+	}
+	p, ok, err := h.clientGuardPlaceOf(ctx)
+	if !ok {
+		return nil
+	}
+	if err != nil {
+		return clientGuardStopped("its hooks folder could not be found: "+err.Error(), clientGuardFixCommand...)
+	}
 	missing := p.missing()
 	if len(missing) == 0 {
 		return nil
 	}
 	if msg := p.notWritten(missing); msg != "" {
-		return []string{msg}
+		return clientGuardStopped(msg)
 	}
-	var out, wrote []string
+	done, problems := h.wireClientGuard(ctx, p)
+	if len(problems) > 0 {
+		return clientGuardStopped(strings.Join(problems, "; "), clientGuardFixCommand...)
+	}
+	if done != "" {
+		h.line("lore: " + done)
+	}
+	return nil
+}
+
+// wireClientGuard writes the guard's missing blocks into p's hooks folder
+// and marks the clone a client repo. done names what was written ("" when
+// nothing was); problems say why a block or the mark is missing (every
+// write lore may not or could not make). It writes nothing into a shared
+// or tracked hooks folder: that is one problem naming the lines to add.
+func (h *liveHost) wireClientGuard(ctx context.Context, p clientGuardPlace) (done string, problems []string) {
+	missing := p.missing()
+	if len(missing) == 0 {
+		return "", nil
+	}
+	if msg := p.notWritten(missing); msg != "" {
+		return "", []string{msg}
+	}
+	var wrote []string
 	for _, n := range missing {
 		marker, lines := clientGuardBlock(n)
 		if err := hookRefused(p.top, p.hooks, n); err != nil {
-			out = append(out, "could not install the leak guard in this clone: "+err.Error()) // D-502
+			problems = append(problems, "could not install the leak guard in this clone: "+err.Error()) // D-502
 			continue
 		}
 		if err := ensureHookBlock(p.hooks, n, marker, withHookPin(hookPinFor(ctx, p.top, p.hooks, false), lines)); err != nil {
-			out = append(out, "could not install the leak guard in this clone: "+err.Error())
+			problems = append(problems, "could not install the leak guard in this clone: "+err.Error())
 			continue
 		}
 		wrote = append(wrote, filepath.Join(p.hooks, n))
 	}
 	if _, err := h.git().Run(ctx, gitref.Invocation{Dir: p.top, Args: []string{"config", "--local", wire.ClientRepoGitKey, clientRepoMarkOn}}); err != nil {
-		out = append(out, "could not mark this clone as a client repo: "+err.Error())
+		problems = append(problems, "could not mark this clone as a client repo: "+err.Error())
 	}
 	if len(wrote) > 0 {
-		out = append(out, "leak guard installed in this clone: "+strings.Join(wrote, ", ")+" (commits and pushes are checked for internal notes; teammates get it when they run the same link in their clone)")
+		done = "leak guard installed in this clone: " + strings.Join(wrote, ", ") + " (commits and pushes are checked for internal notes; teammates get it when they run lore setup or the same link in their clone)"
 	}
-	return out
+	return done, problems
 }
 
 // doctorClientGuard is doctor's check of the guard in a client repo with
@@ -240,8 +348,12 @@ func (h *liveHost) doctorClientGuard(ctx context.Context, fix bool, warn, note f
 		warn("client repo leak guard missing in " + strings.Join(missing, ", ") + " (" + p.hooks + "): commits or pushes here are not checked for internal notes; run `lore doctor --fix` to install it (in .git/hooks only: the repo's files stay unchanged)")
 		return
 	}
-	for _, msg := range h.wireClientGuard(ctx, p) {
+	done, problems := h.wireClientGuard(ctx, p)
+	for _, msg := range problems {
 		warn(msg)
+	}
+	if done != "" {
+		warn(done)
 	}
 }
 
