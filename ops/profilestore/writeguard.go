@@ -157,6 +157,11 @@ func Classify(w engine.GuardedWrite) string {
 // the App as Env).
 type WriteGuard struct{ Env PlaceEnv }
 
+// PlaceLabel names an attached store as the person knows it
+// (engine.PlaceLabeler): a linked folder attached under its bare store
+// name is "<store>/<folder>", so a refusal's --to is the real place.
+func (g WriteGuard) PlaceLabel(src store.Source) string { return labelOf(g.Env, src) }
+
 // GuardWrite refuses a member's change the role rule keeps for admins
 // (see the table above); nothing is written when it does.
 func (g WriteGuard) GuardWrite(ctx context.Context, target store.Source, writes []engine.GuardedWrite) error {

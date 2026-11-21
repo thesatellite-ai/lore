@@ -3,6 +3,7 @@ package settings
 import (
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -15,6 +16,7 @@ import (
 // of stored as a rule that never matches.
 //
 //	agents.person_only       an operation name (task.done), or <operation>.<input field> (meta.edit.merge_into, AGENT_IDENTITY 8.2)
+//	agents.no_write          an agent name (codex) or * for every agent
 //	routing.client_repos     <kind>=<target>, both sides non-empty
 //	meta.scope_aliases       <alias>=<scope label>, both sides non-empty
 //	context.targets          checked by checkContextTargets (tool profiles)
@@ -43,6 +45,16 @@ func (o ops) checkSetItems(d policy.KeyDef, items []string) error {
 			}
 			if !knownOpItem(reg.Registry(), it) {
 				return personOnlyItemErr(it)
+			}
+		}
+	case policy.KeyAgentsNoWrite:
+		// an agent name (codex) or * for every agent: one word, so a
+		// sentence or a flag word (true: "agents may not write") is
+		// refused instead of stored as an item that never matches
+		for _, it := range items {
+			if it != engine.AgentsAll && (!agentNameItem(it) || it == "true" || it == "false") {
+				return errs.New(errs.InvalidInput, "policy set "+string(d.Key)+": "+quote(it)+" is not an agent name").
+					WithHint("an agent name as lore detects it (codex), an agent:<label>, or * for every agent: lore policy set --key " + string(d.Key) + " --value '*' --to <store>/<folder> --yes")
 			}
 		}
 	case policy.KeyClientRoutes, policy.KeyMetaScopeAliases:
@@ -82,4 +94,20 @@ func knownOpItem(reg *op.Registry, it string) bool {
 func personOnlyItemErr(it string) error {
 	return errs.New(errs.InvalidInput, "policy set agents.person_only: "+quote(it)+" is not an operation name").
 		WithHint("list operations as noun.verb (task.done, meta.edit) or an operation and one input field (meta.edit.merge_into); lore help lists the commands")
+}
+
+// agentNameItem: an agents.no_write item is one agent name: a detected
+// tool (codex), a label of LORE_ACTOR=agent:<label>, or a full agent key
+// (agent:auto/codex/1a2b3c); letters, digits and "-_.:/".
+func agentNameItem(it string) bool {
+	if it == "" {
+		return false
+	}
+	for _, r := range it {
+		ok := strings.ContainsRune("-_.:/", r) || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		if !ok {
+			return false
+		}
+	}
+	return true
 }

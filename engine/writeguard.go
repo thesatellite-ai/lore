@@ -63,7 +63,15 @@ type guardKey struct{}
 // guardWrites asks the WriteGuard about changes to st: lore's own upkeep
 // (WithSupportingRefresh) and tables outside guardedTables pass.
 func (e *Engine) guardWrites(ctx context.Context, st Attached, changes []store.Change) error {
-	if e.guard == nil || ctx.Value(guardKey{}) != nil {
+	if ctx.Value(guardKey{}) != nil {
+		return nil
+	}
+	// D-869: agents.no_write of st, for every table (a task or an actor
+	// row in a folder agents may not write is still a write there)
+	if err := e.agentNoWriteChanges(ctx, st, changes); err != nil {
+		return err
+	}
+	if e.guard == nil {
 		return nil
 	}
 	var ws []GuardedWrite

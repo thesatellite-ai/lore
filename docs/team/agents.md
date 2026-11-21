@@ -57,6 +57,8 @@ Your own setup steps are yours, not your agent's: when `lore setup apply` (its i
 
 A team that wants some of this left to people opts in by policy: `lore policy set --key agents.may_manage_people --value false --to <store>/org` keeps roster and profile changes to people, and `lore policy set --key agents.person_only --value gate.approve,task.revoke --to <store>/org` keeps any operation listed to people. Gate approvals never come from `LORE_ACTOR`.
 
+To keep agents out of one folder whatever command they run, list them in that folder's `agents.no_write`: `lore policy set --key agents.no_write --value '*' --to <store>/<folder> --yes` refuses every agent's write into the folder, and `--value codex` (a tool lore detects) or `--value release-bot` (an agent started as `LORE_ACTOR=agent:release-bot`) refuses only that one. Every write into the folder is checked, whatever made it (add, edit, delete, a move or a bulk move into it, an import, a task claim): the agent gets `E_POLICY_DENIED` naming the key, the folder, the policy row and the line a person runs to change the list, and nothing is written. The policy binds only the folder that holds it, not the repos that read the folder, and an agent cannot take itself off the list (removing the policy is a write into the same folder). People are never refused by it; in an org's company folder only an admin changes the folder's policies.
+
 ## Which command when
 
 | Moment | Command | Why |

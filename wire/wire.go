@@ -826,6 +826,24 @@ func (a *App) armEngine(st *state) {
 	st.eng.SetRedactHook(a.redactTask)
 	st.eng.SetWriteGuard(profilestore.WriteGuard{Env: a})
 	st.eng.SetIdentityHolder(a.linkedIdentityHolder) // D-736: a linked repo's repos id lives in the link
+	st.eng.SetAgentSource(a.writerAgent)             // D-869: agents.no_write sees the agent on every path
+}
+
+// writerAgent is the agent a write runs for (engine.AgentSource): the
+// stable key the identity chain resolves with agent detection, "" for a
+// person, a person-only App (`lore api`, a person-credited setup step) or
+// an identity that does not resolve (the write fails on its own then).
+// It resolves from the options, not the opened state, so a write from a
+// folder with no lore project (no row state) is judged the same.
+func (a *App) writerAgent(ctx context.Context) string {
+	if a.personOnly() {
+		return ""
+	}
+	who, err := resolveIdentity(ctx, a.opts)
+	if err != nil {
+		return ""
+	}
+	return who.Agent
 }
 
 // openState is state's open under a.mu. finish reports that this call
