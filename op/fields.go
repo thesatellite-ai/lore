@@ -270,7 +270,8 @@ func fieldsOf(op string, t reflect.Type, dir fieldDirection) []FieldInfo {
 // fieldOf reads one field; skip is true for `json:"-"`.
 func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, bool) {
 	where := fmt.Sprintf("op.Define(%s): field %s", op, sf.Name)
-	jsonTag, hasJSON := sf.Tag.Lookup(tagJSON)
+	tg := parseTags(sf.Tag) // read once: D-825
+	jsonTag, hasJSON := tg.Lookup(tagJSON)
 	if !hasJSON {
 		panic(tagError{where + ": needs a json tag"})
 	}
@@ -281,9 +282,9 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 	if name == "" {
 		panic(tagError{where + ": json tag has no name"})
 	}
-	desc, ok := sharedDesc(sf.Tag.Get(tagDesc))
+	desc, ok := sharedDesc(tg.Get(tagDesc))
 	if !ok {
-		panic(tagError{where + ": desc tag " + sf.Tag.Get(tagDesc) + " names no shared text (op/shareddesc.go)"})
+		panic(tagError{where + ": desc tag " + tg.Get(tagDesc) + " names no shared text (op/shareddesc.go)"})
 	}
 	f := FieldInfo{Name: name, Arg: NoArg, Desc: desc}
 	ft := sf.Type
@@ -300,34 +301,34 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		f.Enum = enumOf(where, ft)
 	}
 	f.Required = !jsonOmits(opts) && f.Type != TypeBool
-	markAfterLookup(where, sf, &f)
-	if a, ok := sf.Tag.Lookup(tagArg); ok {
+	markAfterLookup(where, tg, &f)
+	if a, ok := tg.Lookup(tagArg); ok {
 		n, err := strconv.Atoi(a)
 		if err != nil || n < 0 {
 			panic(tagError{where + ": arg must be a non-negative index"})
 		}
 		f.Arg = n
 	}
-	if r, ok := sf.Tag.Lookup(tagRest); ok {
+	if r, ok := tg.Lookup(tagRest); ok {
 		if r != "true" || f.Arg == NoArg || (f.Type != TypeString && f.Type != TypeStrings && f.Type != TypeList) {
 			panic(tagError{where + `: rest:"true" goes on a positional string, []string or []struct argument`})
 		}
 		f.Rest = true
 		f.Group = f.Type == TypeList
 	}
-	if fl, ok := sf.Tag.Lookup(tagFlag); ok {
+	if fl, ok := tg.Lookup(tagFlag); ok {
 		if !flagName.MatchString(fl) {
 			panic(tagError{where + ": flag " + strconv.Quote(fl) + " is not lowercase-with-hyphens"})
 		}
 		f.Flag = fl
 	}
-	if ao, ok := sf.Tag.Lookup(tagArgOf); ok {
+	if ao, ok := tg.Lookup(tagArgOf); ok {
 		if f.Arg == NoArg || f.Flag != "" || !flagName.MatchString(ao) {
 			panic(tagError{where + `: argof goes on a positional with no flag and names another field's flag`})
 		}
 		f.ArgOf = ao
 	}
-	if al, ok := sf.Tag.Lookup(tagAlias); ok {
+	if al, ok := tg.Lookup(tagAlias); ok {
 		if f.Flag == "" {
 			panic(tagError{where + `: alias goes with a flag`})
 		}
@@ -338,20 +339,20 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 			f.Aliases = append(f.Aliases, a)
 		}
 	}
-	if ne, ok := sf.Tag.Lookup(tagNonEmpty); ok {
+	if ne, ok := tg.Lookup(tagNonEmpty); ok {
 		if (f.Flag == "" && f.Arg == NoArg) || ne == "" || f.Type != TypeString {
 			panic(tagError{where + `: nonempty goes with a string flag and names what to give`})
 		}
 		f.NonEmpty = ne
 	}
-	if mn, ok := sf.Tag.Lookup(tagMin); ok {
+	if mn, ok := tg.Lookup(tagMin); ok {
 		n, err := strconv.ParseInt(mn, 10, 64)
 		if err != nil || f.Flag == "" || (f.Type != TypeInt && f.Type != TypeUint) {
 			panic(tagError{where + `: min goes with an int flag and is an integer`})
 		}
 		f.Min, f.HasMin = n, true
 	}
-	if sh, ok := sf.Tag.Lookup(tagShort); ok {
+	if sh, ok := tg.Lookup(tagShort); ok {
 		if f.Flag == "" || !shortName.MatchString(sh) {
 			panic(tagError{where + `: short goes with a flag and is one lowercase letter`})
 		}
@@ -360,7 +361,7 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 	if dir == dirInput && (f.Type == TypeObject || (f.Type == TypeList && !f.Group)) {
 		panic(tagError{where + `: inputs nest structs only as a repeated group (a []struct positional with rest:"true")`})
 	}
-	if ui, ok := sf.Tag.Lookup(tagUI); ok {
+	if ui, ok := tg.Lookup(tagUI); ok {
 		f.UI = parseUI(where, ui)
 	}
 	return f, false

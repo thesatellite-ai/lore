@@ -11,7 +11,6 @@ package op
 //	  value itself, after the lookup ("missing required field <name>")
 
 import (
-	"reflect"
 	"strings"
 )
 
@@ -22,11 +21,11 @@ const (
 	requiredAfterLookup = "after-lookup"
 )
 
-// markAfterLookup reads the `required` tag of sf into f. Any other value
-// is a programmer error and stops the binary at Define time, like every
-// other bad tag.
-func markAfterLookup(where string, sf reflect.StructField, f *FieldInfo) {
-	v, ok := sf.Tag.Lookup(tagRequired)
+// markAfterLookup reads the `required` tag of a field (its parsed tag tg)
+// into f. Any other value is a programmer error and stops the binary at
+// Define time, like every other bad tag.
+func markAfterLookup(where string, tg tagSet, f *FieldInfo) {
+	v, ok := tg.Lookup(tagRequired)
 	if !ok {
 		return
 	}
@@ -36,7 +35,7 @@ func markAfterLookup(where string, sf reflect.StructField, f *FieldInfo) {
 	if f.Type == TypeBool {
 		panic(tagError{where + ": a bool field is never required (false is a value)"})
 	}
-	if !strings.Contains(sf.Tag.Get(tagJSON), ",omitempty") {
+	if !strings.Contains(tg.Get(tagJSON), ",omitempty") {
 		panic(tagError{where + `: required:"after-lookup" goes with omitempty (the decoder must not refuse it before the lookup)`})
 	}
 	f.Required, f.AfterLookup = true, true

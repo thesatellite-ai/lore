@@ -62,6 +62,15 @@ func driftRoot(t *testing.T) *cobra.Command {
 // shared driftRoot.
 func newDriftRoot(t *testing.T) *cobra.Command {
 	t.Helper()
+	root := newDriftTree(t)
+	refuseEnvDB(root)
+	return root
+}
+
+// newDriftTree is newDriftRoot before its last step (refuseEnvDB), for the
+// test that checks what that step does to the tree.
+func newDriftTree(t *testing.T) *cobra.Command {
+	t.Helper()
 	wd, home := t.TempDir(), t.TempDir()
 	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
 	clk := liveClock()
@@ -96,7 +105,6 @@ func newDriftRoot(t *testing.T) *cobra.Command {
 	root.InitDefaultHelpCmd()
 	root.InitDefaultCompletionCmd()
 	classifyUsageErrors(root) // as run does, after the last command is added
-	refuseEnvDB(root)
 	return root
 }
 

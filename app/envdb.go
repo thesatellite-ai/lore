@@ -26,7 +26,7 @@ func refuseEnvDB(root *cobra.Command) {
 	for _, sub := range root.Commands() {
 		refuseEnvDB(sub)
 	}
-	if root.NonInheritedFlags().Lookup(hosthooks.FlagDB) == nil {
+	if !ownsFlag(root, hosthooks.FlagDB) {
 		return
 	}
 	inner := root.PreRunE
@@ -40,4 +40,15 @@ func refuseEnvDB(root *cobra.Command) {
 		}
 		return nil
 	}
+}
+
+// ownsFlag reports whether cmd defines the flag name itself (as a local or
+// a persistent flag), which is what cmd.NonInheritedFlags().Lookup(name)
+// answers before cobra parses. Why not that call (devco D-825): it merges
+// every parent's persistent flags into each command's flag set, and run
+// asked it of every command in the tree on every process, about 7 ms of
+// a 40 ms `lore --version`. Only an own flag counts: a parent's persistent
+// --db would be inherited, and no command declares one.
+func ownsFlag(cmd *cobra.Command, name string) bool {
+	return cmd.Flags().Lookup(name) != nil || cmd.PersistentFlags().Lookup(name) != nil
 }
