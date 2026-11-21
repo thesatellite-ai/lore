@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// The bars of gate G-1 (hunt beats README, owner 2026-11-21 raised bar).
+// The bars of the recall gate (the raised bar of 2026-11-21).
 const (
 	BarWarm      = 50 * time.Millisecond  // every warm lore call under this
 	BarCold      = 300 * time.Millisecond // every cold lore call under this
@@ -191,7 +191,7 @@ func Report(info RunInfo, rs []Result) string {
 	var b strings.Builder
 	s := Summarize(rs)
 	misses := Misses(rs)
-	fmt.Fprintf(&b, "# lore beats grep: recall gate (G-1)\n\n")
+	fmt.Fprintf(&b, "# lore beats grep: recall gate\n\n")
 	fmt.Fprintf(&b, "Run %s; now pinned at %s; seed %d; %d rows in the store (loaded in %s); %s; grep arm tool: %s.\n\n", info.Started.UTC().Format(time.RFC3339), info.Now.Format(time.RFC3339), info.Seed, info.Rows, info.Load.Round(time.Second), info.Lore, info.GrepTool)
 	fmt.Fprintf(&b, "Summary: `%s`\n\n", s.Line())
 	if len(misses) == 0 {

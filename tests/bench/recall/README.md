@@ -58,7 +58,7 @@ The grep arm runs the commands a careful agent would run, one by one with bash i
 
 Per question: lore calls (always 1), the cold wall time (the first call after the store changed: before each question one feed row arrives from the side clone, as a sync brings it), the warm wall time (the same call again), the characters lore printed (stdout + stderr of the warm call), correctness; for grep its calls, wall time, characters and correctness. The first read after loading the store (every folder's cache built from nothing) is timed and logged but is not a question.
 
-The run passes when every bar holds (hunt beats README, owner 2026-11-21, raised bar):
+The run passes when every bar holds (the raised bar of 2026-11-21):
 
 - every question: 1 lore call, warm under 50 ms, cold under 300 ms, lore's answer correct (50/50, the 20 harder ones included);
 - total characters lore printed fewer than grep's;
