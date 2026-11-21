@@ -250,17 +250,31 @@ func TestBenchRecall(t *testing.T) {
 		r := Result{Q: q}
 		touchStore(t, e, clone, side, bare, i)
 		cold := e.run(e.limit, q.Lore...)
-		warm := e.run(e.limit, q.Lore...)
-		r.Lore.Calls, r.Lore.Cold, r.Lore.Warm, r.Lore.Chars, r.Lore.Exit = 1, cold.wall, warm.wall, len(warm.out), warm.code
-		r.Lore.ColdCPU, r.Lore.WarmCPU = cold.cpu, warm.cpu
+		// the warm time is the median of WarmRepeats warm calls (H-106):
+		// one call's wall time on a shared box can include waiting for a
+		// core; the answer is graded from the first warm call, and any
+		// warm call that fails or is stopped makes the answer wrong
+		warms := make([]call, WarmRepeats)
+		walls, cpus := make([]time.Duration, WarmRepeats), make([]time.Duration, WarmRepeats)
+		for k := range warms {
+			warms[k] = e.run(e.limit, q.Lore...)
+			walls[k], cpus[k] = warms[k].wall, warms[k].cpu
+		}
+		warm := warms[0]
+		r.Lore.Calls, r.Lore.Cold, r.Lore.Warm, r.Lore.WarmRuns, r.Lore.Chars, r.Lore.Exit = 1, cold.wall, WarmOf(walls), walls, len(warm.out), warm.code
+		r.Lore.ColdCPU, r.Lore.WarmCPU = cold.cpu, WarmOf(cpus)
 		r.Lore.Correct, r.Lore.Missing = Grade(q, warm.out)
-		switch {
-		case warm.timedOut:
-			r.Lore.Correct = false
-			r.Lore.Missing = append([]string{fmt.Sprintf("stopped after %s", e.limit)}, r.Lore.Missing...)
-		case warm.code != 0:
-			r.Lore.Correct = false
-			r.Lore.Missing = append([]string{fmt.Sprintf("exit %d: %s", warm.code, firstLine(warm.out))}, r.Lore.Missing...)
+		for _, w := range warms {
+			if w.timedOut {
+				r.Lore.Correct = false
+				r.Lore.Missing = append([]string{fmt.Sprintf("stopped after %s", e.limit)}, r.Lore.Missing...)
+				break
+			}
+			if w.code != 0 {
+				r.Lore.Correct, r.Lore.Exit = false, w.code
+				r.Lore.Missing = append([]string{fmt.Sprintf("exit %d: %s", w.code, firstLine(w.out))}, r.Lore.Missing...)
+				break
+			}
 		}
 		// the accuracy grade reads the same call's structured answer (a
 		// third run, not timed: the agent's one call is the text one)
@@ -273,7 +287,7 @@ func TestBenchRecall(t *testing.T) {
 		default:
 			r.Lore.Acc = GradeAccuracy(q, items)
 		}
-		t.Logf("%s cold %d ms (cpu %d), warm %d ms (cpu %d), correct %v, recall@3 %v, top-1 %v, stale %d, noise %d %s", q.ID, cold.wall.Milliseconds(), cold.cpu.Milliseconds(), warm.wall.Milliseconds(), warm.cpu.Milliseconds(), r.Lore.Correct, r.Lore.Acc.Recall, r.Lore.Acc.Top1, len(r.Lore.Acc.Stale), r.Lore.Acc.Noise, r.Lore.AccErr)
+		t.Logf("%s cold %d ms (cpu %d), warm %d ms (runs %s, cpu %d), correct %v, recall@3 %v, top-1 %v, stale %d, noise %d %s", q.ID, cold.wall.Milliseconds(), cold.cpu.Milliseconds(), r.Lore.Warm.Milliseconds(), runsMS(r.Lore), r.Lore.WarmCPU.Milliseconds(), r.Lore.Correct, r.Lore.Acc.Recall, r.Lore.Acc.Top1, len(r.Lore.Acc.Stale), r.Lore.Acc.Noise, r.Lore.AccErr)
 		var all strings.Builder
 		for _, c := range q.Grep {
 			cmd := exec.Command("bash", "-c", c)
