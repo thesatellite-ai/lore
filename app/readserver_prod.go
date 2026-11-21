@@ -17,3 +17,6 @@ func noteReadServer(string) {}
 
 // readServerTestDie makes the server stop mid-command, in test builds only.
 func readServerTestDie([]string) string { return readServerDieNo }
+
+// noteServerHeap reports the server's live heap, in test builds only.
+func noteServerHeap([]string) {}

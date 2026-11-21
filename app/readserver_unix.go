@@ -58,9 +58,19 @@ const (
 	readMaxRequest = 4 << 20
 	// readGoByte is the CLI's go after the server accepted.
 	readGoByte = 'g'
-	// readServerMemLimit is the server's soft memory limit: it collects at
-	// the CLI's rate (gcPercent) until its heap nears this, then more often.
-	readServerMemLimit = 768 << 20
+	// readServerGCPercent is the server's GOGC. The CLI's gcPercent (400)
+	// lets a short-lived process skip most collections; a process that
+	// lives for an hour would hold five times its live heap that way
+	// (devco:D-845: ~600 MB RSS), so the server collects at Go's default.
+	readServerGCPercent = 100
+	// readServerMemLimit is the server's soft memory limit: past it the
+	// server collects more often than readServerGCPercent asks.
+	readServerMemLimit = 192 << 20
+	// readServerMaxLive is the live heap past which the server exits after
+	// the call it just served (the next call starts a fresh one): what it
+	// keeps across calls (lenses, objects, decoded rows) is bounded, so
+	// this only ever fires on growth nobody bounded (devco:D-845).
+	readServerMaxLive = 128 << 20
 )
 
 // errNotServed is why the CLI runs a command one-shot after asking.
@@ -367,7 +377,7 @@ func serveReads(opts []Option) int {
 		version = o.version
 	}
 	setupUI = o.ui
-	debug.SetGCPercent(gcPercent)
+	debug.SetGCPercent(readServerGCPercent)
 	debug.SetMemoryLimit(readServerMemLimit)
 	home, err := lorehome.Resolve()
 	if err != nil {
@@ -460,7 +470,7 @@ func (s *readServer) loop() {
 			return // idle, closed by watch, or broken
 		}
 		s.handle(conn)
-		if time.Since(s.started) > readServerMaxLife {
+		if time.Since(s.started) > readServerMaxLife || heapLive() > readServerMaxLive {
 			return
 		}
 	}
@@ -521,6 +531,7 @@ func (s *readServer) handle(conn *net.UnixConn) {
 	}
 	code, pipe := s.runFor(conn, req, fds)
 	reply(readReply{Served: true, Code: code, Pipe: pipe})
+	noteServerHeap(req.Env)
 }
 
 // readRequestFrom reads the length-prefixed request and the stdio file

@@ -90,16 +90,25 @@ var exeID = sync.OnceValue(func() string {
 	return p + "|" + strconv.FormatInt(fi.Size(), 10) + "|" + strconv.FormatInt(fi.ModTime().UnixNano(), 10)
 })
 
-// regIDs keeps regID's answer per registry.
-var regIDs sync.Map // *schema.Registry → string
+// lastRegID keeps regID's answer for the last registry it named: one read
+// stamps every folder cache it opens (five on a usual machine) with the
+// same registry. One entry, never a map per registry: each command builds
+// its own registry, and a map keyed by it kept every command's registry
+// for the life of the process, so the local read server grew ~150 KB a
+// call (devco:D-845, the same rule as basePlans).
+var lastRegID struct {
+	sync.Mutex
+	reg *schema.Registry
+	id  string
+}
 
 // regID names a registry by its tables and their fields, without building
 // any table plan (the executable already fixes how plans are built).
 func regID(reg *schema.Registry) string {
-	if v, ok := regIDs.Load(reg); ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
+	lastRegID.Lock()
+	defer lastRegID.Unlock()
+	if lastRegID.reg == reg && lastRegID.id != "" {
+		return lastRegID.id
 	}
 	h := sha256.New()
 	for _, def := range reg.Tables() {
@@ -110,7 +119,7 @@ func regID(reg *schema.Registry) string {
 		_, _ = h.Write([]byte{'\n'})
 	}
 	s := hex.EncodeToString(h.Sum(nil))
-	regIDs.Store(reg, s)
+	lastRegID.reg, lastRegID.id = reg, s
 	return s
 }
 

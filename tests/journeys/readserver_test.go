@@ -13,6 +13,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -156,6 +158,84 @@ func TestJourneyReadServerEndsLikeOneShotOnAClosedPipe(t *testing.T) {
 		// one-shot would have logged "one-shot" first.
 		if b, _ := os.ReadFile(log); string(b) != "served\n" {
 			t.Errorf("want the three piped reads served (no one-shot line) and the read after them served, the log says:\n%s", b)
+		}
+	})
+}
+
+// TestJourneyReadServerKeepsItsMemoryBounded (devco:D-845, bug hunt
+// H-102): the read server lives for up to an hour and served ~600 MB RSS
+// after a few hundred calls: each call's schema registry stayed held by a
+// process-wide memo keyed by it. Over 160 served reads (asks, searches,
+// sql, lists) the server's live heap after a full collection must stay
+// where it was once warm, and every call must be served by the one server.
+func TestJourneyReadServerKeepsItsMemoryBounded(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	uma := w.Persona("Uma Reyes", "uma@acme-co.example")
+	lap := uma.Laptop()
+	me := w.Remote("github.com/uma-reyes/lore-me")
+	w.Step("day1/notes", func() {
+		lap.Lore(lap.Home, "store", "init", "--name", "me", "--url", me.SSHURL(), "--yes").OK(t)
+		lap.Lore(lap.Home, "store", "folder", "add", "me", "work").OK(t)
+		for _, b := range []string{"comet beta has 4 teams.", "comet ships on fridays.", "Decision: comet bills monthly because finance asked."} {
+			lap.Lore(lap.Home, "memory", "add", "--body", b, "--to", "me/work", "--yes").OK(t)
+		}
+	})
+	w.Step("day1/many-served-reads-stay-small", func() {
+		dir := t.TempDir()
+		log, heap := filepath.Join(dir, "read-server.log"), filepath.Join(dir, "heap")
+		sock := lap.LorePath("run", "read.sock")
+		lap.SetEnv("LORE_READ_SERVER", "1")
+		lap.SetEnv("LORE_TEST_READ_SERVER_LOG", log)
+		defer func() {
+			lap.SetEnv("LORE_READ_SERVER", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_LOG", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_HEAP", "")
+			_ = os.Remove(sock) // the server stops once its socket is gone
+		}()
+		lap.Lore(lap.Home, "search", "comet").OK(t) // starts the server
+		for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+			if _, err := os.Stat(sock); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no read server listens on %s", sock)
+			}
+		}
+		_ = os.Remove(log)
+		lap.SetEnv("LORE_TEST_READ_SERVER_HEAP", heap)
+		calls := [][]string{
+			{"ask", "--store", "me", "--query", "what is the status of comet"},
+			{"search", "fridays"},
+			{"sql", "--store", "me", "--query", "SELECT count(*) FROM memories"},
+			{"ask", "--store", "me", "--query", "what did we decide about billing"},
+			{"memory", "list", "--store", "me"},
+		}
+		const n, warm = 160, 40
+		for i := range n {
+			lap.Lore(lap.Home, calls[i%len(calls)]...).OK(t)
+		}
+		if b, _ := os.ReadFile(log); strings.Count(string(b), "served\n") != n || strings.Contains(string(b), "one-shot") {
+			t.Fatalf("want all %d reads served by the one server, the log says:\n%s", n, b)
+		}
+		raw, _ := os.ReadFile(heap)
+		var live []int
+		for f := range strings.FieldsSeq(string(raw)) {
+			v, err := strconv.Atoi(f)
+			if err != nil {
+				t.Fatalf("heap file holds %q", f)
+			}
+			live = append(live, v)
+		}
+		if len(live) != n {
+			t.Fatalf("the server reported its heap after %d of %d calls", len(live), n)
+		}
+		const slack = 6 << 20 // what one more kept lens or a memo refill may add
+		base := slices.Max(live[warm-len(calls) : warm])
+		top := slices.Max(live[warm:])
+		t.Logf("live heap once warm %d KB, highest over the next %d calls %d KB", base>>10, n-warm, top>>10)
+		if top > base+slack {
+			t.Errorf("the read server's live heap grew from %d KB once warm (call %d) to %d KB over %d more calls: something it keeps across calls has no bound", base>>10, warm, top>>10, n-warm)
 		}
 	})
 }

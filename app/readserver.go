@@ -25,12 +25,14 @@ package app
 // client's working directory, environment, arguments, parent pid (agent
 // detection) and its three stdio file descriptors in place of its own, so
 // the output is the same byte for byte; it serves one command at a time
-// and exits after readServerIdle without a call, when its socket is
-// removed, or when the lore binary changes.
+// and exits after readServerIdle without a call, when its live heap passes
+// readServerMaxLive, when its socket is removed, or when the lore binary
+// changes.
 
 import (
 	"os"
 	"path/filepath"
+	"runtime/metrics"
 	"slices"
 	"strings"
 	"time"
@@ -195,4 +197,15 @@ func configTurnsOff(path string) bool {
 func readServerPaths(home string) (dir, sock string) {
 	dir = filepath.Join(home, readServerDir)
 	return dir, filepath.Join(dir, readServerSock)
+}
+
+// heapLive is the live heap as of the last collection
+// (/gc/heap/live:bytes); 0 when the runtime does not report it.
+func heapLive() uint64 {
+	m := []metrics.Sample{{Name: "/gc/heap/live:bytes"}}
+	metrics.Read(m)
+	if m[0].Value.Kind() != metrics.KindUint64 {
+		return 0
+	}
+	return m[0].Value.Uint64()
 }

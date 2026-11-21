@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -441,6 +443,36 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		}
 		if b, _ := os.ReadFile(log); string(b) != "lost\n" {
 			t.Errorf("[O D-838] the call whose server died mid-print must not run again one-shot, the log says:\n%s", b)
+		}
+		// devco:D-845 (bug hunt H-102): the server grew to ~600 MB RSS after
+		// a few hundred calls (each call's schema registry stayed held by a
+		// process-wide memo). Once warm, its live heap after a full
+		// collection stays where it was over many more asks.
+		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "")
+		_ = os.Remove(sock)
+		_ = os.Remove(filepath.Join(ada.Home, ".lore", "run", "read.start"))
+		ask(qs[0])
+		started()
+		heap := filepath.Join(t.TempDir(), "heap")
+		ada.SetEnv("LORE_TEST_READ_SERVER_HEAP", heap)
+		defer ada.SetEnv("LORE_TEST_READ_SERVER_HEAP", "")
+		const calls, warm = 90, 20
+		for i := range calls {
+			ask(qs[i%len(qs)]).OK(t)
+		}
+		var live []int
+		raw, _ := os.ReadFile(heap)
+		for _, f := range strings.Fields(string(raw)) {
+			if v, err := strconv.Atoi(f); err == nil {
+				live = append(live, v)
+			}
+		}
+		if len(live) != calls {
+			t.Fatalf("[O D-845] the server reported its heap after %d of %d asks (not all served by one server)", len(live), calls)
+		}
+		base, top := slices.Max(live[warm-len(qs):warm]), slices.Max(live[warm:])
+		if top > base+4<<20 {
+			t.Errorf("[O D-845] the read server's live heap grew from %d KB once warm to %d KB over %d more asks: something it keeps across calls has no bound", base>>10, top>>10, calls-warm)
 		}
 	})
 	s.Step("personal-store/sql-reads-the-tables-it-names", func() {

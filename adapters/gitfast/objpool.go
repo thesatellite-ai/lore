@@ -14,8 +14,9 @@ package gitfast
 //
 // A kept store is dropped (and its packs closed) when one of its packs is
 // gone (a repack: its open file would pin the deleted pack's disk space),
-// when the alternates file changed, or when it holds more than
-// objPoolMaxObjects decoded objects.
+// when the alternates file changed, or when the objects it decoded hold
+// more than objPoolMaxBytes (devco:D-845: a count of 200k objects let one
+// store keep hundreds of MB in the read server).
 
 import (
 	"os"
@@ -24,9 +25,11 @@ import (
 	"sync"
 )
 
-// objPoolMaxObjects bounds the decoded objects one kept store holds
-// before it is dropped and opened afresh.
-const objPoolMaxObjects = 200_000
+// objPoolMaxBytes bounds the content bytes of the decoded objects one kept
+// store holds before it is dropped and opened afresh: room for every row
+// document of a store of several thousand rows (~25 MB for 6,000), small
+// enough that a background process stays small.
+const objPoolMaxBytes = 48 << 20
 
 // objPool is the process's kept object stores (off unless
 // ShareObjectStores turned it on).
@@ -89,11 +92,11 @@ func openObjectStore(dir string) (s *objectStore, shared bool, err error) {
 }
 
 // current reports whether every pack the store opened is still there and
-// it holds no more than objPoolMaxObjects decoded objects.
+// its decoded objects hold no more than objPoolMaxBytes.
 func (s *objectStore) current() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.cache) > objPoolMaxObjects {
+	if s.bytes > objPoolMaxBytes {
 		return false
 	}
 	for _, p := range s.packs {

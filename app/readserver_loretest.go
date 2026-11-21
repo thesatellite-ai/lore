@@ -4,7 +4,10 @@ package app
 
 import (
 	"os"
+	"runtime"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -24,6 +27,10 @@ const (
 	// mid-call: 1 after it accepted the call, before it runs it; printing
 	// after it printed the start of an answer (a server killed mid-print).
 	envReadServerDie = "LORE_TEST_READ_SERVER_DIE"
+	// envReadServerHeap in a client's environment names a file the server
+	// appends its live heap to (bytes, after a full collection) once it
+	// served the call: a test reads whether what it keeps stays bounded.
+	envReadServerHeap = "LORE_TEST_READ_SERVER_HEAP"
 )
 
 // readServerIdleFor is LORE_TEST_READ_SERVER_IDLE when set, else
@@ -58,4 +65,25 @@ func readServerTestDie(env []string) string {
 		return readServerDiePrinting
 	}
 	return readServerDieNo
+}
+
+// noteServerHeap appends the live heap after a full collection to the
+// file the client's LORE_TEST_READ_SERVER_HEAP names (devco:D-845).
+func noteServerHeap(env []string) {
+	p := ""
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, envReadServerHeap+"="); ok {
+			p = v
+		}
+	}
+	if p == "" {
+		return
+	}
+	runtime.GC()
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	_, _ = f.WriteString(strconv.FormatUint(heapLive(), 10) + "\n")
+	_ = f.Close()
 }
