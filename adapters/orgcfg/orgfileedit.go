@@ -60,7 +60,7 @@ func (g *GitLinks) EditOrgFile(ctx context.Context, e OrgFileEdit) (OrgFileResul
 			raw = acceptedOrgRaw(ctx, dir, tip, e.OrgFolder, raw)
 			body, changed, serr := setOrgFileList(raw, e.Key, e.Values)
 			if serr != nil {
-				return nil, fmt.Errorf("orgcfg: %s in %s: %w", path, norm, serr)
+				return nil, orgFileError(path, norm, serr)
 			}
 			if !changed {
 				res.Existed = true
@@ -76,14 +76,10 @@ func (g *GitLinks) EditOrgFile(ctx context.Context, e OrgFileEdit) (OrgFileResul
 // to values (removed when values is empty); changed is false when raw
 // already held exactly that list. Every other key keeps its place.
 func setOrgFileList(raw []byte, key string, values []string) (out []byte, changed bool, err error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
+	doc, top, err := orgFileMapping(raw)
+	if err != nil {
 		return nil, false, err
 	}
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil, false, fmt.Errorf("not a mapping")
-	}
-	top := doc.Content[0]
 	at := -1
 	var cur []string
 	for i := 0; i+1 < len(top.Content); i += 2 {
@@ -110,7 +106,7 @@ func setOrgFileList(raw []byte, key string, values []string) (out []byte, change
 	default:
 		top.Content = append(top.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, seq)
 	}
-	out, err = yaml.Marshal(&doc)
+	out, err = yaml.Marshal(doc)
 	return out, true, err
 }
 
@@ -119,14 +115,10 @@ func setOrgFileList(raw []byte, key string, values []string) (out []byte, change
 // changed is false when raw already declares floor or higher. Every other
 // key keeps its place (devco:D-735).
 func raiseOrgFileFloor(raw []byte, floor string) (out []byte, changed bool, err error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
+	doc, top, err := orgFileMapping(raw)
+	if err != nil {
 		return nil, false, err
 	}
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil, false, fmt.Errorf("not a mapping")
-	}
-	top := doc.Content[0]
 	val := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: floor}
 	for i := 0; i+1 < len(top.Content); i += 2 {
 		if top.Content[i].Value != orgFileKeyMinLore {
@@ -137,11 +129,11 @@ func raiseOrgFileFloor(raw []byte, floor string) (out []byte, changed bool, err 
 			return nil, false, nil
 		}
 		top.Content[i+1] = val
-		out, err = yaml.Marshal(&doc)
+		out, err = yaml.Marshal(doc)
 		return out, true, err
 	}
 	top.Content = append(top.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: orgFileKeyMinLore}, val)
-	out, err = yaml.Marshal(&doc)
+	out, err = yaml.Marshal(doc)
 	return out, true, err
 }
 

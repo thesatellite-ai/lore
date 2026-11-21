@@ -93,7 +93,7 @@ func (g *GitLinks) RaiseStoreFloor(ctx context.Context, e StoreFloorEdit) (Store
 				}
 				body, changed, ferr := rowfs.RaiseFloorDoc(raw, p, e.Floor)
 				if ferr != nil {
-					return nil, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, ferr)
+					return nil, orgFileError(p, norm, ferr)
 				}
 				if changed {
 					out[p] = body
@@ -103,7 +103,7 @@ func (g *GitLinks) RaiseStoreFloor(ctx context.Context, e StoreFloorEdit) (Store
 			if e.OrgFile {
 				p, body, changed, ferr := orgFileFloorChange(ctx, repo, dir, tip, e.OrgFolder, e.Floor)
 				if ferr != nil {
-					return nil, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, ferr)
+					return nil, orgFileError(p, norm, ferr)
 				}
 				if changed {
 					out[p], res.OrgFile = body, true

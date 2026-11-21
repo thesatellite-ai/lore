@@ -579,6 +579,9 @@ const OrgFileKept = rowfs.OrgFileKeptName
 
 // orgDefaultsDoc is the part of lore-org.yaml read here.
 type orgDefaultsDoc struct {
+	// Format is lore_org: a newer format is refused (orgfileformat.go)
+	// rather than its defaults guessed at.
+	Format   *int `yaml:"lore_org,omitempty"`
 	Defaults struct {
 		ClientRepos map[string]string `yaml:"client_repos,omitempty"`
 	} `yaml:"defaults,omitempty"`
@@ -608,20 +611,22 @@ func (g *GitLinks) ClientRepoDefaults(ctx context.Context, o *orgconf.Org) (map[
 	if !ok {
 		return nil, nil
 	}
-	var raw string
-	found := false
+	var raw, at string
 	for _, p := range orgFilePaths(sc.OrgFolder) {
 		if raw, err = gitRun(ctx, "-C", dir, "cat-file", "blob", tip+":"+p); err == nil {
-			found = true
+			at = p
 			break
 		}
 	}
-	if !found {
+	if at == "" {
 		return nil, nil // no lore-org.yaml (or migrated): no team defaults
 	}
 	var doc orgDefaultsDoc
 	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
 		return nil, fmt.Errorf("orgcfg: %s of %s: %w", orgDefaultsFile, o.Name, err)
+	}
+	if err := CheckOrgFileFormat(doc.Format); err != nil {
+		return nil, orgFileError(at, norm, err)
 	}
 	return doc.Defaults.ClientRepos, nil
 }

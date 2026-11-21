@@ -56,7 +56,7 @@ func (g *GitLinks) RemoveOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (O
 			raw = acceptedOrgRaw(ctx, dir, tip, a.OrgFolder, raw)
 			body, listed, derr := dropOrgFileStore(raw, want)
 			if derr != nil {
-				return nil, fmt.Errorf("orgcfg: %s in %s: %w", path, norm, derr)
+				return nil, orgFileError(path, norm, derr)
 			}
 			res.Existed = listed
 			if !listed {
@@ -71,14 +71,10 @@ func (g *GitLinks) RemoveOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (O
 // dropOrgFileStore is raw (a lore-org.yaml) without the stores: entry of
 // normalised url want; listed is false (and out nil) when no entry has it.
 func dropOrgFileStore(raw []byte, want string) (out []byte, listed bool, err error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
+	doc, top, err := orgFileMapping(raw)
+	if err != nil {
 		return nil, false, err
 	}
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil, false, fmt.Errorf("not a mapping")
-	}
-	top := doc.Content[0]
 	for i := 0; i+1 < len(top.Content); i += 2 {
 		if top.Content[i].Value != orgFileStoresKey || top.Content[i+1].Kind != yaml.SequenceNode {
 			continue
@@ -91,7 +87,7 @@ func dropOrgFileStore(raw []byte, want string) (out []byte, listed bool, err err
 			}
 			if n, nerr := repourl.NormalizeStore(cur.URL); nerr == nil && n == want {
 				stores.Content = append(stores.Content[:j:j], stores.Content[j+1:]...)
-				out, err = yaml.Marshal(&doc)
+				out, err = yaml.Marshal(doc)
 				return out, true, err
 			}
 		}

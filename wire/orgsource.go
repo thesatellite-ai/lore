@@ -85,19 +85,23 @@ func orgsOfStores(cfg *orgconf.Config, urls map[store.Source]string) map[string]
 // machine (the org folder's store, else the first): ok is false when the
 // store has no local copy or no lore-org.yaml.
 func orgSuggestionLocal(ctx context.Context, home string, cfg *orgconf.Config, o *orgconf.Org) (orgcfg.Suggestion, bool) {
+	sg, err := orgSuggestionLocalErr(ctx, home, cfg, o)
+	return sg, err == nil && sg.Version != ""
+}
+
+// orgSuggestionLocalErr is orgSuggestionLocal with the reason a file was
+// not read: the doctor names a lore-org.yaml of a newer format (E_OLD_LORE,
+// devco:D-873) instead of skipping the org without a word.
+func orgSuggestionLocalErr(ctx context.Context, home string, cfg *orgconf.Config, o *orgconf.Org) (orgcfg.Suggestion, error) {
 	sc := o.OrgFolderStore()
 	if sc == nil {
 		if len(o.Stores) == 0 {
-			return orgcfg.Suggestion{}, false
+			return orgcfg.Suggestion{}, nil
 		}
 		sc = &o.Stores[0]
 	}
 	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: home, Config: cfg}
-	sg, err := g.LocalSuggestion(ctx, sc.URL, sc.Branch)
-	if err != nil || sg.Version == "" {
-		return orgcfg.Suggestion{}, false
-	}
-	return sg, true
+	return g.LocalSuggestion(ctx, sc.URL, sc.Branch)
 }
 
 // refreshOrgSources is the automatic refresh (see the file comment). Best
@@ -339,8 +343,17 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 	}
 	for i := range cfg.Orgs {
 		o := &cfg.Orgs[i]
-		sg, ok := orgSuggestionLocal(ctx, a.opts.Home, cfg, o)
-		if !ok {
+		sg, serr := orgSuggestionLocalErr(ctx, a.opts.Home, cfg, o)
+		if errs.Has(serr, errs.OldLore) {
+			// D-873: a newer lore_org is read by no command; the entry
+			// keeps what it last copied until this lore is upgraded
+			var le *errs.Error
+			_ = errors.As(serr, &le) // errs.Has found it
+			out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorWarning, Fix: unknownAudienceFix,
+				Message: "org " + o.Name + ": " + le.Message + "; the org entry keeps what it last copied"})
+			continue
+		}
+		if serr != nil || sg.Version == "" {
 			continue
 		}
 		_, skipped := mineOf(ctx, cfg, o, sg)

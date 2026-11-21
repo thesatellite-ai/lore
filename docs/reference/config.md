@@ -492,12 +492,22 @@ The org entry a team suggests to its members, kept in the store's org folder. It
 
 | Key | What it means |
 |---|---|
+| `lore_org` | the file's format version, a whole number of at least 1 (lore writes `1`, as the first key); a file without it is format 1. A lore that meets a newer format reads nothing from the file and says so with `E_OLD_LORE` and `lore upgrade` |
 | `name` | the suggested entry name |
 | `stores[]` | the org's stores, with `url`, `name`, `branch` and `org_folder` as in your config. Write each `url` in its canonical form, the way every teammate reaches it (`git@github.com:agency/notes.git` or `https://…`), never with an ssh alias of your own; each machine maps it in its own `access:` |
 | `stores[].audience` | who in the org uses the store: left out, every member; `admins`, only the org's admins; `team:@<team>`, that roster team's members and the admins. A member outside the audience gets an org entry without the store, so their lore never clones or reads it. Set it with `lore org store add --audience <who>` or `lore org store audience --org <org> --url <store-url> --audience <who> --push --yes` (`everyone` removes the key) |
 | `own`, `repos` | the repo patterns (`lore org config set --org <org> --key own` or `--key repos`) |
 | `min_lore_version` | the lore version the org's stores need (left out: no floor beyond each folder's own). Set it with `lore org config set --org <org> --key min_lore_version --value <version> --push --yes`, never by hand: the command also writes the floor into every folder's `_meta.json`, which is what an older lore checks |
 | `defaults.client_repos.<kind>` | lore 0.1.17 only, no longer written: where rows of each kind go in client repos is now the `routing.client_repos` policy (`lore policy set --key routing.client_repos --value <kind>=<target> --to <store>/org --yes`). An old file's value is read until `lore migrate run` moves it into that policy |
+
+### Format version and stability
+
+`lore_org` works like `lore_store` in `lore-store.yaml`. What lore promises about the file:
+
+- **Within one format, only additions.** A new lore may add an optional key; every lore since 0.1.18 skips a key it does not know, so an older teammate keeps reading the file. A key is never renamed, removed or given another meaning without a new `lore_org`.
+- **Older formats are always read.** A file without `lore_org` (every file written before the key existed) is format 1, and a lore that writes a newer format still reads every older one.
+- **Migration is the next write.** Each command that changes the file (`lore org create`, `lore org config set`, `lore org store add`, `remove` and `audience`, a store move, `lore migrate run`) writes it in the current format, keeping every value, key order and comment; a format 1 file without the key gets `lore_org: 1` as its first key. Nothing rewrites the file only to stamp it, and reading never changes it.
+- **A newer format is refused, never guessed at.** A lore that meets a `lore_org` above its own reads nothing from the file and changes nothing in it: `lore org refresh --org <org>`, `lore org config get --org <org>`, `lore org config set`, the other commands that change the file and the org's client-repo defaults stop with `E_OLD_LORE` (`org/lore-org.yaml in <store>: lore_org: 2 is the format of a newer lore; this lore reads up to lore_org: 1 and leaves the file unread: run lore upgrade`), and `lore doctor` warns about it under `org_source` with the fix `lore upgrade`. Your org entry keeps what it last copied.
 
 ## `.lore/lore.yaml` (shared database)
 

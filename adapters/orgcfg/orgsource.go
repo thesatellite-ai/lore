@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -144,7 +145,7 @@ func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, 
 	p = ap
 	doc, perr := parseOrgFileDoc(raw)
 	if perr != nil {
-		return Suggestion{}, false, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, perr)
+		return Suggestion{}, false, orgFileError(p, norm, perr)
 	}
 	if serr := doc.checkShortNames(); serr != nil {
 		return Suggestion{}, false, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, serr)
@@ -269,16 +270,15 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 				return nil, fmt.Errorf("%w: %s@%s", ErrNoOrgFile, norm, branch)
 			}
 			old = acceptedOrgRaw(ctx, dir, tip, cur.Folder, old)
-			doc, perr := parseOrgFileDoc(string(old))
-			if perr != nil {
-				return nil, fmt.Errorf("orgcfg: %s in %s: %w", path, norm, perr)
+			if _, perr := parseOrgFileDoc(string(old)); perr != nil {
+				return nil, orgFileError(path, norm, perr)
 			}
-			if !MoveStoreURLs(&doc, m.Old, m.New) {
-				return nil, nil // already so
-			}
-			body, eerr := yaml.Marshal(doc)
+			body, changed, eerr := moveOrgFileURLs(old, m.Old, m.New)
 			if eerr != nil {
-				return nil, fmt.Errorf("orgcfg: encode %s: %w", orgDefaultsFile, eerr)
+				return nil, orgFileError(path, norm, eerr)
+			}
+			if !changed {
+				return nil, nil // already so
 			}
 			res.Changed = true
 			return map[string][]byte{path: body}, nil
@@ -360,25 +360,45 @@ func isOrgMoveSubject(subject string) bool {
 	return ok && org != "" && rest != "" && strings.HasPrefix(subject, "lore: org ")
 }
 
-// MoveStoreURLs points every stores[].url of doc naming one of old at
-// newURL; it reports whether anything changed.
-func MoveStoreURLs(doc *OrgFileDoc, old []string, newURL string) bool {
-	changed := false
-	for i := range doc.Stores {
-		u := doc.Stores[i].URL
-		if u == newURL {
+// moveOrgFileURLs is raw (a lore-org.yaml) with every stores[].url naming
+// one of old pointed at newURL; changed is false when none did. It edits
+// the file in place like the other writers (orgFileMapping): every other
+// key, a key this lore does not know included, keeps its place and its
+// comments, and the format is stamped (D-873: a move by an older lore of
+// the same format never drops a key a newer one added).
+func moveOrgFileURLs(raw []byte, old []string, newURL string) (out []byte, changed bool, err error) {
+	doc, top, err := orgFileMapping(raw)
+	if err != nil {
+		return nil, false, err
+	}
+	for i := 0; i+1 < len(top.Content); i += 2 {
+		if top.Content[i].Value != orgFileStoresKey || top.Content[i+1].Kind != yaml.SequenceNode {
 			continue
 		}
-		for _, o := range old {
-			if storeaddr.Same(u, o) {
-				doc.Stores[i].URL = newURL
-				changed = true
-				break
+		for _, entry := range top.Content[i+1].Content {
+			if entry.Kind != yaml.MappingNode {
+				continue
+			}
+			for j := 0; j+1 < len(entry.Content); j += 2 {
+				u := entry.Content[j+1]
+				if entry.Content[j].Value != orgFileKeyURL || u.Kind != yaml.ScalarNode || u.Value == newURL {
+					continue
+				}
+				if slices.ContainsFunc(old, func(o string) bool { return storeaddr.Same(u.Value, o) }) {
+					u.Value, changed = newURL, true
+				}
 			}
 		}
 	}
-	return changed
+	if !changed {
+		return nil, false, nil
+	}
+	out, err = yaml.Marshal(doc)
+	return out, true, err
 }
+
+// orgFileKeyURL is a stores[] entry's url key in lore-org.yaml.
+const orgFileKeyURL = "url"
 
 // orgFileTip is the commit the org file is read from: branchTip, except
 // when this clone's branch and the fetched one have diverged and the local

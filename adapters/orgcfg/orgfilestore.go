@@ -98,7 +98,7 @@ func (g *GitLinks) AddOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (OrgF
 			raw = acceptedOrgRaw(ctx, dir, tip, a.OrgFolder, raw)
 			body, existed, aerr := appendOrgFileStore(raw, want, a.Store, a.SetAudience)
 			if aerr != nil {
-				return nil, fmt.Errorf("orgcfg: %s in %s: %w", path, norm, aerr)
+				return nil, orgFileError(path, norm, aerr)
 			}
 			if existed && body != nil {
 				res.Existed, res.AudienceChanged = true, true
@@ -123,14 +123,10 @@ func appendOrgFileStore(raw []byte, want string, s OrgFileStore, setAudience boo
 	if setAudience && s.OrgFolder != "" && !orgconf.Audience(s.Audience).ForMembers() {
 		return nil, false, ErrOrgFolderAudience
 	}
-	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
+	doc, top, err := orgFileMapping(raw)
+	if err != nil {
 		return nil, false, err
 	}
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil, false, fmt.Errorf("not a mapping")
-	}
-	top := doc.Content[0]
 	var stores *yaml.Node
 	for i := 0; i+1 < len(top.Content); i += 2 {
 		if top.Content[i].Value == orgFileStoresKey {
@@ -157,7 +153,7 @@ func appendOrgFileStore(raw []byte, want string, s OrgFileStore, setAudience boo
 				return nil, true, ErrOrgFolderAudience
 			}
 			setMapKey(item, orgFileAudienceKey, s.Audience)
-			out, err = yaml.Marshal(&doc)
+			out, err = yaml.Marshal(doc)
 			return out, true, err
 		}
 	}
@@ -166,7 +162,7 @@ func appendOrgFileStore(raw []byte, want string, s OrgFileStore, setAudience boo
 		return nil, false, err
 	}
 	stores.Content = append(stores.Content, item)
-	out, err = yaml.Marshal(&doc)
+	out, err = yaml.Marshal(doc)
 	return out, false, err
 }
 

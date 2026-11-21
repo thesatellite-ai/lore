@@ -561,6 +561,9 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 	if yaml.Unmarshal(b, &p) != nil || len(p.Defaults.ClientRepos) == 0 {
 		return nil, 0, nil
 	}
+	if ferr := orgcfg.CheckOrgFileFormat(p.Format); ferr != nil {
+		return nil, 0, errs.Prefix("migrate: "+orgDefaultsFile+" of "+string(s.Name), ferr)
+	}
 	items := make([]string, 0, len(p.Defaults.ClientRepos))
 	for _, k := range slices.Sorted(maps.Keys(p.Defaults.ClientRepos)) {
 		items = append(items, policy.ClientRouteItem(k, p.Defaults.ClientRepos[k]))
@@ -601,6 +604,11 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 		return nil, 0, errs.New(errs.ConfigInvalid, "migrate: "+orgDefaultsFile+" of "+string(s.Name)+" is not a mapping")
 	}
 	m := doc.Content[0]
+	// the rewrite is a write through lore: it stamps the format, and a
+	// file of a newer format is refused before anything changes (D-873)
+	if err = orgcfg.StampOrgFileFormat(m); err != nil {
+		return nil, 0, errs.Prefix("migrate: "+orgDefaultsFile+" of "+string(s.Name), err)
+	}
 	for i := 0; i+1 < len(m.Content); i += 2 {
 		if m.Content[i].Value == orgDefaultsKey {
 			m.Content = slices.Delete(m.Content, i, i+2)
@@ -646,6 +654,9 @@ const migrateOrgSubject = "lore: migrate org defaults to policies"
 
 // orgDefaultsProbe is the part of lore-org.yaml migrateOrg looks at.
 type orgDefaultsProbe struct {
+	// Format is lore_org: a newer format is refused before the policy
+	// row is written (D-873).
+	Format   *int `yaml:"lore_org"`
 	Defaults struct {
 		ClientRepos map[string]string `yaml:"client_repos"`
 	} `yaml:"defaults"`

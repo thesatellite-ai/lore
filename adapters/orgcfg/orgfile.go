@@ -50,6 +50,9 @@ var (
 // OrgFileDoc is lore-org.yaml (v0.1.17 stores.OrgFileDefaults, same keys
 // and order so both binaries write one byte form).
 type OrgFileDoc struct {
+	// Format is lore_org, the file's format version (orgfileformat.go):
+	// absent in files written before it existed, which read as 1.
+	Format int `yaml:"lore_org,omitempty"`
 	// Name is the suggested entry name.
 	Name string `yaml:"name,omitempty"`
 	// Stores are the org's stores.
@@ -176,6 +179,7 @@ func (g *GitLinks) WriteOrgFile(ctx context.Context, w OrgFileWrite) (OrgFileRes
 	if err != nil {
 		return OrgFileResult{}, err
 	}
+	w.Doc.Format = OrgFileFormat
 	body, err := yaml.Marshal(w.Doc)
 	if err != nil {
 		return OrgFileResult{}, fmt.Errorf("orgcfg: encode %s: %w", orgDefaultsFile, err)
@@ -261,6 +265,9 @@ type Suggestion struct {
 func parseOrgFileDoc(raw string) (OrgFileDoc, error) {
 	var doc OrgFileDoc
 	if err := yamlerr.Decode([]byte(raw), &doc, yamlerr.Lenient); err != nil {
+		return OrgFileDoc{}, err
+	}
+	if err := checkDocFormat([]byte(raw), &doc); err != nil {
 		return OrgFileDoc{}, err
 	}
 	return doc, nil
