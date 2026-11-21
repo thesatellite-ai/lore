@@ -65,7 +65,7 @@ $ lore sync conflicts | head -3
 
 ## Try it
 
-Delete the cache on purpose and let the next command build it again. `ls ~/.lore/cache/repo` shows the repo's cache file gone, then back after one `lore doctor`, with the `.stamp` beside it (what the next read needs to open the cache without reading its whole schema again; only a command that writes to the cache file writes its stamp, so a read or a `--dry-run` that finds the cache current leaves both as they were):
+Delete the cache on purpose and let the next command build it again. `ls ~/.lore/cache/repo` shows the repo's cache file gone, then back after one `lore doctor`, with the `.stamp` beside it (what the next read needs to open the cache without reading its whole schema again; only a command that writes to the cache file writes its stamp, so a read or a `--dry-run` that finds the cache current leaves both as they were; the one exception is the first read after lore itself was upgraded or reinstalled, which puts the new binary's name on the stamp of each cache nothing changed since, so later reads stay fast):
 
 <!-- example: ops#try-cache -->
 ```console
