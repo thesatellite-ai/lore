@@ -15,3 +15,12 @@ import (
 func ResourceNamed(src store.Source, r row.Row, key string, kindName func(id string) string) bool {
 	return resname.Matches(resname.Of(src, r), key, resname.Forms(key), kindName)
 }
+
+// ResourceAliased reports whether key names the resources row r held in
+// src through one of its aliases (resname.ByAlias, devco D-817): the
+// reference resolver tries it only when no resource is named by key, as
+// lore resource show does, so ${res:Bobby} finds the person whose alias
+// is Bobby.
+func ResourceAliased(src store.Source, r row.Row, key string, kindName func(id string) string) bool {
+	return resname.ByAlias(resname.Of(src, r), key, resname.Forms(key), kindName)
+}

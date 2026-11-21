@@ -548,6 +548,14 @@ func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row
 	if v, ok := r.Fields[fieldName]; ok {
 		vals[fieldName] = v
 	}
+	// a resource is found by its aliases as by its name (devco D-817):
+	// they are indexed in the name column, at the name's weight
+	if as := value.ItemStrings(r.Fields[schema.FieldResourceAliases]); len(as) > 0 {
+		named := strings.Join(append(value.ItemStrings(r.Fields[fieldName]), as...), " ")
+		if t, err := value.TextOf(strings.TrimSpace(named)); err == nil {
+			vals[fieldName] = t
+		}
+	}
 	if t, err := value.TextOf(info.kindName); err == nil && info.kindName != "" {
 		vals[ftsResKind] = t
 	}

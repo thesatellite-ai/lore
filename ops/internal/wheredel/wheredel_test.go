@@ -218,6 +218,7 @@ const reasonField = "reason"
 // to the trash, so they take no delete --reason; each entry says why.
 var noTrashReason = map[string]string{
 	"actor.delete":          "always refused: actors are never deleted (BATCH2 #8)",
+	"resource.alias.remove": "edits the resource's alias list; no row is deleted",
 	"resource.field.remove": "edits the kind's field list; no row is deleted",
 	"setup.remove":          "a machine-local setup in the setup trash, not a store row",
 	"store.remove":          "detaches a store; its rows stay",

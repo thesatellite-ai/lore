@@ -5992,6 +5992,13 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "aliases": {
+                            "type": "array",
+                            "description": "its other names: nicknames, full names, roles",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "fields": {
                             "type": "array",
                             "description": "its field values (sensitive ones masked)",
@@ -6063,7 +6070,7 @@
                           },
                           "match": {
                             "type": "string",
-                            "description": "how the question named it: name, typo (a name a letter or two off) or field (a nickname, a role)"
+                            "description": "how the question named it: name, alias (one of its aliases), typo (a name or alias a letter or two off) or field (a nickname, a role kept as a field)"
                           },
                           "name": {
                             "type": "string"
@@ -59386,6 +59393,549 @@
         }
       }
     },
+    "/v1/resource/alias": {
+      "get": {
+        "operationId": "resource.alias.list",
+        "summary": "List the aliases of a resource, or of every resource that has one",
+        "tags": [
+          "resource"
+        ],
+        "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "one resource (name, alias or res_ id); every resource with an alias when left out",
+            "schema": {
+              "type": "string",
+              "description": "one resource (name, alias or res_ id); every resource with an alias when left out"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "only resources of this kind (name or knd_ id)",
+            "schema": {
+              "type": "string",
+              "description": "only resources of this kind (name or knd_ id)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "aliases": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "name",
+                          "store",
+                          "aliases"
+                        ]
+                      }
+                    },
+                    "routed": {
+                      "type": "string",
+                      "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
+                    }
+                  },
+                  "required": [
+                    "count",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_RESOURCE_AMBIGUOUS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "E_KIND_UNKNOWN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "resource.alias.add",
+        "summary": "Give a resource another name (a nickname, full name or role) that every lookup and lore ask find it by",
+        "tags": [
+          "resource"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "alias": {
+                    "type": "array",
+                    "description": "the other name: a nickname, full name or role, any text (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the resource (name, alias or res_ id)"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "description": "only a resource of this kind (name or knd_ id)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_RESOURCE_IN_USE, E_RESOURCE_TAKEN, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "E_KIND_UNKNOWN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/resource/alias/{id}/remove": {
+      "post": {
+        "operationId": "resource.alias.remove",
+        "summary": "Remove an alias of a resource",
+        "tags": [
+          "resource"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the resource (name, alias or res_ id)",
+            "schema": {
+              "type": "string",
+              "description": "the resource (name, alias or res_ id)"
+            },
+            "x-lore-field": "id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "alias": {
+                    "type": "array",
+                    "description": "the other name: a nickname, full name or role, any text (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "kind": {
+                    "type": "string",
+                    "description": "only a resource of this kind (name or knd_ id)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_META_TAKEN, E_NAME_TAKEN, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_RESOURCE_IN_USE, E_RESOURCE_TAKEN, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "E_KIND_UNKNOWN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/resource/fields": {
       "post": {
         "operationId": "resource.field.add",
@@ -61682,6 +62232,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "aliases": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "archived_at": {
                             "type": "string"
                           },
@@ -64357,6 +64913,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "aliases": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "archived_at": {
                             "type": "string"
                           },
@@ -64896,6 +65458,12 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "aliases": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "archived_at": {
                           "type": "string"
                         },

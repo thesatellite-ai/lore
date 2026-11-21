@@ -105,13 +105,15 @@ const (
 
 // Resource is one resource in an answer.
 type Resource struct {
-	ID     string   `json:"id"`
-	Kind   string   `json:"kind" desc:"its kind (person, project, company …)"`
-	Name   string   `json:"name"`
-	Place  string   `json:"place" desc:"where it is stored (<store>/<folder>)"`
-	Match  string   `json:"match" desc:"how the question named it: name, typo (a name a letter or two off) or field (a nickname, a role)"`
-	Fields []Field  `json:"fields" desc:"its field values (sensitive ones masked)"`
-	Linked []Linked `json:"linked" desc:"the resources whose fields name it (the people of a company, the projects a person owns)"`
+	ID    string `json:"id"`
+	Kind  string `json:"kind" desc:"its kind (person, project, company …)"`
+	Name  string `json:"name"`
+	Place string `json:"place" desc:"where it is stored (<store>/<folder>)"`
+	Match string `json:"match" desc:"how the question named it: name, alias (one of its aliases), typo (a name or alias a letter or two off) or field (a nickname, a role kept as a field)"`
+	// Aliases are its other names (lore resource alias add, devco D-817).
+	Aliases []string `json:"aliases,omitempty" desc:"its other names: nicknames, full names, roles"`
+	Fields  []Field  `json:"fields" desc:"its field values (sensitive ones masked)"`
+	Linked  []Linked `json:"linked" desc:"the resources whose fields name it (the people of a company, the projects a person owns)"`
 }
 
 // Field is one field value of a resource; Was and ChangedAt say a value
@@ -230,13 +232,13 @@ var LensTables = []string{"resources", "kinds", "tasks", "row_meta", "knowledge_
 // typedSQL reads the resources (with kind name, fields and history), the
 // open tasks, their owed_by / owed_to metadata and their --ref pointers,
 // in one statement: a first column says which a line is.
-const typedSQL = `SELECT 'res', r.id, r.place, COALESCE(k.name, r.kind), r.name, r.fields, r.history, r.updated_at
+const typedSQL = `SELECT 'res', r.id, r.place, COALESCE(k.name, r.kind), r.name, r.fields, r.history, r.updated_at, r.aliases
 FROM resources_all r LEFT JOIN kinds_all k ON k.id = r.kind WHERE r.archived_at IS NULL
-UNION ALL SELECT 'tsk', t.id, t.place, t.status, t.title, '', '', t.created_at
+UNION ALL SELECT 'tsk', t.id, t.place, t.status, t.title, '', '', t.created_at, ''
 FROM tasks_all t WHERE t.status NOT IN ('done', 'cancelled')
-UNION ALL SELECT 'met', m.entity_id, '', m.key_name, m.value_text, '', '', ''
+UNION ALL SELECT 'met', m.entity_id, '', m.key_name, m.value_text, '', '', '', ''
 FROM row_meta_all m WHERE m.entity_table = 'tasks' AND m.item_idx >= 0 AND m.key_name IN ('owed_by', 'owed_to')
-UNION ALL SELECT 'ref', kr.src_id, '', kr.relation, kr.dst_id, '', '', ''
+UNION ALL SELECT 'ref', kr.src_id, '', kr.relation, kr.dst_id, '', '', '', ''
 FROM knowledge_refs_all kr WHERE kr.src_table = 'tasks' AND kr.dst_table = 'resources'`
 
 // loadTyped reads the resources and the open tasks.
@@ -265,7 +267,11 @@ func loadTyped(ctx context.Context, run Query) ([]resourceRow, []taskRow, error)
 				continue
 			}
 			seenRes[c[1]] = true
-			rs = append(rs, resourceRow{ID: c[1], Place: c[2], Kind: c[3], Name: c[4], Fields: fieldsOf(c[5]), History: historyOf(c[6]), Updated: c[7]})
+			r := resourceRow{ID: c[1], Place: c[2], Kind: c[3], Name: c[4], Fields: fieldsOf(c[5]), History: historyOf(c[6]), Updated: c[7]}
+			if len(c) > 8 {
+				r.Aliases = aliasesOf(c[8])
+			}
+			rs = append(rs, r)
 		case "tsk":
 			if _, dup := at[c[1]]; dup {
 				continue
@@ -291,6 +297,16 @@ func loadTyped(ctx context.Context, run Query) ([]resourceRow, []taskRow, error)
 		}
 	}
 	return rs, ts, nil
+}
+
+// aliasesOf reads resources.aliases (a JSON array of text); a bad value
+// reads as none.
+func aliasesOf(s string) []string {
+	var out []string
+	if s == "" || json.Unmarshal([]byte(s), &out) != nil {
+		return nil
+	}
+	return out
 }
 
 // fieldsOf reads resources.fields: {fld_id: {name, v}} → name/value pairs
@@ -404,6 +420,8 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 	var terms []string
 	for _, m := range ms {
 		terms = append(terms, m.res.Name)
+		// a note that names it by an alias ("lunch with Bobby") is about it
+		terms = append(terms, m.res.Aliases...)
 	}
 	if len(ms) == 0 {
 		terms = append(terms, q.words...)

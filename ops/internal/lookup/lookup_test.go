@@ -64,7 +64,7 @@ var notLookups = map[string]bool{
 var nameOrID = map[string]bool{
 	"vars.show": true, "vars.rm": true,
 	"meta.edit": true, "meta.delete": true, "meta.move": true,
-	"resource.show": true, "resource.edit": true, "resource.delete": true, "resource.check": true, "resource.archive": true,
+	"resource.show": true, "resource.edit": true, "resource.delete": true, "resource.check": true, "resource.archive": true, "resource.alias.remove": true,
 	"tag.edit": true, "project.show": true, "project.archive": true, "project.unarchive": true, "project.delete": true,
 	"actor.show": true, "machine.show": true,
 	"task.time.rm": true, "task.time.edit": true, "secrets.show": true,

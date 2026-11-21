@@ -3,22 +3,39 @@ package ask
 import (
 	"slices"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/fuzzyname"
 )
 
 // How a resource was found from the question (Resource.Match).
 const (
 	MatchName  = "name"  // the question names it: alice-ng, or one part of the name of 4+ letters (alice)
-	MatchTypo  = "typo"  // a word one or two letters off its name: alise-ng, lumne
+	MatchAlias = "alias" // the question says one of its aliases (lore resource alias add): Bobby, the CFO, Robert Kim
+	MatchTypo  = "typo"  // a word one or two letters off its name or an alias: alise-ng, lumne, Boby
 	MatchField = "field" // a word is one of its field values: a nickname (Bobby), a role (CFO)
 )
 
 // resourceRow is one resource as the lens holds it.
 type resourceRow struct {
 	ID, Place, Kind, Name, Updated string
+	// Aliases are its other names (resources.aliases, devco D-817).
+	Aliases []string
 	// Fields in the kind's order of the stored object (name → value).
 	Fields []fieldValue
 	// History is the field history, oldest first.
 	History []historyEntry
+}
+
+// names are r's name and each alias, as question tokens read them (lower
+// case; a several-word alias as its words joined by one space).
+func (r *resourceRow) names() []string {
+	out := []string{strings.ToLower(r.Name)}
+	for _, a := range r.Aliases {
+		if k := aliasKey(a); k != "" && !slices.Contains(out, k) {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // fieldValue is one field of a resource.
@@ -37,16 +54,23 @@ type match struct {
 	field string
 }
 
-// matchResources finds the resources a question is about: by name first
-// (a token is the name, or one part of it), then by a name one or two
-// letters off (a typo), then by a field value (a nickname or a role). A
-// weaker kind of match is used only when no stronger one found any: "who
-// handles the money at acme-co" is about the company acme-co, not about
-// every person whose company field says acme-co.
+// matchResources finds the resources a question is about: by name or
+// alias first (a token is the name, a word of an alias or the whole of a
+// several-word alias, else one part of a name or alias), then by a name or
+// alias one or two letters off (a typo, through a trigram index), then by
+// a field value (a nickname or a role kept as a field). A weaker kind of
+// match is used only when no stronger one found any: "who handles the
+// money at acme-co" is about the company acme-co, not about every person
+// whose company field says acme-co.
 func matchResources(q question, rs []resourceRow) []match {
 	byName := map[string][]*resourceRow{}
+	byAlias := map[string][]*resourceRow{}
 	for i := range rs {
 		byName[strings.ToLower(rs[i].Name)] = append(byName[strings.ToLower(rs[i].Name)], &rs[i])
+		for _, a := range rs[i].Aliases {
+			k := aliasKey(a)
+			byAlias[k] = append(byAlias[k], &rs[i])
+		}
 	}
 	var out []match
 	seen := map[string]bool{}
@@ -57,13 +81,24 @@ func matchResources(q question, rs []resourceRow) []match {
 		seen[r.ID] = true
 		out = append(out, match{res: r, how: how, field: field})
 	}
-	// 1. the name, whole
+	// 1. the name, whole; then an alias, whole: one word (Bobby) or the
+	// words of a longer one in a row ("robert kim", "chief of staff")
 	for _, t := range q.tokens {
 		for _, r := range byName[t] {
 			add(r, MatchName, "")
 		}
 	}
-	// a name part ("alice" for alice-ng) only when no whole name matched
+	said := " " + strings.Join(q.tokens, " ") + " "
+	for k, owners := range byAlias {
+		if k == "" || skipWords[k] || !strings.Contains(said, " "+k+" ") {
+			continue
+		}
+		for _, r := range owners {
+			add(r, MatchAlias, "")
+		}
+	}
+	// a name part ("alice" for alice-ng) or an alias part ("robert" for
+	// Robert Kim) only when no whole name or alias matched
 	if len(out) == 0 {
 		for _, t := range q.tokens {
 			if len([]rune(t)) < 4 || skipWords[t] {
@@ -74,50 +109,79 @@ func matchResources(q question, rs []resourceRow) []match {
 				if name != t && slices.Contains(strings.FieldsFunc(name, isNameSep), t) {
 					add(&rs[i], MatchName, "")
 				}
+				for _, a := range rs[i].Aliases {
+					if slices.Contains(strings.FieldsFunc(aliasKey(a), isNameSep), t) {
+						add(&rs[i], MatchAlias, "")
+					}
+				}
 			}
 		}
 	}
 	if len(out) > 0 {
 		return out
 	}
-	// 2. a typo: the closest name within the allowed distance
+	// 2. a typo: the closest names and aliases within the allowed
+	// distance, found through a trigram index (no scan of every name)
+	idx := typoIndex(rs)
 	for _, t := range q.tokens {
 		if skipWords[t] || len([]rune(t)) < 4 {
 			continue
 		}
-		best, bestD := []*resourceRow(nil), 3
-		for i := range rs {
-			d := osa(t, strings.ToLower(rs[i].Name))
-			if d > typoBudget(t) || d > bestD {
-				continue
-			}
-			if d < bestD {
-				best, bestD = nil, d
-			}
-			best = append(best, &rs[i])
-		}
-		for _, r := range best {
-			add(r, MatchTypo, "")
+		for _, h := range idx.Near(t, typoBudget(t)) {
+			add(&rs[h.Owner], MatchTypo, "")
 		}
 	}
 	if len(out) > 0 {
 		return out
 	}
 	// 3. a field value: a nickname, a role ("the CFO", "our lawyer")
-	low := " " + strings.Join(q.tokens, " ") + " "
 	for i := range rs {
 		for _, f := range rs[i].Fields {
 			v := strings.ToLower(strings.TrimSpace(f.Value))
 			if v == "" || skipWords[v] || len([]rune(v)) < 3 {
 				continue
 			}
-			if strings.Contains(low, " "+v+" ") {
+			if strings.Contains(said, " "+v+" ") {
 				add(&rs[i], MatchField, f.Name)
 				break
 			}
 		}
 	}
 	return out
+}
+
+// typoIndex is the trigram index of every resource's name, each alias
+// and each word of 4+ letters of a several-word alias (Robert Kim: robert
+// kim, robert), owned by the resource's index in rs.
+func typoIndex(rs []resourceRow) *fuzzyname.Index {
+	idx := fuzzyname.New()
+	for i := range rs {
+		idx.Add(rs[i].Name, i)
+		for _, a := range rs[i].Aliases {
+			k := aliasKey(a)
+			idx.Add(k, i)
+			if ws := strings.Fields(k); len(ws) > 1 {
+				for _, w := range ws {
+					if len([]rune(w)) >= 4 && !skipWords[w] {
+						idx.Add(w, i)
+					}
+				}
+			}
+		}
+	}
+	return idx
+}
+
+// aliasKey is an alias as the question's tokens read it: lower case, its
+// words (reWord) joined by one space ("Dr. Robert Kim" → "dr robert kim").
+func aliasKey(a string) string {
+	var ws []string
+	for _, w := range reWord.FindAllString(strings.ToLower(a), -1) {
+		if w = strings.Trim(w, "."); w != "" {
+			ws = append(ws, w)
+		}
+	}
+	return strings.Join(ws, " ")
 }
 
 // isNameSep splits a resource name into its parts.
@@ -132,33 +196,6 @@ func typoBudget(w string) int {
 	return 1
 }
 
-// osa is the optimal string alignment distance of a and b: insertions,
-// deletions, substitutions and swaps of two neighbouring letters (lumne
-// → lumen is one).
-func osa(a, b string) int {
-	x, y := []rune(a), []rune(b)
-	if d := len(x) - len(y); d > 2 || d < -2 {
-		return 3
-	}
-	prev2 := make([]int, len(y)+1)
-	prev := make([]int, len(y)+1)
-	cur := make([]int, len(y)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(x); i++ {
-		cur[0] = i
-		for j := 1; j <= len(y); j++ {
-			cost := 1
-			if x[i-1] == y[j-1] {
-				cost = 0
-			}
-			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
-			if i > 1 && j > 1 && x[i-1] == y[j-2] && x[i-2] == y[j-1] {
-				cur[j] = min(cur[j], prev2[j-2]+1)
-			}
-		}
-		prev2, prev, cur = prev, cur, prev2
-	}
-	return prev[len(y)]
-}
+// osa is the optimal string alignment distance of a and b, at most 3
+// (fuzzyname.OSA with a limit of two edits).
+func osa(a, b string) int { return fuzzyname.OSA(a, b, 2) }
