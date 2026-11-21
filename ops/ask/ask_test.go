@@ -259,7 +259,7 @@ func TestRankedAnswerFirst(t *testing.T) {
 		}
 	}
 	_, text := ask(t, "everything about alice-ng")
-	for _, h := range []string{"\nlatest (the newest row of each folder, word for word):\n", "open tasks (1):", "\nmore rows (word for word):\n"} {
+	for _, h := range []string{"\nlatest (the newest row of each folder and the newest decision, status, budget and meeting row, word for word):\n", "open tasks (1):", "\nmore rows (word for word):\n"} {
 		if !strings.Contains(text, h) {
 			t.Errorf("everything about: no %q in\n%s", h, text)
 		}
@@ -379,7 +379,7 @@ func TestAliasMatch(t *testing.T) {
 		q, res, how string
 		want        []string
 	}{
-		{"who is Robbie", "robert-kim", MatchAlias, []string{"aliases: Robbie, Robert Kim", "designer"}},
+		{"who is Robbie", "robert-kim", MatchAlias, []string{"robert-kim (person; aka Robbie, Robert Kim): ", "designer"}},
 		{"who is Robert Kim", "robert-kim", MatchAlias, nil},
 		{"who is Robie", "robert-kim", MatchTypo, nil},
 		{"who is Hueyy", "hugo-berg", MatchTypo, nil},
@@ -420,7 +420,7 @@ func TestAboutLeadLines(t *testing.T) {
 	o, text := ask(t, "everything about alice-ng")
 	want := "\nwho: person alice-ng (me/work)\n  company: acme-co (changed 2026-10-15, was cobalt-co)\n  role: engineer\n" +
 		"  project lumen (owner): company acme-co\n" +
-		"\nlatest (the newest row of each folder, word for word):\n" +
+		"\nlatest (the newest row of each folder and the newest decision, status, budget and meeting row, word for word):\n" +
 		"  2026-11-20, me/journal: \"ran along the river. Saw alice-ng about lumen.\"\n" +
 		"  2026-11-08, me/work: \"Met alice-ng about lumen: talked about the office move round 7.\"\n" +
 		"\nopen tasks (1):\n  - send the signed contract #1 to alice-ng (owed to alice-ng)\n" +
@@ -464,9 +464,10 @@ func TestReadableUnknownRef(t *testing.T) {
 	}
 }
 
-// TestTypedAnswersCompact: a who-is answer is one line per resource (kind,
-// name, the fields that say who it is, a changed one with what it was,
-// aliases) with no contact value, linked resource, id or echo of the
+// TestTypedAnswersCompact: a who-is answer is one line per resource led
+// by its name (then its kind and aliases in brackets, the fields that say
+// who it is, a changed one with what it was; devco D-844: the name leads
+// so a summary keeps it) with no contact value, linked resource, id or echo of the
 // question; a field the question names is printed even when it is a
 // contact value. A debt answer is one line per open task (title, and who owes whom when
 // the title does not name them) with no heading, status, place or person
@@ -486,9 +487,9 @@ func TestTypedAnswersCompact(t *testing.T) {
 		q    string
 		want string
 	}{
-		{"who is Bobby", "person robert-kim: company: birchwood-co; nickname: Bobby; role: designer; aliases: Robbie\n"},
-		{"what is the email of robert-kim", "person robert-kim: company: birchwood-co; nickname: Bobby; role: designer; email: robert@birchwood.example; aliases: Robbie\n"},
-		{"who is alice-ng", "person alice-ng: company: acme-co (changed 2026-10-15, was cobalt-co); role: engineer\n"},
+		{"who is Bobby", "robert-kim (person; aka Robbie): company: birchwood-co; nickname: Bobby; role: designer\n"},
+		{"what is the email of robert-kim", "robert-kim (person; aka Robbie): company: birchwood-co; nickname: Bobby; role: designer; email: robert@birchwood.example\n"},
+		{"who is alice-ng", "alice-ng (person): company: acme-co (changed 2026-10-15, was cobalt-co); role: engineer\n"},
 		{"what do I owe Bobby", "return the ladder #5 [in_progress] (owed to robert-kim)\nsend the price list #3 to robert-kim\ncited: tsk_5 tsk_3\n"},
 		{"what does robert-kim owe me", "robert-kim owes me the board deck #2\ncited: tsk_2\n"},
 	}
@@ -509,7 +510,7 @@ func TestTypedAnswersCompact(t *testing.T) {
 		}
 	}
 	d.tasks = append(d.tasks, taskRow{ID: "tsk_6", Place: "me/work", Title: "return the drill #6", Status: "todo", OwedBy: "me", OwedTo: "Huey"})
-	if got, want := build(parseQuestion("what do I owe Huey", now), d, 0, 0).Text(), "return the drill #6 (owed to Huey)\nperson hugo-berg: aliases: Huey\ncited: tsk_6 res_hugo\n"; got != want {
+	if got, want := build(parseQuestion("what do I owe Huey", now), d, 0, 0).Text(), "return the drill #6 (owed to Huey)\nhugo-berg (person; aka Huey)\ncited: tsk_6 res_hugo\n"; got != want {
 		t.Errorf("alias debt:\n got %q\nwant %q", got, want)
 	}
 }
@@ -551,6 +552,56 @@ func TestDropDay(t *testing.T) {
 	} {
 		if got := dropDay(in, "2026-11-06"); got != want {
 			t.Errorf("dropDay(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestBareNameReadsAsAbout (devco D-844, bug hunt H-101): an agent asked
+// "hollow" for "what did we decide for hollow and why" and got the three
+// newest rows (a journal line and two status updates), not the decision,
+// months older in the same folder. A question that is only a resource's
+// name is an everything-about question, and an everything-about answer
+// holds, after the newest row of each folder, the newest decision,
+// status, budget and meeting row that no row above holds.
+func TestBareNameReadsAsAbout(t *testing.T) {
+	t.Parallel()
+	d := fixture(t)
+	// the newest meeting is the newest row of a folder of its own: the
+	// meeting topic adds no older meeting (me/work) next to it
+	calls := textRow{Table: "memories", ID: "mem_c1", Place: "me/calls", Body: "Met robert-kim about lumen: a short call on pricing.", At: day(t, "2026-11-15")}
+	d.rows = append(d.rows, calls)
+	for _, q := range []string{"lumen", "lumne", "everything about lumen"} {
+		o := build(parseQuestion(q, now), d, 0, 0)
+		text := o.Text()
+		if o.answer != leadAbout {
+			t.Errorf("%q: answer %d, want everything about (%d)\n%s", q, o.answer, leadAbout, text)
+		}
+		latest, _, _ := strings.Cut(text, "cited: ")
+		for _, want := range []string{
+			"\nwho: project lumen (me/work)\n",
+			"\nlatest (the newest row of each folder and the newest decision, status, budget and meeting row, word for word):\n",
+			`me/work: "Decision for lumen: we chose stripe over paddle because fees are 4 basis points lower."`,
+			`me/work: "Budget for lumen moved to 62k (was 45k)."`,
+			`me/work: "Status update lumen: live in production with 15 customers."`,
+			`me/calls: "Met robert-kim about lumen: a short call on pricing."`,
+		} {
+			if !strings.Contains(latest, want) {
+				t.Errorf("%q: no %q in\n%s", q, want, text)
+			}
+		}
+		if strings.Contains(latest, "office move round 7") {
+			t.Errorf("%q: an older meeting picked next to the newest one\n%s", q, text)
+		}
+		// each topic once: the older status and budget rows are history
+		// or more rows, never a second topic pick
+		if strings.Count(text, "Status update lumen") != 1 {
+			t.Errorf("%q: want one status row\n%s", q, text)
+		}
+	}
+	// a name with a topic, a debt, a date or another word is no bare name
+	for _, q := range []string{"lumen status", "what do I owe alice-ng", "lumen on 2026-11-01", "lumen pricing", "who is alice-ng"} {
+		if o, text := ask(t, q); o.answer == leadAbout {
+			t.Errorf("%q: read as everything about\n%s", q, text)
 		}
 	}
 }

@@ -59,6 +59,9 @@ const (
 	DefaultMaxChars = 4000
 	// DefaultTop is how many rows are printed in full (--top).
 	DefaultTop = 3
+	// LatestHeading heads an everything-about answer's newest rows: the
+	// newest row of each folder, then of each topic no folder row covers.
+	LatestHeading = "latest (the newest row of each folder and the newest decision, status, budget and meeting row, word for word):"
 	// maxLinked caps the resources listed under one resource.
 	maxLinked = 12
 	// maxSideTasks caps the open tasks listed under a question that is
@@ -131,6 +134,7 @@ func build(q question, d data, top, maxChars int) Out {
 	out := Out{Query: q.text, When: q.when, Resources: []Resource{}, Tasks: []Task{}, Rows: []Row{}, Ranked: []Ranked{}, Cited: []string{}}
 	ms := matchResources(q, d.resources)
 	identity := isIdentity(q.text) && len(ms) > 0
+	q.about = !identity && len(ms) > 0 && (isAbout(q.text) || bareName(q, ms))
 	out.identity, out.asked = identity, q.tokens
 	for _, m := range ms {
 		out.Resources = append(out.Resources, resourceOf(m, d.resources, q.owe != oweNone))
@@ -239,7 +243,7 @@ const (
 // list must not stand where its status update is the answer.
 func leadOf(q question, identity bool, o *Out) answerFirst {
 	switch {
-	case identity || len(o.Resources) > 0 && isAbout(q.text):
+	case identity || len(o.Resources) > 0 && q.about:
 		if !identity {
 			return leadAbout
 		}
@@ -295,6 +299,25 @@ func isAbout(text string) bool {
 		}
 	}
 	return false
+}
+
+// bareName reports a question that is only the name of resources it
+// matched ("hollow", "mara-petrov"): no topic, debt, date or file, every
+// word a matched name. It asks for everything about them. Why (devco
+// D-844, blind agent run): an agent asked "hollow" for "what did we
+// decide for hollow and why" and got the three newest rows, none of
+// them the decision; the everything-about answer holds the newest
+// decision, status, budget and meeting row about the resource.
+func bareName(q question, ms []match) bool {
+	if len(q.topics) > 0 || q.owe != oweNone || !q.window.IsZero() || q.file != "" || len(q.words) == 0 {
+		return false
+	}
+	for _, w := range q.words {
+		if !namesResource(w, ms) {
+			return false
+		}
+	}
+	return true
 }
 
 // isIdentity reports a "who is X" question: the resource answers it.
@@ -597,6 +620,9 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 			pick = append(pick, s)
 		}
 	}
+	if q.about && len(all[0].matched) == 0 {
+		pick = append(pick, topicPicks(all, taken)...)
+	}
 	lead := len(pick)
 	for _, s := range all {
 		if len(pick) >= top {
@@ -640,6 +666,41 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 		out = append(out, r)
 	}
 	return out, lead
+}
+
+// topicPicks is, for an everything-about answer, the newest row of each
+// topic (decision, status, budget, meeting) that is not picked yet, best
+// scored first (a row you wrote before an imported one). Why (devco
+// D-844, blind agent run): the newest row of each folder is the last
+// status and the last journal day; the project's decision, months older
+// in the same folder, was never shown, and grep, which prints every line
+// naming the project, answered the question lore did not.
+func topicPicks(all []scored, taken map[string]bool) []scored {
+	var out []scored
+	for _, t := range topicTable {
+		for _, s := range all {
+			if !holdsTopic(s.row, t) {
+				continue
+			}
+			if !taken[s.row.ID] {
+				taken[s.row.ID] = true
+				out = append(out, s)
+			}
+			break
+		}
+	}
+	return out
+}
+
+// holdsTopic reports whether row r holds a row word of topic t.
+func holdsTopic(r *textRow, t topic) bool {
+	toks := tokensOf(r.Title + "\n" + r.Body)
+	for _, w := range t.row {
+		if hasWord(toks, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // windowRows lists the rows of q's date window, oldest first: the rows
@@ -893,7 +954,7 @@ func (o Out) rowsHeader(run, runs int, compact bool) string {
 	case o.When != "":
 		return "\nrows dated " + o.When + ", oldest first:\n"
 	case compact:
-		return "\nlatest (the newest row of each folder, word for word):\n"
+		return "\n" + LatestHeading + "\n"
 	case o.lead > 0:
 		return "\nmore rows (word for word):\n"
 	case run > 0:
@@ -904,10 +965,14 @@ func (o Out) rowsHeader(run, runs int, compact bool) string {
 	return "\nbest rows, in full:\n"
 }
 
-// card is one resource as the answer to "who is X": one line with its
-// kind and name, the fields that say who it is (a changed one with what
-// it was and the day it changed) and its aliases. Contact values (an
-// email, a link) are left out unless the question names that field
+// card is one resource as the answer to "who is X": one line led by its
+// name, its kind and aliases in brackets after it, then the fields that
+// say who it is (a changed one with what it was and the day it changed):
+// "jonah-park (person; aka Jonny): role: support lead". The name leads so
+// it survives a summary: with "person jonah-park:" first a small model
+// read the kind and name as a label and answered with the fields alone
+// (devco D-844, blind agent run: 3 of 9 who-is answers lost the name).
+// Contact values (an email, a link) are left out unless the question names that field
 // ("what is the email of X"), and so are the resources that link to it;
 // `lore resource show` and --json print them. Why (devco D-827, recall
 // gate G-4): a who-is answer must be at least 10x lighter than the
@@ -915,7 +980,11 @@ func (o Out) rowsHeader(run, runs int, compact bool) string {
 // projects and the id were most of it.
 func (r Resource) card(asked []string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s", r.Kind, r.Name)
+	b.WriteString(r.Name + " (" + r.Kind)
+	if len(r.Aliases) > 0 {
+		b.WriteString("; aka " + strings.Join(r.Aliases, ", "))
+	}
+	b.WriteString(")")
 	var parts []string
 	for _, f := range r.Fields {
 		if f.Value == "" || isContact(f.Value) && !slices.Contains(asked, strings.ToLower(f.Name)) {
@@ -926,9 +995,6 @@ func (r Resource) card(asked []string) string {
 			p += fmt.Sprintf(" (changed %s, was %s)", f.ChangedAt, f.Was)
 		}
 		parts = append(parts, p)
-	}
-	if len(r.Aliases) > 0 {
-		parts = append(parts, "aliases: "+strings.Join(r.Aliases, ", "))
 	}
 	if len(parts) > 0 {
 		b.WriteString(": " + strings.Join(parts, "; "))

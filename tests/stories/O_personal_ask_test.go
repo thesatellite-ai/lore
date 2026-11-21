@@ -69,7 +69,7 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			q         string
 			want, not []string
 		}{
-			{"who is alise-ng", []string{"person alice-ng", "role: engineer", "company: acme-co (changed", "was cobalt-co)"}, nil},
+			{"who is alise-ng", []string{"alice-ng (person): ", "role: engineer", "company: acme-co (changed", "was cobalt-co)"}, nil},
 			{"what do I owe Bobby", []string{"send the price list to robert-kim"}, []string{"board deck"}},
 			{"what does robert-kim owe me", []string{"robert-kim owes me the board deck"}, []string{"price list"}},
 			{"what was the reasoning behind orbit's pick", []string{"we chose postgres over mongodb because the reports need joins"}, nil},
@@ -230,13 +230,35 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		// out, so a small model keeps the journal activity
 		lines := "  2026-11-02, me/journal: \"baked sourdough. Saw alice-ng about orbit.\"\n"
 		body, _, _ := strings.Cut(out, "cited: ")
-		if !strings.Contains(out, "\nwho: person alice-ng (") || !strings.Contains(out, "\nlatest (the newest row of each folder, word for word):\n") || !strings.Contains(out, lines) || strings.Contains(out, "${res:") || strings.Contains(body, "mem_") || strings.Contains(body, "res_") {
+		if !strings.Contains(out, "\nwho: person alice-ng (") || !strings.Contains(out, "\nlatest (the newest row of each folder and the newest decision, status, budget and meeting row, word for word):\n") || !strings.Contains(out, lines) || strings.Contains(out, "${res:") || strings.Contains(body, "mem_") || strings.Contains(body, "res_") {
 			t.Errorf("[O D-822/D-836] everything about: want who:/latest headings, the journal row as one quoted line with names, no ${res:…}, no id before cited:\n%s", r)
 		}
 		j := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "everything about alice-ng", "--json")
 		j.OK(t)
 		if !strings.Contains(j.Out(), "Saw ${res:person/alice-ng} about ${res:project/orbit}.") {
 			t.Errorf("[O D-822] ask --json does not keep the stored text:\n%s", j)
+		}
+	})
+	// devco D-844 (bug hunt H-101): in a blind agent run a small model
+	// answered "who is X" with the card's fields and no name (the card
+	// began "person alice-ng:"), and an agent that asked a bare project
+	// name got the three newest rows, not the decision. The card leads
+	// with the name; a bare name is everything about it, whose latest rows
+	// hold the newest decision, status and budget row next to the newest
+	// row of each folder.
+	s.Step("personal-store/name-first-and-bare-name", func() {
+		who := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "who is alise-ng").OK(t).Out()
+		if !strings.HasPrefix(who, "alice-ng (person): ") {
+			t.Errorf("[O D-844] the who-is card does not lead with the name:\n%s", who)
+		}
+		out := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "orbit").OK(t).Out()
+		latest, _, _ := strings.Cut(out, "\nopen tasks")
+		latest, _, _ = strings.Cut(latest, "cited: ")
+		for _, want := range []string{"\nwho: project orbit (", "\nlatest (the newest row of each folder and the newest decision, status, budget and meeting row, word for word):\n",
+			`"Decision for orbit: we chose postgres over mongodb because the reports need joins."`, `"Budget for orbit moved to 55k (was 40k)."`, `"Status update orbit: beta shipped to 12 users."`} {
+			if !strings.Contains(latest, want) {
+				t.Errorf("[O D-844] `lore ask --store me --query orbit`: no %q among its latest rows:\n%s", want, out)
+			}
 		}
 	})
 	// devco D-836 (bug hunt H-93): a small model summarising a changed

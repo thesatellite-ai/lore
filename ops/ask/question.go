@@ -39,6 +39,10 @@ type question struct {
 	// now is the moment the question is asked: a row whose valid_until
 	// is not after it is history, not the answer (devco D-820).
 	now time.Time
+	// about is an everything-about-X question: the words say so
+	// ("everything about hollow"), or the question is only the name of a
+	// resource ("hollow"). Set by build once the resources are matched.
+	about bool
 }
 
 // oweDir is the direction of a debt question.
