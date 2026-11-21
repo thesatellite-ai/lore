@@ -35,8 +35,10 @@ func TestJourneyResourceAliasesFindThePerson(t *testing.T) {
 		lap.LoreIn(code, "init").OK(t)
 		lap.LoreIn(code, "resource", "show", "--store", "me/work", "--id", "kiki").OK(t).
 			Says(t, "person/keiko-sato", "aliases: Kiki, general counsel")
+		// the reference reads as the person's name in the text answer
+		// (devco D-822), the row word for word on one line (devco D-836)
 		lap.LoreIn(code, "ask", "--store", "me", "--query", "everything about our general counsel").OK(t).
-			Says(t, "person keiko-sato", "Ask ${res:Kiki} about the contract.")
+			Says(t, "who: person keiko-sato", ", me/work: \"Ask keiko-sato about the contract.\"\n")
 		lap.LoreIn(code, "ask", "--store", "me", "--query", "what about kikki").OK(t).
 			Says(t, "person keiko-sato")
 		lap.LoreIn(code, "search", "--store", "me", "--query", "counsel").OK(t).

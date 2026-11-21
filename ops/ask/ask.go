@@ -187,6 +187,10 @@ type Row struct {
 	// resource's name (refs.Readable, devco D-822). --json keeps the
 	// stored text.
 	readTitle, readBody string
+	// replaces is the id of the older row on the same thing this newest
+	// row replaces (the id Note names), "" when none: the text answer
+	// leads with a "now:" line for it (devco D-836).
+	replaces string
 }
 
 // RoutedStore implements the op package's StoreRouter, as sql.run does
