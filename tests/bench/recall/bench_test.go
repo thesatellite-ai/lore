@@ -58,6 +58,7 @@ type call struct {
 	out      string // stdout + stderr
 	code     int
 	wall     time.Duration
+	cpu      time.Duration // user + system time of the process
 	timedOut bool
 }
 
@@ -78,6 +79,9 @@ func (e *benchEnv) run(limit time.Duration, args ...string) call {
 	start := time.Now()
 	err := cmd.Run()
 	c := call{out: out.String(), wall: time.Since(start), timedOut: ctx.Err() != nil}
+	if ps := cmd.ProcessState; ps != nil {
+		c.cpu = ps.UserTime() + ps.SystemTime()
+	}
 	if err != nil {
 		ee, ok := err.(*exec.ExitError)
 		if !ok && !c.timedOut {
@@ -219,12 +223,14 @@ func TestBenchRecall(t *testing.T) {
 	qs := ds.Questions(useRG)
 	clone := storeClone(t, home)
 	var rs []Result
+	boxLoad := [2]string{BoxLoad()}
 	for i, q := range qs {
 		r := Result{Q: q}
 		touchStore(t, e, clone, side, bare, i)
 		cold := e.run(e.limit, q.Lore...)
 		warm := e.run(e.limit, q.Lore...)
 		r.Lore.Calls, r.Lore.Cold, r.Lore.Warm, r.Lore.Chars, r.Lore.Exit = 1, cold.wall, warm.wall, len(warm.out), warm.code
+		r.Lore.ColdCPU, r.Lore.WarmCPU = cold.cpu, warm.cpu
 		r.Lore.Correct, r.Lore.Missing = Grade(q, warm.out)
 		switch {
 		case warm.timedOut:
@@ -245,7 +251,7 @@ func TestBenchRecall(t *testing.T) {
 		default:
 			r.Lore.Acc = GradeAccuracy(q, items)
 		}
-		t.Logf("%s cold %d ms, warm %d ms, correct %v, recall@3 %v, top-1 %v, stale %d, noise %d %s", q.ID, cold.wall.Milliseconds(), warm.wall.Milliseconds(), r.Lore.Correct, r.Lore.Acc.Recall, r.Lore.Acc.Top1, len(r.Lore.Acc.Stale), r.Lore.Acc.Noise, r.Lore.AccErr)
+		t.Logf("%s cold %d ms (cpu %d), warm %d ms (cpu %d), correct %v, recall@3 %v, top-1 %v, stale %d, noise %d %s", q.ID, cold.wall.Milliseconds(), cold.cpu.Milliseconds(), warm.wall.Milliseconds(), warm.cpu.Milliseconds(), r.Lore.Correct, r.Lore.Acc.Recall, r.Lore.Acc.Top1, len(r.Lore.Acc.Stale), r.Lore.Acc.Noise, r.Lore.AccErr)
 		var all strings.Builder
 		for _, c := range q.Grep {
 			cmd := exec.Command("bash", "-c", c)
@@ -263,12 +269,13 @@ func TestBenchRecall(t *testing.T) {
 		r.Grep.Present, r.Grep.Stale = GrepAccuracy(q, all.String())
 		rs = append(rs, r)
 	}
+	boxLoad[1] = BoxLoad()
 
 	tool := "grep (rg is not installed)"
 	if useRG {
 		tool = "rg"
 	}
-	report := Report(RunInfo{Now: ds.Now, Seed: seed, Rows: ds.Rows(), Lore: strings.TrimSpace(version), GrepTool: tool, Started: started, Load: load}, rs)
+	report := Report(RunInfo{Now: ds.Now, Seed: seed, Rows: ds.Rows(), Lore: strings.TrimSpace(version), GrepTool: tool, Started: started, Load: load, BoxLoad: boxLoad}, rs)
 	path := os.Getenv(envReport)
 	if path == "" {
 		path = filepath.Join(root, "tmp", "bench", "recall.md")

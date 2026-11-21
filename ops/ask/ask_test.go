@@ -2,6 +2,8 @@ package ask
 
 import (
 	"context"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -246,5 +248,44 @@ func TestRunOneLens(t *testing.T) {
 	}
 	if _, err := run(context.Background(), env, RunIn{Query: "  "}); err == nil {
 		t.Fatal("a blank question was not refused")
+	}
+}
+
+// TestLensTablesCoverTheStatements (devco D-813): the lens ask opens holds
+// only LensTables, so every table an ask statement reads must be listed,
+// for each kind of question (identity, owe, topic, date window).
+func TestLensTablesCoverTheStatements(t *testing.T) {
+	t.Parallel()
+	env := &fakeEnv{}
+	for _, q := range []string{"who is alice-ng", "what do I owe alice-ng", "everything about alice-ng", "what is the status of orbit", "what happened on 2026-11-12", "what happened last week"} {
+		if _, err := run(context.Background(), env, RunIn{Query: q}); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	read := regexp.MustCompile(`\b([a-z_]+)_all\b`)
+	for _, s := range env.stmts {
+		for _, m := range read.FindAllStringSubmatch(s, -1) {
+			if !slices.Contains(LensTables, m[1]) {
+				t.Fatalf("a statement reads %s_all, not in LensTables %v:\n%s", m[1], LensTables, s)
+			}
+		}
+	}
+}
+
+// TestDateQuestionReadsDaysOnce (devco D-813): row_meta_all reads every
+// row's metadata JSON, so a date question reads it in one statement of its
+// own, not once per text table (it was six scans, ~350 ms on 6,000 rows).
+func TestDateQuestionReadsDaysOnce(t *testing.T) {
+	t.Parallel()
+	env := &fakeEnv{}
+	if _, err := run(context.Background(), env, RunIn{Query: "what happened on 2026-11-12"}); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, s := range env.stmts {
+		n += strings.Count(s, "row_meta_all WHERE key_name = 'day'")
+	}
+	if n != 1 {
+		t.Fatalf("the day metadata is read %d time(s), want 1: %q", n, env.stmts)
 	}
 }

@@ -200,6 +200,12 @@ func sqlLike(s string) string {
 	return sqlText("%" + r.Replace(strings.ToLower(s)) + "%")
 }
 
+// LensTables are the tables the statements of ask read (each through its
+// "<table>_all" view): the lens is built with these alone (devco D-813),
+// so a call does not read and view the other tables of every cache.
+// TestLensTablesCoverTheStatements fails when a statement reads another.
+var LensTables = []string{"resources", "kinds", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents"}
+
 // typedSQL reads the resources (with kind name, fields and history), the
 // open tasks, their owed_by / owed_to metadata and their --ref pointers,
 // in one statement: a first column says which a line is.
@@ -337,6 +343,31 @@ func historyOf(s string) []historyEntry {
 
 // textTables are the tables ask reads rows from, with the SQL of their
 // title and text.
+// loadDays reads the rows whose day metadata falls in [since, end) (days
+// as YYYY-MM-DD): row id → its day, and the ids quoted for an IN list.
+// Read once on its own: row_meta_all reads every row's metadata JSON, and
+// as a subquery of each text table's arm it ran once per table (devco
+// D-813: a date question cost ~350 ms of its ~700 ms there).
+func loadDays(ctx context.Context, run Query, since, end string) (map[string]string, []string, error) {
+	res, err := run(ctx, "SELECT entity_id, value_text FROM row_meta_all WHERE key_name = 'day' AND item_idx >= 0 AND value_text >= "+sqlText(since)+" AND value_text < "+sqlText(end))
+	if err != nil {
+		return nil, nil, err
+	}
+	days := map[string]string{}
+	var ids []string
+	for _, row := range res.Rows {
+		if len(row) < 2 {
+			continue
+		}
+		id := cell(row[0])
+		if _, seen := days[id]; !seen {
+			ids = append(ids, sqlText(id))
+		}
+		days[id] = cell(row[1])
+	}
+	return days, ids, nil
+}
+
 var textTables = []struct{ table, title, body, extra string }{
 	{"memories", "''", "m.body", "m.valid_at"},
 	{"decisions", "m.title", "m.body", "NULL"},
@@ -371,12 +402,21 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 		conds = append(conds, "m.id IN (SELECT entity_id FROM row_refs_all WHERE ref_id IN ("+strings.Join(ids, ", ")+"))")
 	}
 	win := !q.window.IsZero()
+	var days map[string]string
 	if win {
 		// days as YYYY-MM-DD: a stored date (2026-11-02T00:00:00.000000000Z)
 		// sorts after its day and before the next one
 		since, end := q.window.Since.Format(time.DateOnly), q.window.End.Format(time.DateOnly)
-		conds = append(conds, "(%V >= "+sqlText(since)+" AND %V < "+sqlText(end)+")",
-			"m.id IN (SELECT entity_id FROM row_meta_all WHERE key_name = 'day' AND item_idx >= 0 AND value_text >= "+sqlText(q.window.Since.Format("2006-01-02"))+" AND value_text < "+sqlText(q.window.End.Format("2006-01-02"))+")")
+		var dayIDs []string
+		var err error
+		if days, dayIDs, err = loadDays(ctx, run, since, end); err != nil {
+			return nil, err
+		}
+		dayCond := "0"
+		if len(dayIDs) > 0 {
+			dayCond = "m.id IN (" + strings.Join(dayIDs, ", ") + ")"
+		}
+		conds = append(conds, "(%V >= "+sqlText(since)+" AND %V < "+sqlText(end)+")", dayCond)
 		if len(ms) > 0 {
 			conds = conds[len(conds)-2:] // the window decides; the resource filter runs in Go
 		}
@@ -406,10 +446,6 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 	if len(ids) > 0 {
 		stmt += "\nUNION ALL SELECT 'ref', entity_table, entity_id, ref_id, '', '', '', 0, 0 FROM row_refs_all WHERE ref_id IN (" + strings.Join(ids, ", ") + ")"
 	}
-	if win {
-		stmt += "\nUNION ALL SELECT 'day', entity_table, entity_id, value_text, '', '', '', 0, 0 FROM row_meta_all WHERE key_name = 'day' AND item_idx >= 0 AND value_text >= " +
-			sqlText(q.window.Since.Format("2006-01-02")) + " AND value_text < " + sqlText(q.window.End.Format("2006-01-02"))
-	}
 	res, err := run(ctx, stmt)
 	if err != nil {
 		return nil, err
@@ -417,7 +453,6 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 	var out []textRow
 	at := map[string]int{}
 	refs := map[string][]string{}
-	days := map[string]string{}
 	for _, row := range res.Rows {
 		if len(row) < 9 {
 			continue
@@ -436,8 +471,6 @@ func loadRows(ctx context.Context, run Query, q question, ms []match) ([]textRow
 			out = append(out, textRow{Table: c[1], ID: c[2], Place: c[3], Title: c[4], Body: c[5], At: t, Imported: c[7] == "1", Superseded: c[8] == "1"})
 		case "ref":
 			refs[c[2]] = append(refs[c[2]], c[3])
-		case "day":
-			days[c[2]] = c[3]
 		}
 	}
 	for i := range out {

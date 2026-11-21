@@ -2,6 +2,7 @@ package recall
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -18,13 +19,18 @@ const (
 
 // LoreRun is the lore arm's result for one question.
 type LoreRun struct {
-	Calls   int
-	Warm    time.Duration // the second run of the call
-	Cold    time.Duration // the first run after the store changed
-	Chars   int           // output of the warm run (stdout + stderr)
-	Correct bool
-	Missing []string
-	Exit    int
+	Calls int
+	Warm  time.Duration // the second run of the call
+	Cold  time.Duration // the first run after the store changed
+	// WarmCPU and ColdCPU are the CPU time (user + system) of the same two
+	// runs: on a loaded box wall time is mostly waiting for a core, and CPU
+	// time shows what the call itself costs (devco D-813). The bars stay
+	// on wall time.
+	WarmCPU, ColdCPU time.Duration
+	Chars            int // output of the warm run (stdout + stderr)
+	Correct          bool
+	Missing          []string
+	Exit             int
 	// Acc is the accuracy grade of the same call with --json (the ranked
 	// answer items); AccErr says why there is none (the call failed or
 	// its JSON did not read), which fails every accuracy bar.
@@ -58,6 +64,7 @@ type Summary struct {
 	LoreCalls, GrepCalls     int
 	WarmP50, WarmMax         time.Duration
 	ColdMax                  time.Duration
+	WarmCPUP50, WarmCPUMax   time.Duration
 	LoreChars, GrepChars     int
 	LoreCorrect, GrepCorrect int
 	Harder, HarderOf         int
@@ -72,7 +79,7 @@ type Summary struct {
 // Summarize totals results.
 func Summarize(rs []Result) Summary {
 	var s Summary
-	var warm []time.Duration
+	var warm, cpu []time.Duration
 	for _, r := range rs {
 		s.Questions++
 		s.LoreCalls += r.Lore.Calls
@@ -82,6 +89,8 @@ func Summarize(rs []Result) Summary {
 		warm = append(warm, r.Lore.Warm)
 		s.WarmMax = max(s.WarmMax, r.Lore.Warm)
 		s.ColdMax = max(s.ColdMax, r.Lore.Cold)
+		cpu = append(cpu, r.Lore.WarmCPU)
+		s.WarmCPUMax = max(s.WarmCPUMax, r.Lore.WarmCPU)
 		if r.Lore.Correct {
 			s.LoreCorrect++
 		}
@@ -117,17 +126,20 @@ func Summarize(rs []Result) Summary {
 	if len(warm) > 0 {
 		slices.Sort(warm)
 		s.WarmP50 = warm[len(warm)/2]
+		slices.Sort(cpu)
+		s.WarmCPUP50 = cpu[len(cpu)/2]
 	}
 	return s
 }
 
 // Line is the summary line, accuracy first: `recall@3 R/N, top-1 T/N,
 // stale S, noise X, calls L/G, warm p50/max ms, cold max ms, chars L/G,
-// correct L/G of N, harder L/20`.
+// correct L/G of N, harder L/20, warm cpu p50/max ms`.
 func (s Summary) Line() string {
-	return fmt.Sprintf("recall@3 %d/%d, top-1 %d/%d, stale %d, noise %d, calls %d/%d, warm p50/max %d/%d ms, cold max %d ms, chars %d/%d, correct %d/%d of %d, harder %d/%d",
+	return fmt.Sprintf("recall@3 %d/%d, top-1 %d/%d, stale %d, noise %d, calls %d/%d, warm p50/max %d/%d ms, cold max %d ms, chars %d/%d, correct %d/%d of %d, harder %d/%d, warm cpu p50/max %d/%d ms",
 		s.Recall, s.Questions, s.Top1, s.Questions, s.Stale, s.Noisy, s.LoreCalls, s.GrepCalls, s.WarmP50.Milliseconds(), s.WarmMax.Milliseconds(), s.ColdMax.Milliseconds(),
-		s.LoreChars, s.GrepChars, s.LoreCorrect, s.GrepCorrect, s.Questions, s.Harder, s.HarderOf)
+		s.LoreChars, s.GrepChars, s.LoreCorrect, s.GrepCorrect, s.Questions, s.Harder, s.HarderOf,
+		s.WarmCPUP50.Milliseconds(), s.WarmCPUMax.Milliseconds())
 }
 
 // typeTotals is one type's totals.
@@ -283,6 +295,10 @@ type RunInfo struct {
 	GrepTool string // rg or grep
 	Started  time.Time
 	Load     time.Duration // writing the store
+	// BoxLoad is the machine's load average (1/5/15 min) at the start
+	// and at the end of the questions ("" where it cannot be read), so a
+	// report from a loaded box says so next to its wall times.
+	BoxLoad [2]string
 }
 
 // Report renders tmp/bench/recall.md: the run, the summary line, the
@@ -293,6 +309,9 @@ func Report(info RunInfo, rs []Result) string {
 	misses := Misses(rs)
 	fmt.Fprintf(&b, "# lore beats grep: recall gate\n\n")
 	fmt.Fprintf(&b, "Run %s; now pinned at %s; seed %d; %d rows in the store (loaded in %s); %s; grep arm tool: %s.\n\n", info.Started.UTC().Format(time.RFC3339), info.Now.Format(time.RFC3339), info.Seed, info.Rows, info.Load.Round(time.Second), info.Lore, info.GrepTool)
+	if info.BoxLoad[0] != "" || info.BoxLoad[1] != "" {
+		fmt.Fprintf(&b, "Box load (1/5/15 min): %s at the first question, %s after the last; wall times on a loaded box are mostly waiting for a core, so each call's CPU time (user + system) is shown next to it.\n\n", orNone(info.BoxLoad[0]), orNone(info.BoxLoad[1]))
+	}
 	fmt.Fprintf(&b, "Summary: `%s`\n\n", s.Line())
 	if len(misses) == 0 {
 		b.WriteString("Result: PASS (every bar met)\n\n")
@@ -340,14 +359,14 @@ func Report(info RunInfo, rs []Result) string {
 		}
 		fmt.Fprintf(&b, "| %s | %d | %d/%d | %d/%d | %d | %d | %d/%d | %.2f |\n", t, tt.n, tt.loreOK, tt.grepOK, tt.loreCalls, tt.grepCalls, tt.warmMax.Milliseconds(), tt.coldMax.Milliseconds(), tt.loreChars, tt.grepChars, ratio)
 	}
-	b.WriteString("\n## Per question\n\n| id | type | question | lore call | recall@3 | top-1 | stale | noise | lore ok | warm ms | cold ms | lore chars | grep calls | grep chars | grep ok | lore misses |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Per question\n\n| id | type | question | lore call | recall@3 | top-1 | stale | noise | lore ok | warm ms | warm cpu ms | cold ms | cold cpu ms | lore chars | grep calls | grep chars | grep ok | lore misses |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range rs {
 		a := r.Lore.Acc
 		misses := append(slices.Clone(a.Missing), r.Lore.Missing...)
 		if r.Lore.AccErr != "" {
 			misses = append([]string{r.Lore.AccErr}, misses...)
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | `lore %s` | %s | %s | %d | %d | %s | %d | %d | %d | %d | %d | %s | %s |\n", r.Q.ID, r.Q.Type, cell(r.Q.Text), cell(strings.Join(r.Q.Lore, " ")), yes(a.Recall), yes(a.Top1), len(a.Stale), a.Noise, yes(r.Lore.Correct), r.Lore.Warm.Milliseconds(), r.Lore.Cold.Milliseconds(), r.Lore.Chars, r.Grep.Calls, r.Grep.Chars, yes(r.Grep.Correct), cell(strings.Join(cut(misses, 3), "; ")))
+		fmt.Fprintf(&b, "| %s | %s | %s | `lore %s` | %s | %s | %d | %d | %s | %d | %d | %d | %d | %d | %d | %d | %s | %s |\n", r.Q.ID, r.Q.Type, cell(r.Q.Text), cell(strings.Join(r.Q.Lore, " ")), yes(a.Recall), yes(a.Top1), len(a.Stale), a.Noise, yes(r.Lore.Correct), r.Lore.Warm.Milliseconds(), r.Lore.WarmCPU.Milliseconds(), r.Lore.Cold.Milliseconds(), r.Lore.ColdCPU.Milliseconds(), r.Lore.Chars, r.Grep.Calls, r.Grep.Chars, yes(r.Grep.Correct), cell(strings.Join(cut(misses, 3), "; ")))
 	}
 	return b.String()
 }
@@ -363,4 +382,26 @@ func yes(ok bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+// orNone prints an unread load average as "unknown".
+func orNone(s string) string {
+	if s == "" {
+		return "unknown"
+	}
+	return s
+}
+
+// BoxLoad reads the 1, 5 and 15 minute load averages from /proc/loadavg
+// ("" where there is none, as on macOS).
+func BoxLoad() string {
+	b, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return ""
+	}
+	f := strings.Fields(string(b))
+	if len(f) < 3 {
+		return ""
+	}
+	return strings.Join(f[:3], " ")
 }

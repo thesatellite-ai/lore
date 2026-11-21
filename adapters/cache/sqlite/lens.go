@@ -116,6 +116,14 @@ type LensOptions struct {
 	// Only's resources needs (lens_kindarms.go) and the sensitive fields
 	// the mask hides; no view reads their rows. "" reads every source.
 	Only string
+	// Tables, when set, names the only tables the lens exposes: their
+	// "<table>" and "<table>_all" views, none of the derived views
+	// (res__*, trash, time_spent, task_rollup) unless named, and no
+	// res_<kind> view unless one is named. A caller whose statements read
+	// a fixed set of tables (lore ask) skips reading and viewing the rest
+	// (devco D-813); masking is the same as a full lens's. nil exposes
+	// every table.
+	Tables []string
 }
 
 // LensHit is where ResolveID found an id.
@@ -163,6 +171,8 @@ type Lens struct {
 	places map[string]string
 	// only is LensOptions.Only (lens_only.go, D-799).
 	only string
+	// tables is LensOptions.Tables (lens_tables.go, D-813).
+	tables []string
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -221,7 +231,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, query: o.Query, loadTrash: o.LoadTrash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places, only: o.Only}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, query: o.Query, loadTrash: o.LoadTrash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places, only: o.Only, tables: slices.Clone(o.Tables)}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -312,6 +322,9 @@ func (l *Lens) setup(ctx context.Context) error {
 			return errs.Prefix("sqlite lens: source "+quoteText(s.Name), err)
 		}
 		for _, n := range names {
+			if !l.wants(n) {
+				continue // D-813: a narrowed lens reads only the tables it exposes
+			}
 			cols, err := l.columns(ctx, i, n)
 			if err != nil {
 				return err
@@ -321,8 +334,10 @@ func (l *Lens) setup(ctx context.Context) error {
 	}
 	// devco D-758: a res_<kind> view also reads the sources whose own
 	// cache lacks the kind (lens_kindarms.go).
-	if err := l.addKindArms(ctx, tables); err != nil {
-		return err
+	if l.wantsKindArms() {
+		if err := l.addKindArms(ctx, tables); err != nil {
+			return err
+		}
 	}
 	var m mask
 	if l.masked {
@@ -333,6 +348,7 @@ func (l *Lens) setup(ctx context.Context) error {
 		l.hidden = l.hiddenNames()
 	}
 	l.keepOnly(tables)
+	l.keepNamed(tables)
 	names := make([]string, 0, len(tables))
 	for n := range tables {
 		names = append(names, n)
@@ -342,6 +358,9 @@ func (l *Lens) setup(ctx context.Context) error {
 		if err := l.createViews(ctx, n, tables[n], m); err != nil {
 			return err
 		}
+	}
+	if l.narrowed() {
+		return l.lock(ctx) // D-813: the derived views read tables it does not expose
 	}
 	// RES 3.10: res__kinds, res__all, res__edges, res__dangling over the
 	// `_all` views (resviews below).
@@ -372,6 +391,11 @@ func (l *Lens) setup(ctx context.Context) error {
 	if err := l.loadTrashFor(ctx); err != nil {
 		return err
 	}
+	return l.lock(ctx)
+}
+
+// lock makes the lens read-only once its views exist.
+func (l *Lens) lock(ctx context.Context) error {
 	if _, err := l.conn.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
 		return dbErr("lock lens", err)
 	}
