@@ -252,10 +252,12 @@ Every live write is a commit, so the live list's history keeps growing. **Compac
 ```console
 # alice, in website
 $ lore live compact --dry-run
-refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2, and force-push it to the remote origin (every clone fetches the rewritten ref)
+refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2, on this machine only (the remote origin has no live ref yet; `lore sync run` sends the compacted ref with the live writes waiting here)
 $ lore live compact --yes
-✓ compacted refs/lore/live to 1 commit (epoch 2) and force-pushed it to the remote origin, so every clone gets the rewritten ref on its next fetch; backup kept locally as refs/lore-backup/live/20261102T100025
-$ lore live log
+✓ compacted refs/lore/live to 1 commit (epoch 2) on this machine only; the remote origin has no live ref yet, and `lore sync run` sends it with the live writes waiting here; backup kept locally as refs/lore-backup/live/20261102T100025
+$ lore sync >/dev/null; lore live log
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
+lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit)
 epoch 2
 601d285 2026-11-02 alice  lore: live compact (epoch 2)
 ```
@@ -271,7 +273,7 @@ epoch 2
 
 "No parent" means the new commit starts a fresh history with nothing before it. A clone that sees a higher epoch backs up its live list, takes the remote's commit and re-applies only its own unpushed writes on top.
 
-Compaction runs by itself past `live.compact_after` (1000) commits, at most once a day. It never touches `main` or any code branch.
+Compaction runs by itself past `live.compact_after` (1000) commits, at most once a day, and only in a run whose live writes go out (`live.autopush` on, or `lore sync`). It never touches `main` or any code branch. A compaction never pushes live writes that wait for `lore sync`: in the example above the remote had no live ref yet, so `lore live compact` stayed on Alice's machine and her `lore sync` sent one commit.
 
 ## Signals: claim, renew, expire, reclaim
 

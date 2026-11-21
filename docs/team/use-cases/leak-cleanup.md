@@ -33,7 +33,7 @@ $ lore sync >/dev/null; lore task list
 ```
 <!-- /example -->
 
-The cleanup has two steps. `lore live purge --ids <id> --confirm` removes the row from live (like `lore trash purge`, it asks first: without `--confirm` it refuses and purges nothing, and `--dry-run` lists what would go) and writes its id to a purge list on the live ref. So every clone drops it on its next fetch, and no clone can push it back. `lore live compact --yes` then rewrites the live ref to a single commit and force-pushes it to the code repo's remote (it asks first; `--yes` answers without a terminal). So the row is gone from the ref's history too:
+The cleanup has two steps. `lore live purge --ids <id> --confirm` removes the row from live (like `lore trash purge`, it asks first: without `--confirm` it refuses and purges nothing, and `--dry-run` lists what would go) and writes its id to a purge list on the live ref. So every clone drops it on its next fetch, and no clone can push it back. `lore live compact --yes` then rewrites the live ref to a single commit and force-pushes it to the code repo's remote (it asks first; `--yes` answers without a terminal). So the row is gone from the ref's history too. Here the row was never synced (live writes wait for `lore sync` while `live.autopush` is off), so the remote has no live ref yet: the compaction stays on Alice's machine, pushes nothing, and her next `lore sync` sends one clean commit, so the text never reaches the remote at all:
 
 <!-- example: leak-cleanup#purge -->
 ```console
@@ -41,10 +41,12 @@ The cleanup has two steps. `lore live purge --ids <id> --confirm` removes the ro
 $ lore live purge --ids tsk_162d…9666 --confirm
 ✓ purged tsk_162d…9666 from live; run `lore live compact` to drop them from the ref's history too
 $ lore live compact --dry-run
-refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2, and force-push it to the remote origin (every clone fetches the rewritten ref)
+refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2, on this machine only (the remote origin has no live ref yet; `lore sync run` sends the compacted ref with the live writes waiting here)
 $ lore live compact --yes
-✓ compacted refs/lore/live to 1 commit (epoch 2) and force-pushed it to the remote origin, so every clone gets the rewritten ref on its next fetch; backup kept locally as refs/lore-backup/live/20261102T100025
-$ lore live log
+✓ compacted refs/lore/live to 1 commit (epoch 2) on this machine only; the remote origin has no live ref yet, and `lore sync run` sends it with the live writes waiting here; backup kept locally as refs/lore-backup/live/20261102T100025
+$ lore sync >/dev/null; lore live log
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
+lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit)
 epoch 2
 601d285 2026-11-02 alice  lore: live compact (epoch 2)
 
@@ -65,7 +67,7 @@ Carol no longer sees it. A fresh mirror of everything the remote serves (every b
 ## The runbook
 
 1. **`lore live purge --ids <id> --confirm`**: removes the row from the live ref for good. Purge entries are kept for 30 days. A clone that has not run lore since then could push the row back; `lore doctor` reports that.
-2. **`lore live compact --yes`**: drops the row from the live ref's history and force-pushes the rewritten ref to the code repo's remote, which every clone fetches. Your own previous live ref is kept locally as `refs/lore-backup/live/<stamp>`.
+2. **`lore live compact --yes`**: drops the row from the live ref's history and force-pushes the rewritten ref to the code repo's remote, which every clone fetches. Your own previous live ref is kept locally as `refs/lore-backup/live/<stamp>`. With `live.autopush` off it never pushes live writes that wait for `lore sync`: if the remote has no live ref yet, it compacts on your machine only and `lore sync` sends the clean commit; if the remote has one and writes wait (the purge itself, say), it refuses with `E_REFUSED` and changes nothing, so run `lore sync run` first and then `lore live compact --yes`.
 3. **If it landed on `main`** (or rode along in a merged pull request), it is an ordinary git history problem. Revert it, and rewrite history if the text must be gone.
 4. **If it contained a secret**, rotate the secret. A pushed secret must be treated as known.
 5. **Copies already fetched stay.** Anyone who fetched before the purge (Carol did) still has the data in their clone, exactly as with any pushed commit. Lore cannot reach other people's machines.

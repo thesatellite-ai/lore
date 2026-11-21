@@ -674,7 +674,7 @@ s_leak_cleanup() {
   on alice work/website "lore live purge --ids $t --confirm"
   on alice work/website "lore live compact --dry-run"
   on alice work/website "lore live compact --yes"
-  on alice work/website "lore live log"
+  on alice work/website "lore sync >/dev/null; lore live log"
   on carol work/app "lore sync >/dev/null; lore task list"
   person newdev newdev@client.example
   on newdev work "git clone -q --mirror https://github.com/client/website app.git && cd app.git && git for-each-ref --format='%(refname)' && for c in \$(git rev-list --all); do git grep -q -i 'unpaid March' \$c && echo \"found in \$c\"; done; echo 'searched every commit the remote serves'"

@@ -480,6 +480,14 @@ const (
 	PushOffline    PushStatus = "offline"     // no verdict: remote unreachable
 	PushRefused    PushStatus = "refused"     // the host refused refs/lore/* (or protection)
 	PushRetriesOut PushStatus = "retries-out" // lost every race
+	// PushWaiting: a compaction that would have to push local writes the
+	// remote has not confirmed, asked without CompactRequest.PushWaiting;
+	// nothing changed (devco D-881).
+	PushWaiting PushStatus = "writes-waiting"
+	// PushKeptLocal: a compaction done on this machine only because the
+	// remote has no live ref yet and writes wait for lore sync (devco
+	// D-881); lore sync sends it.
+	PushKeptLocal PushStatus = "kept-local"
 )
 
 // PushOutcome reports a Push.

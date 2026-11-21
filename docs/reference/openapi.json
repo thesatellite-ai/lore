@@ -29202,6 +29202,9 @@
                     "from_epoch": {
                       "type": "integer"
                     },
+                    "kept_local": {
+                      "type": "boolean"
+                    },
                     "nothing": {
                       "type": "boolean"
                     },
@@ -29265,7 +29268,7 @@
             }
           },
           "409": {
-            "description": "E_NOT_PROJECT_ROOT, E_READ_ONLY, E_UNSUPPORTED",
+            "description": "E_NOT_PROJECT_ROOT, E_READ_ONLY, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {

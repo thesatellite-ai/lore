@@ -50,7 +50,7 @@ func TestCompactKeepsRowsRaisesEpochAndSurvivesARacingWriter(t *testing.T) {
 		_, err := rb.Push(ctx)
 		return err
 	})
-	res, err := ra.Compact(context.Background(), false)
+	res, err := ra.Compact(context.Background(), CompactRequest{PushWaiting: true})
 	if err != nil || res.Status != PushDone || res.Backup == "" {
 		t.Fatalf("compact: %+v %v", res, err)
 	}
@@ -91,7 +91,7 @@ func TestPurgeThenCompactDropsTheRowFromHistory(t *testing.T) {
 	if _, ok := readRowAt(t, r, RefLive, "tsk_leak"); ok {
 		t.Fatal("purge removes the row from the tree")
 	}
-	if _, err := r.Compact(context.Background(), false); err != nil {
+	if _, err := r.Compact(context.Background(), CompactRequest{PushWaiting: true}); err != nil {
 		t.Fatal(err)
 	}
 	for _, rev := range []string{w.OriginRef(RefLive)} {
@@ -119,7 +119,7 @@ func TestCompactDryRunChangesNothing(t *testing.T) {
 	write(t, r, put("tsk_2", NewVersion(nil, row("tsk_2", "y", "low"), t0, "a")))
 	mustPush(t, r)
 	before := w.OriginRef(RefLive)
-	res, err := r.Compact(context.Background(), true)
+	res, err := r.Compact(context.Background(), CompactRequest{DryRun: true, PushWaiting: true})
 	if err != nil || res.Plan.FromEpoch != 1 || res.Plan.ToEpoch != 2 || res.Plan.Commits != 2 {
 		t.Fatalf("plan: %+v %v", res, err)
 	}
@@ -176,7 +176,7 @@ func TestCompactEpochRaisesByOneOnlyWhenHistoryIsRewritten(t *testing.T) {
 	}
 	for _, s := range steps {
 		before := w.OriginRef(RefLive)
-		res, err := r.Compact(ctx, s.dry)
+		res, err := r.Compact(ctx, CompactRequest{DryRun: s.dry, PushWaiting: true})
 		if err != nil {
 			t.Fatalf("%s: %v", s.name, err)
 		}
@@ -197,7 +197,7 @@ func TestCompactEpochRaisesByOneOnlyWhenHistoryIsRewritten(t *testing.T) {
 	if got := epochAt(); got != 2 {
 		t.Fatalf("a write changed the epoch: %d", got)
 	}
-	if res, err := r.Compact(ctx, false); err != nil || res.Plan.ToEpoch != 3 || epochAt() != 3 {
+	if res, err := r.Compact(ctx, CompactRequest{PushWaiting: true}); err != nil || res.Plan.ToEpoch != 3 || epochAt() != 3 {
 		t.Fatalf("second real compaction: %+v %v, remote epoch %d", res, err, epochAt())
 	}
 }
@@ -213,12 +213,78 @@ func TestCompactWithNothingToDoPushesNoWaitingWrite(t *testing.T) {
 	r := newRef(t, a, a.Remote)
 	write(t, r, put("tsk_1", NewVersion(nil, row("tsk_1", "x", "low"), t0, "a")))
 	for _, dry := range []bool{false, true} {
-		res, err := r.Compact(ctx, dry)
+		res, err := r.Compact(ctx, CompactRequest{DryRun: dry})
 		if err != nil || res.Status != PushNothing {
 			t.Fatalf("dry %v: %+v %v", dry, res, err)
 		}
 		if got := w.OriginRef(RefLive); got != "" {
 			t.Fatalf("dry %v: compact pushed the waiting write: origin %s = %s", dry, RefLive, got)
 		}
+	}
+}
+
+// S-1 (devco D-881): a compaction asked without PushWaiting (live.autopush
+// off) never pushes the writes that wait for lore sync. With no live ref on
+// the remote it compacts on this machine only (KeptLocal) and lore sync
+// then sends one clean commit; with a remote live ref it answers
+// PushWaiting and changes nothing, dry run or not. With nothing waiting it
+// still rewrites and force-pushes its own rewrite (the question named it).
+// Old code pushed the waiting writes, then force-pushed the rewrite.
+func TestCompactNeverPushesWaitingWritesWithoutPushWaiting(t *testing.T) {
+	ctx := context.Background()
+	w := gitremotetest.NewWorld(t)
+	a := w.Clone("a")
+	r := newRef(t, a, a.Remote)
+	write(t, r, put("tsk_1", NewVersion(nil, row("tsk_1", "x", "low"), t0, "a")))
+	write(t, r, put("tsk_2", NewVersion(nil, row("tsk_2", "y", "low"), t0, "a")))
+
+	// no live ref on the remote: the plan and the compaction stay here
+	res, err := r.Compact(ctx, CompactRequest{DryRun: true})
+	if err != nil || !res.KeptLocal || res.Status != "" || res.Plan.Commits < 2 || w.OriginRef(RefLive) != "" {
+		t.Fatalf("dry run, no remote ref: %+v %v (origin %q)", res, err, w.OriginRef(RefLive))
+	}
+	res, err = r.Compact(ctx, CompactRequest{})
+	if err != nil || !res.KeptLocal || res.Status != PushKeptLocal || res.Backup == "" {
+		t.Fatalf("no remote ref: %+v %v", res, err)
+	}
+	if got := w.OriginRef(RefLive); got != "" {
+		t.Fatalf("compact pushed the waiting writes: origin %s = %s", RefLive, got)
+	}
+	if n, _ := r.CommitCount(ctx); n != 1 {
+		t.Fatalf("local ref has %d commits after compacting", n)
+	}
+	// lore sync sends the compacted ref: one commit, every row, epoch 2.
+	mustPush(t, r)
+	if n := commitCount(t, w.OriginDir); n != 1 {
+		t.Fatalf("origin has %d commits after sync", n)
+	}
+	tip := w.OriginRef(RefLive)
+	for _, id := range []string{"tsk_1", "tsk_2"} {
+		if _, ok := readRowAt(t, r, tip, id); !ok {
+			t.Fatalf("%s lost by the local compaction", id)
+		}
+	}
+
+	// a remote live ref and a write waiting on top of it: refused, nothing changes
+	write(t, r, put("tsk_3", NewVersion(nil, row("tsk_3", "z", "low"), t0, "a")))
+	before, _ := r.Snapshot(ctx)
+	for _, dry := range []bool{true, false} {
+		res, err := r.Compact(ctx, CompactRequest{DryRun: dry})
+		if err != nil || res.Status != PushWaiting || res.KeptLocal || res.Backup != "" {
+			t.Fatalf("write waiting, dry %v: %+v %v", dry, res, err)
+		}
+		if got := w.OriginRef(RefLive); got != tip {
+			t.Fatalf("write waiting, dry %v: compact pushed: origin %s → %s", dry, tip, got)
+		}
+		if after, _ := r.Snapshot(ctx); after.Local != before.Local {
+			t.Fatalf("write waiting, dry %v: the local ref changed %s → %s", dry, before.Local, after.Local)
+		}
+	}
+
+	// nothing waits: the rewrite itself is what was asked, it goes out
+	mustPush(t, r)
+	res, err = r.Compact(ctx, CompactRequest{})
+	if err != nil || res.Status != PushDone || res.KeptLocal || commitCount(t, w.OriginDir) != 1 {
+		t.Fatalf("nothing waiting: %+v %v (origin commits %d)", res, err, commitCount(t, w.OriginDir))
 	}
 }

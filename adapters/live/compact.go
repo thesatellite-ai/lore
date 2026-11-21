@@ -90,6 +90,30 @@ type CompactResult struct {
 	Status PushStatus
 	Backup string
 	Commit string
+	// KeptLocal: the remote has no live ref yet and writes wait for lore
+	// sync, so the compaction (or, with DryRun, the plan) stays on this
+	// machine and pushes nothing; lore sync sends the compacted ref
+	// (CompactRequest.PushWaiting false, devco D-881).
+	KeptLocal bool
+}
+
+// CompactRequest is what Compact is asked to do.
+type CompactRequest struct {
+	// DryRun plans only: nothing changes and nothing is pushed.
+	DryRun bool
+	// PushWaiting lets a compaction first push the local writes the remote
+	// has not confirmed yet, so they are part of what is compacted. The host
+	// sets it only when live writes may leave this machine on their own
+	// (live.autopush on) or the run is a push the person asked for (lore
+	// sync). Why: the person's yes to "rewrite and force-push the live ref"
+	// is not a yes to sending writes that wait for lore sync (S-1, devco
+	// D-881). With it false and writes waiting, a remote that has no live
+	// ref yet gets nothing: the ref is compacted on this machine only
+	// (CompactResult.KeptLocal) and the clean one-commit ref goes out on
+	// lore sync, so a leaked row that never left never reaches the remote,
+	// not even in history. A remote that has a live ref answers PushWaiting
+	// and nothing changes: the writes go out with lore sync first.
+	PushWaiting bool
 }
 
 // compactRetries bounds the restarts when a writer pushes between our
@@ -102,10 +126,12 @@ const compactRetries = 5
 // the tip it read, so a concurrent writer makes it start again instead of
 // being overwritten (F8). When a rewrite is needed, local writes not
 // pushed yet are pushed first, so they are part of what is compacted; when
-// none is (or with dryRun) nothing changes and nothing is pushed.
-func (r *Ref) Compact(ctx context.Context, dryRun bool) (CompactResult, error) {
+// none is (or with DryRun) nothing changes and nothing is pushed. When a
+// rewrite is needed, local writes wait and PushWaiting is false, it answers
+// PushWaiting with the plan and changes nothing (also with DryRun).
+func (r *Ref) Compact(ctx context.Context, req CompactRequest) (CompactResult, error) {
 	for attempt := 0; attempt < compactRetries; attempt++ {
-		res, err := r.compactOnce(ctx, dryRun)
+		res, err := r.compactOnce(ctx, req)
 		if err == nil && res.Status == PushRetriesOut {
 			continue // lost the lease: someone wrote meanwhile, start again
 		}
@@ -114,7 +140,7 @@ func (r *Ref) Compact(ctx context.Context, dryRun bool) (CompactResult, error) {
 	return CompactResult{Status: PushRetriesOut}, nil
 }
 
-func (r *Ref) compactOnce(ctx context.Context, dryRun bool) (CompactResult, error) {
+func (r *Ref) compactOnce(ctx context.Context, req CompactRequest) (CompactResult, error) {
 	var res CompactResult
 	if r.Remote != nil {
 		if err := r.Fetch(ctx); err != nil {
@@ -132,11 +158,28 @@ func (r *Ref) compactOnce(ctx context.Context, dryRun bool) (CompactResult, erro
 	// to do (or a dry run) pushes nothing, not even local writes that wait
 	// for lore sync under live.autopush false (S-1: no push without asking).
 	p, err := r.compactPlan(ctx)
-	if err != nil || !p.needed || dryRun {
+	if err != nil || !p.needed {
 		res.Plan, res.Status = p.plan, p.status
 		return res, err
 	}
-	if r.Remote != nil {
+	if r.Remote != nil && !req.PushWaiting && p.snap.Ahead() {
+		if p.snap.Tracking != "" {
+			// A rewrite would push the writes that wait for lore sync with
+			// it: refuse before anything changes, dry run or not, so a
+			// question is never asked for a compaction that cannot run
+			// (S-1, devco D-881).
+			res.Plan, res.Status = p.plan, PushWaiting
+			return res, nil
+		}
+		// The remote has no live ref: every commit is a waiting write, and
+		// the compaction is this machine's alone; lore sync sends it.
+		res.KeptLocal = true
+	}
+	if req.DryRun {
+		res.Plan, res.Status = p.plan, p.status
+		return res, nil
+	}
+	if r.Remote != nil && !res.KeptLocal {
 		// Local writes not pushed yet are pushed first, so they are part of
 		// what is compacted; the push may integrate, so plan again after it.
 		out, err := r.Push(ctx)
@@ -171,6 +214,13 @@ func (r *Ref) compactOnce(ctx context.Context, dryRun bool) (CompactResult, erro
 	if r.Remote == nil {
 		res.Status = PushNoRemote
 		return res, r.markSeen(c.OID)
+	}
+	if res.KeptLocal {
+		// Nothing was pushed and the remote still has no live ref: the
+		// compacted commit waits for lore sync like any write; the seen tip
+		// stays (the remote's, none).
+		res.Status = PushKeptLocal
+		return res, nil
 	}
 	out, err := r.ForcePush(ctx, s.Tracking)
 	if err != nil {

@@ -54,7 +54,7 @@ func TestListPurgedKeepsTheTombstone(t *testing.T) {
 	}
 	assertTombstone(t, tree, "tsk_purged")
 	mustPush(t, r)
-	if _, err = r.Compact(ctx, false); err != nil {
+	if _, err = r.Compact(ctx, CompactRequest{PushWaiting: true}); err != nil {
 		t.Fatal(err)
 	}
 	_, tree, err = r.LocalTree(ctx)

@@ -276,3 +276,30 @@ func TestPurgeConfirmAndDryRun(t *testing.T) {
 		}
 	}
 }
+
+// TestCompactKeptLocalSaysNothingLeftThisMachine (devco D-881): with live
+// writes waiting for lore sync and no live ref on the remote yet, the
+// compaction stays on this machine; the question, the plan and the result
+// say so and name `lore sync run` as what sends it, never "force-pushed".
+func TestCompactKeptLocalSaysNothingLeftThisMachine(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	plan := CompactPlan{Ref: "refs/lore/live", Commits: 3, Threshold: 1000, Files: 4, FromEpoch: 1, ToEpoch: 2, Remote: "origin", KeptLocal: true}
+	f := &fakeRef{compact: Compacted{Plan: plan, Backup: "refs/lore-backup/live/x"}}
+	_, err := compact(ctx, env{r: f}, CompactIn{})
+	var e *errs.Error
+	if !errors.As(err, &e) || e.Code != errs.NeedsConfirm {
+		t.Fatalf("compact without a yes must ask, got %v", err)
+	}
+	if want := "rewrite refs/lore/live (3 commits) to 1 commit, epoch 1 → 2, on this machine only (the remote origin has no live ref yet; `lore sync run` sends the compacted ref)?"; e.Question != want {
+		t.Fatalf("question:\n%q\nwant\n%q", e.Question, want)
+	}
+	c, err := compact(ctx, env{r: f}, CompactIn{DryRun: true})
+	if err != nil || c.Text() != "refs/lore/live has 3 commits (threshold 1000); compacting would keep 4 files, epoch 1 → 2, on this machine only (the remote origin has no live ref yet; `lore sync run` sends the compacted ref with the live writes waiting here)\n" {
+		t.Fatalf("dry run: %q %v", c.Text(), err)
+	}
+	c, err = compact(op.WithConfirmed(ctx, true), env{r: f}, CompactIn{})
+	if err != nil || !c.KeptLocal || c.Text() != "✓ compacted refs/lore/live to 1 commit (epoch 2) on this machine only; the remote origin has no live ref yet, and `lore sync run` sends it with the live writes waiting here; backup kept locally as refs/lore-backup/live/x\n" {
+		t.Fatalf("result: %+v %q %v", c, c.Text(), err)
+	}
+}

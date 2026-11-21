@@ -120,6 +120,12 @@ type CompactPlan struct {
 	// Why: the question and the result line must say that every teammate's
 	// clone fetches the rewritten ref (devco D-751).
 	Remote string
+	// KeptLocal: the remote has no live ref yet and live writes wait for
+	// lore sync (live.autopush off), so the compaction stays on this
+	// machine and lore sync sends the compacted ref. Why: a yes to the
+	// rewrite is not a yes to sending waiting writes, and a leaked row that
+	// never left must not reach the remote even in history (devco D-881).
+	KeptLocal bool
 }
 
 // Compacted is the result of a compaction. Nothing is true when there was
@@ -298,6 +304,10 @@ type CompactOut struct {
 	// Remote is the code repo's remote the rewritten ref went to (or, in a
 	// dry run, would go to); empty when the repo has no remote.
 	Remote string `json:"remote,omitempty"`
+	// KeptLocal: compacted (or, in a dry run, would be) on this machine
+	// only, because Remote has no live ref yet and live writes wait for
+	// lore sync, which sends the compacted ref (devco D-881).
+	KeptLocal bool `json:"kept_local,omitempty"`
 }
 
 // Text prints v0.1.17's plan line (--dry-run) or result line.
@@ -314,10 +324,16 @@ func (o CompactOut) Text() string {
 		if o.Purged > 0 {
 			s += fmt.Sprintf(", dropping %d purged rows", o.Purged)
 		}
-		if o.Remote != "" {
+		switch {
+		case o.KeptLocal:
+			s += fmt.Sprintf(", on this machine only (the remote %s has no live ref yet; `lore sync run` sends the compacted ref with the live writes waiting here)", o.Remote)
+		case o.Remote != "":
 			s += fmt.Sprintf(", and force-push it to the remote %s (every clone fetches the rewritten ref)", o.Remote)
 		}
 		return s + "\n"
+	}
+	if o.KeptLocal {
+		return fmt.Sprintf("✓ compacted %s to 1 commit (epoch %d) on this machine only; the remote %s has no live ref yet, and `lore sync run` sends it with the live writes waiting here; backup kept locally as %s\n", o.Ref, o.ToEpoch, o.Remote, o.Backup)
 	}
 	if o.Remote == "" {
 		return fmt.Sprintf("✓ compacted %s to 1 commit (epoch %d) on this machine only (no remote); backup kept locally as %s\n", o.Ref, o.ToEpoch, o.Backup)
@@ -332,6 +348,9 @@ func compactQuestion(o CompactOut) string {
 	what := fmt.Sprintf("rewrite %s (%d commits) to 1 commit, epoch %d → %d", o.Ref, o.Commits, o.FromEpoch, o.ToEpoch)
 	if o.Purged > 0 {
 		what += fmt.Sprintf(", dropping %d purged rows", o.Purged)
+	}
+	if o.KeptLocal {
+		return what + ", on this machine only (the remote " + o.Remote + " has no live ref yet; `lore sync run` sends the compacted ref)?"
 	}
 	if o.Remote == "" {
 		return what + ", on this machine only (no remote)?"
@@ -413,8 +432,10 @@ func Ops(env Env) []op.Entry {
 			// MayAsk: it asks only when there is something to rewrite (a
 			// no-op compaction answers "nothing to compact" without a
 			// question), so the question is asked by compact itself (D-751).
-			Confirm:  op.ConfirmRule{MayAsk: true, PersonOnlyEligible: true, NoSecretFindings: true},
-			Errors:   append(append([]errs.Code{}, writeErrors...), errs.NeedsConfirm),
+			Confirm: op.ConfirmRule{MayAsk: true, PersonOnlyEligible: true, NoSecretFindings: true},
+			// Refused: live writes wait for lore sync under live.autopush
+			// off, and the compaction would push them (devco D-881).
+			Errors:   append(append([]errs.Code{}, writeErrors...), errs.NeedsConfirm, errs.Refused),
 			Examples: []op.Example{{Title: "see what a compaction would do", CLI: "lore live compact --dry-run"}, {Title: "rewrite the live ref to one commit and push it to the remote", CLI: "lore live compact --yes"}},
 		}, func(ctx context.Context, in CompactIn) (CompactOut, error) { return compact(ctx, env, in) }),
 		op.Define(op.Spec{
@@ -543,7 +564,7 @@ func compactOut(c Compacted, dryRun bool) CompactOut {
 	return CompactOut{
 		Ref: p.Ref, DryRun: dryRun, Nothing: c.Nothing, Commits: p.Commits, Threshold: p.Threshold,
 		Files: p.Files, FromEpoch: p.FromEpoch, ToEpoch: p.ToEpoch, Purged: p.Purged, Backup: c.Backup,
-		Remote: p.Remote,
+		Remote: p.Remote, KeptLocal: p.KeptLocal,
 	}
 }
 

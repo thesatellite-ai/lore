@@ -471,7 +471,7 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.neverPushed = ""        // one line says where the rows are
 		return false
 	}
-	if !s.autopush && !s.asked {
+	if !s.mayPushWaiting() {
 		if s.wrote > 0 {
 			s.sayAutopushOnce(liveAutopushOff)
 		}
@@ -516,7 +516,7 @@ func (s *liveSession) pushed(snap live.Snapshot, out live.PushOutcome, err error
 // push would send them now (a remote, not blocked, not a read, autopush or
 // a push the person asked for, ahead, not held back, not already tried).
 func (s *liveSession) canCarryLive(ctx context.Context) bool {
-	if s.ref.Remote == nil || s.blocked != nil || s.read || (!s.autopush && !s.asked) {
+	if s.ref.Remote == nil || s.blocked != nil || s.read || !s.mayPushWaiting() {
 		return false
 	}
 	snap, err := s.ref.Snapshot(ctx)
@@ -748,7 +748,11 @@ func (s *liveSession) writeNote(name, text string) error {
 // autoCompact is F8's automatic compaction after a run that wrote live
 // rows, past live.compact_after commits and not within a day.
 func (s *liveSession) autoCompact(ctx context.Context) {
-	if s.wrote == 0 || s.ref.Remote == nil {
+	// An automatic compaction force-pushes the rewritten ref: only a run
+	// whose live writes may go out (autopush, or lore sync) starts one; a
+	// run under live.autopush off leaves it to the next such run (S-1,
+	// devco D-881).
+	if s.wrote == 0 || s.ref.Remote == nil || !s.mayPushWaiting() {
 		return
 	}
 	n, err := s.ref.CommitCount(ctx)
@@ -762,11 +766,20 @@ func (s *liveSession) autoCompact(ctx context.Context) {
 	if !live.ShouldCompact(live.CompactInputs{Commits: n, Threshold: s.cfg.CompactAfter, LastCompact: tree.CompactedAt(), Now: s.clk.Now()}) {
 		return
 	}
-	res, err := s.ref.Compact(ctx, false)
+	res, err := s.ref.Compact(ctx, live.CompactRequest{PushWaiting: true})
 	if err != nil || res.Status != live.PushDone {
 		return // a later write tries again; nothing is lost
 	}
 	s.warn(fmt.Sprintf("compacted %s (%d commits → 1, epoch %d)", s.ref.Name, res.Plan.Commits, res.Plan.ToEpoch))
+}
+
+// mayPushWaiting reports whether this run may push live writes that wait
+// for lore sync: live.autopush on (and not LORE_LIVE_AUTOPUSH=0), or a push
+// the person asked for (lore sync, lore land, their own git push). The
+// same gate as push's; a compaction that would carry waiting writes asks
+// it too (devco D-881).
+func (s *liveSession) mayPushWaiting() bool {
+	return s.autopush || s.asked
 }
 
 // mainDataPath is a row file's path in .lore/data on a branch for a live

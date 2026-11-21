@@ -137,14 +137,17 @@ func (a *liveRefAdapter) Compact(ctx context.Context, dryRun bool) (opslive.Comp
 	if s.blocked != nil {
 		return opslive.Compacted{}, errLiveBlocked(s.blocked)
 	}
-	res, err := s.ref.Compact(ctx, dryRun)
+	res, err := s.ref.Compact(ctx, live.CompactRequest{DryRun: dryRun, PushWaiting: s.mayPushWaiting()})
 	if err != nil {
 		return opslive.Compacted{}, errs.Wrap(errs.Internal, "compact", err)
+	}
+	if res.Status == live.PushWaiting {
+		return opslive.Compacted{}, errCompactWritesWait(s.ref.RemoteName)
 	}
 	p := res.Plan
 	out := opslive.Compacted{Backup: res.Backup, Plan: opslive.CompactPlan{
 		Ref: s.ref.Name, Commits: p.Commits, Threshold: s.cfg.CompactAfter, Files: p.Files,
-		FromEpoch: p.FromEpoch, ToEpoch: p.ToEpoch, Purged: p.Purged,
+		FromEpoch: p.FromEpoch, ToEpoch: p.ToEpoch, Purged: p.Purged, KeptLocal: res.KeptLocal,
 	}}
 	if s.ref.Remote != nil {
 		// the question and result line name where the rewrite goes (D-751)
@@ -163,7 +166,7 @@ func (a *liveRefAdapter) Compact(ctx context.Context, dryRun bool) (opslive.Comp
 		return out, nil
 	}
 	switch res.Status {
-	case live.PushDone, live.PushNoRemote:
+	case live.PushDone, live.PushNoRemote, live.PushKeptLocal:
 		s.finished = true
 		if res.Status == live.PushNoRemote {
 			out.Plan.Remote = "" // nothing left this machine
@@ -173,6 +176,17 @@ func (a *liveRefAdapter) Compact(ctx context.Context, dryRun bool) (opslive.Comp
 	}
 	return opslive.Compacted{}, errs.New(errs.Offline, "compaction not confirmed by the remote ("+string(res.Status)+")").
 		WithHint("nothing was lost; run it again when the remote is reachable")
+}
+
+// errCompactWritesWait refuses a compaction that would carry live writes
+// waiting for lore sync to the remote under live.autopush off (S-1, devco
+// D-881): the yes to the rewrite names the rewrite, not those writes. The
+// person sends them first (lore sync is a push they ask for), then the
+// compaction pushes only its own rewrite.
+func errCompactWritesWait(remote string) error {
+	return errs.New(errs.Refused, "live compact: live writes on this machine wait for `lore sync run`, and compacting would push them to the remote "+remote+" with the rewrite; nothing changed").
+		WithHint("send them with `lore sync run`, then run `lore live compact --yes`").
+		WithNext("lore", "sync", "run")
 }
 
 // Purge implements opslive.Ref (§6.6); the run's finish pushes it.
