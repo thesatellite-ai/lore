@@ -87,6 +87,14 @@ const (
 	// moves it to the trash.
 	KeyBranchesOrphanDays Key = "branches.orphan_days"
 	KeyAgentsPersonOnly   Key = "agents.person_only"
+	// KeyAgentsNoWrite: the agents a place refuses every write from (an
+	// agent name as lore detects it, e.g. codex, or "*" for every agent;
+	// owner org-setup item 6, devco D-869). agents.person_only names
+	// commands, so a folder only people may change had no guard: this key
+	// names the place instead. It binds only the place whose own policies
+	// hold it (lore policy set --to <store>/<folder>), and the engine checks
+	// it in the one write sink, so every command that writes there obeys it.
+	KeyAgentsNoWrite Key = "agents.no_write"
 	// KeyAgentsMayManagePeople lets an agent run the team profile writes
 	// (actor edit, contacts, periods, offboard, rejoin, members, roles,
 	// contact types; TEAM_PROFILES 3.4, TS-4, TP-20). A flag, default
@@ -504,6 +512,11 @@ func Keys() []KeyDef {
 		// --confirm; a lower level may not switch it back off.
 		{Key: KeyTrashPurgeOnDelete, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(false), Doc: "every delete purges (tombstone, no trash) and needs --confirm"},
 		{Key: KeyAgentsPersonOnly, Shape: ShapeSet, Default: mustList(), Doc: "operations only a person may run"},
+		// A set: the place's own levels join, so a folder can only add
+		// agents to the list; an agent cannot take itself off it (its
+		// write of the policy row is a write into the same place).
+		{Key: KeyAgentsNoWrite, Shape: ShapeSet, Default: mustList(),
+			Doc: "agents refused every write into the place holding this policy (an agent name, or * for every agent); set it with --to <store>/<folder>"},
 		{Key: KeyAgentsMaxClaimsPerAgent, Shape: ShapeLimit, Default: value.Int(defaultMaxClaimsPerAgent),
 			Doc: "task claims one agent session (a person: one worktree) may hold at once; config.yaml may only lower it (at least 1)"},
 		// TS-4: false is stricter (agents refused), so a level that sets

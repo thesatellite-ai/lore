@@ -105,6 +105,18 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 			return op.Result{}, perr
 		}
 	}
+	// D-869: agents.no_write of the target place, before anything is
+	// written (an actor row in the org folder, a project row on first use);
+	// the write sinks check every other place a write reaches. The agent
+	// comes from c or the AgentSource (writerAgent), so a caller whose
+	// agent no surface filled in is still checked.
+	if cl.access == op.AccessWrite {
+		if att, aerr := e.attached(cl.target); aerr == nil {
+			if perr := e.agentNoWrite(context.WithValue(ctx, callKey{}, cl), att); perr != nil {
+				return op.Result{}, perr
+			}
+		}
+	}
 	if needsConfirm(spec, in) && !cl.caller.Yes {
 		q, qerr := e.question(context.WithValue(ctx, callKey{}, cl), entry, in)
 		if qerr != nil {

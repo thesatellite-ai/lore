@@ -13,7 +13,8 @@ import (
 // checked against that key's domain before anything is written:
 // agents.person_only takes registered operation names or operation.field
 // (a flag word, a CLI spelling, an unknown operation or field is
-// E_INVALID_INPUT with a hint); routing.client_repos and meta.scope_aliases
+// E_INVALID_INPUT with a hint); agents.no_write takes agent names or *
+// (devco:D-869); routing.client_repos and meta.scope_aliases
 // take name=value items. Valid values of each key are stored.
 func TestPolicySetItemDomains(t *testing.T) {
 	t.Parallel()
@@ -30,6 +31,13 @@ func TestPolicySetItemDomains(t *testing.T) {
 		{"agents.person_only", "task.done", true},
 		{"agents.person_only", "task.delete, rule.add", true},
 		{"agents.person_only", "meta.edit.merge_into", true},
+		{"agents.no_write", "true", false}, // a flag word: the key lists agents
+		{"agents.no_write", "false", false},
+		{"agents.no_write", "rule.add rule", false},
+		{"agents.no_write", "codex;rm", false},
+		{"agents.no_write", "*", true},
+		{"agents.no_write", "codex, release-bot", true},
+		{"agents.no_write", "agent:auto/codex/1a2b3c", true},
 		{"routing.client_repos", "rule", false},
 		{"routing.client_repos", "rule=", false},
 		{"routing.client_repos", "=agency", false},

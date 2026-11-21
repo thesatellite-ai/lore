@@ -148,6 +148,9 @@ type IDSource interface {
 type Engine struct {
 	// guard is the role check every write passes (writeguard.go).
 	guard WriteGuard
+	// agentOf resolves the writing agent when the caller does not say
+	// (SetAgentSource, agentnowrite.go; devco D-869).
+	agentOf AgentSource
 	// repoFormatOld is set when the repo is still on the lore 0.1.17
 	// format (WithRepoFormatOld): it is read, never written, so an
 	// E_AMBIGUOUS_ID hint there names lore migrate run (devco:D-749).
