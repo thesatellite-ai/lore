@@ -257,7 +257,7 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	if created.target != "" {
 		ctx = context.WithValue(ctx, newFolderKey{}, created)
 	}
-	res, err = eng.Run(ctx, e, d, c)
+	res, err = a.runAsCaller(ctx, eng, e, d, c)
 	if err == nil && write && !previewRun(e, d) { // D-712: a dry run makes no project row
 		a.ensureFolderProject(ctx)
 	}
@@ -381,7 +381,7 @@ func (a *App) runOnDefaultStore(ctx context.Context, e op.Entry, d op.Decoder, c
 	if err != nil {
 		return op.Result{}, true, err
 	}
-	res, err := eng.Run(ctx, e, d, c)
+	res, err := a.runAsCaller(ctx, eng, e, d, c)
 	return res, true, err
 }
 
