@@ -788,20 +788,50 @@ func rowOf(r *textRow, matched []string) Row {
 }
 
 // cap keeps the answer within maxChars of text, walking order (the
-// reading order): items are kept whole, and the first one that does not
-// fit ends the answer, so what is left out is always what ranks lowest;
-// Left counts it. It sets Resources, Tasks, Rows and Ranked to what is
-// kept.
+// reading order): items are kept whole while they fit, an item that does
+// not fit is left out and the walk goes on, so a lower item that fits is
+// still printed; Left counts what was left out. The best row (the first
+// row of order) is never left out for its length: when it does not fit
+// whole it is cut to the part of it that answers the question (cutRow),
+// so the answer is never empty while a row matched. It sets Resources,
+// Tasks, Rows and Ranked to what is kept.
+//
+// Why (devco D-859, public issue #86): the walk stopped at the first item
+// that did not fit, so a best row longer than --max-chars left the answer
+// at "(no answer)" and dropped the short rows under it too.
 func (o *Out) cap(order []Ranked, maxChars int) {
 	o.maxChars = maxChars
 	o.Ranked = []Ranked{}
-	for i, r := range order {
+	o.Left = 0
+	rowIdx := map[string]int{}
+	for i, r := range o.Rows {
+		rowIdx[r.ID] = i
+	}
+	bestRow := true // no row of order seen yet
+	for _, r := range order {
 		o.Ranked = append(o.Ranked, r)
-		if len(o.body()) > maxChars {
-			o.Ranked = o.Ranked[:len(o.Ranked)-1]
-			o.Left = len(order) - i
-			break
+		fits := len(o.body()) <= maxChars
+		if !fits && r.Kind == KindRow && bestRow {
+			fits = o.cutRow(rowIdx[r.ID], maxChars)
 		}
+		if r.Kind == KindRow {
+			bestRow = false
+		}
+		if fits {
+			continue
+		}
+		o.Ranked = o.Ranked[:len(o.Ranked)-1]
+		o.Left++
+		if r.Kind == KindRow && rowIdx[r.ID] < o.lead {
+			// one fewer newest-of-a-folder row is printed compact
+			o.lead--
+		}
+	}
+	if len(o.Ranked) == 0 && len(order) > 0 {
+		// never empty while something matched: the first item whole
+		// (a resource or task card; a row was cut above)
+		o.Ranked = append(o.Ranked, order[0])
+		o.Left--
 	}
 	kept := map[Ranked]bool{}
 	for _, r := range o.Ranked {
@@ -810,6 +840,38 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 	o.Resources = slices.DeleteFunc(o.Resources, func(r Resource) bool { return !kept[Ranked{KindResource, r.ID}] })
 	o.Tasks = slices.DeleteFunc(o.Tasks, func(t Task) bool { return !kept[Ranked{KindTask, t.ID}] })
 	o.Rows = slices.DeleteFunc(o.Rows, func(r Row) bool { return !kept[Ranked{KindRow, r.ID}] })
+}
+
+// cutRow cuts row i of o.Rows, the last item of o.Ranked, to the part of
+// its text that answers the question in the room the answer has left,
+// at most half of maxChars and at least minCut characters, and reports whether it was cut: false
+// when what is above it leaves less than minCut characters (the row is
+// then left out whole, as before).
+func (o *Out) cutRow(i, maxChars int) bool {
+	r := &o.Rows[i]
+	whole, wholeRead := *r, r.readBody
+	r.Body, r.readBody, r.FullChars = "", "", len(whole.Body)
+	// at most half the cap: the rows under it that fit are printed too
+	room := min(maxChars-len(o.body()), max(maxChars/2, minCut))
+	if room < minCut {
+		if len(o.Ranked) > 1 {
+			*r = whole
+			return false
+		}
+		room = minCut
+	}
+	words := cutWords(r.Matched, o.asked)
+	text, cut := cutBody(cmp.Or(wholeRead, whole.Body), words, room)
+	if !cut {
+		// its text fits: what is above it leaves no room
+		*r = whole
+		return false
+	}
+	r.Body, _ = cutBody(whole.Body, words, room)
+	if wholeRead != "" {
+		r.readBody = text
+	}
+	return true
 }
 
 // NoAnswer is the line an answer that holds nothing prints.
@@ -886,8 +948,20 @@ func (o Out) body() string {
 	for _, t := range o.Tasks {
 		tsk[t.ID] = t
 	}
+	ranked := map[string]bool{}
+	for _, it := range o.Ranked {
+		if it.Kind == KindRow {
+			ranked[it.ID] = true
+		}
+	}
 	for _, r := range o.Rows {
-		rows[r.ID] = r
+		// only the rows the answer holds: while cap walks, o.Rows still
+		// holds the rows not yet kept, and the now line quoted one of them
+		// in its "before that", so a row that fits measured as too long
+		// (devco D-859)
+		if ranked[r.ID] {
+			rows[r.ID] = r
+		}
 	}
 	var b strings.Builder
 	b.WriteString(o.header())
@@ -1133,7 +1207,15 @@ func (r Row) text(i int) string {
 	for _, line := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
 		b.WriteString(strings.TrimRight("   "+line, " ") + "\n")
 	}
+	if r.FullChars > 0 {
+		fmt.Fprintf(&b, "   (%s; lore show --id %s prints it whole)\n", r.cutNote(), r.ID)
+	}
 	return b.String()
+}
+
+// cutNote says a row was cut to fit --max-chars and how long it is whole.
+func (r Row) cutNote() string {
+	return fmt.Sprintf("cut to the part that answers the question to fit --max-chars; the whole row is %d characters", r.FullChars)
 }
 
 // readable is r's title and body as the text answer prints them: the
@@ -1228,6 +1310,9 @@ func (r Row) facts() string {
 	}
 	if r.History != "" {
 		line += "  [" + r.History + "]"
+	}
+	if r.FullChars > 0 {
+		line += "  (" + r.cutNote() + ")"
 	}
 	return line + "\n"
 }
