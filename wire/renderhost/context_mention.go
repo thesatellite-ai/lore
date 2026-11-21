@@ -13,7 +13,10 @@ import "strings"
 // character before each occurrence is not part of a path (so
 // "cron/main.go" does not mention "main.go"), and the one after does not
 // continue the name ("main.gox", "main.go/x", "main.go.bak"; a sentence's
-// full stop is fine). A p ending in "/" (a folder) only needs the left edge.
+// full stop is fine). A p ending in "/" (a folder) is mentioned when the
+// folder stands alone ("in billing/ we", "billing/**"), not when the body
+// names a file inside it: a hotfix about billing/tax.go is not about
+// billing/invoice.go (devco D-815).
 func mentionsPath(body, p string) bool {
 	if p == "" {
 		return false
@@ -28,8 +31,14 @@ func mentionsPath(body, p string) bool {
 		if start > 0 && isPathByte(body[start-1]) {
 			continue
 		}
-		if strings.HasSuffix(p, "/") || end == len(body) {
+		if end == len(body) {
 			return true
+		}
+		if strings.HasSuffix(p, "/") {
+			if c := body[end]; c == '*' || !isPathByte(c) {
+				return true
+			}
+			continue // billing/tax.go: a file in the folder, not the folder
 		}
 		next := body[end]
 		if next == '.' {

@@ -119,7 +119,7 @@ func (h *Host) contextForTask(ctx context.Context, raw string) (contextResult, e
 	// Notes on the task's words, best first.
 	words := contextfit.Words(t.Title + " " + t.Body)
 	// Semantic rules on the task's words (6.8 step 5, context_semantic.go).
-	semanticRulePicks(rows, words, add)
+	semanticRulePicks(rows, contextfit.SemanticWords(t.Title+" "+t.Body), add)
 	type scored struct {
 		k knowledgeRow
 		n int
@@ -133,6 +133,12 @@ func (h *Host) contextForTask(ctx context.Context, raw string) (contextResult, e
 			cand = append(cand, scored{k, n})
 		}
 	}
+	// one shared word is dropped once other notes share two (D-815)
+	best := 0
+	for _, c := range cand {
+		best = max(best, c.n)
+	}
+	cand = slices.DeleteFunc(cand, func(c scored) bool { return c.n < contextfit.Floor(words, best) })
 	sort.SliceStable(cand, func(i, j int) bool { return cand[i].n > cand[j].n })
 	for i, c := range cand {
 		if i >= contextNotesMax {

@@ -782,7 +782,7 @@ Available Commands:
 
 Flags:
       --for-file string     rules, hotfixes and notes for this path
-      --for-prompt string   rows matching this free text
+      --for-prompt string   rows matching this free text; with --for-file, what the text adds to the rows for that file (one call for a change: the file and what it is for)
       --for-task string     the task, its plan and links, then what applies to the files it names
       --hook string         answer a tool hook (claude_code, codex, gemini_cli)
       --hook-stdin          with --hook: read the hook input JSON from stdin

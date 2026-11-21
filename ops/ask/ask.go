@@ -14,6 +14,8 @@
 //	     (a nickname, a role)
 //	  ─▶ the rows: for a date the window's rows (journal days first); else
 //	     the best rows about those resources and topics, newest first
+//	  ─▶ a question naming a file: what lore context --for-file picks for
+//	     it comes first (file.go, devco D-815)
 //	  ─▶ capped text (--max-chars): resources with changed fields, open
 //	     tasks, the top rows in full, the ids it cites
 //
@@ -23,6 +25,7 @@ package ask
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -61,7 +64,7 @@ type Env interface {
 
 // RunIn is the input of ask.run.
 type RunIn struct {
-	Query string `json:"query" arg:"0" rest:"true" desc:"the question, in your own words: who is alice-ng, what is the status of orbit, what did we decide for orbit and why, what do I owe alice-ng, what does alice-ng owe me, what happened yesterday / last week / on 2026-11-02, everything about alice-ng (a typo, a nickname or a role finds the resource too)"`
+	Query string `json:"query" arg:"0" rest:"true" desc:"the question, in your own words: who is alice-ng, what is the status of orbit, what did we decide for orbit and why, what do I owe alice-ng, what does alice-ng owe me, what happened yesterday / last week / on 2026-11-02, everything about alice-ng (a typo, a nickname or a role finds the resource too); name the file you are changing (add partial refunds in billing/refund.go) for the rules and hotfixes that apply to it"`
 	// Store names the stores to read, as every other read's --store.
 	Store    string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store alone instead of every attached one: <org> (every folder), <store>/<folder>, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder"`
 	MaxChars int    `json:"max_chars,omitempty" flag:"max-chars" min:"200" desc:"cap the answer at this many characters (default 4000); what is left out is counted at the end"`
@@ -84,10 +87,17 @@ type Out struct {
 	// with the question: a status or decision row before its project, the
 	// owed tasks before the person, the newest rows of each folder right
 	// after the person for everything about X.
-	Ranked   []Ranked `json:"ranked" desc:"every item of the answer in reading order, the one that answers the question first: a status or decision row before its project, the owed tasks before the person, the person then the newest row of each folder for everything about X"`
-	Cited    []string `json:"cited" desc:"the id of every item in the answer, in reading order"`
-	Left     int      `json:"left,omitempty" desc:"how many items were left out to stay under --max-chars"`
+	Ranked []Ranked `json:"ranked" desc:"every item of the answer in reading order, the one that answers the question first: a status or decision row before its project, the owed tasks before the person, the person then the newest row of each folder for everything about X"`
+	Cited  []string `json:"cited" desc:"the id of every item in the answer, in reading order"`
+	Left   int      `json:"left,omitempty" desc:"how many items were left out to stay under --max-chars"`
+	// File, Applies and Context answer a question that names a file
+	// (file.go, devco D-815): what lore context --for-file --for-prompt
+	// picks for it, printed before the ranked items.
+	File     string    `json:"file,omitempty" desc:"the file the question names"`
+	Applies  []Applied `json:"applies,omitempty" desc:"the rules, hotfixes and notes that apply to that file and the question's words, as lore context --for-file --for-prompt picks them"`
+	Context  string    `json:"context,omitempty" desc:"lore context's text for that file (rules and hotfixes in full while they fit)"`
 	maxChars int
+	note     string
 }
 
 // Ranked names one item of an answer: which list holds it and its id.
@@ -203,7 +213,28 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	if err != nil {
 		return Out{}, err
 	}
-	return build(q, d, in.Top, in.MaxChars), nil
+	maxChars := in.MaxChars
+	if maxChars <= 0 {
+		maxChars = DefaultMaxChars
+	}
+	if q.file == "" {
+		return build(q, d, in.Top, maxChars), nil
+	}
+	text, applied, note := fileContext(ctx, env, q.file, q.rest, fileBudget(maxChars))
+	picked := map[string]bool{}
+	for _, a := range applied {
+		picked[a.ID] = true
+	}
+	// a row the file's context already printed is not printed twice
+	d.rows = slices.DeleteFunc(d.rows, func(r textRow) bool { return picked[r.ID] })
+	out := build(q, d, in.Top, maxChars-len(text))
+	out.File, out.Context, out.note, out.maxChars = q.file, text, note, maxChars
+	out.Applies = applied
+	if out.Applies == nil {
+		out.Applies = []Applied{}
+	}
+	out.Cited = append(printedIDs(text, applied), out.Cited...)
+	return out, nil
 }
 
 // cell is a lens cell as text ("" for NULL).
@@ -227,7 +258,7 @@ func sqlLike(s string) string {
 // "<table>_all" view): the lens is built with these alone (devco D-813),
 // so a call does not read and view the other tables of every cache.
 // TestLensTablesCoverTheStatements fails when a statement reads another.
-var LensTables = []string{"resources", "kinds", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents"}
+var LensTables = []string{"resources", "kinds", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents", "hotfixes"}
 
 // typedSQL reads the resources (with kind name, fields and history), the
 // open tasks, their owed_by / owed_to metadata and their --ref pointers,
@@ -411,6 +442,8 @@ var textTables = []struct{ table, title, body, extra string }{
 	{"rules", "''", "m.body", "NULL"},
 	{"patterns", "m.title", "m.body", "NULL"},
 	{"incidents", "m.title", "m.body", "NULL"},
+	// devco D-815: a hotfix is the trap a coding question must not miss
+	{"hotfixes", "m.title", "m.body", "NULL"},
 }
 
 // loadRows reads the rows that can answer q: rows holding a word of the

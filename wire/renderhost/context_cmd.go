@@ -10,6 +10,7 @@
 //	lore context --topic <name>      every row tagged <name>, rules and hotfixes first
 //	lore context --topics            the topic index as a list
 //	lore context --for-prompt "<t>"  rows matching the prompt's words, best first
+//	  (with --for-file: the file's picks, then what the words add)
 //	lore context --hook <tool> --hook-stdin
 //	                                 read the tool's hook JSON (file path / prompt),
 //	                                 answer in its format, capped at context.hook_cap;
@@ -136,6 +137,8 @@ func (h *Host) contextAnswer(ctx context.Context, f *contextFlags, stdin io.Read
 	var res contextResult
 	var err error
 	switch {
+	case f.forFile != "" && f.forPrompt != "":
+		res, err = h.contextForFileAndPrompt(ctx, f.forFile, f.forPrompt)
 	case f.forFile != "":
 		res, err = h.contextForFile(ctx, f.forFile)
 	case f.forTask != "":
@@ -453,6 +456,9 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 			continue
 		}
 		n := contextfit.Score(renderField(k.r.Row, renderFieldTitle)+" "+renderField(k.r.Row, renderFieldBody), words)
+		if n < contextfit.PathFloor(words) {
+			n = 0 // names the folder's topic or the file's, not both (D-815)
+		}
 		if at := fs.inChain(fs.folderOf(k)); at >= 0 {
 			n += scopeNoteBoost * (len(fs.chain) - at)
 		}
@@ -532,7 +538,7 @@ func (h *Host) contextForPrompt(ctx context.Context, text string) (contextResult
 	var cand []scored
 	// 6.8 step 5: semantic rules first, on their applies_to_description.
 	semSeen := map[string]bool{}
-	semanticRulePicks(rows, words, func(k knowledgeRow, why string) {
+	semanticRulePicks(rows, contextfit.SemanticWords(text), func(k knowledgeRow, why string) {
 		semSeen[k.r.ID.String()] = true
 		cand = append(cand, scored{pickOf(k, why), len(words) + 1})
 	})
@@ -545,6 +551,15 @@ func (h *Host) contextForPrompt(ctx context.Context, text string) (contextResult
 			cand = append(cand, scored{pickOf(k, "words"), n})
 		}
 	}
+	// one shared word is dropped once other rows share two (D-815); the
+	// semantic rules (scored above every word count) always stay
+	best := 0
+	for _, c := range cand {
+		if c.p.Why == "words" {
+			best = max(best, c.n)
+		}
+	}
+	cand = slices.DeleteFunc(cand, func(c scored) bool { return c.p.Why == "words" && c.n < contextfit.Floor(words, best) })
 	sort.SliceStable(cand, func(i, j int) bool { return cand[i].n > cand[j].n })
 	picks := make([]contextPick, 0, len(cand))
 	for _, c := range cand {
@@ -556,6 +571,38 @@ func (h *Host) contextForPrompt(ctx context.Context, text string) (contextResult
 		more = "lore search --query \"" + strings.Join(words, " ") + "\""
 	}
 	return contextResult{title: "the prompt", picks: picks, more: more}, nil
+}
+
+// contextForFileAndPrompt is --for-file with --for-prompt (devco D-815):
+// what applies to the file, then what the prompt's words add that the
+// file did not pick, in one answer, so an agent about to make a change
+// (`lore ask` naming a file, or one call before an edit) reads every
+// must-rule and hotfix once.
+func (h *Host) contextForFileAndPrompt(ctx context.Context, p, text string) (contextResult, error) {
+	res, err := h.contextForFile(ctx, p)
+	if err != nil {
+		return contextResult{}, err
+	}
+	pr, err := h.contextForPrompt(ctx, text)
+	if err != nil {
+		return contextResult{}, err
+	}
+	seen := map[string]bool{}
+	for _, cp := range res.picks {
+		seen[cp.ID] = true
+	}
+	for _, cp := range pr.picks {
+		if !seen[cp.ID] {
+			seen[cp.ID] = true
+			res.picks = append(res.picks, cp)
+		}
+	}
+	sortPicks(res.picks)
+	res.title += " and the prompt"
+	if res.more == "" {
+		res.more = pr.more
+	}
+	return res, nil
 }
 
 // hookInput is the part of a tool's hook JSON lore reads: Claude Code and

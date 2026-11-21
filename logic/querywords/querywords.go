@@ -99,7 +99,10 @@ func Stem(w string) string {
 }
 
 // minBase is the shortest Base: a final e or y stays on a shorter stem.
-const minBase = 4
+// Three, not four (devco D-815): with four, "date" kept its e while
+// "dated" and "dates" stem to "dat", so a prompt about an issue date never
+// matched a note saying "dated" (the same for type / typed, note / noted).
+const minBase = 3
 
 // Base is the part every form of the lower-case word w starts with: its
 // Stem without a final e or y when at least minBase characters remain

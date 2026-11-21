@@ -48,6 +48,13 @@ func TestStemHas(t *testing.T) {
 			t.Errorf("Has(%q) = true", term) // "or" is inside orbit, stored is not storm's word
 		}
 	}
+	// devco D-815: a four-letter word ending in e meets its other forms
+	// (date / dated / dates, type / typed)
+	for text, term := range map[string]string{"invoices dated in local time": "date", "the issue dates": "date", "a typed answer": "type", "set the date": "dated"} {
+		if !querywords.Has(text, term) {
+			t.Errorf("Has(%q, %q) = false", text, term)
+		}
+	}
 	if !querywords.Has("see deploy.prod.yml", "deploy.prod.yml") || !querywords.Has("数据库迁移规则", "迁移") {
 		t.Error("a term that is not one plain word is not found as written")
 	}

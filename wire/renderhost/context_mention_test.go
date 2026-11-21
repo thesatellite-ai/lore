@@ -22,6 +22,11 @@ func TestMentionsPathIsWholePath(t *testing.T) {
 		{"vendor/saas/cmd/cron/main.go", "saas/cmd/cron/main.go", false},
 		{"under cmd/ only", "cmd/", true},
 		{"under saas/cmd/ only", "cmd/", false},
+		// devco D-815: a file inside the folder is not the folder
+		{"billing/tax.go rounded with math.Round", "billing/", false},
+		{"everything in billing/** is cents", "billing/", true},
+		{"a lock in db/migrations/ took 20 minutes", "db/migrations/", true},
+		{"see billing/", "billing/", true},
 		{"", "main.go", false},
 	}
 	for _, c := range cases {

@@ -311,6 +311,7 @@ lore ask --query "what did we decide for orbit and why"    # the best 3 rows in 
 lore ask --query "everything about alise-ng" --json        # a typo, a nickname or a role finds the resource too
 lore resource alias add --kind person --id robert-kim --alias Bobby --alias CFO   # other names every lookup and ask find it by (alias list / alias remove)
 lore ask --query "status of orbit" --max-chars 8000 --top 5
+lore ask --query "add partial refunds in billing/refund.go"  # names a file: its rules and hotfixes first (as lore context --for-file)
 ```
 
 The answer is capped at `--max-chars` (default 4000) and ends with `cited:` and the id of every resource, task and row in it.

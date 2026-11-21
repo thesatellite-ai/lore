@@ -12,6 +12,7 @@ import (
 	"path"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/logic/querywords"
 )
@@ -91,6 +92,68 @@ func Words(s string) []string {
 	return out
 }
 
+// SemanticWords is Words plus the three-letter words that are not filler
+// (log, sql, css, jwt, vat), for matching a semantic rule's applies-to
+// description: that description is a curated list of topic words, where a
+// short word is as telling as a long one. "log failed login attempts" never
+// reached the rule that applies to "logging, logs, logger" because "log"
+// was below minWord (devco D-815).
+func SemanticWords(s string) []string {
+	out := Words(s)
+	seen := map[string]bool{}
+	for _, w := range out {
+		seen[w] = true
+	}
+	for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if len([]rune(w)) != minWord-1 || seen[w] || shortStopWords[w] || querywords.IsStop(w) || !hasLetter(w) {
+			continue
+		}
+		seen[w] = true
+		out = append(out, w)
+	}
+	return out
+}
+
+// shortStopWords are three-letter words a task or prompt carries without
+// naming a topic (the verbs of a request, numbers, filler).
+var shortStopWords = map[string]bool{"add": true, "fix": true, "new": true, "use": true, "set": true, "put": true,
+	"run": true, "let": true, "see": true, "via": true, "per": true, "out": true, "off": true, "end": true,
+	"top": true, "way": true, "one": true, "two": true, "old": true, "own": true, "bug": true, "now": true,
+	"too": true, "yet": true, "say": true, "try": true, "lot": true, "few": true, "why": true, "how": true,
+	"its": true, "our": true, "who": true, "has": true, "had": true, "was": true, "are": true, "not": true,
+	"and": true, "but": true, "for": true, "the": true, "you": true, "can": true, "did": true, "get": true,
+	"got": true, "all": true, "any": true, "max": true, "min": true}
+
+// hasLetter reports whether w starts with a letter (10m, 404 are no
+// topic; s3a is).
+func hasLetter(w string) bool {
+	r, _ := utf8.DecodeRuneInString(w)
+	return unicode.IsLetter(r)
+}
+
+// Floor is the fewest of words a row must hold to be picked on its words
+// alone, when the best row holds best of them. One shared word ("invoice",
+// "login", "support") is weak: a prompt about invoice e-mails pulled in
+// every row naming an invoice, and the agent read mostly noise (devco
+// D-815). So a text of three or more words needs two of them in a row;
+// a shorter one ("how is the ledger stored") takes one word only while no
+// row holds both.
+func Floor(words []string, best int) int {
+	if len(words) >= 3 {
+		return 2
+	}
+	return min(2, best)
+}
+
+// PathFloor is the fewest path words a note that is not scoped to the
+// path's folders must hold: every one of them, up to two. A file's words
+// are its folder's topic and its own (billing, invoice); a note naming
+// only one ("the billing team has lunch on Thursdays", "a bigger font on
+// the invoice header") is about something else (devco D-815).
+func PathFloor(words []string) int { return min(2, len(words)) }
+
 // PathWords returns the words of a repo path that can name its topic:
 // Words(p) without the generic names a file or folder carries in every
 // project (main, index, init, util, test, src …) and file-type words
@@ -126,7 +189,10 @@ var genericPathWords = map[string]bool{
 // topic, besides querywords' list (the one search reads, D-435).
 var stopWords = map[string]bool{"this": true, "that": true, "with": true, "from": true, "have": true,
 	"what": true, "when": true, "where": true, "which": true, "there": true, "their": true, "about": true,
-	"would": true, "could": true, "should": true, "into": true, "then": true, "than": true, "them": true}
+	"would": true, "could": true, "should": true, "into": true, "then": true, "than": true, "them": true,
+	// lore's own rows named in a request ("see the ledger notes") are no
+	// topic: the topic is the word next to them (devco D-815)
+	"note": true, "notes": true, "rule": true, "rules": true}
 
 // Score is how many of words appear in text: querywords.Coverage, the
 // matcher `lore search` ranks by too (D-435), so "deploying" in a prompt

@@ -31,6 +31,11 @@ type question struct {
 	window dates.Window
 	// when says how the window was read ("2026-11-19 (yesterday)").
 	when string
+	// file is the path the question names (file.go); its words are not
+	// question words: "db/migrations/0042_invoice.sql" says where, not what.
+	file string
+	// rest is the question without the path (what the change is for).
+	rest string
 }
 
 // oweDir is the direction of a debt question.
@@ -110,7 +115,12 @@ var reWord = regexp.MustCompile(`[\p{L}\p{N}]+(?:[-.'’][\p{L}\p{N}]+)*`)
 // parseQuestion reads q against now (the day relative dates count from).
 func parseQuestion(q string, now time.Time) question {
 	out := question{text: strings.TrimSpace(q)}
+	out.file = fileOf(out.text)
 	low := strings.ToLower(out.text)
+	if out.file != "" {
+		low = strings.Replace(low, strings.ToLower(out.file), " ", 1)
+		out.rest = strings.TrimSpace(strings.Replace(out.text, out.file, " ", 1))
+	}
 	seen := map[string]bool{}
 	for _, w := range reWord.FindAllString(low, -1) {
 		w = strings.TrimSuffix(strings.TrimSuffix(w, "'s"), "’s")

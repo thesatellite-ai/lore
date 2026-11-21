@@ -68,6 +68,13 @@ func TestRenderScenContextTwoModesRefused(t *testing.T) {
 				continue
 			}
 			h := &fakeHost{}
+			if pairOK(an, bn) {
+				// devco D-815: a change's file and its words are one mode
+				if _, err := Fetch(context.Background(), h, scenMerge(a, b), strings.NewReader("{}")); err != nil || h.got.ForFile == "" || h.got.ForPrompt == "" {
+					t.Errorf("--%s with --%s is one call: %v (host got %+v)", an, bn, err, h.got)
+				}
+				continue
+			}
 			_, err := Fetch(context.Background(), h, scenMerge(a, b), strings.NewReader("{}"))
 			if errs.CodeOf(err) != errs.InvalidInput || !strings.Contains(err.Error(), "pass only one of") {
 				t.Errorf("--%s with --%s is refused with E_INVALID_INPUT: %v", an, bn, err)
@@ -77,6 +84,12 @@ func TestRenderScenContextTwoModesRefused(t *testing.T) {
 			}
 		}
 	}
+}
+
+// pairOK reports whether two modes go together: --for-file with
+// --for-prompt (devco D-815).
+func pairOK(a, b string) bool {
+	return a == "for-file" && b == "for-prompt" || a == "for-prompt" && b == "for-file"
 }
 
 func TestRenderScenContextNoModeNamesEveryMode(t *testing.T) {
