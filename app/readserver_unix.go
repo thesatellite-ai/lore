@@ -521,7 +521,6 @@ func (s *readServer) handle(conn *net.UnixConn) {
 	}
 	code, pipe := s.runFor(conn, req, fds)
 	reply(readReply{Served: true, Code: code, Pipe: pipe})
-	return
 }
 
 // readRequestFrom reads the length-prefixed request and the stdio file

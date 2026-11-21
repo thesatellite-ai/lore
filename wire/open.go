@@ -131,7 +131,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			return nil, err
 		}
 	}
-	fail := func(err error) (*state, error) { return nil, errors.Join(err, st.close()) }
+	fail := func(err error) (*state, error) { return nil, joinFlat(err, st.close()) } // flat: replaceErr swaps the refusal (devco:D-840)
 
 	repo, err := git.OpenRepo(ctx, opts.RepoDir, rowfs.FolderRoot, opts.openOptions())
 	if err != nil {
@@ -235,7 +235,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	settled := st.startSettleAgentKey(ctx, backends)
 	failOpen := fail
-	fail = func(err error) (*state, error) { return failOpen(errors.Join(err, settled())) }
+	fail = func(err error) (*state, error) { return failOpen(joinFlat(err, settled())) }
 	// SQ3 / VARS ARE DATA: var, res and row references resolve from the row
 	// files (wire/resolver.go); st.eng is read lazily, set below.
 	rv := newResolver(st)
@@ -1407,7 +1407,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 			return nil, err
 		}
 	}
-	fail := func(err error) (*state, error) { return nil, errors.Join(err, st.close()) }
+	fail := func(err error) (*state, error) { return nil, joinFlat(err, st.close()) } // flat: replaceErr swaps the refusal (devco:D-840)
 	for i := range attached {
 		st.backends = append(st.backends, attached[i].Backend)
 		attached[i].Level = levelOf(attached[i])
@@ -1430,7 +1430,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	// devco:D-826: the agent key's store reads run beside the cache opens
 	settled := st.startSettleAgentKey(ctx, st.byName)
 	if err = openDetachedCaches(ctx, opts.Home, st.caches, attached, reg, exp); err != nil {
-		return fail(errors.Join(err, settled()))
+		return fail(joinFlat(err, settled()))
 	}
 	if err = settled(); err != nil {
 		return fail(err)
