@@ -228,13 +228,24 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 			s.DataIgnored = true // a whole kind of lore file is ignored
 		}
 	}
-	if s.DataIgnored {
+	switch {
+	case s.DataIgnored && LoreDirIgnored(ctx, dir):
+		// devco:D-856 (D-500): git ignoring all of .lore/ is what makes the
+		// project private; doctor --fix re-includes nothing there, so the
+		// warning's fix was a command that did nothing
+		note(doctorPrivateDataNote)
+	case s.DataIgnored:
 		warn(dataIgnoredLine(hit))
 	}
 	// A read never adds these lines (wire/gitignorelines.go): the finding
 	// names them and the command that does.
 	if missing := MissingGitignoreLines(ctx, dir); len(missing) > 0 && HoldsLoreData(dir) && !formatOld {
 		note(doctorGitignoreLinesNote(missing)) // clutter in a teammate's git status, never lost data: a note
+	}
+	// devco:D-856: a private project's tracked .gitignore needs no lore
+	// line; a block an older lore appended is named with the fix that takes it out
+	if lines := PrivateGitignoreBlock(ctx, dir); len(lines) > 0 && !formatOld {
+		note(doctorPrivateGitignoreNote(dir, lines))
 	}
 	// A repo with no lore data of its own (a client repo) never gets its
 	// .gitignore changed, not even by --fix (plain files sweep 3.8): lore's
