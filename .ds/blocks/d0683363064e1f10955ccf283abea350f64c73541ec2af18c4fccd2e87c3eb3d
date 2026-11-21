@@ -1,0 +1,13 @@
+const (
+	DefaultLimit    = 20
+	DefaultPerTable = 10
+	// DefaultFullTop is how many of the best hits --full prints whole
+	// (devco D-800, owner P-17): every hit's body made `search --full`
+	// read more text than grep on the same question, so the hits past
+	// the top keep their snippet unless --full-top asks for more.
+	DefaultFullTop = 3
+	// BodyMax is the label length of a body-labelled hit (truncBody).
+	BodyMax = 80
+	// lineMax caps one printed hit text (v0.1.17: 100, cut to 97 + "...").
+	lineMax = 100
+)
