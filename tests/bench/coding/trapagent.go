@@ -11,8 +11,13 @@ package coding
 // trap.
 //
 // The agents and their CLI are the recall gate's (recall.Agent,
-// recall.ClaudeAgent): the same blind, bare run, with Read, Edit and
-// Write added so they can change files. Only the bench-tagged
+// recall.ClaudeAgent): the same blind run, with Read, Edit and Write
+// added so they can change files. Both arms run with their checkout's
+// own settings, not bare (devco D-835): the lore checkout is what a lore
+// user has, lore init --target claude_code and lore setup --agent-hooks
+// run in it (the CLAUDE.md pointer, the session-start context and the
+// pre-edit context hook that shows a file's hotfixes); the plain
+// checkout has no settings at all. Only the bench-tagged
 // TestBenchTraps (task bench:agent) starts real agents.
 
 import (
@@ -73,8 +78,8 @@ func TrapTasks(traps []Trap, skill string, dirs func(Trap) TrapDirs) []TrapTask 
 		d := dirs(tr)
 		q := recall.Question{ID: tr.Task, Text: tr.Prompt}
 		out = append(out,
-			TrapTask{Trap: tr, Agent: recall.AgentTask{Arm: ArmLore, Q: q, Dir: d.Lore, System: TrapSystem(ArmLore, skill), Prompt: tr.Prompt, PathPrefix: d.LoreBin, Deny: trapDeny[ArmLore], Tools: trapTools}},
-			TrapTask{Trap: tr, Agent: recall.AgentTask{Arm: ArmPlain, Q: q, Dir: d.Plain, System: TrapSystem(ArmPlain, skill), Prompt: tr.Prompt, Deny: trapDeny[ArmPlain], Tools: trapTools}})
+			TrapTask{Trap: tr, Agent: recall.AgentTask{Arm: ArmLore, Q: q, Dir: d.Lore, System: TrapSystem(ArmLore, skill), Prompt: tr.Prompt, PathPrefix: d.LoreBin, Deny: trapDeny[ArmLore], Tools: trapTools, Checkout: true}},
+			TrapTask{Trap: tr, Agent: recall.AgentTask{Arm: ArmPlain, Q: q, Dir: d.Plain, System: TrapSystem(ArmPlain, skill), Prompt: tr.Prompt, Deny: trapDeny[ArmPlain], Tools: trapTools, Checkout: true}})
 	}
 	return out
 }

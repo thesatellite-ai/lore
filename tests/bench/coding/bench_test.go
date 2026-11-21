@@ -114,8 +114,14 @@ func writeFiles(t *testing.T, e *env, files map[string]string) {
 // rows; it returns row id → key.
 func writeRepo(t *testing.T, e *env, files map[string]string) map[string]string {
 	t.Helper()
+	return writeRepoFor(t, e, files, "codex")
+}
+
+// writeRepoFor is writeRepo with lore init wiring the repo for tool.
+func writeRepoFor(t *testing.T, e *env, files map[string]string, tool string) map[string]string {
+	t.Helper()
 	writeFiles(t, e, files)
-	e.must("init", "--name", "orbit", "--target", "codex")
+	e.must("init", "--name", "orbit", "--target", tool)
 	keyOf := map[string]string{}
 	for _, r := range Rows() {
 		out := e.must(addArgs(r)...)

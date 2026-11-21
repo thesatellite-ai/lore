@@ -89,6 +89,9 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 		return err
 	}
 	fmt.Fprintf(w, "%s saved as %s; change with: lore policy set --key %s --value <profiles> --yes\n", h.decor.muted("·"), policy.KeyContextTargets, policy.KeyContextTargets)
+	if missing := h.MissingAgentHooks(ctx, root, names); len(missing) > 0 {
+		fmt.Fprintf(w, "%s "+agentHooksNextF, h.decor.muted("·"), strings.Join(missing, ", "), agentHooksCmd)
+	}
 	return nil
 }
 

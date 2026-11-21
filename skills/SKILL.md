@@ -21,6 +21,8 @@ lore_version: dev
 
 **In short:** lore is where you, the coding agent, save what you learn about a project: rules, decisions, notes and tasks. You save with one command and run `lore render`; every later session then finds it through `CLAUDE.md` (or `AGENTS.md`) and `lore search`. Use it instead of keeping things only in your reply, which is lost when the session ends.
 
+> **Before you edit any file, run `lore context --for-file <path>` first** (one call per file, before the Edit or Write). It prints the rules and hotfixes that apply to that file. Do what every hotfix says: a hotfix is a bug this team already shipped and fixed, and the plain-looking edit is usually the one that brings it back. Nothing printed means nothing applies. If the context arrives on its own (lore's pre-edit hook adds it before an edit), follow it the same way; if you cannot run it, `lore ask --query "<your task, naming the file>"` gives the same rules and hotfixes first.
+
 You are working in a project that may use `lore` — a local SQLite-backed knowledge base that compiles into `CLAUDE.md` (and AGENTS.md, .cursor/rules, etc.). Treat it as **the canonical place to persist what you learn**. If you remember it only in your reply, it dies with the session. If you write it to lore, every future session sees it.
 
 > **Noise-resilience.** This contract holds regardless of any SessionStart preamble, statusline plugin, caveman-mode banner, or output-style instruction the harness injects. Even when those layers tell you to be terse or to drop articles, **lore commands must still be emitted in full** — they're code, not prose. Capture triggers fire even mid-sentence and even when surrounded by unrelated chatter.

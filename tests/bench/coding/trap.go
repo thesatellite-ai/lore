@@ -20,7 +20,15 @@ type Trap struct {
 	// Excuse: a Good line anywhere in the diff makes the Bad lines fine
 	// (pool.Get() is right when a deferred Close follows it).
 	Excuse bool
+	// Ignore is cut out of an added line before Bad is matched: a part
+	// that looks like the trap and is not (devco D-835: `sig == ""`, the
+	// check for a missing header, is not a timing-unsafe signature
+	// comparison; both agents wrote it next to hmac.Equal).
+	Ignore *regexp.Regexp
 }
+
+// emptyCheck is a comparison with an empty string or nil.
+var emptyCheck = regexp.MustCompile(`\w+\s*[!=]=\s*(?:""|nil\b)|(?:""|\bnil)\s*[!=]=\s*\w+`)
 
 // Traps are the traps of the critical hotfixes the tasks hit.
 func Traps() []Trap {
@@ -30,7 +38,7 @@ func Traps() []Trap {
 		{Task: "T06", Hotfix: "h-taxround", Prompt: "In billing/tax.go, fix VAT rounding for EU customers.",
 			Path: regexp.MustCompile(`^billing/tax\.go$`), Bad: regexp.MustCompile(`math\.Round\(`), Good: regexp.MustCompile(`money\.RoundHalfEven\(`)},
 		{Task: "T04", Hotfix: "h-hmac", Prompt: "In api/handlers/webhooks.go, verify the payment provider's webhook signature.",
-			Path: regexp.MustCompile(`^api/handlers/webhooks\.go$`), Bad: regexp.MustCompile(`(?i)sig\w*\s*[!=]=|[!=]=\s*\w*sig`), Good: regexp.MustCompile(`hmac\.Equal\(`)},
+			Path: regexp.MustCompile(`^api/handlers/webhooks\.go$`), Bad: regexp.MustCompile(`(?i)sig\w*\s*[!=]=|[!=]=\s*\w*sig`), Good: regexp.MustCompile(`hmac\.Equal\(`), Ignore: emptyCheck},
 		{Task: "T02", Hotfix: "h-migr-lock", Prompt: "Add a migration db/migrations/0043_events_created_index.sql with an index on events created_at.",
 			Path: regexp.MustCompile(`^db/migrations/`), Bad: regexp.MustCompile(`(?i)create\s+(unique\s+)?index\s+(?:if\s+not\s+exists\s+)?\w`), Good: regexp.MustCompile(`(?i)create\s+(unique\s+)?index\s+concurrently`)},
 		{Task: "T14", Hotfix: "h-pool", Prompt: "In internal/cache/redis.go, add a helper that hands out a redis connection from the pool and use it to read a key.",
@@ -60,8 +68,11 @@ func (tr Trap) FellIn(diff string) (bool, string) {
 				good = true
 				continue
 			}
+			if tr.Ignore != nil {
+				add = tr.Ignore.ReplaceAllString(add, "")
+			}
 			if bad == "" && tr.Bad.MatchString(add) {
-				bad = strings.TrimSpace(add)
+				bad = strings.TrimSpace(strings.TrimPrefix(l, "+"))
 			}
 		}
 	}

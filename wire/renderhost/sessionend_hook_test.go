@@ -117,7 +117,7 @@ func TestSessionEndHookPlannedInstalledRemoved(t *testing.T) {
 	if got := endHookEntries(t, claudeFile); len(got) != 1 || got[0]["command"] != "echo bye" {
 		t.Fatalf("remove: want only the user's SessionEnd hook left, got %v", got)
 	}
-	p, err := planOneHook(context.Background(), root, toolprofile.NameClaudeCode, end, false, false)
+	p, err := planOneHook(context.Background(), root, toolprofile.NameClaudeCode, end, false, false, false)
 	if err != nil || !p.change || !strings.Contains(p.note, "add SessionEnd hook") {
 		t.Fatalf("start hook only: want the end hook planned as missing, got %+v %v", p, err)
 	}

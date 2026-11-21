@@ -33,6 +33,11 @@ const (
 	envTrapOnly   = "LORE_BENCH_TRAP_ONLY"     // comma-separated trap task ids (default every trap)
 )
 
+// agentTool is the lore tool profile of the agent CLI the run starts (a
+// Claude Code compatible CLI): lore init and lore setup --agent-hooks wire
+// the lore checkout for it.
+const agentTool = "claude_code"
+
 func TestBenchTraps(t *testing.T) {
 	started := time.Now()
 	launcher := strings.Fields(os.Getenv(envAgent))
@@ -79,7 +84,10 @@ func TestBenchTraps(t *testing.T) {
 		at := filepath.Join(dir, "traps", tr.Task)
 		// the lore agent's checkout: the store with every row
 		le := newEnv(t, bin, filepath.Join(at, "lore-home"), filepath.Join(at, "lore", "orbit"))
-		writeRepo(t, le, RepoFiles())
+		// what a lore user of the agent CLI has: the repo wired for it and
+		// lore's own hooks installed (devco D-835), never a hand copy
+		writeRepoFor(t, le, RepoFiles(), agentTool)
+		le.must("setup", "--agent-hooks", "--yes")
 		if version == "" {
 			version, _ = le.lore("--version")
 		}
