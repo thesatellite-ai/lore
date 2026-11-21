@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -233,7 +234,18 @@ func TestBenchRecall(t *testing.T) {
 			r.Lore.Correct = false
 			r.Lore.Missing = append([]string{fmt.Sprintf("exit %d: %s", warm.code, firstLine(warm.out))}, r.Lore.Missing...)
 		}
-		t.Logf("%s cold %d ms, warm %d ms, correct %v", q.ID, cold.wall.Milliseconds(), warm.wall.Milliseconds(), r.Lore.Correct)
+		// the accuracy grade reads the same call's structured answer (a
+		// third run, not timed: the agent's one call is the text one)
+		js := e.run(e.limit, append(slices.Clone(q.Lore), "--json")...)
+		switch items, err := Items([]byte(js.out)); {
+		case js.timedOut || js.code != 0:
+			r.Lore.AccErr = fmt.Sprintf("--json exit %d: %s", js.code, firstLine(js.out))
+		case err != nil:
+			r.Lore.AccErr = err.Error()
+		default:
+			r.Lore.Acc = GradeAccuracy(q, items)
+		}
+		t.Logf("%s cold %d ms, warm %d ms, correct %v, recall@3 %v, top-1 %v, stale %d, noise %d %s", q.ID, cold.wall.Milliseconds(), warm.wall.Milliseconds(), r.Lore.Correct, r.Lore.Acc.Recall, r.Lore.Acc.Top1, len(r.Lore.Acc.Stale), r.Lore.Acc.Noise, r.Lore.AccErr)
 		var all strings.Builder
 		for _, c := range q.Grep {
 			cmd := exec.Command("bash", "-c", c)
@@ -248,6 +260,7 @@ func TestBenchRecall(t *testing.T) {
 			all.Write(buf.Bytes())
 		}
 		r.Grep.Correct, r.Grep.Missing = Grade(q, all.String())
+		r.Grep.Present, r.Grep.Stale = GrepAccuracy(q, all.String())
 		rs = append(rs, r)
 	}
 
