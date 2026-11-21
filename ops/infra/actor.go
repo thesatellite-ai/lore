@@ -34,6 +34,10 @@ type ActorListIn struct {
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit
+	// With joins each person's profile, contacts, teams, projects or
+	// stints into the list (devco D-861): one call gives a bot the whole
+	// people list, instead of one actor show per person.
+	With []string `json:"with,omitempty" flag:"with" desc:"also show each person's profile, contacts, teams, projects or periods (comma-separated or repeated; all for every one)"`
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
 }
@@ -41,7 +45,8 @@ type ActorListIn struct {
 // Actor is one actor in v0.1.17's --json form (the ent Actor struct; the
 // machine-local last_seen_at no longer travels in a row), plus the team
 // profile keys of TEAM_PROFILES 3.1 (added, none renamed). The profile
-// lists are filled by actor show only.
+// lists are filled by actor show, and by actor list for the parts --with
+// names (an asked-for list is [] when empty, omitzero keeps the key).
 type Actor struct {
 	ID          string          `json:"id"`
 	CreatedAt   string          `json:"created_at,omitempty"`
@@ -63,9 +68,12 @@ type Actor struct {
 	// "" for a row that has none).
 	StatusNote  string           `json:"status_note,omitempty"`
 	Profile     ActorProfile     `json:"profile,omitzero"`
-	Contacts    []ActorContact   `json:"contacts,omitempty"`
-	Periods     []ActorPeriod    `json:"periods,omitempty"`
-	Memberships []ActorMemberOut `json:"memberships,omitempty"`
+	Contacts    []ActorContact   `json:"contacts,omitzero"`
+	Periods     []ActorPeriod    `json:"periods,omitzero"`
+	Memberships []ActorMemberOut `json:"memberships,omitzero"`
+	// Teams are the active roster teams the person is on (actor show, and
+	// actor list --with teams).
+	Teams []ActorTeam `json:"teams,omitzero"`
 	// CreatedBy / UpdatedBy are the row envelope's writers (INTEG-AUDIT-1,
 	// auditrec), last so the older keys keep their order.
 	CreatedBy string `json:"created_by,omitempty"`
@@ -133,6 +141,8 @@ type ActorListOut struct {
 	Kind          string  `json:"kind"`
 	Count         int     `json:"count,omitempty"`
 	Data          []Actor `json:"data"`
+	// parts is the --with parts joined, for Text (not part of the JSON).
+	parts actorParts
 }
 
 // Text is v0.1.17's list: "<id> [<kind>] <display name>", with the status
@@ -147,11 +157,13 @@ func (o ActorListOut) Text() string {
 	}
 	heads := make([]string, len(o.Data))
 	stores := make([][]string, len(o.Data))
+	extras := make([][]string, len(o.Data))
 	for i, a := range o.Data {
 		heads[i] = fmt.Sprintf("%s [%s] %s%s%s", a.ID, a.Kind, a.DisplayName, statusMark(a), noteMark(a.SourceNote))
 		stores[i] = a.Stores
+		extras[i] = partLines(a, o.parts) // --with: the asked-for parts under each person
 	}
-	return storeColumn(heads, stores, "actor", "actors")
+	return storeColumn(heads, stores, extras, "actor", "actors")
 }
 
 // noteMark is "  <note>", or "" for none.
@@ -250,6 +262,13 @@ func (o ActorShowOut) mainText() string {
 		fmt.Fprintf(&b, "%s%s\n", lead, line)
 		lead = "               "
 	}
+	if len(a.Teams) > 0 {
+		hs := make([]string, len(a.Teams))
+		for i, t := range a.Teams {
+			hs[i] = t.Handle
+		}
+		fmt.Fprintf(&b, "  teams:       %s\n", strings.Join(hs, ", "))
+	}
 	lead = "  projects:    "
 	for _, m := range a.Memberships {
 		when := "since " + m.StartedOn
@@ -296,11 +315,19 @@ func (o ops) actorList(ctx context.Context, in ActorListIn) (ActorListOut, error
 	if in.Status != "" && !slices.Contains(schema.ActorStatuses(), in.Status) {
 		return ActorListOut{}, errs.New(errs.InvalidInput, "--status "+work.Quote(in.Status)+" is not one of "+strings.Join(schema.ActorStatuses(), ", "))
 	}
+	parts, err := parseWith(in.With)
+	if err != nil {
+		return ActorListOut{}, err
+	}
 	rows, err := work.ListAll(ctx, o.env, schema.TableActors, in.Store)
 	if err != nil {
 		return ActorListOut{}, err
 	}
-	out := ActorListOut{SchemaVersion: SchemaVersion, Kind: KindActorList, Data: []Actor{}}
+	src, err := o.loadParts(ctx, parts)
+	if err != nil {
+		return ActorListOut{}, err
+	}
+	out := ActorListOut{SchemaVersion: SchemaVersion, Kind: KindActorList, Data: []Actor{}, parts: parts}
 	held := storesOf(rows)
 	seen := map[string]bool{}
 	for _, s := range rosterFirst(sortByCreated(rows), o.rosterSource(ctx, in.Store)) {
@@ -323,6 +350,9 @@ func (o ops) actorList(ctx context.Context, in ActorListIn) (ActorListOut, error
 		}
 		if in.Status == "" && !in.Archived && a.Status == schema.ActorStatusArchived {
 			continue
+		}
+		if err := o.fillParts(ctx, &a, s.Row, parts, src); err != nil {
+			return ActorListOut{}, err
 		}
 		out.Data = append(out.Data, a)
 	}
@@ -525,9 +555,7 @@ func (o ops) showOut(ctx context.Context, s work.Sourced, pinned bool) (ActorSho
 	a := actorOf(work.LabelerOf(o.env), s)
 	o.applySource(ctx, &a, true, pinned) // the source and every copy (actor_source.go)
 	r := s.Row
-	a.Profile = ActorProfile{Title: work.Field(r, schema.FieldActorTitle), Timezone: work.Field(r, schema.FieldActorTimezone),
-		Location: work.Field(r, schema.FieldActorLocation), PhotoURL: work.Field(r, schema.FieldActorPhotoURL),
-		Bio: work.Field(r, schema.FieldActorBio), Birthday: work.Field(r, schema.FieldActorBirthday)}
+	a.Profile = profileOf(r)
 	var err error
 	if a.Contacts, err = o.contactsOf(ctx, r.ID); err != nil {
 		return ActorShowOut{}, err
@@ -538,23 +566,53 @@ func (o ops) showOut(ctx context.Context, s work.Sourced, pinned bool) (ActorSho
 	if a.Memberships, err = o.membershipsOf(ctx, r.ID); err != nil {
 		return ActorShowOut{}, err
 	}
+	teams, err := o.teamsByActor(ctx)
+	if err != nil {
+		return ActorShowOut{}, err
+	}
+	a.Teams = teams[a.ID]
+	// show's JSON keeps its keys as before: an empty list is left out
+	// (omitzero keeps only the [] that actor list --with asks for).
+	if len(a.Contacts) == 0 {
+		a.Contacts = nil
+	}
+	if len(a.Periods) == 0 {
+		a.Periods = nil
+	}
+	if len(a.Memberships) == 0 {
+		a.Memberships = nil
+	}
 	return ActorShowOut{SchemaVersion: SchemaVersion, Kind: KindActorShow, Data: a, Today: opclock.Now(o.env).UTC().Format(value.DateLayout)}, nil
 }
 
 // profileRows lists the live rows of a profile table in every attached
 // store that belong to actor (field), once per id.
 func (o ops) profileRows(ctx context.Context, table row.Table, field string, actor ids.AnyID) ([]row.Row, error) {
+	by, err := o.rowsByActor(ctx, table, field)
+	if err != nil {
+		return nil, err
+	}
+	return by[actor.String()], nil
+}
+
+// rowsByActor is every live row of a profile table in every attached
+// store, once per id (the first store in precedence order wins), grouped
+// by the actor id in field. Why: actor list --with reads each table once
+// for the whole list instead of once per person.
+func (o ops) rowsByActor(ctx context.Context, table row.Table, field string) (map[string][]row.Row, error) {
 	all, err := work.ListAll(ctx, o.env, table, "")
 	if err != nil {
 		return nil, err
 	}
-	var out []row.Row
+	out := map[string][]row.Row{}
 	seen := map[ids.AnyID]bool{}
 	for _, s := range all {
-		if work.Field(s.Row, field) == actor.String() && !seen[s.Row.ID] {
-			seen[s.Row.ID] = true
-			out = append(out, s.Row)
+		if seen[s.Row.ID] {
+			continue
 		}
+		seen[s.Row.ID] = true
+		a := work.Field(s.Row, field)
+		out[a] = append(out[a], s.Row)
 	}
 	return out, nil
 }
@@ -565,6 +623,12 @@ func (o ops) contactsOf(ctx context.Context, actor ids.AnyID) ([]ActorContact, e
 	if err != nil {
 		return nil, err
 	}
+	return contactsFrom(rows), nil
+}
+
+// contactsFrom is the contacts rows of one person, by type, the primary
+// first, then value ([] for none).
+func contactsFrom(rows []row.Row) []ActorContact {
 	out := []ActorContact{}
 	for _, c := range rows {
 		out = append(out, ActorContact{ID: c.ID.String(), Type: work.Field(c, schema.FieldContactType), Value: work.Field(c, schema.FieldContactValue),
@@ -583,7 +647,7 @@ func (o ops) contactsOf(ctx context.Context, actor ids.AnyID) ([]ActorContact, e
 		}
 		return strings.Compare(x.Value, y.Value)
 	})
-	return out, nil
+	return out
 }
 
 // periodsOf is actor's stints, with the read-time one of TP-22.
@@ -592,6 +656,12 @@ func (o ops) periodsOf(ctx context.Context, actor row.Row) ([]ActorPeriod, error
 	if err != nil {
 		return nil, err
 	}
+	return periodsFrom(actor, rows)
+}
+
+// periodsFrom is the stints of actor from its period rows, with the
+// read-time one of TP-22 when it has none.
+func periodsFrom(actor row.Row, rows []row.Row) ([]ActorPeriod, error) {
 	ps, err := teamprofile.PeriodsOf(actor, rows)
 	if err != nil {
 		return nil, err
@@ -617,20 +687,39 @@ func (o ops) membershipsOf(ctx context.Context, actor ids.AnyID) ([]ActorMemberO
 	if err != nil {
 		return nil, err
 	}
-	names := map[string]string{}
-	if len(rows) > 0 {
-		projects, perr := work.ListAll(ctx, o.env, schema.TableProjects, "")
-		if perr != nil {
-			return nil, perr
+	return o.membershipsFrom(ctx, rows, &projectNames{})
+}
+
+// projectNames is the project names by id, read once on first use (nil
+// until then): one list of the projects table serves every person of an
+// actor list --with projects.
+type projectNames struct{ byID map[string]string }
+
+// of is the name of project pid ("" when no attached store holds it).
+func (n *projectNames) of(ctx context.Context, o ops, pid string) (string, error) {
+	if n.byID == nil {
+		projects, err := work.ListAll(ctx, o.env, schema.TableProjects, "")
+		if err != nil {
+			return "", err
 		}
+		n.byID = make(map[string]string, len(projects))
 		for _, p := range projects {
-			names[p.Row.ID.String()] = work.Field(p.Row, fieldName)
+			n.byID[p.Row.ID.String()] = work.Field(p.Row, fieldName)
 		}
 	}
+	return n.byID[pid], nil
+}
+
+// membershipsFrom is one person's project membership rows as shown:
+// open first, then ended, each by start ([] for none).
+func (o ops) membershipsFrom(ctx context.Context, rows []row.Row, names *projectNames) ([]ActorMemberOut, error) {
 	out := []ActorMemberOut{}
 	for _, m := range rows {
 		pid := work.Field(m, schema.FieldMemberProject)
-		name := names[pid]
+		name, err := names.of(ctx, o, pid)
+		if err != nil {
+			return nil, err
+		}
 		if name == "" {
 			// The project row is in a store not attached here: ask the
 			// host, which reads every store it can (TEAM_PROFILES 2.6),

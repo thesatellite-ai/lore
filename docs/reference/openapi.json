@@ -1693,6 +1693,19 @@
             }
           },
           {
+            "name": "with",
+            "in": "query",
+            "required": false,
+            "description": "also show each person's profile, contacts, teams, projects or periods (comma-separated or repeated; all for every one)",
+            "schema": {
+              "type": "array",
+              "description": "also show each person's profile, contacts, teams, projects or periods (comma-separated or repeated; all for every one)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -1979,6 +1992,27 @@
                             "type": "array",
                             "items": {
                               "type": "string"
+                            }
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "handle": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "handle"
+                              ]
                             }
                           },
                           "updated_at": {
@@ -3877,6 +3911,27 @@
                           "type": "array",
                           "items": {
                             "type": "string"
+                          }
+                        },
+                        "teams": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "handle": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "handle"
+                            ]
                           }
                         },
                         "updated_at": {

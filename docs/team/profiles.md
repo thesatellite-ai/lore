@@ -379,6 +379,10 @@ created 2026-11-02T10:00:00Z by mira · updated 2026-11-02T10:00:00Z by tomas
 ```
 <!-- /example -->
 
+`lore actor show` also prints a `teams:` line (and `"teams"` in `--json`) when the person is on a roster team.
+
+To read everyone at once (a bot building the people list, a script syncing a directory), add `--with` to `lore actor list`: `lore actor list --with contacts,teams --json` returns every person with their contacts and teams in one call. The parts are `profile`, `contacts`, `teams`, `projects` (the `memberships` key in JSON), `periods`, or `all` for every one; comma-separated or repeated. In JSON an asked-for list is `[]` for a person who has none, and an empty profile is left out; in text each part is an indented line under the person (`-` when empty), and `projects` lists only current memberships. Without `--with` the list is unchanged. An unknown part is `E_INVALID_INPUT` naming the set.
+
 `project member edit` sets the current roles; `remove` ends the membership on a date and keeps it in `--history`. Removing someone who is not a member is `E_NOT_FOUND`:
 
 <!-- example: profiles#member-edit-and-remove -->
