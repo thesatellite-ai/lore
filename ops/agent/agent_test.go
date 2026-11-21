@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"strings"
@@ -108,5 +109,58 @@ func TestStartHook(t *testing.T) {
 	}
 	if len(env.h.hooks) != 1 || env.h.hooks[0] != (HookIn{Tool: "claude_code", Session: "s1", Model: "m", Stdin: true}) || len(env.reg) != 0 {
 		t.Fatalf("hooks %+v reg %+v", env.h.hooks, env.reg)
+	}
+}
+
+// toolHost is a Host that runs under a detected coding tool (ToolHost).
+type toolHost struct {
+	fakeHost
+	tool string
+}
+
+func (h *toolHost) CallerTool(context.Context) string { return h.tool }
+
+// toolEnv hands out a toolHost.
+type toolEnv struct {
+	fakeEnv
+	th *toolHost
+}
+
+func (e *toolEnv) AgentHost(context.Context) (Host, error) { return e.th, nil }
+
+// TestStartInsideAToolSaysThePrefix pins devco:D-850: a coding tool runs
+// each command in a new shell, so inside one the printed export reaches no
+// later command and that command is credited to "<owner> via <tool>"; the
+// output says so and gives the per-command prefix, and the export stays
+// the last line (eval scripts take it with tail -1). The JSON output is
+// unchanged.
+func TestStartInsideAToolSaysThePrefix(t *testing.T) {
+	env := &toolEnv{th: &toolHost{tool: "codex"}}
+	out, err := Start(context.Background(), env, StartIn{Label: "frontend_2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.Text(), "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("want 3 lines inside a tool: %q", out.Text())
+	}
+	prefix := "LORE_ACTOR=agent:frontend_2 LORE_SESSION=" + out.Session
+	if !strings.Contains(lines[1], "codex runs each command in a new shell") || !strings.Contains(lines[1], "start every lore command of this agent with "+prefix) {
+		t.Fatalf("tool line: %q", lines[1])
+	}
+	if lines[2] != "export "+prefix {
+		t.Fatalf("the export is not the last line: %q", lines[2])
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "codex") {
+		t.Fatalf("the tool leaked into the JSON output: %s", b)
+	}
+	// outside a tool: the two lines as before
+	env.th.tool = ""
+	if out, _ = Start(context.Background(), env, StartIn{Label: "frontend_2"}); strings.Count(out.Text(), "\n") != 2 {
+		t.Fatalf("outside a tool: %q", out.Text())
 	}
 }

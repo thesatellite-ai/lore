@@ -31,7 +31,10 @@ type standaloneAgent struct {
 	stderr io.Writer
 }
 
-var _ opsagent.Host = (*standaloneAgent)(nil)
+var (
+	_ opsagent.Host     = (*standaloneAgent)(nil)
+	_ opsagent.ToolHost = (*standaloneAgent)(nil)
+)
 
 // CallerLabel implements opsagent.Host: @handle, else the display name;
 // for a detected coding agent, those of the person it acts for.
@@ -47,6 +50,17 @@ func (h *standaloneAgent) CallerLabel(ctx context.Context) (string, error) {
 		return rosterHandleMark + id.Handle, nil
 	}
 	return id.DisplayName, nil
+}
+
+// CallerTool implements opsagent.ToolHost: the coding tool detection
+// finds for this process, whoever the identity chain answered with (an
+// explicit LORE_ACTOR keeps the detection it recorded), "" for none.
+func (h *standaloneAgent) CallerTool(ctx context.Context) string {
+	id, err := resolveIdentity(ctx, h.opts)
+	if err != nil || id.Detection == nil {
+		return ""
+	}
+	return id.Detection.Tool
 }
 
 // RecordHook implements opsagent.Host: the hook must never fail a tool's
