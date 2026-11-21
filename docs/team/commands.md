@@ -266,8 +266,8 @@ Team profiles are in development for lore 0.1.18 (branch `feat/team-profiles`) a
 | Command | Usage | What it does |
 |---|---|---|
 | `lore actor show` | `lore actor show --id <actor> [--store s] [--json]` | the profile, contacts, company periods and project memberships |
-| `lore actor list` | `lore actor list [--store s] [--status s] [--archived] [--with contacts,teams,profile,projects,periods,all] [--json]` | the roster; archived people only with `--archived`; `--with` joins each person's parts into the list (one call for the whole people list, [Team profiles](profiles.md#memberships)); in a repo nobody ran `lore init` in, it (and `actor show`) reads the org's roster store and leaves the repo untouched |
-| `lore actor edit` | `lore actor edit --actor <actor> [--display-name t] [--title t] [--timezone tz] [--location t] [--photo-url u] [--bio t] [--birthday d] [--clear f,f]` | change profile fields |
+| `lore actor list` | `lore actor list [--store s] [--status s] [--archived] [--with contacts,teams,profile,projects,periods,meta,all] [--json]` | the roster; archived people only with `--archived`; `--with` joins each person's parts into the list (one call for the whole people list, [Team profiles](profiles.md#memberships)); in a repo nobody ran `lore init` in, it (and `actor show`) reads the org's roster store and leaves the repo untouched |
+| `lore actor edit` | `lore actor edit --actor <actor> [--display-name t] [--title t] [--timezone tz] [--location t] [--photo-url u] [--bio t] [--birthday d] [--clear f,f] [--meta k=v]` | change profile fields and custom fields (metadata) |
 | `lore actor contact add` | `lore actor contact add --actor <actor> --type <type> --value <value> [--label l] [--primary] [--identity] [--note t] [--merge] [--yes]` | add a contact; `--merge` folds a duplicate actor of that email into this one |
 | `lore actor contact edit` | `lore actor contact edit --id <acn_id> [--value v] [--label l] [--primary] [--no-primary] [--identity] [--no-identity] [--note t]` | change a contact |
 | `lore actor contact remove` | `lore actor contact remove --id <acn_id> [--reason t]` | remove a contact (restorable from the trash) |

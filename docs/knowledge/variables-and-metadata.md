@@ -6,7 +6,7 @@
 
 Use a **variable** when the same fact appears in several notes and will change: the API host, a port, the number of minutes a cache lives. The note keeps the text `${var:api_host}`; `lore show --id <id> --expand` fills in today's value. Renaming a variable keeps the old name as an alias, so notes written with the old name still resolve. Variables never hold secrets: for a password use the `secret_ref` type, which holds only a vault locator.
 
-Use **metadata** when you want to sort or count rows by something lore has no field for: which client a task is for, how many hours it cost, a billing plan. Any row (task, memory, decision, resource) can carry metadata. The first time you set a key, lore adds it to the repo's key registry with the type it saw; you can also declare a key up front with a fixed list of allowed values, so a typo is refused instead of saved.
+Use **metadata** when you want to sort or count rows by something lore has no field for: which client a task is for, how many hours it cost, a billing plan. Any row (task, memory, decision, resource, and a person or team on an org's roster) can carry metadata. The first time you set a key, lore adds it to the repo's key registry with the type it saw; you can also declare a key up front with a fixed list of allowed values, so a typo is refused instead of saved.
 
 | | Variables | Metadata |
 |---|---|---|

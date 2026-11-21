@@ -78,6 +78,8 @@ ERROR: [E_INVALID_INPUT] actor edit --timezone: "Istanbul time" is not an IANA z
 ```
 <!-- /example -->
 
+A field lore has no flag for (an emoji, a desk, a pager rotation) is a custom field: `lore actor edit --actor @mira --meta emoji=🌊 --meta desk=4F --yes` stores it on the person's roster row as [metadata](../knowledge/variables-and-metadata.md), the same key registry notes and resources use (the org store's, where a key first set there starts internal). `lore actor show` prints the fields under `meta:`, and `lore actor show --json` and `lore actor list --json` carry them as `meta` (a sensitive key's value masked and named in `meta_masked`). `lore meta set --id <id> --pair desk=5A` (the person's `act_` id) changes one and `lore meta unset --id <id> --key desk` removes it; `lore member edit --who @mira --meta desk=5A` does the same from the member commands. An older lore reads and edits such a person and keeps the fields; it only does not print them.
+
 ## Step 2 — Add contacts
 
 A person can have any number of contacts. Each one has:
@@ -381,7 +383,7 @@ created 2026-11-02T10:00:00Z by mira · updated 2026-11-02T10:00:00Z by tomas
 
 `lore actor show` also prints a `teams:` line (and `"teams"` in `--json`) when the person is on a roster team.
 
-To read everyone at once (a bot building the people list, a script syncing a directory), add `--with` to `lore actor list`: `lore actor list --with contacts,teams --json` returns every person with their contacts and teams in one call. The parts are `profile`, `contacts`, `teams`, `projects` (the `memberships` key in JSON), `periods`, or `all` for every one; comma-separated or repeated. In JSON an asked-for list is `[]` for a person who has none, and an empty profile is left out; in text each part is an indented line under the person (`-` when empty), and `projects` lists only current memberships. Without `--with` the list is unchanged. An unknown part is `E_INVALID_INPUT` naming the set.
+To read everyone at once (a bot building the people list, a script syncing a directory), add `--with` to `lore actor list`: `lore actor list --with contacts,teams --json` returns every person with their contacts and teams in one call. The parts are `profile`, `contacts`, `teams`, `projects` (the `memberships` key in JSON), `periods`, `meta` (the person's custom fields as one `key=value` line in text; `--json` carries `meta` on every person without asking), or `all` for every one; comma-separated or repeated. In JSON an asked-for list is `[]` for a person who has none, and an empty profile is left out; in text each part is an indented line under the person (`-` when empty), and `projects` lists only current memberships. Without `--with` the list is unchanged. An unknown part is `E_INVALID_INPUT` naming the set.
 
 `project member edit` sets the current roles; `remove` ends the membership on a date and keeps it in `--history`. Removing someone who is not a member is `E_NOT_FOUND`:
 

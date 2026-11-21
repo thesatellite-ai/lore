@@ -63,7 +63,7 @@ func newOrgWorld(t *testing.T) *orgWorld {
 	t.Cleanup(func() { orgStoreHeld = storeHeld })
 	w.hosts = filepath.Join(w.root, "hosts")
 	gc := filepath.Join(w.root, "gitconfig")
-	cfg := "[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n[url \"" + filepath.ToSlash(w.hosts) + "/\"]\n\tinsteadOf = https://github.com/\n\tinsteadOf = git@github.com:\n"
+	cfg := testenv.GitConfigQuiet + "[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n[url \"" + filepath.ToSlash(w.hosts) + "/\"]\n\tinsteadOf = https://github.com/\n\tinsteadOf = git@github.com:\n"
 	if err := os.WriteFile(gc, []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -345,5 +345,20 @@ repo_orgs:
 				}
 			}
 		})
+	}
+}
+
+// TestOrgWorldGitIsQuiet (devco:D-875): the org world's global gitconfig
+// turns off git's auto maintenance, whose detached child outlived
+// TestDoctorAllReadsRosterAndPeriod on a loaded machine and failed its
+// TempDir cleanup ("directory not empty").
+func TestOrgWorldGitIsQuiet(t *testing.T) {
+	w := newOrgWorld(t)
+	got, err := os.ReadFile(filepath.Join(w.root, "gitconfig"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(got), testenv.GitConfigQuiet) {
+		t.Fatalf("org world gitconfig does not start with testenv.GitConfigQuiet:\n%s", got)
 	}
 }

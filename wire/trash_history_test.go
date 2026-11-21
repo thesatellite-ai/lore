@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -33,7 +34,7 @@ func histGitWorld(t *testing.T) string {
 		t.Fatal(err)
 	}
 	cfg := filepath.Join(root, "gitconfig")
-	body := "[url \"" + filepath.ToSlash(hosts) + "/\"]\n\tinsteadOf = https://" + histHost + "/\n" +
+	body := testenv.GitConfigQuiet + "[url \"" + filepath.ToSlash(hosts) + "/\"]\n\tinsteadOf = https://" + histHost + "/\n" +
 		"[user]\n\tname = t\n\temail = t@example.com\n[commit]\n\tgpgsign = false\n[init]\n\tdefaultBranch = main\n"
 	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
 		t.Fatal(err)

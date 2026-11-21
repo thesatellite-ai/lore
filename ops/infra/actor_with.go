@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -27,6 +28,9 @@ const (
 	WithProfile  = "profile"
 	WithProjects = "projects"
 	WithPeriods  = "periods"
+	// WithMeta prints the person's custom fields (metadata) in the text
+	// list; --json carries them as meta on every row anyway (MQ13).
+	WithMeta = "meta"
 	// WithAll is every part above.
 	WithAll = "all"
 )
@@ -34,7 +38,7 @@ const (
 // ActorWithParts is the closed set --with takes, in the order the text
 // list prints them (WithAll last).
 func ActorWithParts() []string {
-	return []string{WithProfile, WithContacts, WithTeams, WithProjects, WithPeriods, WithAll}
+	return []string{WithProfile, WithContacts, WithTeams, WithProjects, WithPeriods, WithMeta, WithAll}
 }
 
 // actorParts is the parsed --with: which parts to join.
@@ -243,6 +247,19 @@ func partLines(a Actor, parts actorParts) []string {
 			ps = append(ps, p.StartedOn+" → "+orNow(p.EndedOn)+" "+p.Type)
 		}
 		add("periods", strings.Join(ps, ", "))
+	}
+	if parts[WithMeta] {
+		shown := metashow.Display(a.Meta, a.MetaMasked)
+		names := make([]string, 0, len(shown))
+		for n := range shown {
+			names = append(names, n)
+		}
+		slices.Sort(names)
+		kv := make([]string, 0, len(names))
+		for _, n := range names {
+			kv = append(kv, n+"="+shown[n])
+		}
+		add("meta", strings.Join(kv, ", "))
 	}
 	return out
 }

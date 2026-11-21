@@ -29,6 +29,9 @@ func TestOpTableEveryMetaNoun(t *testing.T) {
 		"tastepref.add": schema.TableTastePrefs, "techdoc.add": schema.TableTechDocs,
 		"workflow.edit": schema.TableWorkflows, "workspace.add": schema.TableWorkspaces,
 		"resource.add": schema.TableResources,
+		// the roster's people and teams (owner org-setup item 3); member
+		// edit is no table's noun, so its actors write takes the flags.
+		"actor.edit": schema.TableActors, "team.add": schema.TableTeams, "member.edit": "",
 		// not metadata tables: the first metadata write takes the flags.
 		"meta.add": "", "link.add": "", "repo.add": "", "row.edit": "", "pii_pattern.add": "", "": "", ".add": "",
 	}

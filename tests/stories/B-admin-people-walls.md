@@ -20,6 +20,7 @@ Cora is the CTO and the admin of the org acme, with a team store on the (fake) G
 7. Secrets (a fresh org): Cora pastes a token (built at run time by `FakeSecret`) into a memory: the write is refused, and neither the refusal, `memory list`, `search` nor `check leaks --rows` prints the token or its tail; no file in the repo holds it.
 8. Cora commits a config file holding the token: the commit hook blocks it naming the file and prints a ready `lore secrets allow --file <path> --rule <rule> --match-hash sha256:<hash>` line, never the value.
 9. The admin is the roster's role (a fresh org, devco:D-852): Cora starts the org with `lore org create` and no guided setup, so her laptop holds no admin setup; she is the roster's admin and `lore org config set --org acme --key own --add … --yes` changes lore-org.yaml. Nia joins with `lore org import` as a member; her `lore org config set` is refused naming her identity (`human:nia@…`) and that the roster of acme gives her no admin role, and the file keeps Cora's list.
+10. People and teams hold custom fields (devco:D-862, owner org-setup item 3): Cora gives `@web` an emoji and a chat room with `lore team add --handle @web --meta emoji=… --meta room=… --yes` and herself a desk with `lore actor edit --actor @cora --meta desk=4F --yes`; `lore team show` and `lore actor show` print them under `meta:`, the list `--json` carries them as `meta`, `lore meta unset --id <id> --key room` (the team's `tem_` id) removes one, and Nia reads the rest on her laptop after a sync.
 
 ## What must hold
 
@@ -65,4 +66,4 @@ The story replays the company's timeline in one world; the details of each part 
 
 ## Findings it guards
 
-D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, D-431, D-433, D-434, D-437, D-440, D-441, D-449, D-454, D-470, D-478, D-479, D-480, D-484, D-485, D-487, D-493, D-499, D-506, D-507, D-508, D-509, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.
+D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, D-431, D-433, D-434, D-437, D-440, D-441, D-449, D-454, D-470, D-478, D-479, D-480, D-484, D-485, D-487, D-493, D-499, D-506, D-507, D-508, D-509, D-862, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.

@@ -164,6 +164,11 @@ var metaTables = map[row.Table]bool{
 	schema.TablePrompts: true, schema.TableReminders: true, schema.TableRules: true, schema.TableSnapshots: true,
 	schema.TableSuggestions: true, schema.TableTasklists: true, schema.TableTasks: true, schema.TableTastePrefs: true,
 	schema.TableTechDocs: true, schema.TableWorkflows: true, schema.TableWorkspaces: true, schema.TableResources: true,
+	// People and teams on an org's roster hold custom fields too (an
+	// emoji, a desk, a pager rotation): the roster ops bind --meta through
+	// BindInputMeta, and lore meta set/unset reach them by id (owner
+	// org-setup item 3).
+	schema.TableActors: true, schema.TableTeams: true,
 }
 
 // AcceptsMeta reports whether rows of table take metadata from the CLI.
@@ -341,7 +346,7 @@ func (e *Engine) createMetaScreened(ctx context.Context, cl call, target store.S
 func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
 	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite, creating bool, sc *screened) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
 	if !metaTables[def.Name] {
-		return nil, nil, errs.New(errs.MetaTable, "metadata cannot be set on "+string(def.Name)+" from the command line; knowledge, work and resource rows accept it").
+		return nil, nil, errs.New(errs.MetaTable, "metadata cannot be set on "+string(def.Name)+" from the command line; knowledge, work and resource rows, people and teams accept it").
 			WithHint("lore help meta")
 	}
 	reg, err := e.metaRegistry(ctx)
@@ -1155,6 +1160,21 @@ type MetaFlags struct {
 	NoLayer bool `json:"no_layer,omitempty" flag:"no-layer" desc:"on a code branch with its own notes (a branch layer), write this row to the shared notes instead"`
 }
 
+// RowMetaFlags are the --meta, --meta-json and --meta-stdin flags of a
+// write that lives outside the repo's notes (a person or a team on the org
+// roster): MetaFlags without --no-layer, which names a code branch's notes
+// and means nothing there. Run and BindInputMeta read them by field name.
+type RowMetaFlags struct {
+	Meta      []string `json:"meta,omitempty" flag:"meta" desc:"set metadata: key=value, key:type=value (repeatable)"`
+	MetaJSON  []string `json:"meta_json,omitempty" flag:"meta-json" desc:"set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)"`
+	MetaStdin string   `json:"meta_stdin,omitempty" flag:"meta-stdin" desc:"read the value of this key from stdin (keeps it out of shell history)"`
+}
+
+// Empty reports no flag given.
+func (f RowMetaFlags) Empty() bool {
+	return len(f.Meta) == 0 && len(f.MetaJSON) == 0 && f.MetaStdin == ""
+}
+
 // Input field names of MetaFlags (Run reads them from any input).
 const (
 	inputMeta      = "meta"
@@ -1332,6 +1352,28 @@ func (e *Engine) bindInputMeta(ctx context.Context, in op.Input) (context.Contex
 		aliases, _ := pol.ScopeAliases()
 		f.Meta = meta.ExpandAliases(f.Meta, aliases)
 	}
+	return bindMetaFlags(ctx, in, f)
+}
+
+// BindInputMeta is bindInputMeta for an operation that runs with no
+// engine around it (wire's direct roster ops: team add, actor edit,
+// member add/edit). Why: those ops write through the roster App's own
+// engine, so Run never sees their input; without this their --meta flags
+// would be parsed and dropped. The returned check refuses flags no write
+// took (E_META_TABLE), exactly as Run does. The repo's scope aliases do
+// not apply: a roster row is not in the repo.
+func BindInputMeta(ctx context.Context, in op.Input) (context.Context, func() error, error) {
+	f := metaFromInput(in)
+	if f.Empty() {
+		return ctx, func() error { return nil }, nil
+	}
+	return bindMetaFlags(ctx, in, f)
+}
+
+// bindMetaFlags binds f to the op's first metadata write of its own table
+// and returns the check run after the op.
+func bindMetaFlags(ctx context.Context, in op.Input, f MetaFlags) (context.Context, func() error, error) {
+	none := func() error { return nil }
 	mw, err := f.Write("", ids.AnyID{}, nil)
 	if err != nil {
 		return nil, none, err

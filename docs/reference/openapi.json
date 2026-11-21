@@ -1696,10 +1696,10 @@
             "name": "with",
             "in": "query",
             "required": false,
-            "description": "also show each person's profile, contacts, teams, projects or periods (comma-separated or repeated; all for every one)",
+            "description": "also show each person's profile, contacts, teams, projects, periods or meta (comma-separated or repeated; all for every one)",
             "schema": {
               "type": "array",
-              "description": "also show each person's profile, contacts, teams, projects or periods (comma-separated or repeated; all for every one)",
+              "description": "also show each person's profile, contacts, teams, projects, periods or meta (comma-separated or repeated; all for every one)",
               "items": {
                 "type": "string"
               }
@@ -1891,6 +1891,18 @@
                                 "roles",
                                 "started_on"
                               ]
+                            }
+                          },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
                             }
                           },
                           "owner_actor_id": {
@@ -3815,6 +3827,18 @@
                             ]
                           }
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "owner_actor_id": {
                           "type": "string"
                         },
@@ -4089,6 +4113,24 @@
                   "location": {
                     "type": "string",
                     "description": "free text (Ankara, TR)"
+                  },
+                  "meta": {
+                    "type": "array",
+                    "description": "set metadata: key=value, key:type=value (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_json": {
+                    "type": "array",
+                    "description": "set a JSON value: key=\u003cjson\u003e, key=@file.json or key=- for stdin (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_stdin": {
+                    "type": "string",
+                    "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
                   "name": {
                     "type": "string",
@@ -31739,6 +31781,24 @@
                   "handle": {
                     "type": "string",
                     "description": "new @handle"
+                  },
+                  "meta": {
+                    "type": "array",
+                    "description": "set metadata: key=value, key:type=value (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_json": {
+                    "type": "array",
+                    "description": "set a JSON value: key=\u003cjson\u003e, key=@file.json or key=- for stdin (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_stdin": {
+                    "type": "string",
+                    "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
                   "name": {
                     "type": "string",
@@ -118127,6 +118187,18 @@
                             ]
                           }
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "pending": {
                           "type": "array",
                           "items": {
@@ -118421,6 +118493,18 @@
                             "required": [
                               "id"
                             ]
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
                           }
                         },
                         "pending": {
@@ -118754,6 +118838,18 @@
                               ]
                             }
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "pending": {
                             "type": "array",
                             "items": {
@@ -118895,6 +118991,24 @@
                       "type": "string"
                     }
                   },
+                  "meta": {
+                    "type": "array",
+                    "description": "set metadata: key=value, key:type=value (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_json": {
+                    "type": "array",
+                    "description": "set a JSON value: key=\u003cjson\u003e, key=@file.json or key=- for stdin (repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "meta_stdin": {
+                    "type": "string",
+                    "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
                   "name": {
                     "type": "string",
                     "description": "the display name"
@@ -119024,6 +119138,18 @@
                             "required": [
                               "id"
                             ]
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
                           }
                         },
                         "pending": {
@@ -119514,6 +119640,18 @@
                             ]
                           }
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "pending": {
                           "type": "array",
                           "items": {
@@ -119807,6 +119945,18 @@
                             ]
                           }
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "pending": {
                           "type": "array",
                           "items": {
@@ -120085,6 +120235,18 @@
                             "required": [
                               "id"
                             ]
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
                           }
                         },
                         "pending": {

@@ -67,7 +67,7 @@ func newAccessWorld(t *testing.T) *accessWorld {
 		orgGit(t, d, "init", "-q", "--bare", "-b", "main")
 	}
 	gc := filepath.Join(w.root, "gitconfig")
-	if err := os.WriteFile(gc, []byte("[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n"), 0o600); err != nil {
+	if err := os.WriteFile(gc, []byte(testenv.GitConfigQuiet+"[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	ssh := filepath.Join(w.root, "fakessh")

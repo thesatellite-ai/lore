@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
@@ -37,7 +38,7 @@ type ActorListIn struct {
 	// With joins each person's profile, contacts, teams, projects or
 	// stints into the list (devco D-861): one call gives a bot the whole
 	// people list, instead of one actor show per person.
-	With []string `json:"with,omitempty" flag:"with" desc:"also show each person's profile, contacts, teams, projects or periods (comma-separated or repeated; all for every one)"`
+	With []string `json:"with,omitempty" flag:"with" desc:"also show each person's profile, contacts, teams, projects, periods or meta (comma-separated or repeated; all for every one)"`
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
 }
@@ -88,6 +89,12 @@ type Actor struct {
 	SourceNote string         `json:"source_note,omitempty"`
 	Source     ActorSourceOut `json:"source,omitzero"`
 	Copies     []ActorCopyOut `json:"copies,omitempty"`
+	// Meta is the person's custom fields, name → value (metashow: an
+	// emoji, a desk; sensitive values masked and named in MetaMasked),
+	// read from the copy shown (the roster's); absent when there are
+	// none, so an older envelope is unchanged (owner org-setup item 3).
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // ActorProfile is the profile fields of TEAM_PROFILES 2.1 (TP-5).
@@ -279,6 +286,7 @@ func (o ActorShowOut) mainText() string {
 		lead = "               "
 	}
 	b.WriteString(sourceText(a)) // the source and every copy (actor_source.go)
+	b.WriteString(metashow.Text(a.Meta, a.MetaMasked))
 	return b.String()
 }
 
@@ -337,6 +345,8 @@ func (o ops) actorList(ctx context.Context, in ActorListIn) (ActorListOut, error
 		seen[s.Row.ID.String()] = true
 		a := actorOf(work.LabelerOf(o.env), s)
 		a.Stores = held[s.Row.ID.String()]
+		mb := metashow.Row(ctx, o.env, s.Row) // MQ13: metadata on every read
+		a.Meta, a.MetaMasked = mb.Meta, mb.MetaMasked
 		// FB-ACTOR-KEY: the copy shown may lack the stable key and handle
 		// by design (a repo that is not an org's own is written the F18
 		// projection: its files are committed, and an email there is
@@ -555,6 +565,8 @@ func (o ops) showOut(ctx context.Context, s work.Sourced, pinned bool) (ActorSho
 	a := actorOf(work.LabelerOf(o.env), s)
 	o.applySource(ctx, &a, true, pinned) // the source and every copy (actor_source.go)
 	r := s.Row
+	mb := metashow.Row(ctx, o.env, r) // MQ13: metadata on every read
+	a.Meta, a.MetaMasked = mb.Meta, mb.MetaMasked
 	a.Profile = profileOf(r)
 	var err error
 	if a.Contacts, err = o.contactsOf(ctx, r.ID); err != nil {

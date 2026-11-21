@@ -60,7 +60,7 @@ func TestActorListWithParts(t *testing.T) {
 		t.Errorf("text --with projects shows an ended membership:\n%s", txt)
 	}
 
-	if msg := h.Fails(infra.OpActorList, `{"with":["contacts","emails"]}`, errs.InvalidInput); !strings.Contains(msg, `"emails" is not one of profile, contacts, teams, projects, periods, all`) {
+	if msg := h.Fails(infra.OpActorList, `{"with":["contacts","emails"]}`, errs.InvalidInput); !strings.Contains(msg, `"emails" is not one of profile, contacts, teams, projects, periods, meta, all`) {
 		t.Errorf("an unknown --with part: %s", msg)
 	}
 

@@ -73,9 +73,24 @@ func runDirect(ctx context.Context, e op.Entry, d op.Decoder) (op.Result, error)
 	if ctx, err = engine.BindListAuthors(ctx, reg, in); err != nil {
 		return op.Result{}, err
 	}
+	// A roster op's --meta flags (team add, actor edit, member add/edit)
+	// ride on its own roster write, as Engine.Run binds them for a repo
+	// op; flags no write took are refused, never dropped (owner org-setup
+	// item 3).
+	ctx, metaUsed, err := engine.BindInputMeta(ctx, in)
+	if err != nil {
+		return op.Result{}, err
+	}
 	// B2-4 / R-1: a store commit made by a direct operation (actor
 	// register, …) is titled after it too, as engine.Run does.
-	return e.Invoke(store.WithCommitOp(ctx, e.Spec().Name), in)
+	res, err := e.Invoke(store.WithCommitOp(ctx, e.Spec().Name), in)
+	if err != nil {
+		return res, err
+	}
+	if err := metaUsed(); err != nil {
+		return op.Result{}, err
+	}
+	return res, nil
 }
 
 // ActorRegister implements opsinfra.Roster.

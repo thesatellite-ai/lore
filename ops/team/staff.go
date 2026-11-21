@@ -325,6 +325,10 @@ type StaffEditIn struct {
 	Name   string `json:"name,omitempty" flag:"name" desc:"new display name"`
 	Handle string `json:"handle,omitempty" flag:"handle" desc:"new @handle"`
 	Role   string `json:"role,omitempty" flag:"role" desc:"new org-level role (on their open stint)"`
+	// --meta / --meta-json / --meta-stdin: the person's custom fields,
+	// bound by the direct runner to this op's actors write (owner
+	// org-setup item 3), as on actor edit.
+	engine.RowMetaFlags
 }
 
 // StaffRemoveIn is the input of member.remove.
@@ -1196,8 +1200,8 @@ func (o ops) staffShow(ctx context.Context, in StaffShowIn) (StaffShowOut, error
 }
 
 func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, error) {
-	if in.Name == "" && in.Handle == "" && in.Role == "" {
-		return StaffWriteOut{}, errs.New(errs.InvalidInput, "member edit: nothing to change").WithHint("give --name, --handle or --role")
+	if in.Name == "" && in.Handle == "" && in.Role == "" && in.RowMetaFlags.Empty() {
+		return StaffWriteOut{}, errs.New(errs.InvalidInput, "member edit: nothing to change").WithHint("give --name, --handle, --role or --meta key=value")
 	}
 	if _, err := adminSetup(ctx, o.env); err != nil {
 		return StaffWriteOut{}, errs.Prefix("member edit", err)
@@ -1228,7 +1232,8 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 	}
 	// the actor row and the stint's role in ONE store commit (B1-21)
 	sctx := engine.Staging(store.WithCommitTitle(ctx, "member edit: "+in.Who))
-	if len(patch) > 0 {
+	if len(patch) > 0 || !in.RowMetaFlags.Empty() {
+		// a --meta-only edit writes an empty patch its metadata rides on
 		if _, err := r.Update(sctx, schema.TableActors, a.ID, patch); err != nil {
 			engine.Discard(sctx)
 			return StaffWriteOut{}, err

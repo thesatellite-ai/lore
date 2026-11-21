@@ -12,6 +12,7 @@ import (
 	// a machine without Go.
 	_ "time/tzdata"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
@@ -68,6 +69,10 @@ type ActorEditIn struct {
 	Bio         string `json:"bio,omitempty" flag:"bio" desc:"markdown"`
 	Birthday    string `json:"birthday,omitempty" flag:"birthday" desc:"YYYY-MM-DD, or --MM-DD without the year"`
 	Clear       string `json:"clear,omitempty" flag:"clear" desc:"comma-separated fields to empty: photo_url,timezone,location,title,bio,birthday"`
+	// --meta / --meta-json / --meta-stdin: the person's custom fields (an
+	// emoji, a desk, a pager rotation), bound by the direct runner to this
+	// op's actors write (owner org-setup item 3); lore meta unset removes one.
+	engine.RowMetaFlags
 }
 
 // ActorEditOut is the edited actor.
@@ -207,12 +212,20 @@ func actorPatch(in ActorEditIn) (map[string]value.Value, []string, error) {
 			set(name, value.Null{})
 		}
 	}
-	if len(patch) == 0 {
+	if !in.RowMetaFlags.Empty() {
+		// a --meta-only edit is a real change: the empty patch is the
+		// write its metadata rides on
+		changed = append(changed, fieldMeta)
+	}
+	if len(patch) == 0 && in.RowMetaFlags.Empty() {
 		return nil, nil, errs.New(errs.InvalidInput, "actor edit: nothing to change").
-			WithHint("give a field flag (--title, --timezone, …) or --clear f,f")
+			WithHint("give a field flag (--title, --timezone, --meta key=value, …) or --clear f,f")
 	}
 	return patch, changed, nil
 }
+
+// fieldMeta names a metadata change in ActorEditOut.Changed.
+const fieldMeta = "meta"
 
 // timezoneHint is the hint of a refused --timezone.
 const timezoneHint = "give an IANA zone name such as Europe/Istanbul or America/New_York"

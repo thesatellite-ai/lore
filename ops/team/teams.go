@@ -35,6 +35,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
@@ -47,9 +48,11 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Team operation names (CLI `lore team add|list|show|remove`, `lore team
@@ -140,6 +143,10 @@ type TeamAddIn struct {
 	Handle  string   `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle"`
 	Name    string   `json:"name,omitempty" flag:"name" desc:"the display name"`
 	Members []string `json:"members,omitempty" flag:"members" desc:"the people: @handle, act_ id or email, comma-separated or repeated (replaces the members of an existing team)"`
+	// --meta / --meta-json / --meta-stdin: the team's custom fields (an
+	// emoji, a chat room, a pager rotation), bound by the direct runner
+	// to this op's teams write (owner org-setup item 3).
+	engine.RowMetaFlags
 }
 
 // TeamListIn is the input of team.list.
@@ -229,6 +236,11 @@ type Team struct {
 	// add), sorted by type with the primary of each type first. Filled by
 	// team show and team list; a write's answer leaves them out.
 	Contacts []TeamContact `json:"contacts,omitempty"`
+	// Meta is the team's custom fields, name → value (metashow: sensitive
+	// values masked and named in MetaMasked); absent for a team without
+	// any, so an older envelope is unchanged.
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // TeamWriteOut is a team write's answer.
@@ -403,6 +415,7 @@ func (o TeamShowOut) Text() string {
 			b.WriteString("  " + c.ID + "  " + c.line() + "\n")
 		}
 	}
+	b.WriteString(metashow.Text(t.Meta, t.MetaMasked))
 	return b.String()
 }
 
@@ -439,6 +452,25 @@ func teamOf(r row.Row, actors map[string]row.Row) Team {
 		t.Members = append(t.Members, memberOf(id, actors[id]))
 	}
 	return t
+}
+
+// teamWithMeta is teamOf plus the row's custom fields (metashow, read
+// through the roster: the key rows live in the roster's store).
+func teamWithMeta(ctx context.Context, r profilestore.Roster, x row.Row, actors map[string]row.Row) Team {
+	t := teamOf(x, actors)
+	b := metashow.Row(ctx, rosterMeta{r: r}, x)
+	t.Meta, t.MetaMasked = b.Meta, b.MetaMasked
+	return t
+}
+
+// rosterMeta reads the meta key rows a team's metadata names from the
+// roster (metashow.Env), so a sensitive key is masked there too.
+type rosterMeta struct{ r profilestore.Roster }
+
+// Get implements metashow.Env.
+func (m rosterMeta) Get(ctx context.Context, ref engine.Ref) (store.Source, row.Row, error) {
+	x, err := m.r.Get(ctx, ref.Table, ref.ID)
+	return m.r.Source(), x, err
 }
 
 // memberOf is actor id as a member (a only names it; an actor the roster
@@ -592,6 +624,9 @@ func teamAdd(ctx context.Context, env profilestore.Store, in TeamAddIn) (TeamWri
 	if ms := splitList(in.Members); len(ms) > 0 {
 		line += " --members " + shellWord(strings.Join(ms, listSep))
 	}
+	for _, kv := range in.Meta {
+		line += " --meta " + shellWord(kv)
+	}
 	if err = requireTeamAdmin(ctx, r, h, line); err != nil {
 		return TeamWriteOut{}, err
 	}
@@ -662,7 +697,7 @@ func teamAdd(ctx context.Context, env profilestore.Store, in TeamAddIn) (TeamWri
 		return TeamWriteOut{}, err
 	}
 	r.Push(ctx)
-	return TeamWriteOut{Team: teamOf(w, actors), Verb: verb, Warnings: r.Warnings(), Where: r.Where(), label: r.Label()}, nil
+	return TeamWriteOut{Team: teamWithMeta(ctx, r, w, actors), Verb: verb, Warnings: r.Warnings(), Where: r.Where(), label: r.Label()}, nil
 }
 
 func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamListOut, error) {
@@ -689,7 +724,7 @@ func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamL
 	}
 	out := TeamListOut{Teams: []Team{}, Where: r.Where(), label: r.Label()}
 	for _, x := range rows {
-		t := teamOf(x, actors)
+		t := teamWithMeta(ctx, r, x, actors)
 		t.Pending = pending[t.Handle]
 		t.Contacts = contacts[t.ID]
 		if t.Active || in.All {
@@ -729,7 +764,7 @@ func teamShow(ctx context.Context, env profilestore.Store, in TeamShowIn) (TeamS
 	if err != nil {
 		return TeamShowOut{}, err
 	}
-	t := teamOf(cur, actors)
+	t := teamWithMeta(ctx, r, cur, actors)
 	t.Pending = pending[t.Handle]
 	t.Contacts = contacts[t.ID]
 	return TeamShowOut{Team: t, Where: r.Where()}, nil
@@ -768,7 +803,7 @@ func teamRemove(ctx context.Context, env profilestore.Store, in TeamRefIn) (Team
 		return TeamWriteOut{}, err
 	}
 	r.Push(ctx)
-	return TeamWriteOut{Team: teamOf(w, actors), Verb: verbTeamRemoved, Warnings: r.Warnings(), Where: r.Where(), label: r.Label()}, nil
+	return TeamWriteOut{Team: teamWithMeta(ctx, r, w, actors), Verb: verbTeamRemoved, Warnings: r.Warnings(), Where: r.Where(), label: r.Label()}, nil
 }
 
 // teamRename changes a team's handle (G-15: a team could only be
@@ -857,7 +892,7 @@ func teamRename(ctx context.Context, env profilestore.Store, in TeamRenameIn) (T
 		out.Pending = append(out.Pending, x.Email+" (invite "+x.ID.String()+")")
 	}
 	r.Push(ctx)
-	out.Team, out.Warnings = teamOf(w, actors), r.Warnings()
+	out.Team, out.Warnings = teamWithMeta(ctx, r, w, actors), r.Warnings()
 	return out, nil
 }
 
@@ -1039,7 +1074,7 @@ func teamMembers(ctx context.Context, env profilestore.Store, in TeamMembersIn, 
 		}
 		r.Push(ctx)
 	}
-	out.Team = teamOf(w, actors)
+	out.Team = teamWithMeta(ctx, r, w, actors)
 	out.Warnings = r.Warnings()
 	return out, nil
 }
