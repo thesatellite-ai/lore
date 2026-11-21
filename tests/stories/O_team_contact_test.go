@@ -74,6 +74,21 @@ func TestStoryOTeamContact(t *testing.T) {
 		ada.LoreIn(pc, "team", "show", "--handle", "@platform").OK(t).Says(t, "contacts (1):").Never(t, "#platform")
 	})
 
+	// devco:D-880 (bug hunt H-139): "restorable from the trash" is true for
+	// a team contact: the trash lists it, an edit of it says E_IN_TRASH with
+	// the restore line, and that line, run where printed, brings it back
+	// under its own id.
+	s.Step("D-880/removed-team-contact-restores", func() {
+		ada.LoreIn(pc, "trash", "list", "--type", "team_contacts", "--to", oOrg).OK(t).Says(t, slackID)
+		r := ada.LoreIn(pc, "team", "contact", "edit", "--id", slackID, "--label", "on-call", "--yes")
+		restore := "lore trash restore --id " + slackID
+		oCheck(t, "D-880/edit-in-trash", r.Code != 0 && strings.Contains(r.Out(), "E_IN_TRASH") && strings.Contains(r.Out(), restore),
+			"an edit of a removed team contact does not say E_IN_TRASH with %q:\n%s", restore, r)
+		ada.LoreIn(pc, "trash", "restore", "--id", slackID, "--yes").OK(t).Says(t, slackID)
+		ada.LoreIn(pc, "team", "show", "--handle", "@platform").OK(t).Says(t, "contacts (2):", slackID+"  slack  #platform")
+		ada.LoreIn(pc, "trash", "list", "--type", "team_contacts", "--to", oOrg).OK(t).Never(t, slackID)
+	})
+
 	s.Step("D-867/refusals-print-lines-that-run", func() {
 		r := ada.LoreIn(pc, "team", "contact", "add", "--handle", "@platform", "--type", "pager", "--value", "x", "--yes")
 		oCheck(t, "D-867/unknown-type", r.Code != 0 && strings.Contains(r.Out(), "E_CONTACT_TYPE") && strings.Contains(r.Out(), "lore contact-type list"),

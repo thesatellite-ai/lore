@@ -71,6 +71,15 @@ trap cleanup EXIT
 
 hermetic_path
 
+# LORE_HUMAN=1: every scenario is a person at a terminal. lore detects a
+# coding agent from the environment and from its parent processes, which a
+# script cannot hide, so a gate started from inside an agent session would
+# otherwise run every scenario as "<person> via <tool>" and apply the agent
+# rules (agents.person_only, --commitment on task add) to the person's
+# writes (devco:D-880). A scenario that plays an agent unsets it for that
+# call (env -u LORE_HUMAN) or detaches like SC-37.
+export LORE_HUMAN=1
+
 fail() { echo "FAIL: $1" >&2; exit 1; }
 skip() { echo "SKIP: $1"; exit 0; }
 pass() { echo "PASS: $1"; exit 0; }

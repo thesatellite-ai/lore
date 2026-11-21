@@ -1,10 +1,12 @@
 package team
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
@@ -141,5 +143,78 @@ func TestTeamContactIsATeamChange(t *testing.T) {
 	w := engine.GuardedWrite{After: row.Row{Table: schema.TableTeamContacts}}
 	if got := profilestore.Classify(w); got != profilestore.ChangeTeam {
 		t.Errorf("Classify(team_contacts) = %q, want %q", got, profilestore.ChangeTeam)
+	}
+}
+
+// TestTeamContactTrashLookup (devco:D-880, bug hunt H-139): team contact
+// remove says "restorable from the trash", so a removed contact answers
+// like every trashed row: edit and remove of its tcn_ id (padded too) say
+// E_IN_TRASH with `lore trash restore --id <tcn_id>` in the hint; once it is
+// purged, or for an id never written, E_NOT_FOUND with no restore line.
+func TestTeamContactTrashLookup(t *testing.T) {
+	const (
+		stTrashed = "trashed"
+		stPurged  = "purged"
+		stNever   = "never existed"
+	)
+	want := map[string]errs.Code{stTrashed: errs.InTrash, stPurged: errs.NotFound, stNever: errs.NotFound}
+	verbs := []struct {
+		name string
+		do   func(x *fixture, id string) error
+	}{
+		{"edit", func(x *fixture, id string) error {
+			_, err := teamContactEdit(x.ctx, x.e, TeamContactEditIn{ID: id, Label: "on-call"})
+			return err
+		}},
+		{"remove", func(x *fixture, id string) error {
+			_, err := teamContactRemove(x.ctx, x.e, TeamContactRemoveIn{ID: id})
+			return err
+		}},
+	}
+	for _, state := range []string{stTrashed, stPurged, stNever} {
+		for _, pad := range []bool{false, true} {
+			for _, v := range verbs {
+				t.Run(fmt.Sprintf("%s/padded=%t/%s", state, pad, v.name), func(t *testing.T) {
+					x, _, _ := teamFixture(t)
+					x.teamAdd(TeamAddIn{Handle: "@web", Members: []string{"@mira"}})
+					a, err := teamContactAdd(x.ctx, x.e, TeamContactAddIn{Handle: "@web", Type: "slack", Value: "#web"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					id := a.Contact.ID
+					switch state {
+					case stTrashed, stPurged:
+						if _, err = teamContactRemove(x.ctx, x.e, TeamContactRemoveIn{ID: id}); err != nil {
+							t.Fatal(err)
+						}
+						if state == stPurged {
+							aid, perr := ids.ParseAny(id)
+							if perr != nil {
+								t.Fatal(perr)
+							}
+							x.e.Purge(schema.TableTeamContacts, aid)
+						}
+					case stNever:
+						// a well-formed tcn_ id no row has: the live
+						// contact's id with its last digit changed
+						repl := byte('1')
+						if id[len(id)-1] == repl {
+							repl = '2'
+						}
+						id = id[:len(id)-1] + string(repl)
+					}
+					ref := id
+					if pad {
+						ref = "  " + id + " "
+					}
+					err = v.do(x, ref)
+					wantCode(t, state, err, want[state])
+					hint := errs.EnvelopeOf(err).Error.Hint
+					if restore := "lore trash restore --id " + id; (state == stTrashed) != strings.Contains(hint, restore) {
+						t.Fatalf("%s: hint %q, the restore line wanted only for a trashed contact", state, hint)
+					}
+				})
+			}
+		}
 	}
 }

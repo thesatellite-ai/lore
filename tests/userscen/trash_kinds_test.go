@@ -135,6 +135,7 @@ var trashNotAKind = map[string]string{
 	"teams":              "teams: no delete verb",
 	"machines":           "machine profiles: written by lore itself; no delete verb",
 	"actor_contacts":     "team profile rows (never client): actor contact flows",
+	"team_contacts":      "a team's contacts on the org roster only (team contact remove → trash → restore): ops/team TestTeamContactTrashLookup, story O D-880 (devco:D-880)",
 	"contact_types":      "contact types are retired, not deleted",
 	"roles":              "roles are retired, not deleted",
 	"actor_periods":      "team profile rows: actor period flows",

@@ -11,14 +11,15 @@
 1. Ada starts the team in `~/code/platform`, adds `own: github.com/acme-co/*` and `repos: github.com/client-co/*`, links the client clones to `acme/shop` and `platform` to `acme/platform --own`.
 2. Ben joins. In each place (client repo, client repo outside the setup's folders, unlinked client repo, own linked repo, the store clone's `shop/` folder): Ben adds two memories to `acme/platform` and syncs; Ada adds three memories there and three from the home folder (to `acme/org` and `acme/platform`), then runs `lore sync` there.
 3. The move matrix: Ada moves the store with `lore store set-url --name acme --url <new repo>` (the old repo still exists, the history copied over) three times, once per explicit push path: `lore sync` in `~/code/platform`, `lore sync --setup acme-admin` from home, `lore store push --store acme`. Ben syncs after each.
-4. A day later, from the home folder under a coding agent: `memory add`, `decision add`, `task add` (the folder's first task list) to `acme/shop`, and `memory add` to `acme/org`.
+4. A day later, from the home folder under a coding agent: `task add` to `acme/shop` without `--commitment` (refused), then `memory add`, `decision add`, `task add --commitment proposed` (the folder's first task list) to `acme/shop`, and `memory add` to `acme/org`.
 
 ## What must hold
 
 - `sent N` on the store line is the commits `git rev-list` counts on the store remote between before and after the sync, `received N` the commits the remote held that the clone did not (Ben's), in every place, and the `lore: pushed store …` line is printed in every place.
 - After each set-url: the old repo is unchanged until an explicit push (set-url and a read push nothing); that push prints one line naming the old repo with git's count there (`forwarded N commits to the old address <old url> (branch main, now at commit …)`), and after a take-in of a teammate's commits one more naming the new repo (`forwarded N commits to the new address <new url> …`) and leaves the old and new repos' `main` equal; the next push says nothing of the old address; Ben's next sync makes his config name the new address and his clone of the new repo equal to its `main`.
 - The `lore: wrote …` / `lore: removed …` lines of a write name exactly the files its commits hold: never a row rewritten with the same bytes, and a folder's new `_meta.json` by name.
+- The agent's `task add --to acme/shop` without `--commitment` exits 20 asking for it (agents state a commitment, D-872) and the store gets no commit.
 
 ## Findings it guards
 
-- `devco:D-684`, `devco:D-691` (REGRESSIONS.md, owner use pass 4 weak 2 and weak 8); `devco:D-699` (owner use pass 5 weak 5, the move matrix).
+- `devco:D-684`, `devco:D-691` (REGRESSIONS.md, owner use pass 4 weak 2 and weak 8); `devco:D-699` (owner use pass 5 weak 5, the move matrix); `devco:D-880` (bug hunt H-139, the agent's task add states its commitment).

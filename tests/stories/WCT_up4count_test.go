@@ -12,6 +12,8 @@ package stories
 //	       reached the remote, "received M" the commits that arrived, and the
 //	       "lore: pushed store …" line is printed in every placement
 //	D-691: a write's "wrote N row file(s)" is the files its commit holds
+//	D-880: the agent's task add there states --commitment (D-872); without
+//	       it the agent is refused and the store gets no commit
 
 import (
 	"path/filepath"
@@ -118,11 +120,19 @@ func TestStoryWCTUp4Count(t *testing.T) {
 		home := pc.With(wqAgentEnv("wct-session-1")...)
 		home.Dir = m.Home
 		shopTo := []string{"--to", wOrg + "/shop"}
+		// devco:D-880: since D-872 an agent's task add with --to states its
+		// commitment; without it the agent is refused and nothing is written
+		head := wqGit(t, clone, "rev-parse", "HEAD")
+		home.Lore(append([]string{"task", "add", "--title", "rotate the shop's api key"}, shopTo...)...).
+			Fails(t, 20, "--commitment is required when an agent adds a task", "--commitment accepted")
+		if now := wqGit(t, clone, "rev-parse", "HEAD"); now != head {
+			t.Errorf("[WCT D-880] a refused task add committed to the store (HEAD %s → %s)", head, now)
+		}
 		for _, args := range [][]string{
 			append([]string{"memory", "add", "--body", "the shop's cdn purges on deploy"}, shopTo...),
 			append([]string{"decision", "add", "--title", "orders use uuids", "--body", "uuids, not serials"}, shopTo...),
 			// the folder's first task list: its commit adds the folder's _meta.json
-			append([]string{"task", "add", "--title", "rotate the shop's api key"}, shopTo...),
+			append([]string{"task", "add", "--title", "rotate the shop's api key", "--commitment", "proposed"}, shopTo...),
 			append([]string{"memory", "add", "--body", "the org's vpn is wireguard"}, "--to", inOrg),
 		} {
 			head := wqGit(t, clone, "rev-parse", "HEAD")
@@ -134,7 +144,7 @@ func TestStoryWCTUp4Count(t *testing.T) {
 			if said := wctWroteCount(r.Out()); said != len(files) {
 				t.Errorf("[WCT D-691] lore %s says it wrote %d file(s), its commits hold %d (%v):\n%s", strings.Join(args[:2], " "), said, len(files), files, r)
 			}
-			if args[1] == "task" {
+			if args[0] == "task" {
 				r.Says(t, "_meta.json")
 			}
 		}

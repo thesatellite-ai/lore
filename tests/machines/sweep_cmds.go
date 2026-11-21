@@ -222,6 +222,8 @@ var reads = []sweepStep{
 	{Cmd: "session list", In: inRepo},
 	{Cmd: "actor list", In: inRepo},
 	{Cmd: "actor contact list", In: inRepo},
+	// devco:D-880: a team's contacts read like a person's (none in a repo with no org)
+	{Cmd: "team contact list", In: inRepo},
 	{Cmd: "role list", In: inRepo},
 	{Cmd: "contact-type list", In: inRepo},
 	{Cmd: "tag list", In: inRepo},
@@ -510,6 +512,7 @@ var notUserRun = map[string]string{
 	"project member add": whyTeam, "project member edit": whyTeam, "project member list": whyTeam, "project member remove": whyTeam,
 	"project shared-init": whyTeam, "team invite list": whyTeam, "team invite resend": whyTeam, "team invite revoke": whyTeam,
 	"team add": whyTeam, "team list": whyTeam, "team show": whyTeam, "team remove": whyTeam, "team rename": whyTeam, "team member add": whyTeam, "team member remove": whyTeam,
+	"team contact add": whyTeam, "team contact edit": whyTeam, "team contact remove": whyTeam,
 	"member add": whyTeam, "member list": whyTeam, "member show": whyTeam, "member edit": whyTeam, "member remove": whyTeam, // journey TestJourneyStaff runs them
 	"handoff add": whyTeam, "handoff ack": whyTeam, "handoff show": whyTeam, "handoff delete": whyTeam, "machine label": whyTeam,
 	"setup suggest-again": whyTeam,

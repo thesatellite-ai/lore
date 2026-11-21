@@ -32,6 +32,7 @@ Each script:
 5. Emits `PASS: SC-N` on success
 6. Calls `fail "<reason>"` and exits non-zero on assertion failure
 7. Reads `$LORE` env var for binary path (default: `aicoder` on PATH)
+8. Runs lore as a person: `tests/lib/common.sh` exports `LORE_HUMAN=1`, so a gate started inside a coding agent's session does not run the scenarios as that agent (lore also detects an agent from its parent processes); a step that plays an agent unsets it for that call (`env -u LORE_HUMAN`), as SC-38 shows
 
 ## Regression index
 
