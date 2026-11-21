@@ -44,7 +44,7 @@ func TestStoryOPersonalAliases(t *testing.T) {
 			Says(t, "robert-kim")
 		for _, q := range []string{"who is Bobby", "who is Boby", "who is Robert Kim"} {
 			ada.Lore(ada.Home, "ask", "--store", "me", "--query", q).OK(t).
-				Says(t, "person robert-kim", "aliases: Bobby, Robert Kim, CFO", "role: designer")
+				Says(t, "robert-kim (person; aka Bobby, Robert Kim, CFO): ", "role: designer")
 		}
 		r := ada.Lore(ada.Home, "resource", "show", "--store", to, "--id", "robert-kin")
 		if r.Code == 0 || !strings.Contains(r.Out(), "did you mean person/robert-kim?") {
