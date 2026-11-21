@@ -305,9 +305,52 @@ func TestReportShowsCPUAndLoad(t *testing.T) {
 	r := Result{Q: Question{ID: "Q01", Type: TypeWho, Text: "who is alice-ng", Lore: []string{"ask", "--query", "who is alice-ng"}},
 		Lore: LoreRun{Calls: 1, Warm: 900 * time.Millisecond, WarmCPU: 123 * time.Millisecond, Cold: 1100 * time.Millisecond, ColdCPU: 234 * time.Millisecond, Chars: 100, Correct: true}}
 	out := Report(RunInfo{BoxLoad: [2]string{"150.10 140.00 130.00", "160.20 150.00 140.00"}}, []Result{r})
-	for _, want := range []string{"Box load (1/5/15 min): 150.10 140.00 130.00 at the first question, 160.20 150.00 140.00 after the last", "warm cpu p50/max 123/123 ms", "| 900 | 123 | 1100 | 234 |", "warm cpu ms", "cold cpu ms"} {
+	for _, want := range []string{"Box load (1/5/15 min): 150.10 140.00 130.00 at the first question, 160.20 150.00 140.00 after the last", "warm cpu p50/max 123/123 ms", "| 900 | - | 123 | 1100 | 234 |", "warm cpu ms", "cold cpu ms"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report does not say %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestWarmIsMedianOfRepeats (bug hunt H-106, devco D-849): a question's
+// warm time is the median of its WarmRepeats warm calls, so one call that
+// waited for a core on a shared box does not miss the bar while two slow
+// calls of three still do; the report keeps every call and the summary
+// line the raw max, so the spike is shown, not hidden.
+func TestWarmIsMedianOfRepeats(t *testing.T) {
+	ms := func(xs ...int) []time.Duration {
+		out := make([]time.Duration, len(xs))
+		for i, x := range xs {
+			out[i] = time.Duration(x) * time.Millisecond
+		}
+		return out
+	}
+	if WarmRepeats != 3 {
+		t.Fatalf("WarmRepeats = %d, the bar is 2 of 3 under %d ms", WarmRepeats, BarWarm.Milliseconds())
+	}
+	for _, c := range []struct {
+		runs []time.Duration
+		want time.Duration
+	}{{ms(30, 77, 29), 30 * time.Millisecond}, {ms(54, 12, 13), 13 * time.Millisecond}, {ms(60, 12, 70), 60 * time.Millisecond}, {ms(20), 20 * time.Millisecond}, {nil, 0}} {
+		if got := WarmOf(c.runs); got != c.want {
+			t.Errorf("WarmOf(%v) = %v, want %v", c.runs, got, c.want)
+		}
+	}
+	run := func(id string, runs []time.Duration) Result {
+		return Result{Q: Question{ID: id, Type: TypeWho}, Lore: LoreRun{Calls: 1, Warm: WarmOf(runs), WarmRuns: runs, Cold: 100 * time.Millisecond, Chars: 100, Correct: true, Acc: Accuracy{Recall: true, Top1: true}}, Grep: GrepRun{Calls: 2, Chars: 5000, Correct: true}}
+	}
+	spike, slow := run("Q11", ms(30, 77, 29)), run("Q70", ms(60, 12, 70))
+	if m := Misses([]Result{spike}); len(m) != 0 {
+		t.Errorf("one slow warm call of three misses the bar: %v", m)
+	}
+	m := strings.Join(Misses([]Result{spike, slow}), "\n")
+	if !strings.Contains(m, "Q70 (who is X): warm call 60 ms (median of 60/12/70 ms), the bar is < 50 ms") || strings.Contains(m, "Q11") {
+		t.Errorf("misses should name only Q70 with its three calls:\n%s", m)
+	}
+	rep := Report(RunInfo{}, []Result{spike, slow})
+	for _, want := range []string{"warm p50/max 60/60 ms (raw max 77)", "| warm ms | warm runs ms |", "| 30 | 30/77/29 |", "| 60 | 60/12/70 |"} {
+		if !strings.Contains(rep, want) {
+			t.Errorf("report does not say %q:\n%s", want, rep)
 		}
 	}
 }
