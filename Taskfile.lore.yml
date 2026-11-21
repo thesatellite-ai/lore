@@ -654,6 +654,19 @@ tasks:
       - CGO_ENABLED=0 go build -o {{.BENCH_BIN}} ./cmd/lore
       - "LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^TestBenchRecall$' -timeout 60m -v {{.CLI_ARGS}} ./tests/bench/recall/"
 
+  # The blind agent run of the recall gate (owner 2026-11-21, accuracy first, devco D-816): every gate
+  # question asked of a lore agent (skills/SKILL.md, the lore command only) and a grep agent (rg/cat over
+  # the markdown tree) on one small model, both graded against the ground truth they never see; tokens
+  # and wall time per question. It starts real agents and costs money: never in task check or on push;
+  # the release script runs it. LORE_BENCH_AGENT names the command that starts the agent CLI.
+  bench:agent:
+    desc: "Blind agent run (tests/bench/recall, tag bench): every recall-gate question asked of a lore agent (SKILL.md + lore only) and a grep agent (rg/cat over the markdown tree) on claude-haiku-4-5, graded automatically; tokens and wall time per question; section in tmp/bench/recall.md; fails unless lore >= grep on the normal set and > grep on the harder set. Starts real agents (costs money): set LORE_BENCH_AGENT to the agent launcher (default claude). Settings: tests/bench/recall/README.md. Extra go test flags after --"
+    vars:
+      BENCH_BIN: "{{.BIN_DIR}}/lore-bench"
+    cmds:
+      - CGO_ENABLED=0 go build -o {{.BENCH_BIN}} ./cmd/lore
+      - "LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^TestBenchAgent$' -timeout 90m -v {{.CLI_ARGS}} ./tests/bench/recall/"
+
   test:stories:
     desc: "Replayable user stories (tests/stories, tags stories+journeys): every scenario track lore was tried against (bug hunt J1-J4, dev company A-I) replayed end to end on the real binary over generated repo shapes (5.5k-row 0.1.17 repo, monorepo, docs-only, Unicode/CRLF, worktrees, shallow clones, two machines), checking the owner's standing rules; tests/stories/REGRESSIONS.md maps every fixed finding to the test that guards it. Stories run in parallel (PARALLEL); full gate only, not check:fast. Extra go test flags after --"
     vars:
