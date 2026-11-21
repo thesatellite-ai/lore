@@ -72,7 +72,7 @@ The run passes when every accuracy bar and every bar below holds (the raised bar
 - every question: 1 lore call, warm under 50 ms, cold under 300 ms, lore's answer correct (70/70, the 20 harder ones included);
 - total characters lore printed fewer than grep's;
 - lore correct on at least as many questions as grep;
-- typed answers (who is X: resources; what I owe: tasks) at least 10x lighter than grep's.
+- typed answers: who is X (a resource) at least 10x lighter than grep's; what I owe / who owes me (tasks) lighter than grep's. Why not 10x for both: grep's owe answer is the one `tasks.md` line per task (about 150 characters a question), so 10x lighter would be shorter than one task title; lore's owe answer is one line per task too, so it can be lighter but not ten times lighter (devco D-827, decided for the owner, reversible).
 
 ## The report
 

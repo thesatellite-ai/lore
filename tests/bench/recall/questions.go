@@ -39,9 +39,32 @@ func (t Type) Harder() bool {
 	return false
 }
 
-// Typed reports whether t is answered by typed rows (resources, tasks):
-// those answers must stay >= 10x lighter than grep's (gate G-4).
-func (t Type) Typed() bool { return t == TypeWho || t == TypeOwe }
+// TypedBar is the size bar of a type answered by typed rows (gate G-4):
+// who is X (a resource) at least BarTypedGain times lighter than grep,
+// what I owe / who owes me (tasks) lighter than grep, BarNone for every
+// other type. Why two bars (devco D-827, coordinator decision for the
+// owner, reversible): grep's owe answer is the one tasks.md line per
+// task, ~150 chars a question, so 10x lighter would be shorter than one
+// task title; the owe answer can only be lighter, not ten times lighter.
+func (t Type) TypedBar() TypedBar {
+	switch t {
+	case TypeWho:
+		return BarTenfold
+	case TypeOwe:
+		return BarLighter
+	}
+	return BarNone
+}
+
+// TypedBar is a typed answer's size bar against grep's.
+type TypedBar int
+
+// The typed bars (TypedBar).
+const (
+	BarNone    TypedBar = iota // not a typed answer: only the total chars bar
+	BarTenfold                 // at least BarTypedGain times lighter than grep
+	BarLighter                 // fewer chars than grep
+)
 
 // Ask is what a question is about as the question spells it: the facts a
 // typed call would take (before gate G-3 the lore arm called resource

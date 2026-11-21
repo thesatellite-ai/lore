@@ -145,6 +145,26 @@ func TestMissesNamesEveryBar(t *testing.T) {
 			t.Errorf("misses do not say %q:\n%s", want, got)
 		}
 	}
+	// the typed bars per type (devco D-827): who is X >= 10x lighter, what
+	// I owe lighter than grep, an untyped type only the total bar
+	for _, c := range []struct {
+		t          Type
+		lore, grep int
+		miss       string
+	}{
+		{TypeWho, 600, 5000, `typed answers "who is X": lore 600 chars vs grep 5000, the bar is >= 10x lighter`},
+		{TypeWho, 500, 5000, ""},
+		{TypeOwe, 1200, 1209, ""},
+		{TypeOwe, 1209, 1209, `typed answers "what I owe / who owes me": lore 1209 chars vs grep 1209, the bar is lighter than grep`},
+		{TypeStatus, 4000, 5000, ""},
+	} {
+		r := good
+		r.Q.Type, r.Lore.Chars, r.Grep.Chars = c.t, c.lore, c.grep
+		got := strings.Join(Misses([]Result{r}), "\n")
+		if c.miss == "" && strings.Contains(got, "typed answers") || c.miss != "" && !strings.Contains(got, c.miss) {
+			t.Errorf("%s lore %d grep %d: misses %q, want %q", c.t, c.lore, c.grep, got, c.miss)
+		}
+	}
 	more := good
 	more.Lore.Chars = 6000
 	if !strings.Contains(strings.Join(Misses([]Result{more}), "\n"), "total chars: lore 6000 >= grep 5000") {

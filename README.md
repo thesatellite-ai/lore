@@ -98,12 +98,13 @@ A folder of tidy markdown notes plus `grep` and `cat` is the honest alternative,
 | answers right | 70/70 (harder set 20/20) | 70/70 |
 | right answer in the top 3 / first | 70/70 / 70/70, 0 stale facts | (one pile of text) |
 | calls | 70 (one per question) | 114 |
-| characters read | 48,190 | 139,274 (2.9x more) |
-| everything about a person or project | 10,603 chars | 108,300 chars (10x more) |
-| who is X | 2,340 chars | 6,680 chars (2.9x more) |
-| time per call | warm p50 180 ms, max 467 ms; cold max 807 ms (on a loaded shared box) | — |
+| characters read | 38,798 | 139,274 (3.6x more) |
+| everything about a person or project | 9,753 chars | 108,300 chars (11x more) |
+| who is X | 528 chars | 6,680 chars (12.7x more) |
+| what I owe / who owes me | 1,173 chars | 1,209 chars |
+| time per call | warm p50 187 ms, max 391 ms; cold max 405 ms (on a loaded shared box) | — |
 
-Where the gate still misses its own bar (so it does not block releases yet): warm calls under 50 ms and cold calls under 300 ms; "who is X" at least 10x lighter than grep; "what I owe" (3,654 vs 1,209 chars), decisions and day/week questions still print more than grep's single matching lines. Rerun it yourself with `task bench:recall` (report in `tmp/bench/recall.md`).
+Where the gate still misses its own bar (so it does not block releases yet): warm calls under 50 ms and cold calls under 300 ms. Decisions and day/week questions also still print more than grep's single matching lines (no bar on those beyond the total). Rerun it yourself with `task bench:recall` (report in `tmp/bench/recall.md`).
 
 ## Install
 

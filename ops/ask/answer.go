@@ -131,11 +131,21 @@ func build(q question, d data, top, maxChars int) Out {
 	out := Out{Query: q.text, When: q.when, Resources: []Resource{}, Tasks: []Task{}, Rows: []Row{}, Ranked: []Ranked{}, Cited: []string{}}
 	ms := matchResources(q, d.resources)
 	identity := isIdentity(q.text) && len(ms) > 0
+	out.identity, out.asked = identity, q.tokens
 	for _, m := range ms {
 		out.Resources = append(out.Resources, resourceOf(m, d.resources, q.owe != oweNone))
 	}
 	if !identity {
 		out.Tasks = tasksFor(q, ms, d.tasks)
+	}
+	if q.owe != oweNone && len(out.Tasks) > 0 {
+		// devco D-827: the owed tasks answer a debt question and their
+		// lines name the person; the person's card under them only made
+		// the answer heavier than the grep it replaces. A person the
+		// lines name only by an alias (owed to Huey) keeps a one-line
+		// card that says who that is; with no open task the person stays,
+		// so the answer still says who was looked up.
+		out.Resources = slices.DeleteFunc(out.Resources, func(r Resource) bool { return namedByTasks(r, out.Tasks) })
 	}
 	lead := 0
 	switch {
@@ -198,6 +208,18 @@ func readable(text string, names map[string]string) string {
 	})
 }
 
+// namedByTasks reports whether every task names resource r by its name:
+// as the other side of the debt or in its title.
+func namedByTasks(r Resource, ts []Task) bool {
+	name := strings.ToLower(r.Name)
+	for _, t := range ts {
+		if !strings.EqualFold(t.OwedBy, name) && !strings.EqualFold(t.OwedTo, name) && !allWords(tokensOf(t.Title), name) {
+			return false
+		}
+	}
+	return true
+}
+
 // answerFirst is which list leads an answer.
 type answerFirst int
 
@@ -250,7 +272,8 @@ func (o *Out) rank(q question, identity bool, lead int) []Ranked {
 	for _, r := range o.Rows {
 		rows = append(rows, Ranked{Kind: KindRow, ID: r.ID})
 	}
-	switch leadOf(q, identity, o) {
+	o.answer = leadOf(q, identity, o)
+	switch o.answer {
 	case leadTasks:
 		return slices.Concat(tsk, res, rows)
 	case leadRows:
@@ -713,10 +736,9 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 // NoAnswer is the line an answer that holds nothing prints.
 const NoAnswer = "(no answer)"
 
-// Text is the answer as an agent reads it: the question, the items in
-// reading order (resources, open tasks, rows in full, grouped where they
-// follow each other), then the ids it cites.
-
+// Text is the answer as an agent reads it: the date window (a date
+// question), the items in reading order (resources, open tasks, rows in
+// full, grouped where they follow each other), then the ids it cites.
 func (o Out) Text() string {
 	var b strings.Builder
 	body := o.body()
@@ -742,11 +764,36 @@ func (o Out) Text() string {
 	if o.Left > 0 {
 		fmt.Fprintf(&b, "\n%s left out to stay under %d characters; --max-chars %d prints more\n", plural.Count(o.Left, "more item"), o.maxChars, o.maxChars*2)
 	}
-	if len(o.Cited) > 0 {
-		b.WriteString("\ncited: " + strings.Join(o.Cited, " ") + "\n")
+	if cited := o.textCited(); len(cited) > 0 {
+		b.WriteString("cited: " + strings.Join(cited, " ") + "\n")
 	}
 	return b.String()
 }
+
+// textCited is the ids the text's cited line names: every cited item but
+// the resources of a who-is answer, whose card names them by kind and
+// name (lore resource show --kind <kind> --name <name> reads one; --json
+// keeps every id in cited). Why (devco D-827, recall gate G-4): a who-is
+// answer must stay at least 10x lighter than the files grep opens, and a
+// 30-character id per card was a third of it.
+func (o Out) textCited() []string {
+	if !o.identity || o.answer != leadResources {
+		return o.Cited
+	}
+	out := []string{}
+	for _, r := range o.Ranked {
+		if r.Kind != KindResource {
+			out = append(out, r.ID)
+		}
+	}
+	return out
+}
+
+// cards reports an answer whose resources print as one-line cards: a
+// who-is question (the resource is the answer, not context) and a debt
+// question (the person under the tasks, only when a line names them by
+// an alias).
+func (o Out) cards() bool { return o.identity && o.answer == leadResources || o.answer == leadTasks }
 
 // body is the header and the items of o.Ranked in that order: a run of
 // tasks under one "open tasks" heading, a run of rows under one rows
@@ -776,8 +823,18 @@ func (o Out) body() string {
 		first := i == 0 || o.Ranked[i-1].Kind != it.Kind
 		switch it.Kind {
 		case KindResource:
+			if o.cards() {
+				b.WriteString(res[it.ID].card(o.asked))
+				continue
+			}
 			b.WriteString(res[it.ID].text())
 		case KindTask:
+			if o.answer == leadTasks {
+				// a debt answer is its task lines: no heading, the
+				// person named once per line (devco D-827)
+				b.WriteString(tsk[it.ID].line(true))
+				continue
+			}
 			if first {
 				run := 0
 				for _, x := range o.Ranked[i:] {
@@ -788,7 +845,7 @@ func (o Out) body() string {
 				}
 				fmt.Fprintf(&b, "\nopen tasks (%d):\n", run)
 			}
-			b.WriteString(tsk[it.ID].text())
+			b.WriteString(tsk[it.ID].line(false))
 		case KindRow:
 			compact := n < o.lead
 			if first || n == o.lead && o.lead > 0 {
@@ -806,13 +863,15 @@ func (o Out) body() string {
 	return b.String()
 }
 
-// header is the first line(s): the question and the date window.
+// header is the first line: the date window a date question was read
+// as, "" for every other question. The question itself is not echoed:
+// the agent wrote it, and every echoed character is read again (devco
+// D-827); --json keeps it as query.
 func (o Out) header() string {
-	h := "ask: " + o.Query + "\n"
 	if o.When != "" {
-		h += "dates: " + o.When + "\n"
+		return "dates: " + o.When + "\n"
 	}
-	return h
+	return ""
 }
 
 // rowsHeader heads the run'th of runs runs of rows (0 the first), or the
@@ -830,6 +889,44 @@ func (o Out) rowsHeader(run, runs int, compact bool) string {
 		return "\nnewest row of each folder, in full:\n"
 	}
 	return "\nbest rows, in full:\n"
+}
+
+// card is one resource as the answer to "who is X": one line with its
+// kind and name, the fields that say who it is (a changed one with what
+// it was and the day it changed) and its aliases. Contact values (an
+// email, a link) are left out unless the question names that field
+// ("what is the email of X"), and so are the resources that link to it;
+// `lore resource show` and --json print them. Why (devco D-827, recall
+// gate G-4): a who-is answer must be at least 10x lighter than the
+// person's notes file grep reads, and the full field list, the linked
+// projects and the id were most of it.
+func (r Resource) card(asked []string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s", r.Kind, r.Name)
+	var parts []string
+	for _, f := range r.Fields {
+		if f.Value == "" || isContact(f.Value) && !slices.Contains(asked, strings.ToLower(f.Name)) {
+			continue
+		}
+		p := f.Name + ": " + f.Value
+		if f.Was != "" {
+			p += fmt.Sprintf(" (changed %s, was %s)", f.ChangedAt, f.Was)
+		}
+		parts = append(parts, p)
+	}
+	if len(r.Aliases) > 0 {
+		parts = append(parts, "aliases: "+strings.Join(r.Aliases, ", "))
+	}
+	if len(parts) > 0 {
+		b.WriteString(": " + strings.Join(parts, "; "))
+	}
+	return b.String() + "\n"
+}
+
+// isContact reports a value that is a way to reach someone (an email, a
+// link), not who they are.
+func isContact(v string) bool {
+	return strings.Contains(v, "@") || strings.Contains(v, "://")
 }
 
 // text is one resource: its line, its fields and what links to it.
@@ -862,13 +959,56 @@ func (r Resource) text() string {
 	return b.String()
 }
 
-// text is one task line.
-func (t Task) text() string {
-	s := fmt.Sprintf("  - [%s] %s  %s  (%s)", t.Status, t.Title, t.ID, t.Place)
-	if t.OwedBy != "" || t.OwedTo != "" {
-		s += fmt.Sprintf("  owed by %s to %s", cmp.Or(t.OwedBy, "?"), cmp.Or(t.OwedTo, "?"))
+// line is one open task: its title, its status when it is not plain
+// todo, and the debt (who owes whom). The id is cited once at the end of
+// a debt answer, not on the line. debt is a debt answer: the question fixed
+// the direction, so a title that already names the other side ("send the
+// contract to keiko-sato", "robert-kim owes me the deck") says it all.
+// Why (devco D-827, recall gate G-4): the owe answer was three times the
+// grep line it replaces (status, id, place and the debt on every line,
+// the person's card under them).
+func (t Task) line(debt bool) string {
+	s := t.Title
+	if t.Status != "" && t.Status != schema.TaskStatusTodo {
+		s += " [" + t.Status + "]"
+	}
+	if d := t.debt(); d != "" && !(debt && t.namesOther()) {
+		s += " (" + d + ")"
+	}
+	if !debt {
+		// a task under another answer (everything about X) is a list item
+		// under its heading and keeps its id on its line, as the rows
+		// around it do; a debt answer's lines are the whole answer, bare
+		s = "  - " + s + "  " + t.ID
 	}
 	return s + "\n"
+}
+
+// debt says who owes whom from the person's side: "owed to X" (I owe X),
+// "owed by X" (X owes me), "owed by A to B" between two others; "" for a
+// task that is not a debt.
+func (t Task) debt() string {
+	switch {
+	case t.OwedBy == "" && t.OwedTo == "":
+		return ""
+	case strings.EqualFold(t.OwedBy, Me):
+		return "owed to " + cmp.Or(t.OwedTo, "?")
+	case strings.EqualFold(t.OwedTo, Me):
+		return "owed by " + cmp.Or(t.OwedBy, "?")
+	}
+	return fmt.Sprintf("owed by %s to %s", cmp.Or(t.OwedBy, "?"), cmp.Or(t.OwedTo, "?"))
+}
+
+// namesOther reports a title that names the other side of the debt.
+func (t Task) namesOther() bool {
+	other := t.OwedTo
+	if strings.EqualFold(t.OwedTo, Me) {
+		other = t.OwedBy
+	}
+	if other == "" || strings.EqualFold(other, Me) || strings.EqualFold(t.OwedBy, t.OwedTo) {
+		return false
+	}
+	return allWords(tokensOf(t.Title), strings.ToLower(other))
 }
 
 // text is one row in full, numbered i+1, its references read as names.

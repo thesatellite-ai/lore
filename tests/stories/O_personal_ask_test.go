@@ -85,9 +85,22 @@ func TestStoryOPersonalAsk(t *testing.T) {
 					t.Errorf("[O D-807] `lore ask --store me --query %q` says %q:\n%s", c.q, n, r)
 				}
 			}
-			if !strings.Contains(out, "cited: ") {
+			if !strings.HasPrefix(c.q, "who is ") && !strings.Contains(out, "cited: ") {
 				t.Errorf("[O D-807] `lore ask` cites no id:\n%s", r)
 			}
+		}
+		// devco D-827 (recall gate G-4): typed answers stay lighter than
+		// the files grep reads: "who is X" is one card line (no id, no
+		// echo of the question; --json keeps the id), a debt answer its
+		// task lines and the ids once (no heading, status, place, person
+		// card)
+		who := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "who is alise-ng").OK(t).Out()
+		if lines := strings.Split(strings.TrimSpace(who), "\n"); len(lines) != 1 || strings.Contains(who, "res_") || strings.Contains(who, "who is") {
+			t.Errorf("[O D-827] who is X is not one card line:\n%s", who)
+		}
+		owe := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "what do I owe Bobby").OK(t).Out()
+		if !strings.HasPrefix(owe, "send the price list to robert-kim\ncited: tsk_") || strings.Count(owe, "\n") != 2 {
+			t.Errorf("[O D-827] the debt answer is not its task line and the id once:\n%s", owe)
 		}
 		j := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "everything about alice-ng", "--max-chars", "400", "--json")
 		j.OK(t)

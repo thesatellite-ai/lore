@@ -14,7 +14,7 @@ const (
 	BarWarm      = 50 * time.Millisecond  // every warm lore call under this
 	BarCold      = 300 * time.Millisecond // every cold lore call under this
 	BarCalls     = 1                      // lore calls per question
-	BarTypedGain = 10                     // typed answers: grep chars / lore chars at least this
+	BarTypedGain = 10                     // who is X: grep chars / lore chars at least this
 )
 
 // LoreRun is the lore arm's result for one question.
@@ -268,11 +268,18 @@ func Misses(rs []Result) []string {
 	m := byType(rs)
 	for _, t := range Types() {
 		tt, ok := m[t]
-		if !ok || !t.Typed() {
+		if !ok {
 			continue
 		}
-		if tt.loreChars*BarTypedGain > tt.grepChars {
-			out = append(out, fmt.Sprintf("typed answers %q: lore %d chars vs grep %d, the bar is >= %dx lighter", t, tt.loreChars, tt.grepChars, BarTypedGain))
+		switch t.TypedBar() {
+		case BarTenfold:
+			if tt.loreChars*BarTypedGain > tt.grepChars {
+				out = append(out, fmt.Sprintf("typed answers %q: lore %d chars vs grep %d, the bar is >= %dx lighter", t, tt.loreChars, tt.grepChars, BarTypedGain))
+			}
+		case BarLighter:
+			if tt.loreChars >= tt.grepChars {
+				out = append(out, fmt.Sprintf("typed answers %q: lore %d chars vs grep %d, the bar is lighter than grep", t, tt.loreChars, tt.grepChars))
+			}
 		}
 	}
 	return out
