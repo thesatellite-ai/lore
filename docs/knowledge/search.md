@@ -22,8 +22,8 @@ Give one or more words, or ask a question in plain words. Each hit shows its kin
 # alice, in website
 $ lore search --query payments
 Found 2 hits for "payments" across 2 entity types:
-decision  dec_7a67…9504  We use Stripe for payments  (score=0.950)
-memory    mem_2ad3…f891  Old payments page is gone  (score=0.950)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.850)
+memory    mem_2ad3…f891  Old payments page is gone  (score=0.850)
 ```
 <!-- /example -->
 
@@ -36,7 +36,7 @@ memory    mem_2ad3…f891  Old payments page is gone  (score=0.950)
 # alice, in website
 $ lore search --query payments --tables decision
 Found 1 hit for "payments" across 1 entity type:
-decision  dec_7a67…9504  We use Stripe for payments  (score=0.950)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.850)
 $ lore decision search --query Stripe
 dec_7a67…9504 [accepted] We use Stripe for payments
 ```
@@ -65,7 +65,7 @@ $ lore search --query WhatsApp --json
         "entity": "memory",
         "id": "mem_162d…9666",
         "pretty": "mem_162d…9666",
-        "score": 0.95,
+        "score": 0.85,
         "snippet": "The client replies faster on \u003cb\u003eWhatsApp\u003c/b\u003e than email"
       }
     ],
@@ -86,7 +86,7 @@ $ lore search --query payments --tables memory
 (no matches)
 $ lore search --query payments --tables memory --include-archived
 Found 1 hit for "payments" across 1 entity type:
-memory  mem_2ad3…f891  Old payments page is gone  (score=0.950)
+memory  mem_2ad3…f891  Old payments page is gone  (score=0.850)
 ```
 <!-- /example -->
 
@@ -124,7 +124,7 @@ mem_05e9…4603 [retrieved] The web repo deploys on every merge to main
 2 hidden (2 scoped to a repo); --all shows them
 $ lore search --query deploys --all-repos
 Found 1 hit for "deploys" across 1 entity type:
-memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.950)
+memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.850)
 ```
 <!-- /example -->
 
@@ -137,21 +137,21 @@ Search matches whole words, upper or lower case alike, with accents ignored (`ca
 # alice, in website
 $ lore search --query invoice
 Found 2 hits for "invoice" across 2 entity types:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.950)
-task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.950)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.850)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.850)
 $ lore search --query invoices
 Found 2 hits for "invoices" across 2 entity types:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.950)
-task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.950)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.850)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.850)
 $ lore search --query 'invoi*'
 Found 2 hits for "invoi*" across 2 entity types:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.950)
-task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.950)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.850)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.850)
 $ lore search --query 'client Fridays'
 Found 3 hits for "client Fridays" across 2 entity types:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.967)
-task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.533)
-memory  mem_162d…9666  The client replies faster on WhatsApp than email  (score=0.483)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.900)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.492)
+memory  mem_162d…9666  The client replies faster on WhatsApp than email  (score=0.450)
 ```
 <!-- /example -->
 
@@ -164,16 +164,16 @@ Type the question as you would ask a teammate: `lore search --query "where is th
 # alice, in website
 $ lore search --query 'where is the stripe test mode on'
 Found 3 hits for "where is the stripe test mode on" across 3 entity types:
-hotfix    hfx_d431…313a  Stripe test mode is on in staging  (score=0.975)
-decision  dec_7a67…9504  We use Stripe for payments  (score=0.375)
-rule      rul_b4f4…a5b0  Run the tests before you push  (score=0.375)
+hotfix    hfx_d431…313a  Stripe test mode is on in staging  (score=0.988)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.350)
+rule      rul_b4f4…a5b0  Run the tests before you push  (score=0.350)
 $ lore search --query 'stripe invoices'
 Found 4 hits for "stripe invoices" across 4 entity types:
 No row holds every word; these hold some of them, most first.
-decision  dec_7a67…9504  We use Stripe for payments  (score=0.533)
-hotfix    hfx_d431…313a  Stripe test mode is on in staging  (score=0.533)
-memory    mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.533)
-task      tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.533)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.492)
+hotfix    hfx_d431…313a  Stripe test mode is on in staging  (score=0.492)
+memory    mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.492)
+task      tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.492)
 ```
 <!-- /example -->
 

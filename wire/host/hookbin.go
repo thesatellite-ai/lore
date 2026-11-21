@@ -284,16 +284,6 @@ func pinHooksAsked(ctx context.Context) bool {
 	return ok && v
 }
 
-// sameExecutable reports whether a and b are the same file.
-func sameExecutable(a, b string) bool {
-	ia, err := os.Stat(a)
-	if err != nil {
-		return false
-	}
-	ib, err := os.Stat(b)
-	return err == nil && os.SameFile(ia, ib)
-}
-
 // hooksDirInWorkTree reports whether dir is inside the work tree at top and
 // not in its .git folder (a committed or committable hooks folder).
 func hooksDirInWorkTree(top, dir string) bool {
