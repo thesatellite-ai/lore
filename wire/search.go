@@ -20,6 +20,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
@@ -319,7 +320,7 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		if h.Source == store.SourceRepo {
 			if sc.keeps(t, r) {
-				out = append(out, rankedHit{hit: hitOf(t, h.ID.String(), h.Snippet, r), matched: held(h.ID, r)})
+				out = append(out, rankedHit{hit: hitOf(t, h.ID.String(), h.Snippet, r), matched: held(h.ID, r), at: schema.RowDate(r)})
 			}
 			continue
 		}
@@ -330,7 +331,7 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		hit := hitOf(t, h.ID.String(), h.Snippet, r)
 		hit.Source = a.DescribeSource(h.Source)
-		out = append(out, rankedHit{hit: hit, matched: held(h.ID, r)})
+		out = append(out, rankedHit{hit: hit, matched: held(h.ID, r), at: schema.RowDate(r)})
 	}
 	return rankTable(out, w, perTable), nil
 }
@@ -346,10 +347,13 @@ func hitLabel(h opssearch.Hit) string {
 }
 
 // rankedHit is one in-scope hit of a table before scoring: matched is how
-// many topic words it holds (natural queries only).
+// many topic words it holds (natural queries only), at the day the row is
+// about (schema.RowDate; zero for a roster hit), so rows naming the words
+// equally come newest first (searchrank.Words.Order, D-791).
 type rankedHit struct {
 	hit     opssearch.Hit
 	matched int
+	at      time.Time
 }
 
 // rankTable orders one table's hits (searchrank.Words.Order), cut to
@@ -357,7 +361,7 @@ type rankedHit struct {
 func rankTable(in []rankedHit, w searchrank.Words, perTable int) []opssearch.Hit {
 	items := make([]searchrank.Item, len(in))
 	for i, x := range in {
-		items[i] = searchrank.Item{Label: hitLabel(x.hit), Matched: x.matched}
+		items[i] = searchrank.Item{Label: hitLabel(x.hit), Matched: x.matched, At: x.at}
 	}
 	ranked := w.Order(items, perTable)
 	out := make([]opssearch.Hit, len(ranked))
