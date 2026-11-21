@@ -77,10 +77,31 @@ type Out struct {
 	Resources []Resource `json:"resources" desc:"the resources the question names (person, project, company …), each with its fields and the resources that link to it"`
 	Tasks     []Task     `json:"tasks" desc:"the open tasks that answer it: for what do I owe X / what does X owe me every open one owed that way, else the open tasks of the resources it names"`
 	Rows      []Row      `json:"rows" desc:"the rows that answer it, in full: the best ones newest first, or every row of the dates it names, oldest first"`
-	Cited     []string   `json:"cited" desc:"the id of every resource, task and row in the answer"`
-	Left      int        `json:"left,omitempty" desc:"how many items were left out to stay under --max-chars"`
-	maxChars  int
+	// Ranked is the answer's reading order (devco D-818): the item that
+	// answers the question type first, the named resource after it as
+	// context. Why a separate list: the three typed lists keep their JSON
+	// shape, while the order an agent reads (and the text prints) changes
+	// with the question: a status or decision row before its project, the
+	// owed tasks before the person, the newest rows of each folder right
+	// after the person for everything about X.
+	Ranked   []Ranked `json:"ranked" desc:"every item of the answer in reading order, the one that answers the question first: a status or decision row before its project, the owed tasks before the person, the person then the newest row of each folder for everything about X"`
+	Cited    []string `json:"cited" desc:"the id of every item in the answer, in reading order"`
+	Left     int      `json:"left,omitempty" desc:"how many items were left out to stay under --max-chars"`
+	maxChars int
 }
+
+// Ranked names one item of an answer: which list holds it and its id.
+type Ranked struct {
+	Kind string `json:"kind" desc:"resource, task or row: the list (resources, tasks, rows) that holds the item"`
+	ID   string `json:"id"`
+}
+
+// The kinds of Ranked.
+const (
+	KindResource = "resource"
+	KindTask     = "task"
+	KindRow      = "row"
+)
 
 // Resource is one resource in an answer.
 type Resource struct {

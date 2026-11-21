@@ -69,7 +69,8 @@ type scored struct {
 
 // build answers q from d: the matched resources, the open tasks that
 // answer it, then the rows (the window's rows for a date question, else
-// the best top rows), cut to maxChars of text.
+// the best top rows), ranked so the item that answers the question type
+// comes first, cut to maxChars of text in that order.
 func build(q question, d data, top, maxChars int) Out {
 	if top <= 0 {
 		top = DefaultTop
@@ -77,7 +78,7 @@ func build(q question, d data, top, maxChars int) Out {
 	if maxChars <= 0 {
 		maxChars = DefaultMaxChars
 	}
-	out := Out{Query: q.text, When: q.when, Resources: []Resource{}, Tasks: []Task{}, Rows: []Row{}, Cited: []string{}}
+	out := Out{Query: q.text, When: q.when, Resources: []Resource{}, Tasks: []Task{}, Rows: []Row{}, Ranked: []Ranked{}, Cited: []string{}}
 	ms := matchResources(q, d.resources)
 	identity := isIdentity(q.text) && len(ms) > 0
 	for _, m := range ms {
@@ -86,6 +87,7 @@ func build(q question, d data, top, maxChars int) Out {
 	if !identity {
 		out.Tasks = tasksFor(q, ms, d.tasks)
 	}
+	lead := 0
 	switch {
 	case q.owe != oweNone || identity:
 		// a debt question is answered by the tasks, "who is X" by the
@@ -93,19 +95,89 @@ func build(q question, d data, top, maxChars int) Out {
 	case !q.window.IsZero():
 		out.Rows = windowRows(q, ms, d.rows)
 	default:
-		out.Rows = topRows(q, ms, d.rows, top)
+		out.Rows, lead = topRows(q, ms, d.rows, top)
 	}
-	out.cap(maxChars)
-	for _, r := range out.Resources {
-		out.Cited = append(out.Cited, r.ID)
-	}
-	for _, t := range out.Tasks {
-		out.Cited = append(out.Cited, t.ID)
-	}
-	for _, r := range out.Rows {
+	out.cap(out.rank(q, identity, lead), maxChars)
+	for _, r := range out.Ranked {
 		out.Cited = append(out.Cited, r.ID)
 	}
 	return out
+}
+
+// answerFirst is which list leads an answer.
+type answerFirst int
+
+const (
+	leadResources answerFirst = iota // who is X, or nothing better
+	leadTasks                        // what do I owe X, what does X owe me
+	leadRows                         // a status, a decision, a budget, a date
+	leadAbout                        // everything about X
+)
+
+// leadOf is which list answers q first. A debt question is answered by
+// its owed tasks, a date question by the rows of its dates, a question
+// asking for something the rows hold (a status, a decision, a budget) by
+// those rows, everything about X by the resource itself; the resource the
+// question names follows as context. Why: an agent reads the first item
+// and often stops there (recall gate, top-1 bar), so the project's field
+// list must not stand where its status update is the answer.
+func leadOf(q question, identity bool, o *Out) answerFirst {
+	switch {
+	case identity || len(o.Resources) > 0 && isAbout(q.text):
+		if !identity {
+			return leadAbout
+		}
+		return leadResources
+	case q.owe != oweNone && len(o.Tasks) > 0:
+		return leadTasks
+	case !q.window.IsZero() && len(o.Rows) > 0:
+		return leadRows
+	case len(o.Rows) > 0 && len(o.Rows[0].Matched) > 0:
+		// the best row holds what the question asks for, not only the name
+		return leadRows
+	}
+	return leadResources
+}
+
+// rank is the answer's reading order (see leadOf). For everything about
+// X: the resource, then the lead rows (the newest row of each folder:
+// the last meeting, the last journal day), then the open tasks, then the
+// other rows; lead is how many of o.Rows are those lead rows.
+func (o *Out) rank(q question, identity bool, lead int) []Ranked {
+	res := make([]Ranked, 0, len(o.Resources))
+	for _, r := range o.Resources {
+		res = append(res, Ranked{Kind: KindResource, ID: r.ID})
+	}
+	tsk := make([]Ranked, 0, len(o.Tasks))
+	for _, t := range o.Tasks {
+		tsk = append(tsk, Ranked{Kind: KindTask, ID: t.ID})
+	}
+	rows := make([]Ranked, 0, len(o.Rows))
+	for _, r := range o.Rows {
+		rows = append(rows, Ranked{Kind: KindRow, ID: r.ID})
+	}
+	switch leadOf(q, identity, o) {
+	case leadTasks:
+		return slices.Concat(tsk, res, rows)
+	case leadRows:
+		return slices.Concat(rows, res, tsk)
+	case leadAbout:
+		lead = min(lead, len(rows))
+		return slices.Concat(res, rows[:lead], tsk, rows[lead:])
+	}
+	return slices.Concat(res, tsk, rows)
+}
+
+// isAbout reports an "everything about X" question: the resource leads,
+// then the newest rows that name it, then its open tasks.
+func isAbout(text string) bool {
+	low := " " + strings.ToLower(strings.TrimSpace(text))
+	for _, p := range []string{" everything about ", " all about ", " tell me about ", " know about ", " anything about ", " everything on "} {
+		if strings.Contains(low, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // isIdentity reports a "who is X" question: the resource answers it.
@@ -323,8 +395,10 @@ func firstLine(s string) string {
 // topRows picks the best top rows for q, newest first among equals; the
 // first pick takes the best row of each folder among the best-scored rows,
 // so one busy folder (a daily journal) does not hide the others (the
-// meeting note about the same person).
-func topRows(q question, ms []match, rows []textRow, top int) []Row {
+// meeting note about the same person). Those picks stay first, newest
+// first, and lead says how many there are: a newer row of a folder already
+// shown comes after the newest row of every other folder.
+func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 	var all []scored
 	for i := range rows {
 		if s, ok := score(q, ms, &rows[i]); ok {
@@ -341,7 +415,7 @@ func topRows(q question, ms []match, rows []textRow, top int) []Row {
 		return strings.Compare(b.row.ID, a.row.ID)
 	})
 	if len(all) == 0 {
-		return []Row{}
+		return []Row{}, 0
 	}
 	if len(all[0].matched) > 0 {
 		// some rows hold what the question asks (a topic, a word): rows
@@ -360,6 +434,7 @@ func topRows(q question, ms []match, rows []textRow, top int) []Row {
 			pick = append(pick, s)
 		}
 	}
+	lead := len(pick)
 	for _, s := range all {
 		if len(pick) >= top {
 			break
@@ -369,12 +444,14 @@ func topRows(q question, ms []match, rows []textRow, top int) []Row {
 			pick = append(pick, s)
 		}
 	}
-	slices.SortStableFunc(pick, func(a, b scored) int {
+	byScoreThenNewest := func(a, b scored) int {
 		if c := cmp.Compare(b.score, a.score); c != 0 {
 			return c
 		}
 		return b.row.At.Compare(a.row.At)
-	})
+	}
+	slices.SortStableFunc(pick[:lead], byScoreThenNewest)
+	slices.SortStableFunc(pick[lead:], byScoreThenNewest)
 	out := make([]Row, 0, len(pick))
 	for _, s := range pick {
 		out = append(out, rowOf(s.row, s.matched))
@@ -389,7 +466,7 @@ func topRows(q question, ms []match, rows []textRow, top int) []Row {
 			}
 		}
 	}
-	return out
+	return out, lead
 }
 
 // windowRows lists the rows of q's date window, oldest first: the rows
@@ -457,80 +534,38 @@ func rowOf(r *textRow, matched []string) Row {
 	return out
 }
 
-// cap keeps the answer within maxChars of text: resources, then tasks,
-// then rows, each kept whole or left out; Left counts what was left out.
-func (o *Out) cap(maxChars int) {
-	used := len(o.header())
-	keep := func(n int) bool {
-		if used+n > maxChars {
-			return false
-		}
-		used += n
-		return true
-	}
-	var rs []Resource
-	for i, r := range o.Resources {
-		if !keep(len(r.text())) {
-			o.Left += len(o.Resources) - i
-			break
-		}
-		rs = append(rs, r)
-	}
-	var ts []Task
-	if len(o.Tasks) > 0 {
-		used += len(o.tasksHeader())
-	}
-	for i, t := range o.Tasks {
-		if !keep(len(t.text())) {
-			o.Left += len(o.Tasks) - i
-			break
-		}
-		ts = append(ts, t)
-	}
-	var rows []Row
-	if len(o.Rows) > 0 {
-		used += len(o.rowsHeader())
-	}
-	for i, r := range o.Rows {
-		if !keep(len(r.text(i))) {
-			o.Left += len(o.Rows) - i
-			break
-		}
-		rows = append(rows, r)
-	}
-	o.Resources, o.Tasks, o.Rows = orEmpty(rs), orEmpty(ts), orEmpty(rows)
+// cap keeps the answer within maxChars of text, walking order (the
+// reading order): items are kept whole, and the first one that does not
+// fit ends the answer, so what is left out is always what ranks lowest;
+// Left counts it. It sets Resources, Tasks, Rows and Ranked to what is
+// kept.
+func (o *Out) cap(order []Ranked, maxChars int) {
 	o.maxChars = maxChars
-}
-
-// orEmpty is s, or an empty (not nil) slice.
-func orEmpty[T any](s []T) []T {
-	if s == nil {
-		return []T{}
+	o.Ranked = []Ranked{}
+	for i, r := range order {
+		o.Ranked = append(o.Ranked, r)
+		if len(o.body()) > maxChars {
+			o.Ranked = o.Ranked[:len(o.Ranked)-1]
+			o.Left = len(order) - i
+			break
+		}
 	}
-	return s
+	kept := map[Ranked]bool{}
+	for _, r := range o.Ranked {
+		kept[r] = true
+	}
+	o.Resources = slices.DeleteFunc(o.Resources, func(r Resource) bool { return !kept[Ranked{KindResource, r.ID}] })
+	o.Tasks = slices.DeleteFunc(o.Tasks, func(t Task) bool { return !kept[Ranked{KindTask, t.ID}] })
+	o.Rows = slices.DeleteFunc(o.Rows, func(r Row) bool { return !kept[Ranked{KindRow, r.ID}] })
 }
 
-// Text is the answer as an agent reads it: the question, the resources,
-// the open tasks, the rows in full, then the ids it cites.
+// Text is the answer as an agent reads it: the question, the items in
+// reading order (resources, open tasks, rows in full, grouped where they
+// follow each other), then the ids it cites.
 func (o Out) Text() string {
 	var b strings.Builder
-	b.WriteString(o.header())
-	for _, r := range o.Resources {
-		b.WriteString(r.text())
-	}
-	if len(o.Tasks) > 0 {
-		b.WriteString(o.tasksHeader())
-		for _, t := range o.Tasks {
-			b.WriteString(t.text())
-		}
-	}
-	if len(o.Rows) > 0 {
-		b.WriteString(o.rowsHeader())
-		for i, r := range o.Rows {
-			b.WriteString(r.text(i))
-		}
-	}
-	if len(o.Resources)+len(o.Tasks)+len(o.Rows) == 0 {
+	b.WriteString(o.body())
+	if len(o.Ranked) == 0 {
 		b.WriteString("nothing in the store answers it; try other words, or lore search --query \"<words>\"\n")
 	}
 	if o.Left > 0 {
@@ -538,6 +573,59 @@ func (o Out) Text() string {
 	}
 	if len(o.Cited) > 0 {
 		b.WriteString("\ncited: " + strings.Join(o.Cited, " ") + "\n")
+	}
+	return b.String()
+}
+
+// body is the header and the items of o.Ranked in that order: a run of
+// tasks under one "open tasks" heading, a run of rows under one rows
+// heading (a second run of rows, after the tasks of an everything-about
+// answer, under "more rows").
+func (o Out) body() string {
+	res, tsk, rows := map[string]Resource{}, map[string]Task{}, map[string]Row{}
+	for _, r := range o.Resources {
+		res[r.ID] = r
+	}
+	for _, t := range o.Tasks {
+		tsk[t.ID] = t
+	}
+	for _, r := range o.Rows {
+		rows[r.ID] = r
+	}
+	var b strings.Builder
+	b.WriteString(o.header())
+	runs := 0 // how many runs of rows the answer has
+	for i, it := range o.Ranked {
+		if it.Kind == KindRow && (i == 0 || o.Ranked[i-1].Kind != KindRow) {
+			runs++
+		}
+	}
+	rowRuns, n := 0, 0
+	for i, it := range o.Ranked {
+		first := i == 0 || o.Ranked[i-1].Kind != it.Kind
+		switch it.Kind {
+		case KindResource:
+			b.WriteString(res[it.ID].text())
+		case KindTask:
+			if first {
+				run := 0
+				for _, x := range o.Ranked[i:] {
+					if x.Kind != KindTask {
+						break
+					}
+					run++
+				}
+				fmt.Fprintf(&b, "\nopen tasks (%d):\n", run)
+			}
+			b.WriteString(tsk[it.ID].text())
+		case KindRow:
+			if first {
+				b.WriteString(o.rowsHeader(rowRuns, runs))
+				rowRuns++
+			}
+			b.WriteString(rows[it.ID].text(n))
+			n++
+		}
 	}
 	return b.String()
 }
@@ -551,13 +639,17 @@ func (o Out) header() string {
 	return h
 }
 
-// tasksHeader heads the open tasks.
-func (o Out) tasksHeader() string { return "\nopen tasks (" + fmt.Sprint(len(o.Tasks)) + "):\n" }
-
-// rowsHeader heads the rows.
-func (o Out) rowsHeader() string {
-	if o.When != "" {
+// rowsHeader heads the run'th of runs runs of rows (0 the first): two
+// runs are an everything-about answer's newest row of each folder, then
+// the other rows after its open tasks.
+func (o Out) rowsHeader(run, runs int) string {
+	switch {
+	case o.When != "":
 		return "\nrows dated " + o.When + ", oldest first:\n"
+	case runs > 1 && run == 0:
+		return "\nnewest row of each folder, in full:\n"
+	case run > 0:
+		return "\nmore rows, in full:\n"
 	}
 	return "\nbest rows, in full:\n"
 }

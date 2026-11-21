@@ -193,7 +193,7 @@ func TestAnswerOrderAndCap(t *testing.T) {
 	if len(o.Rows) == 0 || o.Rows[0].ID != "mem_s3" {
 		t.Fatalf("newest status not first:\n%s", text)
 	}
-	if !strings.Contains(text, "cited: res_lumen") || !strings.Contains(text, "mem_s3") {
+	if !strings.Contains(text, "cited: mem_s3") || !strings.Contains(text, "res_lumen") {
 		t.Errorf("no citations:\n%s", text)
 	}
 	o, _ = ask(t, "everything about alice-ng")
@@ -209,6 +209,72 @@ func TestAnswerOrderAndCap(t *testing.T) {
 	}
 	if len(st) > 300+200 { // the cap counts items; the closing lines are extra
 		t.Errorf("capped answer is %d chars", len(st))
+	}
+}
+
+// TestRankedAnswerFirst: the item that answers the question type is read
+// first (devco D-818): a status or decision row before its project, the
+// owed tasks before the person, a date's rows first; "who is X" and
+// "everything about X" lead with the resource, the latter followed by the
+// newest row of each folder, then the open tasks, then the other rows.
+// The text prints the items in the same order.
+func TestRankedAnswerFirst(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		q    string
+		want []string // the first ids of Ranked, in order
+	}{
+		{"what is the status of lumen", []string{"mem_s3", "mem_s2", "mem_s1", "res_lumen"}},
+		{"what is the status of lumne", []string{"mem_s3"}},
+		{"how far along is lumen these days", []string{"mem_s3"}},
+		{"what did we decide for lumen and why", []string{"mem_d1", "res_lumen"}},
+		{"how much money can lumen spend now", []string{"mem_b2"}},
+		{"what do I owe Bobby", []string{"tsk_3", "res_robert"}},
+		{"what does robert-kim owe me", []string{"tsk_2", "res_robert"}},
+		{"who is alice-ng", []string{"res_alice"}},
+		{"what happened yesterday", []string{"mem_j1120"}},
+		{"everything about alice-ng", []string{"res_alice", "mem_j1120", "mem_m1", "tsk_1", "mem_j1119"}},
+	}
+	for _, c := range cases {
+		o, text := ask(t, c.q)
+		var got []string
+		for _, r := range o.Ranked {
+			got = append(got, r.ID)
+		}
+		if len(got) < len(c.want) || !slices.Equal(got[:len(c.want)], c.want) {
+			t.Errorf("%q: ranked %v, want it to start %v\n%s", c.q, got, c.want, text)
+			continue
+		}
+		if !slices.Equal(o.Cited, got) {
+			t.Errorf("%q: cited %v is not the reading order %v", c.q, o.Cited, got)
+		}
+		last := -1
+		for _, id := range got {
+			i := strings.Index(text, id)
+			if i < last {
+				t.Errorf("%q: the text prints %s out of reading order\n%s", c.q, id, text)
+			}
+			last = i
+		}
+	}
+	_, text := ask(t, "everything about alice-ng")
+	for _, h := range []string{"newest row of each folder, in full:", "open tasks (1):", "more rows, in full:"} {
+		if !strings.Contains(text, h) {
+			t.Errorf("everything about: no %q in\n%s", h, text)
+		}
+	}
+}
+
+// TestCapKeepsReadingOrder: --max-chars leaves out what ranks lowest, so
+// a tight status answer keeps the status row and drops the project.
+func TestCapKeepsReadingOrder(t *testing.T) {
+	t.Parallel()
+	o := build(parseQuestion("what is the status of lumen", now), fixture(t), 1, 200)
+	if len(o.Rows) != 1 || o.Rows[0].ID != "mem_s3" || len(o.Resources) != 0 || o.Left != 1 {
+		t.Fatalf("capped status answer: rows %v resources %v left %d\n%s", o.Rows, o.Resources, o.Left, o.Text())
+	}
+	if len(o.Ranked) != 1 || o.Ranked[0] != (Ranked{KindRow, "mem_s3"}) {
+		t.Errorf("ranked %v", o.Ranked)
 	}
 }
 
