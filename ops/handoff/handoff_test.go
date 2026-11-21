@@ -221,7 +221,7 @@ func TestSearch(t *testing.T) {
 	if !strings.Contains(st, b) || strings.Contains(st, a) {
 		t.Errorf("search --column status_str acked: %s", st)
 	}
-	if got := opstest.Text(h.Must("handoff.search", `{"query":"zzzz"}`)); got != "(no matches)\n" {
+	if got := opstest.EmptyTextOf(t, opstest.Text(h.Must("handoff.search", `{"query":"zzzz"}`)), "zzzz"); got != "(no matches)\n" { // D-821 note checked whole (D-832)
 		t.Errorf("no hits %q", got)
 	}
 	h.Fails("handoff.search", `{"query":"x","columns":["title"]}`, errs.InvalidInput)

@@ -14,6 +14,7 @@ package journeys
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,11 @@ import (
 const (
 	taSecretSlug = "github.com/acme-co/lore-secret"
 	taSecretBody = "the client portal deploys from the blue cluster"
+	// taSecretPhrase is a part of taSecretBody that is not the query a
+	// reader searches for ("blue cluster"): an empty answer echoes the
+	// query words (devco:D-821), so a search's checks look for this phrase
+	// and the row's id, either way round (devco:D-832)
+	taSecretPhrase = "client portal deploys"
 )
 
 func TestJourneyTeamAudienceStore(t *testing.T) {
@@ -30,7 +36,7 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 	lee := tt.person(tlLee)
 	sec := w.Remote(taSecretSlug)
 	parent := filepath.Join(lee.Home, "code")
-	line := ""
+	line, secretID := "", ""
 
 	w.Step("day1/lee-keeps-a-store-to-the-secret-team", func() {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
@@ -49,7 +55,10 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 			t.Fatalf("lore-org.yaml lacks the team audience:\n%s", got)
 		}
 		lee.Lore(parent, "store", "folder", "add", sec.SSHURL(), "client").OK(t)
-		lee.Lore(parent, "memory", "add", "--body", taSecretBody, "--to", "lore-secret/client", "--yes").OK(t)
+		added := lee.Lore(parent, "memory", "add", "--body", taSecretBody, "--to", "lore-secret/client", "--yes").OK(t)
+		if secretID = regexp.MustCompile(`mem_[0-9a-f]{32}`).FindString(added.Out()); secretID == "" {
+			t.Fatalf("no memory id in: %s", added.Out())
+		}
 		lee.Lore(parent, "sync").OK(t)
 		_, line = tlInvite(t, lee, c.Dir, tlAnn.Email)
 	})
@@ -66,7 +75,10 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 		tt.lore(tlAnn, "sync").OK(t).Never(t, "lore-secret", "could not", "problem")
 		tt.lore(tlAnn, "whoami").OK(t).Never(t, "lore-secret")
 		tt.lore(tlAnn, "doctor").Never(t, "lore-secret", "store_access")
-		tt.lore(tlAnn, "search", "blue cluster").OK(t).Never(t, "blue cluster")
+		// the empty answer echoes the query words in its read-as and try
+		// lines (devco:D-821); the row itself (its id, its body past the
+		// query words) never shows (devco:D-832)
+		tt.lore(tlAnn, "search", "blue cluster").OK(t).Says(t, "(no matches)").Never(t, secretID, taSecretPhrase)
 		if cfg := asConfig(t, ann); strings.Contains(cfg, "lore-secret") {
 			t.Fatalf("Ann's org entry lists the @secret store:\n%s", cfg)
 		}
@@ -85,7 +97,7 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 	})
 
 	w.Step("day1/lee-reads-it", func() {
-		lee.Lore(parent, "search", "blue cluster").OK(t).Says(t, "blue cluster")
+		lee.Lore(parent, "search", "blue cluster").OK(t).Says(t, secretID, taSecretPhrase)
 		lee.Lore(parent, "store", "list").OK(t).Says(t, "lore-secret", "team:@secret")
 	})
 
@@ -101,7 +113,7 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 			t.Fatalf("Ann's org entry lacks the @secret store after joining the team:\n%s", cfg)
 		}
 		tt.lore(tlAnn, "sync").OK(t)
-		ann.Lore(filepath.Join(ann.Home, "code"), "search", "blue cluster").OK(t).Says(t, "blue cluster")
+		ann.Lore(filepath.Join(ann.Home, "code"), "search", "blue cluster").OK(t).Says(t, secretID, taSecretPhrase)
 		// whoami and doctor name the team's store with who uses it
 		tt.lore(tlAnn, "whoami").OK(t).Says(t, "lore-secret.git on branch main  (audience team:@secret)")
 		tt.lore(tlAnn, "doctor").Says(t, "lore-secret (team:@secret)")
@@ -122,6 +134,6 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 		if cfg := asConfig(t, ann); strings.Contains(cfg, "lore-secret") {
 			t.Fatalf("Ann's org entry still lists the @secret store after leaving the team:\n%s", cfg)
 		}
-		ann.Lore(filepath.Join(ann.Home, "code"), "search", "blue cluster").OK(t).Never(t, "blue cluster")
+		ann.Lore(filepath.Join(ann.Home, "code"), "search", "blue cluster").OK(t).Says(t, "(no matches)").Never(t, secretID, taSecretPhrase)
 	})
 }

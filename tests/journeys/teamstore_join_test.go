@@ -70,7 +70,9 @@ func TestJourneyTeamStoreAtJoin(t *testing.T) {
 			t.Fatalf("Ann has no clone of the @web store: %v", err)
 		}
 		tt.lore(tlAnn, "whoami").OK(t).Says(t, "lore-web/"+tsWebFolder+" (this repo's link)", "1 link(s) for this repo").Never(t, "cannot read that audience")
-		tt.lore(tlAnn, "search", "green cluster").OK(t).Says(t, "green cluster")
+		// the row's body past the query words: an empty answer echoes the
+		// query (devco:D-821), so "green cluster" alone proves nothing (D-832)
+		tt.lore(tlAnn, "search", "green cluster").OK(t).Says(t, "web app deploys").Never(t, "(no matches)")
 		// a second sync keeps the store
 		tt.lore(tlAnn, "sync").OK(t)
 		if cfg := asConfig(t, ann); !strings.Contains(cfg, "lore-web") {

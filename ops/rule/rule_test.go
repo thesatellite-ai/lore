@@ -56,7 +56,13 @@ func TestTextMatchesV017(t *testing.T) {
 		if s.op == rule.OpShow { // INTEG-AUDIT-2: a show ends with the writers line
 			s.want += norm(contenttest.WriterLine(t, h.JSON(res), "data"))
 		}
-		if got := norm(opstest.Text(res)); got != s.want {
+		got := norm(opstest.Text(res))
+		if s.op == rule.OpSearch && s.input == `{"query":"zzzz"}` {
+			// devco:D-832: the empty answer's note (D-821) is checked whole,
+			// the v0.1.17 part before it exactly
+			got = opstest.EmptyTextOf(t, got, "zzzz")
+		}
+		if got != s.want {
 			t.Fatalf("%s %s:\n%q\nwant\n%q", s.op, s.input, got, s.want)
 		}
 	}

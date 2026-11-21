@@ -4,14 +4,18 @@ package userscen
 
 // campaign_render_context_test.go — `lore context` (the agent's fetch
 // command, CONTEXT_BUDGET 6.5-6.12) in the cases a script meets first:
-//   - nothing applies: every list mode answers --json {"data": []} (a list
+//   - nothing applies: every list mode answers --json "data": [] (a list
 //     a caller can take the length of, never null), on the CLI and REST;
+//     the modes that search (--for-file, --for-prompt) also say what they
+//     searched and what to try (devco:D-821/D-824), next to data, nothing
+//     else (devco:D-832);
 //   - odd values: a path with spaces and unicode, a 10k-char prompt, a
 //     tag as a topic, a missing topic (E_NOT_FOUND + hint), a task id
 //     of the wrong shape;
 //   - a fetch writes nothing in the work tree.
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -21,29 +25,62 @@ func TestCampaignRender_ContextEmptyIsAList(t *testing.T) {
 	c := renderSolo(t)
 	srv := renderStartAPI(t, c)
 	modes := []struct {
-		name string
-		cli  []string
-		rest string
+		name     string
+		cli      []string
+		rest     string
+		searched string // the "searched" field of an empty answer ("" none)
 	}{
-		{"for-file", []string{"--for-file", "src/a.go"}, `{"for_file":"src/a.go"}`},
-		{"for-prompt", []string{"--for-prompt", "how do we deploy"}, `{"for_prompt":"how do we deploy"}`},
-		{"topics", []string{"--topics"}, `{"topics":true}`},
+		{"for-file", []string{"--for-file", "src/a.go"}, `{"for_file":"src/a.go"}`, `"path":"src/a.go"`},
+		{"for-prompt", []string{"--for-prompt", "how do we deploy"}, `{"for_prompt":"how do we deploy"}`, `"words":["deploy"]`},
+		{"topics", []string{"--topics"}, `{"topics":true}`, ""},
 	}
 	for _, m := range modes {
 		t.Run(m.name, func(t *testing.T) {
 			r := c.Lore(append([]string{"context"}, append(m.cli, "--json")...)...).OK(t)
-			if got := strings.TrimSpace(r.Stdout); !sameJSON(got, `{"data":[]}`) { // the CLI indents --json
-				t.Errorf("CLI --json with nothing to return: {\"data\":[]}, got %s", got)
-			}
+			contextEmpty(t, "CLI --json", r.Stdout, m.searched)
 			rep := srv.post(t, "/v1/context/fetch", []byte(m.rest))
-			if rep.status != 200 || strings.TrimSpace(string(rep.body)) != `{"data":[]}` {
-				t.Errorf("REST with nothing to return: 200 {\"data\":[]}, got %d %s", rep.status, rep.body)
+			if rep.status != 200 {
+				t.Errorf("REST with nothing to return: 200, got %d %s", rep.status, rep.body)
+			}
+			contextEmpty(t, "REST", string(rep.body), m.searched)
+			if r := strings.TrimSpace(r.Stdout); !sameJSON(r, string(rep.body)) {
+				t.Errorf("CLI --json and REST differ:\n%s\n%s", r, rep.body)
 			}
 			// The text form says so instead of printing nothing.
 			if txt := c.MustLore(append([]string{"context"}, m.cli...)...); strings.TrimSpace(txt.Stdout) == "" {
 				t.Errorf("the text form is never empty: %s", txt)
 			}
 		})
+	}
+}
+
+// contextEmpty checks body, a `lore context --json` answer with nothing
+// to return: "data" is [] (never null), and when searched is set the
+// searched object holds it and try lists 1-3 lore commands; no other field.
+func contextEmpty(t *testing.T, where, body, searched string) {
+	t.Helper()
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &m); err != nil {
+		t.Fatalf("%s: not JSON: %v: %s", where, err, body)
+	}
+	var data []json.RawMessage
+	if err := json.Unmarshal(m["data"], &data); err != nil || data == nil || len(data) != 0 {
+		t.Errorf("%s with nothing to return: \"data\": [], got %s", where, body)
+	}
+	want := 1
+	if searched != "" {
+		want = 3
+		var s bytes.Buffer
+		if err := json.Compact(&s, m["searched"]); err != nil || !strings.Contains(s.String(), searched) {
+			t.Errorf("%s: searched holds %s, got %s", where, searched, body)
+		}
+		var try []string
+		if err := json.Unmarshal(m["try"], &try); err != nil || len(try) == 0 || len(try) > 3 || !strings.HasPrefix(try[0], "lore ") {
+			t.Errorf("%s: try lists 1-3 lore commands, got %s", where, body)
+		}
+	}
+	if len(m) != want {
+		t.Errorf("%s: %d fields, want %d (data, and searched + try for a search): %s", where, len(m), want, body)
 	}
 }
 

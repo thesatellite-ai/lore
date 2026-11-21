@@ -69,7 +69,7 @@ func TestCommentLifecycle(t *testing.T) {
 	if env.Kind != "comment.search" || env.Query != "good" || env.Count != 1 || env.Data[0].Row.EntityTable != "tasks" || env.Data[0].Row.EntityID != task {
 		t.Fatalf("search json %s", h.JSON(search))
 	}
-	if got := opstest.Text(h.Must("comment.search", `{"query":"zzz"}`)); got != "(no matches)\n" {
+	if got := opstest.EmptyTextOf(t, opstest.Text(h.Must("comment.search", `{"query":"zzz"}`)), "zzz"); got != "(no matches)\n" { // D-821 note checked whole (D-832)
 		t.Fatalf("no match %q", got)
 	}
 	if !strings.Contains(h.JSON(h.Must("comment.search", `{"query":"zzz"}`)), `"count":0`) {
@@ -83,7 +83,7 @@ func TestCommentLifecycle(t *testing.T) {
 	if strings.Contains(opstest.Text(h.Must("comment.list", ``)), id) {
 		t.Fatal("deleted comment still listed")
 	}
-	if got := opstest.Text(h.Must("comment.search", `{"query":"good"}`)); got != "(no matches)\n" {
+	if got := opstest.EmptyTextOf(t, opstest.Text(h.Must("comment.search", `{"query":"good"}`)), "good"); got != "(no matches)\n" {
 		t.Fatalf("deleted comment still found: %q", got)
 	}
 }
