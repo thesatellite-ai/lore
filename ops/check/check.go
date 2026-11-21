@@ -68,7 +68,7 @@ const prBodyClean = "✓ nothing internal found (a copy-paste check: a paraphras
 
 // LeaksIn is the input of check.leaks.
 type LeaksIn struct {
-	CI        bool   `json:"ci,omitempty" flag:"ci" desc:"CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal"`
+	CI        bool   `json:"ci,omitempty" flag:"ci" desc:"CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal. CI cannot read your private store: a not-a-secret allow kept in a store folder (where a linked repo saves them) is not seen here; the commit and pre-push hooks on each member's machine enforce it, and a committed .lore/data/secret_allows entry or .gitleaksignore line is seen"`
 	Since     string `json:"since,omitempty" flag:"since" desc:"with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits"`
 	Explain   bool   `json:"explain,omitempty" flag:"explain" desc:"print the rule, the source and the matched words of each finding"`
 	Staged    bool   `json:"staged,omitempty" flag:"staged" desc:"check the staged files (default unless --commit-msg is given alone)"`

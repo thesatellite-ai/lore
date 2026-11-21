@@ -74,3 +74,57 @@ func TestCIScansTheCheckoutForSecrets(t *testing.T) {
 		t.Fatalf("a value the file already held at the base was refused again: %v", err)
 	}
 }
+
+// TestCIRefusalSaysStoreAllowsAreNotSeen (devco D-803, owner answer 1): a
+// linked repo saves `lore secrets allow` in its store folder, which a CI
+// clone does not have, so CI keeps reporting a value the hooks let through.
+// The refusal's hint says so and names the committed .gitleaksignore line;
+// that line must really let CI pass, or the hint would print a step that
+// does not work. Break-verified: without ciStoreAllowNote the hint misses
+// the note.
+func TestCIRefusalSaysStoreAllowsAreNotSeen(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	key := "AKIA" + strings.Repeat("W", 16) // built at run time, never a literal key
+	dir := t.TempDir()
+	gitInitIn(t, dir)
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	commit := func() {
+		t.Helper()
+		for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-q", "--no-verify", "-m", "c"}} {
+			cmd := exec.Command("git", args...)
+			cmd.Dir = dir
+			cmd.Env = gitenv.Clean(os.Environ())
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v %s", args, err, out)
+			}
+		}
+	}
+	write("fixture.env", "AWS_ACCESS_KEY_ID="+key+"\n")
+	commit()
+	err := checkCISecrets(ctx, dir, "", noCIEnv)
+	if !errs.Has(err, errs.LeakBlocked) {
+		t.Fatalf("err = %v, want E_LEAK_BLOCKED", err)
+	}
+	hint := hintOf(err)
+	for _, want := range []string{"linked to a store folder", "CI cannot read", "pre-push hooks", ".gitleaksignore as <path>:<rule>:<line>"} {
+		if !strings.Contains(hint, want) {
+			t.Errorf("the CI hint misses %q:\n%s", want, hint)
+		}
+	}
+	_, after, ok := strings.Cut(err.Error(), "--rule ")
+	if !ok {
+		t.Fatalf("the refusal names no rule:\n%v", err)
+	}
+	rule, _, _ := strings.Cut(after, " ")
+	write(".gitleaksignore", "fixture.env:"+rule+":1\n")
+	commit()
+	if err := checkCISecrets(ctx, dir, "", noCIEnv); err != nil {
+		t.Fatalf("the .gitleaksignore line the hint names did not let CI pass: %v", err)
+	}
+}
