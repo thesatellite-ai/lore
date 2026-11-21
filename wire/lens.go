@@ -38,23 +38,40 @@ import (
 // its own read-only connection (mode=ro, query_only); nothing it runs can
 // change a cache.
 func (a *App) Lens(ctx context.Context, o sqlite.LensOptions) (*sqlite.Lens, error) {
-	l, _, err := a.lensFor(ctx, o, false, "")
+	l, _, err := a.lensFor(ctx, o, lensScope{}, "")
 	return l, err
 }
 
-// lensFor is Lens with the client repo's --internal choice and, when
-// deleted is not "", the deleted-rows file (FA-META-2) attached last; it
-// also returns the internal stores attached only because of internal.
-func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool, deleted string) (*sqlite.Lens, []string, error) {
+// lensScope is which of the attached stores a lens reads: Internal is a
+// client repo's --internal (CFG4); RepoOnly is `lore sql --store repo`
+// (devco D-799), the repo's own cache alone.
+type lensScope struct {
+	Internal bool
+	RepoOnly bool
+}
+
+// lensFor is Lens with the scope sc and, when deleted is not "", the
+// deleted-rows file (FA-META-2) attached last; it also returns the
+// internal stores attached only because of sc.Internal.
+func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, sc lensScope, deleted string) (*sqlite.Lens, []string, error) {
 	st, err := a.state(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	srcs, extra, err := a.lensSources(ctx, st, internal)
+	srcs, extra, err := a.lensSources(ctx, st, sc)
 	if err != nil {
 		return nil, nil, err
 	}
 	o.Trash = trashIn(o.Trash, srcs, st.eng.Stores())
+	if sc.RepoOnly {
+		// devco D-799: `--store repo` reads the repo's rows alone, as any
+		// other --store reads that store alone (routedStoreRead). The
+		// stores stay attached so a resource of a kind defined in a store
+		// keeps its res_<kind> view and its sensitive fields masked, but
+		// every view reads the repo's rows only (sqlite LensOptions.Only).
+		o.Only = string(store.SourceRepo)
+		o.Trash = trashIn(o.Trash, srcs[:1], nil)
+	}
 	if deleted != "" {
 		srcs = append(srcs, sqlite.LensSource{Name: deletedLensName, Path: deleted, Deleted: true})
 	}
@@ -138,12 +155,17 @@ func (a *App) placeLabels(names []string) []string {
 //	own repo ─▶ every store (or the combined file)
 //	client   ─▶ repo + shareable stores; + internal stores with internal (CFG4)
 //	client, combined ─▶ repo only; + the combined file with internal
-func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqlite.LensSource, []string, error) {
+func (a *App) lensSources(ctx context.Context, st *state, sc lensScope) ([]sqlite.LensSource, []string, error) {
+	internal := sc.Internal
 	repo := sqlite.LensSource{
 		Name: string(store.SourceRepo),
 		Path: st.repoCacheOf(),
 	}
 	srcs := []sqlite.LensSource{repo}
+	if sc.RepoOnly && repo.Path == "" {
+		return nil, nil, errs.New(errs.NotFound, "sql --store repo: this folder has no repo store to read").
+			WithHint(`run it in a repo set up with lore, or name a store: lore sql run --store <store> --query "<query>"`)
+	}
 	if repo.Path == "" {
 		// a store-only open (a store clone, a read outside any repo) has
 		// no repo cache: its stores are the sources (devco D-454; it
@@ -276,12 +298,12 @@ const deletedLensName = "deleted"
 // the lens closes; it removes the folder.
 //
 //	engine.Trashed ─▶ keep attached stores ─▶ sqlite.Open(temp) ─▶ Apply per store ─▶ Close
-func (a *App) deletedCache(ctx context.Context, internal bool) (string, func(), error) {
+func (a *App) deletedCache(ctx context.Context, sc lensScope) (string, func(), error) {
 	st, err := a.state(ctx)
 	if err != nil {
 		return "", nil, err
 	}
-	srcs, _, err := a.lensSources(ctx, st, internal)
+	srcs, _, err := a.lensSources(ctx, st, sc)
 	if err != nil {
 		return "", nil, err
 	}
@@ -290,6 +312,9 @@ func (a *App) deletedCache(ctx context.Context, internal bool) (string, func(), 
 		return "", nil, err
 	}
 	keep := map[store.Source]bool{}
+	if sc.RepoOnly {
+		srcs = srcs[:1] // the repo's own trashed rows alone (devco D-799)
+	}
 	for _, s := range srcs {
 		if s.Combined {
 			for _, n := range st.eng.Stores() {
@@ -371,9 +396,10 @@ func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, err
 			return opssql.Result{}, err
 		}
 	}
+	sc := lensScope{Internal: r.Internal, RepoOnly: r.RepoOnly}
 	var deleted string
 	if r.IncludeDeleted {
-		dir, cleanup, derr := a.deletedCache(ctx, r.Internal)
+		dir, cleanup, derr := a.deletedCache(ctx, sc)
 		if derr != nil {
 			return opssql.Result{}, derr
 		}
@@ -387,7 +413,7 @@ func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, err
 		return opssql.Result{}, err
 	}
 	clientKey, _ := pol.Text(policy.KeyTimeClientKey) // unset = the lens default
-	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows, TimeClientKey: clientKey, Now: a.Now()}, r.Internal, deleted)
+	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows, TimeClientKey: clientKey, Now: a.Now()}, sc, deleted)
 	if err != nil {
 		return opssql.Result{}, err
 	}

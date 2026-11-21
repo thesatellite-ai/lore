@@ -40,6 +40,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Operation names (`lore sql run`, REST POST /v1/sql/run).
@@ -80,6 +81,10 @@ type Request struct {
 	// IncludeDeleted adds the rows in the trash of the attached stores to
 	// every table view (DELETION 2.9, FA-META-2).
 	IncludeDeleted bool
+	// RepoOnly is `--store repo` (devco D-799): the lens holds the repo's
+	// own cache alone. Any other --store is routed before the op runs
+	// (RunIn.RoutedStore), so the lens then holds that store alone.
+	RepoOnly bool
 }
 
 // Env is what sql.run needs; *wire.App implements it.
@@ -124,8 +129,17 @@ type RunIn struct {
 	// read's --store: `<org>` is every folder of the org's stores, each a
 	// source <store>/<folder>; `<org>/<folder>` is that folder. wire routes
 	// it before the op runs (runOutsideRepo), from any folder.
-	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store instead of the repo's: <org> (every folder, each a source <store>/<folder>) or <store>/<folder>; works from any folder"`
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store alone: <org> (every folder, each a source <store>/<folder>), <store>/<folder>, a store's name, or repo (the repo's own rows); works from any folder"`
 }
+
+// RoutedStore implements the op package's StoreRouter (devco D-799): the
+// query runs on the store --store names alone (wire routedStoreRead), as
+// op.StoreFlag's reads do. Without it, in a repo set up with lore, a store
+// attached through .lore/stores.yaml (neither an org nor `me`) was not
+// routed: the lens kept the repo first, so `SELECT name FROM res_person`
+// read the repo's rows, every `_all` view held the repo's rows too, and a
+// name no store answers to ran on the repo instead of being refused.
+func (in RunIn) RoutedStore() string { return in.Store }
 
 // RunOut is the output of sql.run (--json and REST): column names, rows
 // of typed cells, and the row count.
@@ -246,7 +260,8 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
-	res, err := env.SQL(ctx, Request{Query: q, ShowSensitive: in.ShowSensitive, Timeout: timeout, Internal: in.Internal, IncludeDeleted: in.IncludeDeleted})
+	res, err := env.SQL(ctx, Request{Query: q, ShowSensitive: in.ShowSensitive, Timeout: timeout, Internal: in.Internal, IncludeDeleted: in.IncludeDeleted,
+		RepoOnly: in.Store == string(store.SourceRepo)})
 	if err != nil {
 		return RunOut{}, err
 	}
