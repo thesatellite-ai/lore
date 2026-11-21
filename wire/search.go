@@ -301,25 +301,32 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		return opsmemory.Held(w, matched[id], text.String())
 	}
-	rows := map[store.Source]map[ids.AnyID]row.Row{} // per store, loaded on its first hit
+	// devco:D-797: only the hit rows are read (eng.ListIDs), per store,
+	// never the whole table: a 5,000-row folder read every row file here
+	want := map[store.Source][]ids.AnyID{}
+	for _, h := range hits {
+		if sc.fromStore(h.Source) {
+			want[h.Source] = append(want[h.Source], h.ID)
+		}
+	}
+	rows := make(map[store.Source]map[ids.AnyID]row.Row, len(want))
+	for src, idList := range want {
+		list, err := eng.ListIDs(ctx, src, t.Table, idList)
+		if err != nil {
+			return nil, err
+		}
+		byID := make(map[ids.AnyID]row.Row, len(list))
+		for _, r := range list {
+			byID[r.ID] = r
+		}
+		rows[src] = byID
+	}
 	var out []rankedHit
 	for _, h := range hits {
 		if !sc.fromStore(h.Source) {
 			continue // --store: another store's hit, before the cut
 		}
-		byID, ok := rows[h.Source]
-		if !ok {
-			list, err := eng.List(ctx, h.Source, t.Table)
-			if err != nil {
-				return nil, err
-			}
-			byID = make(map[ids.AnyID]row.Row, len(list))
-			for _, r := range list {
-				byID[r.ID] = r
-			}
-			rows[h.Source] = byID
-		}
-		r, ok := byID[h.ID]
+		r, ok := rows[h.Source][h.ID]
 		if !ok {
 			continue // gone since the cache was refreshed
 		}
@@ -672,11 +679,16 @@ type condHit struct {
 // for every row. Why every store: the conditions read the repo's rows
 // only, so `day:2026-11-20` or `status:open` found nothing in a store
 // folder (a personal store's adopted journal) while the same words did
-// (devco D-796). Each store's rows are listed once, on its first hit.
+// (devco D-796). Only the hit rows are read, per store (eng.ListIDs),
+// never the store's whole table (devco D-797).
 func (a *App) condHits(ctx context.Context, eng *engine.Engine, t opssearch.Target, sc searchScope, cells [][]value.Value) ([]condHit, error) {
 	names := a.lensSourceNames(eng)
-	rows := map[store.Source]map[string]row.Row{}
-	out := make([]condHit, 0, len(cells))
+	type cell struct {
+		src store.Source
+		id  string
+	}
+	var kept []cell
+	want := map[store.Source][]ids.AnyID{}
 	for _, c := range cells {
 		if len(c) < 2 {
 			continue
@@ -685,20 +697,29 @@ func (a *App) condHits(ctx context.Context, eng *engine.Engine, t opssearch.Targ
 		if !ok || !sc.fromStore(src) {
 			continue // a label of no attached store (a deleted-rows copy), or --store
 		}
-		byID, ok := rows[src]
-		if !ok {
-			list, err := eng.List(ctx, src, t.Table)
-			if err != nil {
-				return nil, err
-			}
-			byID = make(map[string]row.Row, len(list))
-			for _, r := range list {
-				byID[r.ID.String()] = r
-			}
-			rows[src] = byID
+		id, err := ids.ParseAny(c[1].String())
+		if err != nil {
+			continue // no row id: no row of t
 		}
-		id := c[1].String()
-		r, ok := byID[id]
+		kept = append(kept, cell{src: src, id: id.String()})
+		want[src] = append(want[src], id)
+	}
+	rows := make(map[store.Source]map[string]row.Row, len(want))
+	for src, idList := range want {
+		list, err := eng.ListIDs(ctx, src, t.Table, idList)
+		if err != nil {
+			return nil, err
+		}
+		byID := make(map[string]row.Row, len(list))
+		for _, r := range list {
+			byID[r.ID.String()] = r
+		}
+		rows[src] = byID
+	}
+	out := make([]condHit, 0, len(kept))
+	for _, c := range kept {
+		src, id := c.src, c.id
+		r, ok := rows[src][id]
 		if !ok {
 			continue // gone since the cache was refreshed
 		}
