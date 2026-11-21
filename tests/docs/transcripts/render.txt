@@ -11,6 +11,7 @@ lore initialized
 · context targets: claude_code (CLAUDE.md) (detected in this repo; change with --target <profile>)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set --key context.targets --value <profiles> --yes
+· the session and pre-edit context hooks of claude_code are not installed (they put the rules and hotfixes of a file in front of the agent before it edits it); install them with: lore setup --agent-hooks --yes
   next: lore render            to write .lore/LORE.md for those tools
 
 ### render

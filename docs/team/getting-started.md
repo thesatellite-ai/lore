@@ -41,6 +41,7 @@ lore initialized
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/notes-app/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set --key context.targets --value <profiles> --yes
+· the session and pre-edit context hooks of codex are not installed (they put the rules and hotfixes of a file in front of the agent before it edits it); install them with: lore setup --agent-hooks --yes
   next: lore render            to write .lore/LORE.md for those tools
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
 ```

@@ -116,7 +116,9 @@ func (a *App) withResourceLink(ctx context.Context, err error) error {
 
 // replaceErr is err with its part old swapped for repl: err itself when it
 // is old, or the errors.Join open's fail makes (the refusal joined with
-// the close of a half-open state). Any other wrapping keeps err as it is.
+// the close of a half-open state), a join inside it included (devco:D-840:
+// a join nested in the join kept the placeholder hint). Any other
+// wrapping keeps err as it is.
 func replaceErr(err error, old *errs.Error, repl error) error {
 	if err == error(old) { //nolint:errorlint // identity, not a match
 		return repl
@@ -127,15 +129,9 @@ func replaceErr(err error, old *errs.Error, repl error) error {
 	}
 	var out []error
 	for _, p := range j.Unwrap() {
-		if p == error(old) { //nolint:errorlint // identity, not a match
-			p = repl
-		}
-		out = append(out, p)
+		out = append(out, replaceErr(p, old, repl))
 	}
-	if len(out) == 1 {
-		return out[0]
-	}
-	return errors.Join(out...)
+	return joinFlat(out...)
 }
 
 // writeHint is the next step of a write refused in an unlinked own repo
