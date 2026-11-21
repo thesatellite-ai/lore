@@ -46,6 +46,17 @@ func IsRowFile(rel string) bool {
 // is ignored (0 = some are, 128 = a fatal error).
 const checkIgnoreNone = 1
 
+// checkIgnoreFatal is `git check-ignore`'s exit status on a fatal error,
+// such as a folder with no git repository around it.
+const checkIgnoreFatal = 128
+
+// inWorkTree reports whether root is inside a git work tree. It runs only
+// after check-ignore failed, so a normal answer costs no second git process.
+func inWorkTree(ctx context.Context, root string) bool {
+	out, err := (gitref.Exec{}).Run(ctx, gitref.Invocation{Dir: root, Args: []string{"rev-parse", "--is-inside-work-tree"}})
+	return err == nil && strings.TrimSpace(string(out)) == "true"
+}
+
 // probeStem is the file name stem used inside table folders: not a valid
 // row id, so a stray file by that name is skipped, never read.
 const probeStem = "sample"
@@ -88,6 +99,9 @@ func Ignored(ctx context.Context, root string, paths []string) (map[string]strin
 		Stdin: []byte(strings.Join(paths, "\x00") + "\x00")})
 	if code, ok := gitref.ExitCode(err); ok && code == checkIgnoreNone {
 		return nil, nil
+	}
+	if code, ok := gitref.ExitCode(err); ok && code == checkIgnoreFatal && !inWorkTree(ctx, root) {
+		return nil, nil // devco:D-876: no repository, so no ignore rule applies
 	}
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "git check-ignore", err)
