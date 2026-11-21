@@ -102,7 +102,11 @@ func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.
 // judges).
 func (c *Cache) upsertKind(ctx context.Context, tx *sql.Tx, st state, kind ids.ID[ids.Kind], source string, r row.Row) error {
 	info, ok := st.kinds[kind]
-	if kind.IsZero() || !ok {
+	// A resource belongs only in the table of the kind it names. The refill
+	// of a kind table (state.go) reads every resource row, so without this
+	// check a refill (a field added, a migrated or adopted folder) put the
+	// whole store into each res_<kind> table (devco:D-794).
+	if kind.IsZero() || !ok || kindOf(r) != kind {
 		return nil
 	}
 	vals := map[string]value.Value{}
