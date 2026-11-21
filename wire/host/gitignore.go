@@ -15,6 +15,9 @@ package host
 //	          ─► appended to the tracked .gitignore under "# lore"
 //	       any other write ─► the clone's own .git/info/exclude (devco:D-753:
 //	          a plain write changes no tracked file outside .lore/)
+//	  ─► a private project (git ignores .lore/, info/exclude included):
+//	     no line is missing; an install step takes an older lore's block
+//	     out of the tracked .gitignore (devco:D-856)
 //
 // The git wiring v0.1.17 did at the same point (merge driver,
 // .gitattributes, the commit/push hooks) is not here: its hooks call the
@@ -102,6 +105,17 @@ func GitignoreHookFor(workDir string, client ClientRepoFunc) Hook {
 			// does, and two teammates' writes adding the same lines
 			// uncommitted made the git pull of either commit abort.
 			install := run.Entry != nil && runWireMode(run) == wireInstall
+			// devco:D-856: in a private project (git ignores .lore/, by
+			// any rule) no lore line belongs in the tracked .gitignore; an
+			// install step takes out a block an older lore appended there
+			if install && !onlyData && !wire.ProjectFormatOld(root) {
+				if removed, derr := wire.DropPrivateGitignoreBlock(ctx, root); derr != nil {
+					err = errs.Wrap(errs.Internal, "update "+gitignoreName, derr)
+					return
+				} else if len(removed) > 0 {
+					announcePrivateDrop(os.Stderr, root, removed)
+				}
+			}
 			if why, local := excludeReason(ctx, root, onlyData, install, client); local {
 				// A repo that holds no lore data (a client repo linked to
 				// a store folder; plain files sweep 3.8) never gets a
@@ -276,6 +290,13 @@ func announceGitignore(w io.Writer, root string, added []string) {
 		strings.Join(added, ", "), filepath.Join(root, gitignoreName))
 }
 
+// announcePrivateDrop says which lore lines an install step took out of
+// a private project's tracked .gitignore (devco:D-856).
+func announcePrivateDrop(w io.Writer, root string, removed []string) {
+	_, _ = fmt.Fprintf(w, "lore: took lore's block (%s) out of %s: git ignores .lore/ here, so the project is private and its tracked files need no lore line (commit .gitignore if the block was committed)\n",
+		strings.Join(removed, ", "), filepath.Join(root, gitignoreName))
+}
+
 // excludeWhy is why a write keeps lore's .gitignore lines in the clone's
 // own info/exclude instead of the tracked .gitignore (excludeReason).
 type excludeWhy int
@@ -351,6 +372,9 @@ func announceExclude(w io.Writer, root string, added []string, why excludeWhy) {
 func rewireTracked(ctx context.Context, root string, client ClientRepoFunc) []string {
 	if !wire.HoldsLoreData(root) || wire.ProjectFormatOld(root) || os.Getenv(EnvSyncGit) == envOff || clientRepoHere(ctx, client) {
 		return nil
+	}
+	if !wire.RepoMayHoldLoreFiles(ctx, root) {
+		return nil // devco:D-856 (D-500): a private project gets neither the .gitignore lines nor the .gitattributes block
 	}
 	var out []string
 	if added, err := ensureGitignore(ctx, root); err == nil && len(added) > 0 {

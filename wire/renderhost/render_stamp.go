@@ -316,9 +316,13 @@ func pointerCopies(ctx context.Context, root string, pick targetPick) []opsrende
 	}
 	names := make([]string, 0, len(pick.targets))
 	var found []opsrender.CopyFinding
+	// devco:D-856 (D-500): a private project's tracked tool files never get
+	// the pointer (render skips them and says how the tool reads the notes),
+	// so "fix: lore render" for one changed nothing and doctor stayed degraded
+	private := !wire.RepoMayHoldLoreFiles(ctx, root)
 	for _, t := range pick.targets {
 		names = append(names, t.profile.Name)
-		if !t.profile.HasPointerFile() {
+		if !t.profile.HasPointerFile() || private {
 			continue
 		}
 		if (rootProbe{root: root}).State(t.profile.PointerFile) == toolprofile.FileWired {

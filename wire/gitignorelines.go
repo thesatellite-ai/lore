@@ -14,6 +14,8 @@ package wire
 //	MissingGitignoreLines: a line counts as listed when .gitignore holds
 //	   it or a rule git shares with the team ignores it; this clone's
 //	   .git/info/exclude does not count (it reaches nobody else)
+//	   ; a private project (git ignores the whole .lore/, by any rule,
+//	   info/exclude included) misses none (devco:D-856, gitignoreprivate.go)
 
 import (
 	"context"
@@ -92,6 +94,9 @@ const localExcludeMode = 0o644
 // Any git failure counts the line as missing (the doctor finding then
 // says so; adding a line twice is harmless).
 func MissingGitignoreLines(ctx context.Context, root string) []string {
+	if LoreDirIgnored(ctx, root) {
+		return nil // devco:D-856: git ignores all of .lore/ here; a line would only change the tracked .gitignore
+	}
 	existing := ""
 	// through an os.Root, as the append does: a .gitignore committed as a
 	// link out of the repository is not followed
