@@ -14,6 +14,8 @@
 //	check leaks --as-client                  the whole repo as the client sees it
 //	check leaks --rows                       every stored row re-scanned with today's
 //	                                         secret rules (SQ12, the lint secret_found scan)
+//	check leaks --history [--since c]        every file version and commit message
+//	                                         reachable from HEAD (D-870)
 //	check pr-body <file|->                   read the text ─► Checker.CheckText
 //
 // Every refusal is E_LEAK_BLOCKED (exit class guard); a check that cannot
@@ -61,6 +63,7 @@ const (
 	ModeCI       = "ci"
 	ModeAsClient = "as_client"
 	ModeRows     = "rows"
+	ModeHistory  = "history"
 )
 
 // prBodyClean is the line a clean pr-body check prints (v0.1.17).
@@ -69,12 +72,13 @@ const prBodyClean = "✓ nothing internal found (a copy-paste check: a paraphras
 // LeaksIn is the input of check.leaks.
 type LeaksIn struct {
 	CI        bool   `json:"ci,omitempty" flag:"ci" desc:"CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal. CI cannot read your private store: a not-a-secret allow kept in a store folder (where a linked repo saves them) is not seen here; the commit and pre-push hooks on each member's machine enforce it, and a committed .lore/data/secret_allows entry or .gitleaksignore line is seen"`
-	Since     string `json:"since,omitempty" flag:"since" desc:"with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits"`
+	Since     string `json:"since,omitempty" flag:"since" desc:"with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits. With --history: check only the commits after this one"`
 	Explain   bool   `json:"explain,omitempty" flag:"explain" desc:"print the rule, the source and the matched words of each finding"`
 	Staged    bool   `json:"staged,omitempty" flag:"staged" desc:"check the staged files (default unless --commit-msg is given alone)"`
 	CommitMsg string `json:"commit_msg,omitempty" flag:"commit-msg" desc:"also check this commit message file (the commit-msg hook's $1)"`
 	AsClient  bool   `json:"as_client,omitempty" flag:"as-client" desc:"check the whole repo as the client would see it (before a hand-over)"`
 	Rows      bool   `json:"rows,omitempty" flag:"rows" desc:"re-scan every stored row of every attached store with today's secret rules"`
+	History   bool   `json:"history,omitempty" flag:"history" desc:"scan every file version and commit message reachable from HEAD for secrets (each version read once), naming the commit that added each one; with --since, only the commits after that one"`
 }
 
 // Mode is the check the flags ask for.
@@ -86,6 +90,8 @@ func (in LeaksIn) Mode() string {
 		return ModeAsClient
 	case in.Rows:
 		return ModeRows
+	case in.History:
+		return ModeHistory
 	}
 	return ModeCommit
 }
@@ -146,7 +152,7 @@ func Ops(c Checker) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
 			Name:    OpLeaks,
-			Summary: "Check staged files and the commit message (hooks), or the tree structure (--ci), for internal or personal content",
+			Summary: "Check staged files and the commit message (hooks), the tree structure (--ci) or the whole history (--history), for internal or personal content",
 			// Read-only: a check writes no row. Local: a hook never opens the engine (P3-CFG-1).
 			Permission: op.PermRead, Access: op.AccessRead, Errors: leakErrors, Local: true,
 			Examples: []op.Example{
@@ -155,15 +161,20 @@ func Ops(c Checker) []op.Entry {
 				{Title: "in the client's CI", CLI: "lore check leaks --ci", Want: "✓"},
 				{Title: "before handing an own repo to the client", CLI: "lore check leaks --as-client", Want: "✓"},
 				{Title: "every stored row with today's secret rules", CLI: "lore check leaks --rows", Want: "✓"},
+				{Title: "every commit of the repo's history", CLI: "lore check leaks --history", Want: "✓"},
 			},
 		}, func(ctx context.Context, in LeaksIn) (LeaksOut, error) {
 			if in.CI && in.AsClient {
 				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --ci and --as-client cannot be used together").
 					WithHint("--ci is the client's CI check; --as-client is the hand-over check of an own repo")
 			}
-			if in.Since != "" && !in.CI {
-				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --since is a --ci option").
-					WithHint("lore check leaks --ci --since <the last commit CI checked>")
+			if in.History && (in.CI || in.AsClient || in.Rows || in.Staged || in.CommitMsg != "") {
+				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --history checks the repo's history alone").
+					WithHint("run --history on its own (with --since <commit> for the commits after it); the commit, --ci, --as-client and --rows checks are separate runs")
+			}
+			if in.Since != "" && !in.CI && !in.History {
+				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --since is a --ci or --history option").
+					WithHint("lore check leaks --ci --since <the last commit CI checked>, or lore check leaks --history --since <commit>")
 			}
 			if in.Rows && (in.CI || in.AsClient || in.Staged || in.CommitMsg != "") {
 				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --rows checks the stored rows alone").

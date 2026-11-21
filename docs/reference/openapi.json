@@ -11133,7 +11133,7 @@
     "/v1/checks/leaks": {
       "post": {
         "operationId": "check.leaks",
-        "summary": "Check staged files and the commit message (hooks), or the tree structure (--ci), for internal or personal content",
+        "summary": "Check staged files and the commit message (hooks), the tree structure (--ci) or the whole history (--history), for internal or personal content",
         "tags": [
           "check"
         ],
@@ -11160,13 +11160,17 @@
                     "type": "boolean",
                     "description": "print the rule, the source and the matched words of each finding"
                   },
+                  "history": {
+                    "type": "boolean",
+                    "description": "scan every file version and commit message reachable from HEAD for secrets (each version read once), naming the commit that added each one; with --since, only the commits after that one"
+                  },
                   "rows": {
                     "type": "boolean",
                     "description": "re-scan every stored row of every attached store with today's secret rules"
                   },
                   "since": {
                     "type": "string",
-                    "description": "with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits"
+                    "description": "with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits. With --history: check only the commits after this one"
                   },
                   "staged": {
                     "type": "boolean",

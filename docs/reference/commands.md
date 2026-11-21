@@ -137,7 +137,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore check` … | Leak checks: internal or personal content must never reach the client | — |
-| `lore check leaks` | Check staged files and the commit message (hooks), or the tree structure (--ci), for internal or personal content | [team/commands › lore check leaks](../../docs/team/commands.md#lore-check-leaks) |
+| `lore check leaks` | Check staged files and the commit message (hooks), the tree structure (--ci) or the whole history (--history), for internal or personal content | [team/commands › lore check leaks](../../docs/team/commands.md#lore-check-leaks) |
 | `lore check pr-body` | Check a pull request body or comment before posting it (agents: always) | [team/commands › lore check pr-body](../../docs/team/commands.md#lore-check-pr-body) |
 
 ### lore comment
