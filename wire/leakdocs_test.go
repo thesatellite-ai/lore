@@ -386,3 +386,40 @@ func leakActorFields(t *testing.T) map[string]value.Value {
 	}
 	return f
 }
+
+// TestLeakIndexSkipsCommitLinkMessage (issue #127): a commit link's
+// message is the linked commit's own message, copied from git, so it is
+// not internal text: a rebased or amended commit carrying that message
+// passes the text rule. The same words in a note a person wrote still
+// block, and so does a person's prose in a reminder's message field.
+func TestLeakIndexSkipsCommitLinkMessage(t *testing.T) {
+	const (
+		linkID = "cml_01a1a67a33b7777587cca0cfc9e5d801"
+		remID  = "rmd_01a1a67a33b7777587cca0cfc9e5d802"
+		memID  = "mem_01a1a67a33b7777587cca0cfc9e5d803"
+		subj   = "Show the order received banner after the customer submits the checkout form"
+		note   = "the client keeps the order received banner hidden for the whole spring launch"
+	)
+	links := leakIndexRows([]row.Row{leakTestRow(t, linkID, map[string]string{"message": subj, "author": "Ann Example"})}, schema.TableCommitLinks, "agency", leakStoreLabelPrefix+"agency", nil)
+	if len(links) != 1 || len(links[0].Texts) != 0 {
+		t.Fatalf("a commit link's copied message must not be indexed text: %+v", links)
+	}
+	rems := leakIndexRows([]row.Row{leakTestRow(t, remID, map[string]string{"message": note})}, schema.TableReminders, "agency", leakStoreLabelPrefix+"agency", nil)
+	if len(rems) != 1 || len(rems[0].Texts) != 1 {
+		t.Fatalf("a reminder's message is a person's prose and stays indexed: %+v", rems)
+	}
+	mems := leakIndexRows([]row.Row{leakTestRow(t, memID, map[string]string{"body": subj})}, schema.TableMemories, "agency", leakStoreLabelPrefix+"agency", nil)
+	idx := leakcheck.NewIndex(slices.Concat(links, rems), nil)
+	msg := []leakcheck.Item{{Where: "message of commit 1a2b3c4", Content: []byte(subj + "\n")}}
+	if fs := leakcheck.Blocking(leakcheck.Check(msg, idx, leakcheck.Options{ClientRepo: true})); len(fs) != 0 {
+		t.Fatalf("the commit's own message was refused as a leak of its link row: %+v", fs)
+	}
+	idx = leakcheck.NewIndex(slices.Concat(links, rems, mems), nil)
+	if fs := leakcheck.Blocking(leakcheck.Check(msg, idx, leakcheck.Options{ClientRepo: true})); len(fs) != 1 || fs[0].Rule != leakcheck.RuleText {
+		t.Fatalf("the same words in a memory must still block: %+v", fs)
+	}
+	rem := []leakcheck.Item{{Where: "message of commit 1a2b3c4", Content: []byte(note + "\n")}}
+	if fs := leakcheck.Blocking(leakcheck.Check(rem, idx, leakcheck.Options{ClientRepo: true})); len(fs) != 1 {
+		t.Fatalf("a reminder's message must still block: %+v", fs)
+	}
+}

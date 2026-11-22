@@ -73,6 +73,28 @@ func leakCannotCheckErr(what string, cause error) error {
 // legitimately points at a client row match the client row's own id.
 var leakTextFields = []string{"title", "name", "body", "description", "reason", "notes", "message"}
 
+// leakGitCopyFields are prose fields lore fills by copying git itself, per
+// table: a commit link's message is the linked commit's own message (`lore
+// link add` reads it from git log). Why they are not indexed text: the text
+// came from a code repo, not from an internal note, so it must never block
+// the commit it was copied from. After a rebase or an amend that commit is
+// new to the push and its message equals the link row word for word; the
+// guard refused it as a leak of the link row (issue #127). A row's meta
+// values stay indexed: a person writes those.
+var leakGitCopyFields = map[row.Table]map[string]bool{
+	schema.TableCommitLinks: {leakCommitLinkMessage: true},
+}
+
+// leakCommitLinkMessage is the commit_links field holding the copied commit
+// message (schema linkDefs).
+const leakCommitLinkMessage = "message"
+
+// leakIsGitCopy reports whether field f of table t is a copy of git text
+// (leakGitCopyFields), which the text rule never reads.
+func leakIsGitCopy(t row.Table, f string) bool {
+	return leakGitCopyFields[t][f]
+}
+
 // leakStoreLabelPrefix starts the label a finding names for a row's store.
 const leakStoreLabelPrefix = "store "
 
@@ -586,6 +608,9 @@ func leakIndexRows(rows []row.Row, t row.Table, src store.Source, label string, 
 		}
 		var texts []string
 		for _, f := range leakTextFields {
+			if leakIsGitCopy(t, f) {
+				continue
+			}
 			if s := fieldText(r, f); s != "" {
 				texts = append(texts, s)
 			}
