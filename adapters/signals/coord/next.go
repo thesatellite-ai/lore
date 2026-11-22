@@ -43,6 +43,9 @@ type UrgencyContext struct {
 type NextResult struct {
 	// Resumed: the caller already held Task; nothing was claimed.
 	Resumed bool
+	// Renewed: Resumed, and the caller's lease on Task had run out while
+	// its claim stayed on the ref, so Claim renewed it (devco:D-896).
+	Renewed bool
 	Task    string
 	Claim   ClaimResult
 	// Poisoned are tasks this call blocked after max_attempts.
@@ -233,7 +236,17 @@ func Next(ctx context.Context, env Env, req NextRequest) (NextResult, error) {
 		req.Opts.OpenChildren = OpenChildrenOf(docs)
 	}
 	if held, ok := resumable(env, v, req.Opts.OpenChildren); ok {
-		return NextResult{Resumed: true, Task: held}, nil
+		own, mine := signals.FindOwn(v, env.Caller, env.Folder, held)
+		if !mine || !signals.ExpiredForHolder(own, v.Now) {
+			return NextResult{Resumed: true, Task: held}, nil
+		}
+		// devco:D-896: resuming a lapsed lease renews it, so the work the
+		// caller resumes is not fenced out on its next heartbeat or done.
+		cr, err := Claim(ctx, env, held, req.Opts)
+		if err != nil {
+			return NextResult{}, err
+		}
+		return NextResult{Resumed: true, Renewed: cr.Plan.Renewed, Task: held, Claim: cr}, nil
 	}
 	res := queueOf(env, v, req, docs)
 	out := NextResult{Scores: res.Scores}

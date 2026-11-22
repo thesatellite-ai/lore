@@ -14,7 +14,7 @@ Words used below:
 
 - **Mission**: one shared plan, a group of tasks that several agents and people work through together.
 - **Claim**: a note that says "this task is mine right now", like putting your name on a whiteboard. Only one person or agent holds a claim on a task.
-- **Lease**: how long a claim lasts without a sign of life (20 minutes by default, `lease.ttl`). A **heartbeat** is that sign of life: it renews the lease. If an agent crashes, its lease runs out and someone else may take the task.
+- **Lease**: how long a claim lasts without a sign of life (20 minutes by default, `lease.ttl`). A **heartbeat** is that sign of life: it renews the lease. If an agent crashes, its lease runs out and someone else may take the task. If its lease ran out and nobody took the task yet, the agent keeps it: its next `task claim`, `task heartbeat` or `task next --claim` renews the lease, and `task done` lands.
 - **Gate**: a step that waits for a person to say yes.
 - **Finding**: a fact one agent learned that every agent on the mission should know.
 - **Handoff**: a message that passes a task to one named person or agent.
@@ -90,7 +90,7 @@ To keep agents out of one folder whatever command they run, list them in that fo
 |---|---|---|---|
 | 10 | `E_NO_WORK` | nothing is ready; the message lists why each task waits (dependency not merged, gate, claimed by someone) | stop, or wait and ask again later; report to the coordinator if a dependency looks stuck |
 | 11 | `E_CONTENDED` | ready work exists but other agents won every claim, or another writer won every attempt to push a claim, heartbeat or other coordination write, for about 15 seconds of retries with random waits (the line says how many attempts over how long); when the tasks this agent lost all went to others, `task next` reads the queue again and answers `E_NO_WORK` instead | wait a few seconds (with some randomness) and run the command again (`task next` for a claim) |
-| 12 | `E_LOST_CLAIM` | your claim is gone: the lease expired and another agent took the task, or it was revoked | **stop working on that task at once**; do not push more to it; run `task next --claim --push` for other work |
+| 12 | `E_LOST_CLAIM` | your claim is gone: the lease expired and another agent took the task, or it was revoked (a lease that only ran out, with nobody taking the task, is renewed instead) | **stop working on that task at once**; do not push more to it; run `task next --claim --push` for other work. When the claim is your own agent's in another session, or one the task no longer matches, the hint says so and names the command to run instead |
 | 13 | `E_CANCELLED` | a person cancelled the task while you held it | stop; do not finish it |
 | 14 | `E_REASSIGNED` | a person gave the task to someone else | stop; leave a note or handoff if you have useful state |
 | 15 | `E_OFFLINE` | the remote could not be reached, so it could not confirm the write; nothing was queued | retry when the network is back; never assume the write happened |

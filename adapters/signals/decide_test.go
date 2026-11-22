@@ -176,7 +176,9 @@ func TestHolderFencing(t *testing.T) {
 	}{
 		{"valid", Board{p: mine}, t0.Add(time.Minute), 4, true, true, true},
 		{"epoch bumped by a human", Board{p: mine}, t0.Add(time.Minute), 5, true, false, true},
-		{"my lease expired, still on the ref", Board{p: mine}, t0.Add(lease.TTL + time.Second), 4, false, false, true},
+		// devco:D-896: still on the ref under my token means nobody took it.
+		{"my lease expired, still on the ref", Board{p: mine}, t0.Add(lease.TTL + time.Second), 4, true, true, true},
+		{"my lease expired past grace, still on the ref", Board{p: mine}, t0.Add(lease.TTL + lease.Grace + time.Hour), 4, true, true, true},
 		{"reclaimed by another", Board{p: claimBy(other, task, t0.Add(time.Hour), 0)}, t0.Add(time.Hour), 4, false, false, false},
 		{"revoked (absent)", Board{}, t0.Add(time.Minute), 5, false, false, false},
 		{"same actor other session", Board{p: claimBy(Caller{ActorID: me.ActorID, Session: "s-other"}, task, t0, 0)}, t0.Add(time.Minute), 1, false, false, false},
@@ -278,4 +280,75 @@ func TestWIPRefusalSendsAgentsToAPerson(t *testing.T) {
 	if !strings.Contains(lowered, "up to the team's 3 (lore config set --key agents.max_claims_per_agent --value 2)") {
 		t.Fatalf("person with a lowered limit: %q", lowered)
 	}
+}
+
+// TestOwnLapsedLeaseRenews pins devco:D-896 (issue #121): the caller's own
+// claim whose lease ran out on its clock, still on the ref because nobody
+// took the task, is renewed by a claim (never a "you hold it" that renews
+// nothing), by a heartbeat, and accepted by a holder write; once another
+// holder reclaimed it, every one of them is fenced out as before.
+func TestOwnLapsedLeaseRenews(t *testing.T) {
+	p := ClaimPath(folder, task)
+	mine := claimBy(me, task, t0, 2)
+	mine.ClaimEpoch = 4
+	row := RowState{Epoch: 4, Attempts: 1}
+	req := ClaimRequest{Caller: me, Folder: folder, ID: task, CountsTowardWIP: true, MaxClaims: 1, MaxAttempts: 1, Row: row, Token: "ct_fresh"}
+	for _, now := range []time.Time{
+		t0.Add(lease.TTL + time.Second),               // inside grace: others still see it active
+		t0.Add(lease.TTL + lease.Grace + time.Minute), // past grace: others may treat it as expired
+	} {
+		v := view(Board{p: mine}, t0, now)
+		plan, err := DecideClaim(v, req)
+		if err != nil {
+			t.Fatalf("claim of my lapsed lease at %s: %v", now, err)
+		}
+		s := plan.Signal
+		if !plan.Renewed || plan.Resumed || plan.Reclaim || plan.Poisoned {
+			t.Fatalf("my lapsed lease must be renewed, not resumed, reclaimed or poisoned: %+v", plan)
+		}
+		if s.ClaimToken != mine.ClaimToken || s.ClaimEpoch != 4 || plan.Epoch != 4 || plan.Attempts != 1 || !s.Since.Equal(mine.Since) {
+			t.Fatalf("a renewal keeps token, epoch, attempts and since: %+v", plan)
+		}
+		if !s.Expires.Equal(now.Add(lease.TTL)) || s.RenewedSeq != mine.RenewedSeq+1 || !s.RenewedAt.Equal(now) {
+			t.Fatalf("a renewal moves expires and bumps the seq: %+v", s)
+		}
+		if ExpiredForHolder(s, now) {
+			t.Fatal("the renewed claim must be live for its holder")
+		}
+	}
+	t.Run("live lease still resumes", func(t *testing.T) {
+		plan, err := DecideClaim(view(Board{p: mine}, t0, t0.Add(time.Minute)), req)
+		if err != nil || !plan.Resumed || plan.Renewed || plan.Signal.RenewedSeq != mine.RenewedSeq {
+			t.Fatalf("a live own lease resumes and writes nothing: %+v %v", plan, err)
+		}
+	})
+	t.Run("my claim no longer matches the row: claimed again", func(t *testing.T) {
+		plan, err := DecideClaim(view(Board{p: mine}, t0, t0.Add(time.Minute)), ClaimRequest{Caller: me, Folder: folder, ID: task, Row: RowState{Epoch: 5, Attempts: 1}, Token: "ct_fresh"})
+		if err != nil || plan.Resumed || plan.Renewed || plan.Reclaim || plan.Epoch != 6 || plan.Attempts != 1 || plan.Signal.ClaimToken != "ct_fresh" {
+			t.Fatalf("an own claim the row no longer matches is replaced, same attempts: %+v %v", plan, err)
+		}
+	})
+	t.Run("a mission claim is never replaced over the row epoch", func(t *testing.T) {
+		m := claimBy(me, "msn_1", t0, 0)
+		plan, err := DecideClaim(view(Board{ClaimPath(folder, "msn_1"): m}, t0, t0.Add(lease.TTL+time.Second)), ClaimRequest{Caller: me, Folder: folder, ID: "msn_1", Row: RowState{}, Token: "ct_fresh"})
+		if err != nil || !plan.Renewed || plan.Signal.ClaimToken != m.ClaimToken {
+			t.Fatalf("my lapsed mission claim is renewed in place: %+v %v", plan, err)
+		}
+	})
+	t.Run("reclaimed by another after expiry: fenced out", func(t *testing.T) {
+		theirs := claimBy(other, task, t0.Add(lease.TTL+lease.Grace+time.Minute), 0)
+		theirs.ClaimEpoch = 5
+		now := theirs.Since.Add(time.Minute)
+		v := view(Board{p: theirs}, theirs.Since, now)
+		if _, err := DecideRenew(v, me, folder, task); !errors.Is(err, ErrNotHeld) {
+			t.Fatalf("heartbeat after another holder reclaimed: %v", err)
+		}
+		if _, err := CheckHolder(v, me, folder, task, 5); !errors.Is(err, ErrNotHeld) {
+			t.Fatalf("holder write after another holder reclaimed: %v", err)
+		}
+		var he *HeldError
+		if _, err := DecideClaim(v, ClaimRequest{Caller: me, Folder: folder, ID: task, Row: RowState{Epoch: 5, Attempts: 2}, Token: "ct_fresh"}); !errors.As(err, &he) {
+			t.Fatalf("claim after another holder reclaimed: %v", err)
+		}
+	})
 }

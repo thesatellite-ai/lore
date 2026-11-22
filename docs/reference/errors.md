@@ -39,7 +39,7 @@ The [full list](#the-full-list) below links every code with its exit status.
 | 1 | something unexpected failed: `E_INTERNAL` |
 | 10 | `E_NO_WORK`: `lore task next --claim` found nothing ready to do |
 | 11 | `E_CONTENDED`: there was work, but another agent claimed it first every time; wait a moment and try again |
-| 12 | `E_LOST_CLAIM`: your claim on the task ran out or was taken back; stop working on it |
+| 12 | `E_LOST_CLAIM`: your claim on the task was taken over after it ran out, or taken back; stop working on it |
 | 13 | `E_CANCELLED`: a person cancelled the task while you held it; stop |
 | 14 | `E_REASSIGNED`: a person gave the task to someone else while you held it; stop |
 | 15 | `E_OFFLINE`, `E_STORE_UNREACHABLE`, `E_SECRET_UNAVAILABLE`: something that must be reached at once could not be; nothing was queued |
@@ -339,7 +339,7 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 |---|---|---|---|
 | `E_NO_WORK` | 10 | `lore task next --claim` found no ready task; the message says why each one is blocked | wait, or unblock a task |
 | `E_CONTENDED` | 11 | ready work exists but every claim lost the race to another agent, or another writer won every attempt to push a coordination write | wait a moment and try again |
-| `E_LOST_CLAIM` | 12 | your claim is no longer on the server (it ran out or was taken back); lore fetched once and retried before answering this, so it is not stale | stop working on this task |
+| `E_LOST_CLAIM` | 12 | your claim is no longer on the server (another holder took the task after your lease ran out, or it was taken back; a lease that only ran out, with nobody taking the task, is renewed instead); lore fetched once and retried before answering this, so it is not stale | stop working on this task; when the claim on the server is your own actor's (another session, or a claim the task no longer matches), the hint names what to run instead |
 | `E_CANCELLED` | 13 | a person cancelled the task while you held it | stop working on this task |
 | `E_REASSIGNED` | 14 | a person reassigned the task while you held it | stop working on this task |
 | `E_OFFLINE` | 15 | the server could not be reached to confirm a coordination write; nothing was queued | check the network and try again |

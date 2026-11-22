@@ -84,6 +84,11 @@ func claimLines(id string, cr coord.ClaimResult, ttl time.Duration, ref string) 
 	if cr.Plan.Resumed {
 		return []string{fmt.Sprintf("you hold %s already (until %s); resume, or `lore task release --id %s`", id, s.Expires.UTC().Format(time.Kitchen), id)}
 	}
+	if cr.Plan.Renewed {
+		// devco:D-896: the lease had run out and nobody took the task.
+		return []string{fmt.Sprintf("%s renewed your claim on %s (lease %s, until %s, token %s…) on %s; your lease had run out and nobody took the task",
+			markOK, id, shortDuration(ttl), s.Expires.UTC().Format(time.Kitchen), s.ClaimToken[:min(len(s.ClaimToken), coord.TokenPrefixLen)], ref)}
+	}
 	extra := ""
 	if cr.Plan.Reclaim && cr.Plan.Prev != nil {
 		extra = fmt.Sprintf("; reclaim, attempt %d; previous holder %s timed out", cr.Plan.Attempts, holderName(*cr.Plan.Prev))
@@ -517,6 +522,11 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 	}
 	if err != nil {
 		return opscoord.NextOut{Lines: lines}, w.coordErr(w.namedDoneBy(ctx, err))
+	}
+	if res.Renewed {
+		lines = append(lines, claimLines(res.Task, res.Claim, w.lease.TTL, w.claimPlace(env.Signals.Ref))...)
+		lines = append(lines, fmt.Sprintf("  resume, or `lore task release --id %s`", res.Task))
+		return opscoord.NextOut{Claimed: res.Task, Lines: lines}, nil
 	}
 	if res.Resumed {
 		lines = append(lines, fmt.Sprintf("you hold %s; resume, or `lore task release --id %s`", res.Task, res.Task))

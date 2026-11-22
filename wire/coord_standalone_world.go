@@ -1258,6 +1258,13 @@ func coordErrPush(err error, push string) error {
 		case coord.FenceLost:
 			code = errs.LostClaim
 		}
+		if code == errs.LostClaim && fe.SelfHeld {
+			// devco:D-896: the claim on the ref is the caller's own actor's.
+			if fe.OtherSession != "" {
+				return errs.New(code, fe.Error()).WithHint("you hold it in another session (" + fe.OtherSession + "): work on it there, or take other work with `" + next + "`")
+			}
+			return errs.New(code, fe.Error()).WithHint("`lore task claim --id " + fe.Task + push + "` takes your claim on it again")
+		}
 		return errs.New(code, fe.Error()).WithHint("stop work on this task; `" + next + "` takes other work")
 	case errors.As(err, &off) && off.RacesLost:
 		// Reachable, but another writer won every attempt: contention, not

@@ -89,6 +89,13 @@ type FencedError struct {
 	Kind   FenceKind
 	Task   string
 	Detail string
+	// SelfHeld is true when the claim now on the ref is the caller's own
+	// actor's (devco:D-896): the error names the caller as the holder, so
+	// "stop work" is the wrong advice. OtherSession is that claim's session
+	// when it is not the caller's ("" = the caller's own session, whose
+	// claim no longer matches the task: claiming again takes it back).
+	SelfHeld     bool
+	OtherSession string
 }
 
 func (e *FencedError) Error() string {
@@ -306,6 +313,12 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			out.Doc = doc
 			return signals.Change{}, nil, nil
 		}
+		if plan.Renewed {
+			// devco:D-896: the caller's own lapsed lease, still on the
+			// ref, is renewed in place: the signal only, never the row.
+			out.Doc = doc
+			return signals.Change{Put: map[string]signals.Signal{plan.Path: plan.Signal}}, nil, nil
+		}
 		if mission {
 			return signals.Change{Put: map[string]signals.Signal{plan.Path: plan.Signal}}, nil, nil
 		}
@@ -452,7 +465,14 @@ func classify(ctx context.Context, env Env, id string, cause error) error {
 			detail += fmt.Sprintf("; your token %s… expired %s", prefix(rec.Token), rec.Expires.UTC().Format(time.Kitchen))
 		}
 	}
-	return &FencedError{Kind: FenceLost, Task: id, Detail: detail}
+	fe := &FencedError{Kind: FenceLost, Task: id, Detail: detail}
+	if cur := nh.Current; cur != nil && cur.Holder == env.Caller.ActorID {
+		fe.SelfHeld = true
+		if cur.Session != env.Caller.Session {
+			fe.OtherSession = cur.Session
+		}
+	}
+	return fe
 }
 
 // revokeOf is the revoke marker that names the caller's token, read from
@@ -636,8 +656,14 @@ func HolderWrite(ctx context.Context, env Env, id string, dropClaim bool, mutate
 		written = next
 		rows := append([]RowWrite{{ID: id, Doc: next}}, extra...)
 		ch := signals.Change{}
-		if dropClaim {
+		switch {
+		case dropClaim:
 			ch.Delete = []string{signals.ClaimPath(env.Folder, id)}
+		case signals.ExpiredForHolder(held, v.Now):
+			// devco:D-896: a holder write on its own lapsed lease (still on
+			// the ref, so nobody took it) keeps working and renews the
+			// lease in the same push, so the claim it keeps is live again.
+			ch.Put = map[string]signals.Signal{signals.ClaimPath(env.Folder, id): signals.RenewedClaim(v, held)}
 		}
 		if ch, err = withDoneMarker(ch, env, v, id, next); err != nil {
 			return signals.Change{}, nil, err

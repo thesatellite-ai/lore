@@ -406,7 +406,7 @@ Lore keeps a local cache (under `~/.lore/cache/`) and takes a short lock while i
 
 **What do hooks not protect against?** `--no-verify`, edits in the GitHub web interface, teammates without lore, reworded text, text pasted into PR bodies or chat without `lore check pr-body`, client-owned machines with your stores configured, and backups of `~/.lore`. The guards catch copy-paste mistakes; they are not a wall.
 
-**Can two agents end up working on the same task?** No. A claim is a compare-and-swap push: git accepts it only if nobody changed the list since lore read it, so exactly one agent wins. A holder whose lease ran out is fenced out (lore refuses its writes with `E_LOST_CLAIM`) and cannot finish the task.
+**Can two agents end up working on the same task?** No. A claim is a compare-and-swap push: git accepts it only if nobody changed the list since lore read it, so exactly one agent wins. A holder whose task was taken over after its lease ran out is fenced out (lore refuses its writes with `E_LOST_CLAIM`) and cannot finish the task; a holder whose lease ran out while nobody took the task keeps it, and its next claim, heartbeat or done renews or finishes it.
 
 **Do heartbeats fill the repo with commits?** No. Signals live on `refs/lore/signals`, which always holds exactly one commit; each heartbeat replaces it.
 

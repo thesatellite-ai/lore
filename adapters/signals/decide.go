@@ -195,6 +195,12 @@ type ClaimPlan struct {
 	// Resumed is true when the caller already holds this claim: nothing is
 	// written and Signal is the existing claim.
 	Resumed bool
+	// Renewed is true when the caller's own claim is still on the ref but
+	// its lease ran out on the caller's clock (devco:D-896): nobody took
+	// the task, so the claim is renewed in place (same token, epoch and
+	// attempts; Expires = now + TTL, RenewedSeq + 1) and only the signal is
+	// written, never the row. Signal is the renewed claim.
+	Renewed bool
 	// Signal is the claim to write (or the held one when Resumed).
 	Signal Signal
 	// Reclaim is true when an expired claim of another holder is replaced;
@@ -213,7 +219,12 @@ type ClaimPlan struct {
 // DecideClaim arbitrates a claim on req.ID against the board.
 //
 // Rules (F7, §7.4): an active claim by another holder refuses (HeldError);
-// the caller's own claim in the same session resumes; the same actor in
+// the caller's own claim in the same session resumes, and is renewed when
+// its lease ran out while it stayed on the ref (devco:D-896: a claim never
+// says "you hold it" while every holder write would then be fenced out);
+// an own task claim whose epoch is no longer the row's (a row write that
+// never landed) is replaced by a new claim (same attempts: the same holder
+// took it again); the same actor in
 // another session refuses with SameActor; an expired claim is reclaimed
 // (attempts+1, or Poisoned past MaxAttempts); the caller may hold at most
 // MaxClaims task claims. Every new claim gets claim_epoch = row epoch + 1.
@@ -224,15 +235,24 @@ type ClaimPlan struct {
 func DecideClaim(v View, req ClaimRequest) (ClaimPlan, error) {
 	p := ClaimPath(req.Folder, req.ID)
 	plan := ClaimPlan{Path: p}
-	if cur, ok := v.Board[p]; ok {
+	own, mine := FindOwn(v, req.Caller, req.Folder, req.ID)
+	// A mission row never records the claim's epoch (only a task's does),
+	// so only a task claim is replaced on an epoch that is not the row's.
+	if mine && (own.ClaimEpoch == req.Row.Epoch || !isTaskID(req.ID)) {
+		plan.Epoch = req.Row.Epoch
+		plan.Attempts = req.Row.Attempts
+		plan.Signal = own
+		if ExpiredForHolder(own, v.Now) {
+			plan.Renewed = true
+			plan.Signal = RenewedClaim(v, own)
+			return plan, nil
+		}
+		plan.Resumed = true
+		return plan, nil
+	}
+	if cur, ok := v.Board[p]; ok && !mine {
 		if active, isActive := v.Active(p); isActive {
 			switch {
-			case active.Holder == req.Caller.ActorID && active.Session == req.Caller.Session:
-				plan.Resumed = true
-				plan.Signal = active
-				plan.Epoch = req.Row.Epoch
-				plan.Attempts = req.Row.Attempts
-				return plan, nil
 			case active.Holder == req.Caller.ActorID:
 				return ClaimPlan{}, &HeldError{Path: p, By: active, SameActor: true}
 			default:
@@ -311,34 +331,44 @@ func notHeld(v View, p, reason string) error {
 }
 
 // DecideRenew renews the caller's claim (F7 "renew"): the caller's claim must
-// be on the ref and not expired on the caller's clock. It returns the new
-// signal: Expires = now + TTL, RenewedSeq + 1. Renewing never touches the row.
+// be on the ref. It returns the new signal: Expires = now + TTL,
+// RenewedSeq + 1. Renewing never touches the row.
+//
+// A lease that ran out on the caller's clock is renewed too (devco:D-896):
+// every decision reads a freshly fetched board and the write is a leased
+// push, so a claim still on the ref under the caller's token is one nobody
+// took; had another holder reclaimed it, the board (or the push) says so
+// and the caller is fenced out.
 func DecideRenew(v View, c Caller, folder, id string) (Signal, error) {
-	p := ClaimPath(folder, id)
 	s, ok := FindOwn(v, c, folder, id)
 	if !ok {
-		return Signal{}, notHeld(v, p, "your claim is not on the signals ref")
+		return Signal{}, notHeld(v, ClaimPath(folder, id), "your claim is not on the signals ref")
 	}
-	if ExpiredForHolder(s, v.Now) {
-		return Signal{}, notHeld(v, p, "your lease expired at "+s.Expires.UTC().Format(time.RFC3339))
-	}
-	s.Expires = normalizeTime(v.Now).Add(v.Lease.TTL)
+	return RenewedClaim(v, s), nil
+}
+
+// RenewedClaim is s renewed at v.Now: Expires = now + TTL, RenewedSeq + 1,
+// RenewedAt = now (D3: the last heartbeat). Token, epoch and Since stay.
+// It is the one renewal of a heartbeat, a claim of an own lapsed lease and
+// a holder write on one (devco:D-896).
+func RenewedClaim(v View, s Signal) Signal {
+	now := normalizeTime(v.Now)
+	s.Expires = now.Add(v.Lease.TTL)
 	s.RenewedSeq++
-	s.RenewedAt = normalizeTime(v.Now) // D3: the last heartbeat
-	return s, nil
+	s.RenewedAt = now
+	return s
 }
 
 // CheckHolder is the fencing check for a holder write (done, note, gate
-// request by the holder; F7 table): the caller's claim is on the ref, not
-// expired on its clock, and its claim_epoch equals the row's.
+// request by the holder; F7 table): the caller's claim is on the ref and its
+// claim_epoch equals the row's. A lease that ran out on the caller's clock
+// while the claim stayed on the ref passes (devco:D-896, see DecideRenew);
+// a holder write that keeps the claim renews it (ExpiredForHolder).
 func CheckHolder(v View, c Caller, folder, id string, rowEpoch int) (Signal, error) {
 	p := ClaimPath(folder, id)
 	s, ok := FindOwn(v, c, folder, id)
 	if !ok {
 		return Signal{}, notHeld(v, p, "your claim is not on the signals ref")
-	}
-	if ExpiredForHolder(s, v.Now) {
-		return Signal{}, notHeld(v, p, "your lease expired at "+s.Expires.UTC().Format(time.RFC3339))
 	}
 	if s.ClaimEpoch != rowEpoch {
 		return Signal{}, notHeld(v, p, fmt.Sprintf("claim epoch %d does not match the task's %d", s.ClaimEpoch, rowEpoch))
