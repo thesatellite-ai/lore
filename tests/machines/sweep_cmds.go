@@ -140,6 +140,8 @@ var reads = []sweepStep{
 	{Cmd: "fix run", Args: []string{"--dry-run"}, In: inBoth, Exits: doctorExits},
 	{Cmd: "version", In: inHome},
 	{Cmd: "whoami show", In: inBoth},
+	// agent stop outside a coding tool has nothing to stop and says so (devco:D-895)
+	{Cmd: "agent stop", In: inBoth},
 	{Cmd: "where show", In: inBoth}, {Cmd: "where show", Args: []string{"--json"}, In: inBoth},
 	{Cmd: "identity show", In: inBoth},
 	{Cmd: "config check", In: inHome},

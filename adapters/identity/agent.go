@@ -69,8 +69,9 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 	}
 	if det.IsAgent() && det.SessionID != "" {
 		// devco:D-889: `lore agent start` bound this tool session to its
-		// agent, so every new shell of the session writes as that agent
-		if b, ok := BoundTo(in.Home, det.Tool, det.SessionID); ok {
+		// agent, so every new shell of the session writes as that agent,
+		// but only for the person it was started for (devco:D-895)
+		if b, ok := boundFor(in.Home, r, det); ok {
 			return boundOf(r, b, &det), nil
 		}
 	}

@@ -41,9 +41,6 @@ func TestBoundToolSessionWritesAsTheStartedAgent(t *testing.T) {
 	for tool, tc := range tools {
 		for shape, set := range shapes {
 			home := t.TempDir()
-			if err := Bind(home, tc.id, Binding{Tool: tool, Actor: actor, Session: session}); err != nil {
-				t.Fatal(err)
-			}
 			resolve := func(extra map[string]string) Resolved {
 				t.Helper()
 				env := maps.Clone(tc.markers)
@@ -56,6 +53,10 @@ func TestBoundToolSessionWritesAsTheStartedAgent(t *testing.T) {
 					t.Fatalf("%s/%s %v: %v", tool, shape, extra, err)
 				}
 				return r
+			}
+			person := resolve(map[string]string{EnvHuman: "1"}) // who agent start binds for
+			if err := Bind(home, tc.id, Binding{Tool: tool, Actor: actor, Session: session, Person: person.StableKey, Org: person.Org}); err != nil {
+				t.Fatal(err)
 			}
 			r := resolve(nil)
 			if r.StableKey != actor || r.Step != StepBound || r.Agent != actor || r.Kind != KindAgent || r.Session != session || r.Owner != nil {
@@ -98,7 +99,7 @@ func TestBoundToolSessionWritesAsTheStartedAgent(t *testing.T) {
 	}
 	// a tool that names no session (OPENCODE=1 alone) has no key to bind
 	home := t.TempDir()
-	if err := Bind(home, "", Binding{Tool: "opencode", Actor: actor}); err == nil {
+	if err := Bind(home, "", Binding{Tool: "opencode", Actor: actor, Person: "human:mira@acme-co.example"}); err == nil {
 		t.Fatal("a session-less tool was bound")
 	}
 }
@@ -108,8 +109,11 @@ func TestBoundToolSessionWritesAsTheStartedAgent(t *testing.T) {
 // past bindingMaxAge is removed when the next one is written.
 func TestBindingFileIsPrivate(t *testing.T) {
 	home := t.TempDir()
-	if err := Bind(home, "thread-secret-42", Binding{Tool: "codex", Actor: "human:mira@acme-co.example"}); err == nil {
+	if err := Bind(home, "thread-secret-42", Binding{Tool: "codex", Actor: "human:mira@acme-co.example", Person: "human:mira@acme-co.example"}); err == nil {
 		t.Fatal("a person's key was bound to a tool session")
+	}
+	if err := Bind(home, "thread-secret-42", Binding{Tool: "codex", Actor: "agent:frontend"}); err == nil {
+		t.Fatal("a binding with no person was written")
 	}
 	old := filepath.Join(home, filepath.FromSlash(BindingsDir), "codex-000000000000000000000000.json")
 	if err := os.MkdirAll(filepath.Dir(old), 0o700); err != nil {
@@ -122,7 +126,7 @@ func TestBindingFileIsPrivate(t *testing.T) {
 	if err := os.Chtimes(old, stale, stale); err != nil {
 		t.Fatal(err)
 	}
-	if err := Bind(home, "thread-secret-42", Binding{Tool: "codex", Actor: "agent:frontend", Session: "s-1"}); err != nil {
+	if err := Bind(home, "thread-secret-42", Binding{Tool: "codex", Actor: "agent:frontend", Session: "s-1", Person: "human:mira@acme-co.example"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
@@ -162,5 +166,72 @@ func TestSessionOfPrefersLORESESSION(t *testing.T) {
 	t.Setenv(EnvSession, "s-env")
 	if got := SessionOf(r); got != "s-env" {
 		t.Fatalf("SessionOf = %q, want LORE_SESSION", got)
+	}
+}
+
+// TestBindingNeverCrossesPeople pins devco:D-895 (bug hunt H-154): a tool
+// session bound by `lore agent start` writes as the agent only for the
+// person (and org) it was started for. The same tool session in a repo
+// where another person answers the chain (another solo setup, another
+// org entry), the same person in another org, and a binding file with no
+// person (written before D-895) all stay "<person> via <tool>".
+func TestBindingNeverCrossesPeople(t *testing.T) {
+	ctx := context.Background()
+	const actor, session, sid = "agent:helper", "s-0a1b2c3d", "cc-9"
+	env := map[string]string{"CLAUDE_CODE_CHILD_SESSION": "1", "CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": sid}
+	mira := func(in *Inputs) {
+		in.Org = &Org{Name: "acme", Identity: Entry{Key: "human:mira@acme-co.example", Name: "Mira"}}
+	}
+	shapes := map[string]func(in *Inputs){
+		"another person, another org": func(in *Inputs) {
+			in.Org = &Org{Name: "globex", Identity: Entry{Key: "human:tomas@globex.example", Name: "Tomas"}}
+		},
+		"another person, same org": func(in *Inputs) {
+			in.Org = &Org{Name: "acme", Identity: Entry{Key: "human:tomas@acme-co.example", Name: "Tomas"}}
+		},
+		"another person, solo setup": func(in *Inputs) {
+			in.Setup = &SetupIdentity{Setup: "solo", Entry: Entry{Key: "human:tomas@home.example", Name: "Tomas"}}
+		},
+		"same person, another org": func(in *Inputs) {
+			in.Org = &Org{Name: "globex", Identity: Entry{Key: "human:mira@acme-co.example", Name: "Mira"}}
+		},
+	}
+	resolve := func(home string, set func(*Inputs)) Resolved {
+		t.Helper()
+		in := Inputs{Home: home, Getenv: func(k string) string { return env[k] }, Detect: detectWith(env, false),
+			GitEmail: func(context.Context) string { return "" }, GitName: func(context.Context) string { return "" }}
+		set(&in)
+		r, err := Resolve(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	home := t.TempDir()
+	if err := Bind(home, sid, Binding{Tool: "claude_code", Actor: actor, Session: session, Person: "human:mira@acme-co.example", Org: "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	if r := resolve(home, mira); r.Step != StepBound || r.StableKey != actor {
+		t.Fatalf("the person the agent was started for is not bound: %+v", r)
+	}
+	for name, set := range shapes {
+		if r := resolve(home, set); r.Step != StepDetected || r.Session != "" || !strings.HasSuffix(r.DisplayName, " via claude_code") {
+			t.Errorf("%s: the binding crossed to %+v", name, r)
+		}
+	}
+	// a binding file with no person (lore before D-895) binds nobody
+	legacy := t.TempDir()
+	path, err := bindingPath(legacy, "claude_code", sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"tool":"claude_code","actor":"agent:helper","session":"s-1"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := resolve(legacy, mira); r.Step != StepDetected {
+		t.Errorf("a binding with no person answered for %+v", r)
 	}
 }

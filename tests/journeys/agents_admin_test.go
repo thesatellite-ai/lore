@@ -85,13 +85,6 @@ func TestJourneyAgentsAdminSetup(t *testing.T) {
 		if !strings.Contains(inv.Stdout, "lore-invite:") {
 			t.Errorf("the agent's team invite printed no invite line: %s", inv)
 		}
-		// The agent starts a labelled agent for Ada: its owner is Ada.
-		agent.Lore("agent", "start", "--label", "helper").OK(t).Says(t, "helper")
-		// An agent actor with no person behind it is the one refusal, and
-		// it names the fix.
-		ghost := tt.repo[ada.Email].With("LORE_ACTOR=agent:ghost")
-		ghost.Lore("actor", "register").Refused(t).Says(t, "agent:ghost has no person behind it", "--owner @<person>")
-
 		// Provenance: the invite records Ada's Claude Code ("Ada via
 		// claude_code") as the writer, as every write of it does.
 		who := jAgentsWhoami(t, m, tt.repo[ada.Email], &jClaude, "cc-admin").Data.Identity
@@ -99,6 +92,26 @@ func TestJourneyAgentsAdminSetup(t *testing.T) {
 			t.Errorf("whoami in Ada's Claude Code session = %+v, want %s via %s", who, ada.Name, jAgentsClaude)
 		}
 		tt.lore(ada, "team", "invite", "list").OK(t).Says(t, jAdminTeammate, who.ActorID)
+
+		// The agent starts a labelled agent for Ada: its owner is Ada, and
+		// (devco:D-889) this Claude Code session now writes as it; another
+		// session of Ada's stays "Ada via claude_code", and `lore agent
+		// stop` gives the session back (devco:D-895, H-154).
+		agent.Lore("agent", "start", "--label", "helper").OK(t).Says(t, "helper", "owner "+ada.Name)
+		if b := jAgentsWhoami(t, m, tt.repo[ada.Email], &jClaude, "cc-admin").Data.Identity; b.Kind != "agent" || b.Name != "helper" {
+			t.Errorf("whoami in the session agent start bound = %+v, want the agent helper", b)
+		}
+		if o := jAgentsWhoami(t, m, tt.repo[ada.Email], &jClaude, "cc-other").Data.Identity; o.Name != ada.Name+" via "+jAgentsClaude || o.ActorID != who.ActorID {
+			t.Errorf("whoami in another Claude Code session of Ada = %+v, want %s via %s (%s)", o, ada.Name, jAgentsClaude, who.ActorID)
+		}
+		agent.Lore("agent", "stop").OK(t).Says(t, "no longer writes as agent:helper")
+		if a := jAgentsWhoami(t, m, tt.repo[ada.Email], &jClaude, "cc-admin").Data.Identity; a.ActorID != who.ActorID {
+			t.Errorf("whoami after agent stop = %+v, want %s via %s (%s)", a, ada.Name, jAgentsClaude, who.ActorID)
+		}
+		// An agent actor with no person behind it is the one refusal, and
+		// it names the fix.
+		ghost := tt.repo[ada.Email].With("LORE_ACTOR=agent:ghost")
+		ghost.Lore("actor", "register").Refused(t).Says(t, "agent:ghost has no person behind it", "--owner @<person>")
 	})
 
 	w.Step("day2/ada-opts-the-team-into-strictness", func() {

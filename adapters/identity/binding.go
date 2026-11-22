@@ -16,6 +16,12 @@ package identity
 //	       ─▶ BoundTo(home, T, S) ─▶ agent:L, Step StepBound, Session s-…
 //	`lore agent stop` (or the tool's session-end hook) ─▶ Unbind
 //
+// A binding belongs to the person (and org) who started the agent
+// (devco:D-895): the same tool session in a repo where another person, or
+// the same person in another org, answers the chain is not bound, so an
+// agent never writes for someone it was not started for (a file without
+// a person, written before D-895, binds nobody).
+//
 // The file is machine-local and private (0600 in a 0700 folder): the tool
 // session id is never written, only its hash. A binding older than
 // bindingMaxAge is removed when the next one is written, so a session that
@@ -68,6 +74,13 @@ type Binding struct {
 	Actor string `json:"actor"`
 	// Session is the LORE_SESSION agent start made.
 	Session string `json:"session"`
+	// Person is the stable key of the person who started the agent: the
+	// binding answers only when the chain resolves this person again
+	// (devco:D-895), never for anyone else on the machine.
+	Person string `json:"person"`
+	// Org is the org entry the person was in ("" outside an org): the
+	// agent is on that org's roster only.
+	Org string `json:"org,omitempty"`
 	// At is when agent start bound it.
 	At time.Time `json:"at"`
 }
@@ -91,6 +104,9 @@ func bindingPath(home, tool, sessionID string) (string, error) {
 func Bind(home, sessionID string, b Binding) error {
 	if kindOf(b.Actor) != KindAgent || len(b.Actor) <= len(KindAgent+kindSep) {
 		return errs.New(errs.InvalidInput, "identity: only an agent:<label> actor can be bound to a tool session")
+	}
+	if kindOf(b.Person) == KindAgent || strings.TrimSpace(b.Person) == "" {
+		return errs.New(errs.InvalidInput, "identity: a tool session is bound for the person who started the agent; no person was given")
 	}
 	path, err := bindingPath(home, b.Tool, sessionID)
 	if err != nil {
@@ -144,6 +160,17 @@ func BoundTo(home, tool, sessionID string) (Binding, bool) {
 	}
 	var b Binding
 	if json.Unmarshal(data, &b) != nil || kindOf(b.Actor) != KindAgent || b.Tool != tool {
+		return Binding{}, false
+	}
+	return b, true
+}
+
+// boundFor is the binding of det's tool session when it was made for
+// person (same stable key and org); a binding made for anyone else (or
+// with no person, before devco:D-895) does not answer.
+func boundFor(home string, person Resolved, det agentdetect.Result) (Binding, bool) {
+	b, ok := BoundTo(home, det.Tool, det.SessionID)
+	if !ok || b.Person == "" || b.Person != person.StableKey || b.Org != person.Org {
 		return Binding{}, false
 	}
 	return b, true

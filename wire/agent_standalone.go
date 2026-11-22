@@ -71,15 +71,44 @@ func (h *standaloneAgent) CallerTool(ctx context.Context) string {
 // lore home, so the chain answers with that agent in its next shells
 // (identity.StepBound). Outside a tool, or in one that names no session,
 // nothing is written.
+//
+// The binding is the person's (devco:D-895): it records who the chain
+// answered with under the tool, so the same tool session never writes as
+// the agent for another person or org. A caller that is not the tool's
+// person (an explicit LORE_ACTOR) or has no stable identity is not bound:
+// agent start prints the prefix instead.
 func (h *standaloneAgent) BindToolSession(ctx context.Context, actor, session string) (opsagent.ToolBinding, error) {
-	det, ok := h.toolSession(ctx)
-	if !ok {
+	id, err := resolveIdentity(ctx, h.opts)
+	if err != nil || id.Detection == nil {
+		return opsagent.ToolBinding{}, nil
+	}
+	det := *id.Detection
+	person, ok := bindingPerson(h.opts.Home, id)
+	if !ok || !det.IsAgent() || det.SessionID == "" {
 		return opsagent.ToolBinding{Tool: det.Tool}, nil
 	}
-	if err := identity.Bind(h.opts.Home, det.SessionID, identity.Binding{Tool: det.Tool, Actor: actor, Session: session}); err != nil {
+	if err := identity.Bind(h.opts.Home, det.SessionID, identity.Binding{Tool: det.Tool, Actor: actor, Session: session, Person: person, Org: id.Org}); err != nil {
 		return opsagent.ToolBinding{}, err
 	}
 	return opsagent.ToolBinding{Tool: det.Tool, Actor: actor, Session: session, Bound: true}, nil
+}
+
+// bindingPerson is the stable key of the person a binding made for id
+// belongs to: the person behind the detected tool, the declared person
+// (LORE_HUMAN=1), or, in a session already bound, the person its binding
+// was made for (a bound session resolves only for that person). ok is
+// false for an explicit LORE_ACTOR/--actor or an identity that changes
+// from run to run (it could never match again).
+func bindingPerson(home string, id identity.Resolved) (string, bool) {
+	switch id.Step {
+	case identity.StepFlag, identity.StepEnv:
+		return "", false
+	case identity.StepBound:
+		b, ok := identity.BoundTo(home, id.Detection.Tool, id.Detection.SessionID)
+		return b.Person, ok && b.Person != ""
+	}
+	p := id.Person()
+	return p.StableKey, p.Stable() && p.Kind != identity.KindAgent
 }
 
 // UnbindToolSession implements opsagent.SessionBinder: remove the binding

@@ -1275,7 +1275,7 @@ Flags:
 ```
 <!-- /help -->
 
-Inside a coding tool that names its session (Codex, Claude Code, OpenCode and others), `lore agent start` binds that tool session to the agent: every later command of the session, each one a new shell, writes as the agent without `LORE_ACTOR`, and `lore whoami` says `from: lore agent start in this <tool> session`. Another session of the tool stays `<you> via <tool>`, and `LORE_ACTOR` or `LORE_HUMAN=1` still win.
+Inside a coding tool that names its session (Codex, Claude Code, OpenCode and others), `lore agent start` binds that tool session to the agent: every later command of the session, each one a new shell, writes as the agent without `LORE_ACTOR`, and `lore whoami` says `from: lore agent start in this <tool> session`. Another session of the tool stays `<you> via <tool>`, and `LORE_ACTOR` or `LORE_HUMAN=1` still win. The binding belongs to the person who started the agent: when the same tool session works in a repo where lore answers with another identity (another person, your personal setup, another org), its commands there stay `<that identity> via <tool>`. Started with `LORE_ACTOR` set, or with no stable identity, `lore agent start` binds nothing and prints the prefix instead.
 
 ### `lore agent stop`
 

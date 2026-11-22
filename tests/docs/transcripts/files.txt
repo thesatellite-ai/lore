@@ -107,7 +107,7 @@ machine.json
 state
 stores
 alice$ head -20 ~/.lore/README.md
-<!-- written by lore, layout 2026-11-15.2; lore rewrites this file when its layout changes -->
+<!-- written by lore, layout 2026-11-22.1; lore rewrites this file when its layout changes -->
 # lore's home on this machine
 
 This folder is where lore keeps what belongs to this machine: its settings, the stores it cloned, caches and small state files. Your notes themselves live in stores (git repositories or folders) and in your code repos' .lore/data folders; nothing here is synced by itself.
