@@ -352,6 +352,7 @@ lore 0.1.18: a new core under every command, and the first release whose source 
 - A store folder whose push is held by refusals in several other folders names all of them.
 - The first commit after upgrading from 0.1.17 no longer fails with `.git/hooks/commit-msg: 6: Syntax error: ")" unexpected`: lore writes a re-wired hook script to a new file and renames it into place, so the hook git is running (which runs lore) reads on unchanged; a symlinked hook is still written through.
 - The pre-push and commit leak checks no longer refuse a commit for its own message: a commit link's `message` (what `lore link add` copied from the linked commit) is git's text, not an internal note, so the text rule does not read it. A PR branch rebased or amended after its commit was linked to a task force-pushes cleanly; the same words in a note a person wrote still block (#127).
+- `lore decision add --supersedes <id>` (and `--supersedes` of every rule, hotfix, memory and pattern) finds the row in a repo with its own lore project that is linked to a store folder, as `decision show` and `decision edit` do: the repo's rows land in that folder with the folder's project, and `--supersedes` now counts that project as this repo's instead of failing `E_NOT_FOUND` "no decision with that id in this project"; a row of another project is still refused. `lore link remap` reads the linked folder's commit links the same way (#134).
 
 
 ### Documentation

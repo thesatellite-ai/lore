@@ -438,7 +438,7 @@ func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], r
 		return ids.ID[ids.Memory]{}, "", row.Row{}, lookup.BadID("--supersedes "+textcut.Cut(strings.TrimSpace(raw), maxQuotedID, maxQuotedID)+": not a memory id (mem_…)", err)
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id.Any()})
-	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || field(r, fieldProject) != project.String())) {
+	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || !repohome.SameProject(ctx, o.env, project, field(r, fieldProject)))) {
 		return ids.ID[ids.Memory]{}, "", row.Row{}, notFound
 	}
 	if err != nil {

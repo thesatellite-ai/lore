@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/repohome"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -127,7 +128,7 @@ func (o ops) remap(ctx context.Context, in RemapIn) (RemapOut, error) {
 			return RemapOut{}, lerr
 		}
 		for _, r := range rows {
-			if r.Deleted || field(r, fieldProject) != project.String() {
+			if r.Deleted || !repohome.SameProject(ctx, o.env, project, field(r, fieldProject)) { // D-911: the linked folder's rows too
 				continue
 			}
 			for _, rw := range rws {

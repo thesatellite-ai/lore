@@ -234,3 +234,46 @@ func TestQuoteIDNeverSplitsARune(t *testing.T) {
 		}
 	}
 }
+
+// LinkedFolderProject implements repohome.LinkedProjecter (as wire.App
+// does): the linked folder's project when the test sets one.
+func (f *fakeEnv) LinkedFolderProject(context.Context) (ids.ID[ids.Project], bool) {
+	return f.linked, !f.linked.IsZero()
+}
+
+// TestSupersedesLinkedFolderRow (devco D-911, issue #134): in a repo with
+// its own project linked to a store folder, the repo's rows land in the
+// folder carrying the folder's project; --supersedes names such a row as
+// one of this project, while a row of a third project is still refused.
+func TestSupersedesLinkedFolderRow(t *testing.T) {
+	env := newFakeEnv(t)
+	folder, err := ids.Parse[ids.Project]("prj_01a1a5aca4ff7540bab22323785fa911")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.linked = folder
+	inFolder := mustAdd(t, env, `{"body":"v1"}`)
+	foreign := mustAdd(t, env, `{"body":"foreign"}`)
+	other, err := ids.ParseAny("prj_01a1a5aca4ff7540bab22323785fa000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, pid := range map[string]ids.AnyID{inFolder: folder.Any(), foreign: other} {
+		r := env.rows[store.SourceRepo][id]
+		if r.Fields[fieldProject], err = value.RefOf(pid); err != nil {
+			t.Fatal(err)
+		}
+		env.rows[store.SourceRepo][id] = r
+	}
+	next := mustAdd(t, env, `{"body":"v2","supersedes":"`+inFolder+`"}`)
+	if got := env.rows[store.SourceRepo][inFolder].Fields[fieldSuperseded]; got == nil || got.String() != next {
+		t.Fatalf("the linked folder's memory: superseded_by = %v, want %s", got, next)
+	}
+	if _, err := call[WriteOut](t, env, OpAdd, `{"body":"x","supersedes":"`+foreign+`"}`); !errs.Has(err, errs.NotFound) {
+		t.Fatalf("a memory of a third project: %v, want E_NOT_FOUND", err)
+	}
+	env.linked = ids.ID[ids.Project]{}
+	if _, err := call[WriteOut](t, env, OpAdd, `{"body":"x","supersedes":"`+next+`"}`); err != nil {
+		t.Fatalf("the repo's own memory without a link: %v", err)
+	}
+}

@@ -115,6 +115,30 @@ func (a *App) LinkedFolderStore(ctx context.Context) (store.Source, bool) {
 	return a.linkedFolderSource(ctx, eng, a.linkedFolderTarget(ctx, top))
 }
 
+// LinkedFolderProject implements repohome.LinkedProjecter: the project of
+// the store folder this repo's org link names (that folder's _meta.json
+// id, the one engine.placeFolderProject gives every row written there).
+// ok is false in an unlinked repo and when the folder is not open here.
+// It only reads: no project row is made. Why (devco D-911, issue #134): a
+// repo with its own project row linked to a folder writes its rows with
+// the folder's project, so "a row of this project" (--supersedes) must
+// count that project too.
+func (a *App) LinkedFolderProject(ctx context.Context) (ids.ID[ids.Project], bool) {
+	src, ok := a.LinkedFolderStore(ctx)
+	if !ok {
+		return ids.ID[ids.Project]{}, false
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return ids.ID[ids.Project]{}, false
+	}
+	pid, err := folderProjectIDOf(ctx, st, src)
+	if err != nil || pid.IsZero() {
+		return ids.ID[ids.Project]{}, false
+	}
+	return pid, true
+}
+
 // RepoHomeStore is the store a write that names "this repo" with no --to
 // goes to (devco D-736, the secrets-allow class): the repo store in an
 // unlinked repo, the attached store folder its org link names in a linked

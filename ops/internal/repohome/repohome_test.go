@@ -65,3 +65,49 @@ func TestProjectRowsReadsTheLinkedFolder(t *testing.T) {
 		t.Fatalf("a linked folder not open here must say so, got %v", err)
 	}
 }
+
+// linkedTo is a lister that is also a LinkedProjecter (as wire.App is).
+type linkedTo struct {
+	lister
+	folder ids.ID[ids.Project]
+}
+
+func (l linkedTo) LinkedFolderProject(context.Context) (ids.ID[ids.Project], bool) {
+	return l.folder, !l.folder.IsZero()
+}
+
+// TestSameProjectCountsTheLinkedFolder (devco D-911, issue #134): a row
+// written from a repo with its own project into the store folder the repo
+// is linked to carries the folder's project; SameProject counts it as this
+// project, never a third project's row, and without a link only the
+// repo's own project.
+func TestSameProjectCountsTheLinkedFolder(t *testing.T) {
+	ctx := context.Background()
+	own, err := ids.Parse[ids.Project]("prj_01936f0000007a1b8c2d3e4f5a6b7c11")
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := ids.Parse[ids.Project]("prj_01936f0000007a1b8c2d3e4f5a6b7c22")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const third = "prj_01936f0000007a1b8c2d3e4f5a6b7c33"
+	env := linkedTo{lister: lister{}, folder: folder}
+	for _, c := range []struct {
+		env  Lister
+		row  string
+		want bool
+	}{
+		{env, own.String(), true},
+		{env, folder.String(), true},
+		{env, third, false},
+		{env, "", false},
+		{linkedTo{lister: lister{}}, folder.String(), false},
+		{lister{}, folder.String(), false},
+		{lister{}, own.String(), true},
+	} {
+		if got := SameProject(ctx, c.env, own, c.row); got != c.want {
+			t.Errorf("SameProject(%T, %q) = %v, want %v", c.env, c.row, got, c.want)
+		}
+	}
+}

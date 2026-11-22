@@ -299,7 +299,7 @@ func checkSupersedes(ctx context.Context, env Env, n Noun, project ids.ID[ids.Pr
 		return ids.AnyID{}, "", row.Row{}, lookup.BadID("--supersedes "+textcut.Cut(strings.TrimSpace(raw), maxQuoted, maxQuoted)+": not a "+n.Name+" id ("+string(n.Prefix)+"_…)", err)
 	}
 	src, r, err := env.Get(ctx, engine.Ref{Table: n.Table, ID: id})
-	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || Field(r, FieldProject) != project.String())) {
+	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || !repohome.SameProject(ctx, env, project, Field(r, FieldProject)))) {
 		return ids.AnyID{}, "", row.Row{}, notFound
 	}
 	if err != nil {

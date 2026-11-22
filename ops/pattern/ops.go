@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/repohome"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -184,7 +185,7 @@ func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], r
 	if errs.Has(err, errs.InvalidID) {
 		return ids.AnyID{}, "", lookup.BadID("--supersedes "+content.QuoteID(raw)+": not a pattern id (pat_…)", err)
 	}
-	if errs.Has(err, errs.NotFound) || (err == nil && content.Field(r, content.FieldProject) != project.String()) {
+	if errs.Has(err, errs.NotFound) || (err == nil && !repohome.SameProject(ctx, o.c.Env, project, content.Field(r, content.FieldProject))) {
 		return ids.AnyID{}, "", errs.New(errs.NotFound, "--supersedes "+content.QuoteID(raw)+": no pattern with that id in this project").
 			WithHint("run `lore pattern list` to see the ids")
 	}

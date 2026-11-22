@@ -26,6 +26,9 @@ type fakeEnv struct {
 	rows    map[store.Source]map[string]row.Row
 	order   []store.Source
 	project ids.ID[ids.Project]
+	// linked, when set, is the project of the store folder the repo is
+	// linked to (repohome.LinkedProjecter, devco D-911).
+	linked  ids.ID[ids.Project]
 	next    int
 	created map[string]value.Value
 	patched map[string]value.Value

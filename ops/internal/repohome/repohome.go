@@ -7,6 +7,7 @@ package repohome
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
@@ -55,4 +56,36 @@ func ProjectRows(ctx context.Context, env Lister) ([]row.Row, error) {
 		return nil, err
 	}
 	return append(rows, more...), nil
+}
+
+// LinkedProjecter is the optional Env upgrade (wire.App.LinkedFolderProject)
+// naming the project of the store folder this repo's org link names. ok is
+// false in an unlinked repo and when the folder is not open here.
+type LinkedProjecter interface {
+	LinkedFolderProject(ctx context.Context) (ids.ID[ids.Project], bool)
+}
+
+// SameProject reports whether rowProject (a row's project_id) is a project
+// "this project" means for a lookup by id: project (Env.Project) or, in a
+// repo linked to a store folder, that folder's project.
+//
+// Why (devco D-911, issue #134): a repo with a project row of its own
+// (`lore init`) that is then linked to a store folder writes its rows into
+// that folder, where the engine gives them the folder's project
+// (engine.placeFolderProject), so they carry another prj_ id than
+// Env.Project. `decision add --supersedes <id>` compared the two and
+// answered "no decision with that id in this project" for the row
+// `decision show` and `decision edit` find. Every check of "a row of this
+// project" that a row id flag goes through asks here, so the linked
+// folder's rows count as this repo's everywhere.
+func SameProject(ctx context.Context, env Lister, project ids.ID[ids.Project], rowProject string) bool {
+	if rowProject == project.String() {
+		return true
+	}
+	lp, ok := upgrade.As[LinkedProjecter](env)
+	if !ok {
+		return false
+	}
+	pid, linked := lp.LinkedFolderProject(ctx)
+	return linked && !pid.IsZero() && rowProject == pid.String()
 }
