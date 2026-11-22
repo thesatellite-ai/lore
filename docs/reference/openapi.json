@@ -6221,7 +6221,7 @@
                   },
                   "top": {
                     "type": "integer",
-                    "description": "how many best rows to print in full (default 3); a date question prints every row of its dates"
+                    "description": "how many best rows to print in full (default 3); a date question with no other words (what happened yesterday) prints every row of its dates"
                   }
                 },
                 "required": [
@@ -6240,6 +6240,26 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "abstain": {
+                      "type": "object",
+                      "description": "set when the question names something (a word written with a capital, such as a place or a pet's name) that no row holds: the rows are then the nearest the memory holds, not the answer",
+                      "properties": {
+                        "missing": {
+                          "type": "array",
+                          "description": "the names (lower case) the question writes with a capital that no row holds",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "not_in_memory": {
+                          "type": "boolean",
+                          "description": "true: the question names something no row holds, so the rows are the nearest the memory holds, not the answer"
+                        }
+                      },
+                      "required": [
+                        "missing"
+                      ]
+                    },
                     "applies": {
                       "type": "array",
                       "description": "the rules, hotfixes and notes that apply to that file and the question's words, as lore context --for-file --for-prompt picks them",
@@ -6448,7 +6468,7 @@
                     },
                     "rows": {
                       "type": "array",
-                      "description": "the rows that answer it, in full: the best ones newest first, or every row of the dates it names, oldest first",
+                      "description": "the rows that answer it, in full: the best ones newest first (a row dated near the dates the question names ranked higher), or, for a question that is only dates (what happened yesterday), every row of those dates, oldest first",
                       "items": {
                         "type": "object",
                         "properties": {

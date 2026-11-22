@@ -307,6 +307,7 @@ lore comment search --query "<query>"
 lore ask --query "who is alice-ng"                         # one line led by the name: alice-ng (person; aka Ali): fields (a changed one says when and what it was)
 lore ask --store me --query "what do I owe alice-ng"       # one line per open task owed by me to alice-ng (and "what does alice-ng owe me")
 lore ask --store me --query "what happened last week"      # the journal rows of those days, oldest first
+lore ask --store me --query "where did I go hiking last weekend"  # dates and words: the best rows, those dated near the dates ranked higher
 lore ask --query "what did we decide for orbit and why"    # the best 3 rows, best match first
 lore ask --store me --query "everything about alice-ng"   # who:, latest (newest row per folder + newest decision/status/budget/meeting, one quoted line each), open tasks, more rows; ids only in cited:
 lore ask --store me --query "what is my gym now"          # a changed fact starts with now: <newest> (changed <day>; before that: <older>)

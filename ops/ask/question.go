@@ -43,6 +43,9 @@ type question struct {
 	// ("everything about hollow"), or the question is only the name of a
 	// resource ("hollow"). Set by build once the resources are matched.
 	about bool
+	// fuzz is how many days around window a row still counts as dated
+	// near it (prior.go: timeBonus); 0 without a window.
+	fuzz float64
 }
 
 // oweDir is the direction of a debt question.
@@ -153,6 +156,7 @@ func parseQuestion(q string, now time.Time) question {
 	}
 	out.owe = oweOf(low)
 	out.window, out.when = windowOf(low, now)
+	readDates(&out, low) // prior.go: weekends, months, holidays; the fuzz
 	if !out.window.IsZero() {
 		// the date words were the date: "what happened on 2026-11-02"
 		// asks for that day's rows, not for rows holding "2026-11-02"

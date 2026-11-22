@@ -771,4 +771,32 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-894] the row holding the rare word (parking) must lead the rows holding only \"code\":\n%s", out)
 		}
 	})
+
+	// devco:D-897 (bug hunt H-150): a date phrase lore ask did not read
+	// ("in <month>") ranked rows newest first, so the hike of that month
+	// came after a newer one; a date phrase is now a soft prior (rows
+	// dated near it rank higher, never a filter), and a name no row holds
+	// starts the answer with a "not in memory" hint line.
+	s.Step("personal-store/date-phrase-ranks-its-rows-up", func() {
+		// the world's test clock (LORE_NOW), which lore reads "in <month>" against
+		today := s.Now().UTC()
+		first := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -3, 0)
+		then := first.AddDate(0, 0, 9)
+		recent := today.AddDate(0, 0, -2)
+		ada.Lore(ada.Home, "memory", "add", "--body", "Went hiking at the lake trail with Dana, six hours.", "--at", then.Format(time.DateOnly), "--to", "me/journal", "--yes").OK(t)
+		ada.Lore(ada.Home, "memory", "add", "--body", "Went hiking at the ridge trail before work.", "--at", recent.Format(time.DateOnly), "--to", "me/journal", "--yes").OK(t)
+		q := "where did I go hiking in " + first.Month().String()
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", q)
+		r.OK(t)
+		out := r.Out()
+		lake, ridge := strings.Index(out, "lake trail"), strings.Index(out, "ridge trail")
+		if lake < 0 || ridge >= 0 && ridge < lake || !strings.Contains(out, "rows dated near them rank higher") {
+			t.Errorf("[O D-897] %q: the hike dated in that month must lead the newer one, under a dates line saying so:\n%s", q, out)
+		}
+		r = ada.Lore(ada.Home, "ask", "--store", "me", "--query", "where did I go hiking in Zermatt")
+		r.OK(t)
+		if out := r.Out(); !strings.HasPrefix(out, "not in memory: no row holds zermatt; the rows below are the nearest\n") || !strings.Contains(out, "hiking") {
+			t.Errorf("[O D-897] a name no row holds must start the answer with the not-in-memory hint, the nearest rows still printed:\n%s", out)
+		}
+	})
 }

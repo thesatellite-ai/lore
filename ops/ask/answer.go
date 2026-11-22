@@ -240,8 +240,13 @@ func build(q question, d data, top, maxChars int) Out {
 	case q.owe != oweNone || identity:
 		// a debt question is answered by the tasks, "who is X" by the
 		// resource: rows would only make the answer heavier
-	case !q.window.IsZero():
+	case !q.window.IsZero() && !asksBesidesDate(q, ms):
+		// "what happened yesterday": the window's rows are the answer
 		out.Rows = windowRows(q, ms, d.rows)
+	case !q.window.IsZero():
+		// "what did I buy last weekend": the date is a soft prior (prior.go)
+		out.Rows, lead = priorRows(q, ms, d.rows, top)
+		out.prior = true
 	case q.file != "":
 		// a change to a file: its context says what applies; a row is
 		// added only when it holds two or more of the question's words
@@ -256,6 +261,9 @@ func build(q question, d data, top, maxChars int) Out {
 	for i := range out.Rows {
 		r := &out.Rows[i]
 		r.readTitle, r.readBody = readable(r.Title, names), readable(r.Body, names)
+	}
+	if q.file == "" && q.owe == oweNone && !identity {
+		out.Abstain = abstainOf(q, ms, d.rows) // abstain.go
 	}
 	if leadOf(q, identity, &out) == leadAbout {
 		out.lead = lead
@@ -618,6 +626,9 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	if len(ms) == 0 && len(s.matched) == 0 {
 		return s, false
 	}
+	// a row dated in (or near) the question's window ranks up (prior.go);
+	// it never makes a row answer on its own
+	s.score += timeBonus(q, r)
 	if r.Imported {
 		s.score -= 2
 	}
@@ -689,6 +700,7 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 		all[i].history = staleNote(all[i].row, q.now)
 	}
 	markReplaced(all)
+	thenCurrent(q, all) // prior.go: a row dated in the question's window is what was true then
 	// history (superseded, expired, replaced) never stands where the
 	// current answer goes: the current rows are picked first, history
 	// only fills what is left of top, marked (devco D-820)
@@ -750,6 +762,9 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 	}
 	slices.SortStableFunc(pick[:lead], byScoreThenNewest)
 	slices.SortStableFunc(pick[lead:], byScoreThenNewest)
+	if !q.about && q.file == "" {
+		pick, hist = wasSecond(pick, hist, top)
+	}
 	for _, s := range hist {
 		if len(pick) >= top {
 			break
@@ -993,6 +1008,11 @@ func (o Out) Text() string {
 		}
 		body = h + f + strings.TrimPrefix(body, h)
 	}
+	if hint := o.Abstain.line(); hint != "" && len(o.Ranked) > 0 {
+		// the memory names no such thing: the rows are the nearest it
+		// holds, not the answer (abstain.go)
+		body = hint + body
+	}
 	b.WriteString(body)
 	if len(o.Ranked)+len(o.Applies) == 0 {
 		// devco D-821: the empty line every empty read prints; the
@@ -1132,6 +1152,10 @@ func (o Out) body() string {
 // the agent wrote it, and every echoed character is read again (devco
 // D-827); --json keeps it as query.
 func (o Out) header() string {
+	if o.When != "" && o.prior {
+		// the rows are the best rows, not only those of the dates
+		return "dates: " + o.When + "; rows dated near them rank higher\n"
+	}
 	if o.When != "" {
 		return "dates: " + o.When + "\n"
 	}
@@ -1143,6 +1167,8 @@ func (o Out) header() string {
 // rows (compact) one line each, then the other rows after its open tasks.
 func (o Out) rowsHeader(run, runs int, compact bool) string {
 	switch {
+	case o.When != "" && o.prior:
+		return "\nbest rows, a row dated near those dates ranked higher:\n"
 	case o.When != "":
 		return "\nrows dated " + o.When + ", oldest first:\n"
 	case compact:

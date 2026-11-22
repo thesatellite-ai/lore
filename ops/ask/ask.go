@@ -7,13 +7,18 @@
 //	  ─▶ read the question: content words, topics (decision, status,
 //	     budget …), a debt direction (what do I owe X / what does X owe
 //	     me), a date window (2026-11-02, the week of …, yesterday, last
-//	     week, two Fridays ago; against the clock)
+//	     week, two Fridays ago, last weekend, in February, a holiday;
+//	     against the clock; prior.go)
 //	  ─▶ one lens (Env.AskLens): resources with fields and history, open
 //	     tasks with owed_by / owed_to and --ref pointers
 //	  ─▶ the resources it names: by name, a typo of a name, a field value
 //	     (a nickname, a role)
-//	  ─▶ the rows: for a date the window's rows (journal days first); else
-//	     the best rows about those resources and topics, newest first
+//	  ─▶ the rows: for a question that is only a date the window's rows
+//	     (journal days first); else the best rows about those resources
+//	     and topics, a row dated near the window ranked higher, the row
+//	     the first one replaced second (updates.go), newest first among
+//	     equals; a name no row holds starts the text with a "not in
+//	     memory" hint (abstain.go)
 //	  ─▶ a question naming a file: what lore context --for-file picks for
 //	     it comes first (file.go, devco D-815)
 //	  ─▶ capped text (--max-chars): resources with changed fields, open
@@ -72,7 +77,7 @@ type RunIn struct {
 	// Store names the stores to read, as every other read's --store.
 	Store    string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store alone instead of every attached one: <org> (every folder), <store>/<folder>, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder; with none outside a code repo, where no setup covers the folder, it reads your personal store"`
 	MaxChars int    `json:"max_chars,omitempty" flag:"max-chars" min:"200" desc:"cap the answer at this many characters (default 4000); what is left out is counted at the end"`
-	Top      int    `json:"top,omitempty" flag:"top" min:"1" desc:"how many best rows to print in full (default 3); a date question prints every row of its dates"`
+	Top      int    `json:"top,omitempty" flag:"top" min:"1" desc:"how many best rows to print in full (default 3); a date question with no other words (what happened yesterday) prints every row of its dates"`
 }
 
 // Out is the output of ask.run: what answers the question, each item with
@@ -83,7 +88,7 @@ type Out struct {
 	// Resources are the resources the question names, with their fields.
 	Resources []Resource `json:"resources" desc:"the resources the question names (person, project, company …), each with its fields and the resources that link to it"`
 	Tasks     []Task     `json:"tasks" desc:"the open tasks that answer it: for what do I owe X / what does X owe me every open one owed that way, else the open tasks of the resources it names"`
-	Rows      []Row      `json:"rows" desc:"the rows that answer it, in full: the best ones newest first, or every row of the dates it names, oldest first"`
+	Rows      []Row      `json:"rows" desc:"the rows that answer it, in full: the best ones newest first (a row dated near the dates the question names ranked higher), or, for a question that is only dates (what happened yesterday), every row of those dates, oldest first"`
 	// Ranked is the answer's reading order (devco D-818): the item that
 	// answers the question type first, the named resource after it as
 	// context. Why a separate list: the three typed lists keep their JSON
@@ -97,9 +102,14 @@ type Out struct {
 	// File, Applies and Context answer a question that names a file
 	// (file.go, devco D-815): what lore context --for-file --for-prompt
 	// picks for it, printed before the ranked items.
-	File     string    `json:"file,omitempty" desc:"the file the question names"`
-	Applies  []Applied `json:"applies,omitempty" desc:"the rules, hotfixes and notes that apply to that file and the question's words, as lore context --for-file --for-prompt picks them"`
-	Context  string    `json:"context,omitempty" desc:"lore context's text for that file (rules and hotfixes in full while they fit)"`
+	File    string    `json:"file,omitempty" desc:"the file the question names"`
+	Applies []Applied `json:"applies,omitempty" desc:"the rules, hotfixes and notes that apply to that file and the question's words, as lore context --for-file --for-prompt picks them"`
+	Context string    `json:"context,omitempty" desc:"lore context's text for that file (rules and hotfixes in full while they fit)"`
+	// Abstain says the memory seems not to hold what the question asks
+	// (abstain.go, devco D-897); the zero value, left out of the JSON,
+	// when it does. A value, not a pointer: op.Define describes outputs
+	// by reflection and has no pointer type.
+	Abstain  Abstain `json:"abstain,omitzero" desc:"set when the question names something (a word written with a capital, such as a place or a pet's name) that no row holds: the rows are then the nearest the memory holds, not the answer"`
 	maxChars int
 	note     string
 	// lead is how many of Rows (the first ones) are an everything-about
@@ -113,6 +123,10 @@ type Out struct {
 	identity bool
 	answer   answerFirst
 	asked    []string
+	// prior is a date question with words besides the date: its rows are
+	// the best rows, those dated near the window ranked up (prior.go),
+	// not the window's rows oldest first.
+	prior bool
 }
 
 // Ranked names one item of an answer: which list holds it and its id.
@@ -617,6 +631,9 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 		// days as YYYY-MM-DD: a stored date (2026-11-02T00:00:00.000000000Z)
 		// sorts after its day and before the next one
 		f.since, f.end = q.window.Since.Format(time.DateOnly), q.window.End.Format(time.DateOnly)
+		if q.window.End.IsZero() {
+			f.end = openEnd // "after march 3rd": every day after it
+		}
 		var err error
 		if f.days, err = loadDays(ctx, run, f.since, f.end, keeps); err != nil {
 			return nil, err
@@ -684,6 +701,10 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 	}
 	return out, nil
 }
+
+// openEnd is the end of a window open to the future, as a day: after
+// every stored day.
+const openEnd = "9999-12-31"
 
 // rowFilter is what decides that a text row can answer a question: the
 // lowered words (pats), the matched resources (ids) and the rows that

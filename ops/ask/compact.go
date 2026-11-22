@@ -30,7 +30,7 @@ const (
 // basis to pick one) stays whole. A date question keeps whole rows: the
 // rows of its dates are the answer.
 func (o *Out) chunkLong() {
-	if o.When != "" {
+	if o.When != "" && !o.prior {
 		return
 	}
 	for i := range o.Rows {
@@ -107,7 +107,7 @@ func (o Out) compactBody(res map[string]Resource, tsk map[string]Task, rows map[
 		}
 		b.WriteString(one + ":\n")
 	}
-	oneDay := o.When != "" && !strings.Contains(o.When, " to ")
+	oneDay := o.When != "" && !o.prior && !strings.Contains(o.When, " to ")
 	for i, it := range o.Ranked {
 		switch it.Kind {
 		case KindResource:
