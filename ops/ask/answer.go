@@ -95,6 +95,9 @@ type scored struct {
 	// replacedBy is the id of the newer row that replaced this one on the
 	// same thing (markReplaced), "" when none.
 	replacedBy string
+	// fused is the row's meaning-and-words score for the question
+	// (fuseScores, wsum50 in 0..1): it orders rows of equal score.
+	fused float64
 }
 
 // staleNote says why row r is no longer the current answer as lore
@@ -657,8 +660,16 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 			all = append(all, s)
 		}
 	}
+	// an everything-about answer leads with the newest row of each folder
+	// and topic (lore's structure): the fused order stays out of it
+	if !q.about {
+		fuseScores(q, all, top)
+	}
 	slices.SortStableFunc(all, func(a, b scored) int {
 		if c := cmp.Compare(b.score, a.score); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(b.fused, a.fused); c != 0 {
 			return c
 		}
 		if c := b.row.At.Compare(a.row.At); c != 0 {
@@ -688,6 +699,17 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 			hist = append(hist, s)
 		}
 	}
+	// history reads as a timeline, newest first: the fused order is for
+	// choosing the current answer, not for what came before it
+	slices.SortStableFunc(hist, func(a, b scored) int {
+		if c := cmp.Compare(b.score, a.score); c != 0 {
+			return c
+		}
+		if c := b.row.At.Compare(a.row.At); c != 0 {
+			return c
+		}
+		return strings.Compare(b.row.ID, a.row.ID)
+	})
 	all = cur
 	if len(all) == 0 {
 		all, hist = hist, nil
@@ -719,6 +741,9 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 	}
 	byScoreThenNewest := func(a, b scored) int {
 		if c := cmp.Compare(b.score, a.score); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(b.fused, a.fused); c != 0 {
 			return c
 		}
 		return b.row.At.Compare(a.row.At)

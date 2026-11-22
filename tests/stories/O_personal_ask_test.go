@@ -13,6 +13,7 @@ package stories
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -745,6 +746,29 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		}
 		if strings.Contains(out, "[history: replaced by") || strings.HasPrefix(out, "now: ") {
 			t.Errorf("[O D-893] the note holding the answer is printed as history of the short status row:\n%s", out)
+		}
+	})
+	// devco:D-894 (bug hunt H-149): lore's score counts the question
+	// words a row holds, so the one row holding the rare word ("parking")
+	// tied with newer rows holding only the common one ("code") and,
+	// newest first, fell past --top 3. Rows of equal score are now ordered
+	// by meaning and words (wsum50 of BM25 and static vectors).
+	s.Step("personal-store/rare-word-row-leads-its-band", func() {
+		ada.Lore(ada.Home, "memory", "add", "--body", "Parking at the cabin: use the north lot, spot 12, gate opens with 4417.", "--at", "2026-03-01", "--to", to, "--yes").OK(t)
+		for i, body := range []string{"Code freeze for the billing service starts Monday.", "Code review checklist: tests, docs and the changelog.", "Wrote code all afternoon, then a long walk."} {
+			ada.Lore(ada.Home, "memory", "add", "--body", body, "--at", fmt.Sprintf("2026-11-1%d", i), "--to", "me/journal", "--yes").OK(t)
+		}
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "what is the parking code")
+		r.OK(t)
+		out := r.Out()
+		park, codeFirst := strings.Index(out, "gate opens with 4417"), len(out)
+		for _, c := range []string{"Code freeze", "Code review", "Wrote code"} {
+			if i := strings.Index(out, c); i >= 0 {
+				codeFirst = min(codeFirst, i)
+			}
+		}
+		if park < 0 || codeFirst < park {
+			t.Errorf("[O D-894] the row holding the rare word (parking) must lead the rows holding only \"code\":\n%s", out)
 		}
 	})
 }
