@@ -8,17 +8,19 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 )
 
-// TestPrivateBudgetLineStatesTheRealLimit (devco D-430): a private file
-// whose pinned rules and hotfixes alone are over context.budget.internal
-// says so with both sizes, instead of "left out by … 8000 bytes" on a
-// 21 KB file; under the budget the line is unchanged.
+// TestPrivateBudgetLineStatesTheRealLimit (devco D-430, D-909): a private
+// file whose pinned rules and hotfixes alone are over context.budget.internal
+// used to say so with both sizes on a file larger than its budget; the
+// budget is hard now, so the file stays within it and its closing lines
+// name the budget and the commands that print the rest.
 func TestPrivateBudgetLineStatesTheRealLimit(t *testing.T) {
-	over := fitPrivate([]privateBody{privBody(strings.Repeat("x", 300), 2, 4)}, 100, budgetFix{})
-	if txt := over.texts[0]; !strings.Contains(txt, "context.budget.internal is 100 bytes") || !strings.Contains(txt, "already take 300 bytes (never cut") {
-		t.Fatalf("over-core file does not state the real limit:\n%s", txt)
+	over := fitPrivate([]privateBody{privBody("H", 40, 4)}, 1000, 0)
+	txt := over.texts[0]
+	if len(txt) > 1000 || !strings.Contains(txt, "not listed to stay within context.budget.internal 1000 bytes") || strings.Contains(txt, "never cut") {
+		t.Fatalf("over-core file (%d bytes) does not state the real limit:\n%s", len(txt), txt)
 	}
-	under := fitPrivate([]privateBody{privBody("C", 0, 30)}, 200, budgetFix{})
-	if txt := under.texts[0]; !strings.Contains(txt, "left out by context.budget.internal 200 bytes") || strings.Contains(txt, "never cut") {
+	under := fitPrivate([]privateBody{privBody("C", 0, 30)}, 600, 0)
+	if txt := under.texts[0]; !strings.Contains(txt, "left out by context.budget.internal 600 bytes") || strings.Contains(txt, "never cut") {
 		t.Fatalf("under-budget file line changed:\n%s", txt)
 	}
 }

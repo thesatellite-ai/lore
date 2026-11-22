@@ -20,8 +20,8 @@ func TestOverCoreWarnNamesTheFixCommands(t *testing.T) {
 	}}
 	w := privateOverCoreWarn(p)
 	for _, want := range []string{
-		"20285 bytes, over context.budget.internal 8000",
-		"The largest: hfx_big (9000 bytes), rul_big (5000 bytes), rul_small (100 bytes).",
+		"20285 bytes in full, over context.budget.internal 8000",
+		"The longest:\n  - hotfix hfx_big (9000 bytes)\n  - rule rul_big (5000 bytes)\n  - rule rul_small (100 bytes)",
 		"`lore rule edit --id rul_big --severity should`", // the largest listed rule, not the first found (devco D-602)
 		"`lore hotfix edit --id hfx_big --severity medium`",
 		"`lore policy set --key context.budget.internal --value 22000 --yes`",
@@ -33,8 +33,10 @@ func TestOverCoreWarnNamesTheFixCommands(t *testing.T) {
 	if strings.Contains(w, "unpin some") {
 		t.Errorf("warning still says unpin with no command:\n%s", w)
 	}
-	if l := leftOutLine(3, 8000, 20285, budgetFix{}); !strings.Contains(l, "lore policy set --key context.budget.internal --value 22000 --yes") {
-		t.Errorf("left-out line names no command: %s", l)
+	// D-909: the file stays within its budget, so its left-out line names
+	// the budget and `lore search`, no fix of the pinned part
+	if l := leftOutLine(3, 8000); !strings.Contains(l, "left out by context.budget.internal 8000 bytes: run `lore search`") {
+		t.Errorf("left-out line: %s", l)
 	}
 }
 
@@ -67,9 +69,7 @@ func TestOverCoreFixWorksWherePrinted(t *testing.T) {
 	if got := overCoreFix(5000, pins, f); !strings.Contains(got, cmd) {
 		t.Errorf("the raise does not name the linked folder:\n%s", got)
 	}
-	if l := leftOutLine(3, 1000, 5000, f); !strings.Contains(l, cmd) {
-		t.Errorf("the left-out line does not name the linked folder: %s", l)
-	}
+
 }
 
 // TestOverCoreFixOnlyAdminsLowerCompanyRows guards devco D-637 and D-681:
@@ -112,8 +112,7 @@ func TestOverCoreFixOnlyAdminsLowerCompanyRows(t *testing.T) {
 	if own, _, _ := strings.Cut(got, "the admin would run"); strings.Contains(own, "lore policy set") || !strings.Contains(got, "raise context.budget.internal to 7000 in acme/org") {
 		t.Errorf("a member is given a company policy command:\n%s", got)
 	}
-	l := leftOutLine(3, 1000, 5000, company)
-	if own, _, _ := strings.Cut(l, "the admin would run"); strings.Contains(own, "lore policy set") || !strings.Contains(l, "ask an admin of acme (Ada Admin); the admin would run `lore policy set") {
+	if l := leftOutLine(3, 1000); strings.Contains(l, "lore policy set") {
 		t.Errorf("the left-out line gives a member a company policy command: %s", l)
 	}
 }
@@ -125,7 +124,7 @@ func TestOverCoreFixOnlyAdminsLowerCompanyRows(t *testing.T) {
 func TestOverCoreFixUnplacedPrintsNoPlaceholder(t *testing.T) {
 	pins := []privatePin{{id: "rul_big", kind: privatePinRule, text: strings.Repeat("r", 5000)}}
 	f := budgetFix{unplaced: true}
-	for _, got := range []string{overCoreFix(5000, pins, f), leftOutLine(3, 1000, 5000, f)} {
+	for _, got := range []string{overCoreFix(5000, pins, f)} {
 		if strings.Contains(got, "lore policy set") || strings.Contains(got, "<store") || !strings.Contains(got, "`lore whoami`") {
 			t.Errorf("devco:D-658: an unplaced raise prints a command that cannot work:\n%s", got)
 		}

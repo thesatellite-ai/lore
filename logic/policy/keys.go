@@ -287,6 +287,15 @@ const (
 	ceilingManagerTimeoutSec    int64 = 30    // SECRETS 6: "max 30 s"
 )
 
+// ContextCeiling is the hard ceiling, in bytes, of everything lore adds
+// to one tool's instruction files together: the budgeted LORE.md, the
+// private per-store renders it imports, and the SessionStart answer. Why
+// (devco D-909): a client repo's private render pinned 175 must rules and
+// 61 critical/high hotfixes (146 KB) and a tool refused instruction files
+// over its total limit; a setting above the ceiling is clamped, never
+// honored, and render says so.
+const ContextCeiling = 40000
+
 // OnDetect is the value of secrets.on_detect.
 type OnDetect string
 

@@ -59826,6 +59826,10 @@
                         "budget_exceeded": {
                           "type": "boolean"
                         },
+                        "budget_set": {
+                          "type": "integer",
+                          "description": "--report: the budget as set when the 40000-byte ceiling clamped it"
+                        },
                         "chains": {
                           "type": "array",
                           "description": "--report --scopes: the root-to-folder sums a tool loads",
@@ -60010,13 +60014,24 @@
                         "path_scoped_rules": {
                           "type": "integer"
                         },
+                        "pinned_left_out": {
+                          "type": "array",
+                          "description": "--report: must rules and critical hotfixes left out to stay within the budget (every line already as short as it gets), by id",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "private": {
                           "type": "object",
                           "description": "--report: the private render outside the checkout (the attached internal stores); in a linked repo with no .lore folder the only member",
                           "properties": {
                             "budget": {
                               "type": "integer",
-                              "description": "context.budget.internal in bytes"
+                              "description": "the budget the private files were fitted to: context.budget.internal, clamped to the 40000-byte ceiling less LORE.md"
+                            },
+                            "budget_set": {
+                              "type": "integer",
+                              "description": "context.budget.internal as set"
                             },
                             "bytes": {
                               "type": "integer",
@@ -60024,7 +60039,7 @@
                             },
                             "core": {
                               "type": "integer",
-                              "description": "bytes of the pinned part (never cut)"
+                              "description": "bytes of the pinned part in full"
                             },
                             "dir": {
                               "type": "string",
@@ -60036,11 +60051,23 @@
                             },
                             "over_core": {
                               "type": "boolean",
-                              "description": "the pinned part alone is over the budget"
+                              "description": "the pinned part in full is over the budget"
                             },
                             "pinned": {
                               "type": "integer",
-                              "description": "must rules and critical/high hotfixes, always in full"
+                              "description": "must rules and critical/high hotfixes (in full, as a one-line index entry or not listed)"
+                            },
+                            "pinned_full": {
+                              "type": "integer",
+                              "description": "pinned rows written in full"
+                            },
+                            "pinned_index": {
+                              "type": "integer",
+                              "description": "pinned rows written as a one-line index entry (full text: lore show --id)"
+                            },
+                            "pinned_not_listed": {
+                              "type": "integer",
+                              "description": "pinned rows the budget left out of the index too"
                             },
                             "rows": {
                               "type": "integer",
@@ -60059,7 +60086,11 @@
                             "left_out",
                             "budget",
                             "bytes",
-                            "core"
+                            "core",
+                            "pinned_full",
+                            "pinned_index",
+                            "pinned_not_listed",
+                            "budget_set"
                           ]
                         },
                         "profile": {

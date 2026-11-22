@@ -104,6 +104,15 @@ func (h *Host) contextForTask(ctx context.Context, raw string) (contextResult, e
 			}
 		}
 	}
+	// D-909: every always-on pinned row the private context lists only as
+	// one line, in full, whether or not the task names a file
+	h.indexedPinPicks(ctx, rows, func(k knowledgeRow, why string) int {
+		if seen[k.r.ID.String()] {
+			return 0
+		}
+		add(k, why)
+		return picks[len(picks)-1].Bytes
+	})
 	// Rows sharing a tag with the task.
 	if len(t.TagIDs) > 0 {
 		names := h.tagNames(ctx)
@@ -151,7 +160,13 @@ func (h *Host) contextForTask(ctx context.Context, raw string) (contextResult, e
 	if len(words) > 0 {
 		more = "lore search --query \"" + strings.Join(words, " ") + "\""
 	}
-	return contextResult{title: "task " + t.ID, picks: picks, more: more}, nil
+	uncapped := 0 // the cap is raised by the always-on rows above (D-909)
+	for _, cp := range picks {
+		if strings.HasSuffix(cp.Why, whyIndexed) {
+			uncapped += cp.Bytes
+		}
+	}
+	return contextResult{title: "task " + t.ID, picks: picks, more: more, uncapped: uncapped}, nil
 }
 
 // loadTaskForContext runs task.show (the same read and refs as `lore task

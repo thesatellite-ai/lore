@@ -45,6 +45,17 @@ type budgetFix struct {
 	// is another org's (an ops folder's row read from a company repo,
 	// devco D-681), so the member is sent to that org's admins.
 	rowAdmins map[string]profilestore.Admins
+	// maxBudget is the largest budget the private files may get (the
+	// ceiling less LORE.md, D-909); a raise past it would be clamped, so
+	// it is offered only when what is pinned fits under it (0: no limit).
+	maxBudget int
+}
+
+// raiseHelps reports whether raising the budget can fit coreBytes: a
+// value above maxBudget is clamped (D-909: the warning offered a raise to
+// 144000 that would have loaded 144 KB into every session).
+func (f budgetFix) raiseHelps(coreBytes int) bool {
+	return f.maxBudget <= 0 || budgetToFit(coreBytes) <= f.maxBudget
 }
 
 // adminsOf is the admins who may change pinned row id.
@@ -69,7 +80,7 @@ func (f budgetFix) mayRaise() bool { return !f.raiseCompany || f.admins.May() }
 // D-725): the warning went to every member of a company folder, though
 // only an admin may change its rows and budget; it goes to who can act.
 func (f budgetFix) canFit(coreBytes, budget int, pins []privatePin) bool {
-	if f.unplaced || f.mayRaise() {
+	if f.raiseHelps(coreBytes) && (f.unplaced || f.mayRaise()) {
 		return true
 	}
 	left := coreBytes
@@ -180,6 +191,9 @@ func overCoreFix(coreBytes int, pins []privatePin, f budgetFix) string {
 		can = append(can, "take a row out of the pinned part with "+strings.Join(lower, " or "))
 	}
 	switch {
+	case !f.raiseHelps(coreBytes):
+		// D-909: no budget holds this much; shorter or fewer pinned rows do
+		can = append(can, fmt.Sprintf("shorten the longest with `lore rule edit --id %s --summary \"<one line>\"` (the index line) or `--body \"<shorter text>\"`; a budget above %d is clamped", rule, f.maxBudget))
 	case f.unplaced:
 		can = append(can, f.unplacedText(coreBytes))
 	case f.mayRaise():

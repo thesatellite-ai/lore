@@ -369,8 +369,17 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 				report.MustFull, report.MustLine, report.Critical, report.HighLine, highOutNote(len(report.HighOut)), plural.Count(report.Topics, "topic"))
 		}
 	}
+	if !f.quiet && !isOrphan {
+		// D-909: a clamped budget and pinned entries left out are said
+		if report.Set > 0 && report.Set != report.Budget {
+			fmt.Fprintf(f.out(), "  budget %d as set, clamped to %d: everything lore adds to a tool's instruction files stays under %d bytes\n", report.Set, report.Budget, policy.ContextCeiling)
+		}
+		if n := len(report.PinnedOut); n > 0 {
+			fmt.Fprintf(f.out(), "  %s left out to stay within the budget (lore render --report names them; full text: `lore context --for-file <path>` / `lore show --id <id>`)\n", plural.Of(n, "pinned entry", "pinned entries"))
+		}
+	}
 	if report.Over {
-		fmt.Fprintln(os.Stderr, h.decor.warn(fmt.Sprintf("WARN: budget_exceeded: %s is %d bytes, over the %d-byte budget of %s; every must rule and critical/high hotfix is still written (lore render --report)",
+		fmt.Fprintln(os.Stderr, h.decor.warn(fmt.Sprintf("WARN: budget_exceeded: %s is %d bytes, over the %d-byte budget of %s; the fixed part alone (header, index, tails) does not fit (lore render --report)",
 			resolvedOut, report.After, report.Budget, report.Profile)))
 	}
 	// CQ2: the full fallback file, next to LORE.md, never imported.

@@ -96,14 +96,19 @@ func TestJourneyLinkedOwnRepoGetsItsNotes(t *testing.T) {
 
 	// devco D-430: the private render states its real limit, and drops the
 	// noise (a default trust="0.50", a Source line naming another repo's
-	// row file).
+	// row file). devco D-909: the limit is hard, pinned rows included, so
+	// a 300-byte budget lists what fits and names the commands for the
+	// rest; the hotfix's text, noise dropped, is one command away.
 	w.Step("day2/private-render-budget-and-noise", func() {
 		mira.LoreIn(sync, "hotfix", "add", "--title", "queue drains slowly", "--severity", "high", "--to", lgOrg+"/sync",
 			"--body", "drain the queue before a deploy\nSource: oldapp/.lore/data/hotfixes/hfx_old.json").OK(t)
 		mira.LoreIn(sync, "memory", "add", "--body", "staging lives on the second box", "--to", lgOrg+"/sync").OK(t)
+		mira.LoreIn(sync, "render", "--dry-run").OK(t).
+			Says(t, "drain the queue before a deploy").
+			Never(t, `trust="0.50"`, "Source: oldapp/.lore/data")
 		mira.LoreIn(sync, "policy", "set", "--key", "context.budget.internal", "--value", "300", "--to", lgOrg, "--yes").OK(t)
 		mira.LoreIn(sync, "render", "--dry-run").OK(t).
-			Says(t, "context.budget.internal is 300 bytes and the pinned rules and hotfixes above already take", "drain the queue before a deploy").
-			Never(t, `trust="0.50"`, "Source: oldapp/.lore/data")
+			Says(t, "not listed to stay within context.budget.internal 300 bytes").
+			Never(t, "never cut", `trust="0.50"`, "Source: oldapp/.lore/data")
 	})
 }

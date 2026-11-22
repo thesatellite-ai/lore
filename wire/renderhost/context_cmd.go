@@ -167,7 +167,7 @@ func (h *Host) contextAnswer(ctx context.Context, f *contextFlags, stdin io.Read
 	}
 	maxB := f.maxBytes
 	if maxB <= 0 {
-		maxB = contextDefaultMax
+		maxB = contextDefaultMax + res.uncapped // D-909: --for-file stays complete
 	}
 	text, printed := res.fit(maxB)
 	// 6.12 "not used in 60 days" (context_usage.go). P3-MISC-6: one fetch
@@ -237,6 +237,10 @@ type contextResult struct {
 	title string
 	picks []contextPick
 	more  string
+	// uncapped is the bytes of the picks the command's cap is raised by
+	// (--for-file's always-on rows the private context lists as one line,
+	// D-909), so they never push the file's own picks out.
+	uncapped int
 	// always is the bytes of the leading picks that are never cut (the
 	// SessionStart always-on rules, devco D-494); the hook adds it to its
 	// cap so they always go in full.
@@ -477,6 +481,21 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 			add(k, "mentions "+dir+"/")
 		}
 	}
+	// 3b. D-909: the always-on pinned rows the private context shows only
+	// as a one-line index entry (its budget is hard), in full, so the
+	// agent gets every rule that applies to the file on demand; only for
+	// the command (tool ""), never the per-file hook, whose cap they
+	// would crowd out (the SessionStart answer lists them)
+	indexed := 0
+	if tool == "" {
+		indexed = h.indexedPinPicks(ctx, rows, func(k knowledgeRow, why string) int {
+			if seen[k.r.ID.String()] {
+				return 0
+			}
+			add(k, why)
+			return picks[len(picks)-1].Bytes
+		})
+	}
 	// 4. rows tagged with a topic whose glob set covers the path (6.10).
 	h.topicGlobPicks(ctx, rel, rows, add)
 	// 5. semantic rules on the path's words (context_semantic.go).
@@ -521,7 +540,46 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 		more = "lore search --query \"" + strings.Join(words, " ") + "\""
 	}
 	read := &contextop.Reading{Path: rel, Folders: slices.Clone(fs.chain), Words: words}
-	return contextResult{title: rel, picks: picks, more: more, read: read}, nil
+	return contextResult{title: rel, picks: picks, more: more, read: read, uncapped: indexed}, nil
+}
+
+// whyIndexed is the why of an always-on pinned row --for-file adds because
+// the private context shows it only as a one-line index entry (D-909).
+const whyIndexed = "always on (the private context lists it as one line: budget)"
+
+// indexedPinPicks adds, through add, every always-on pinned row (a must
+// rule for every file, a critical or high hotfix) that the private render
+// of this repo shows only as a one-line index entry or not at all, in its
+// rank order; add returns the bytes it added (0 when the row was picked
+// already). It returns the bytes added, which the command's cap is raised
+// by, so --for-file stays complete (D-909). Best effort: no repo or no
+// plan adds nothing.
+func (h *Host) indexedPinPicks(ctx context.Context, rows []knowledgeRow, add func(knowledgeRow, string) int) int {
+	if h.app == nil {
+		return 0
+	}
+	top, err := runGit(ctx, false, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return 0
+	}
+	p, err := h.planPrivate(ctx, strings.TrimSpace(string(top)))
+	if err != nil {
+		return 0
+	}
+	byID := make(map[string]knowledgeRow, len(rows))
+	for _, k := range rows {
+		byID[k.r.ID.String()] = k
+	}
+	n := 0
+	for _, pin := range p.pins {
+		if pin.shown == pin.text || (pin.rank != pinRankCritical && pin.rank != pinRankAlways && pin.rank != pinRankHigh) {
+			continue // in full already, or not for every file (globs and semantic rules have their own steps)
+		}
+		if k, ok := byID[pin.id]; ok {
+			n += add(k, whyIndexed)
+		}
+	}
+	return n
 }
 
 // contextForTopic returns every row tagged name.

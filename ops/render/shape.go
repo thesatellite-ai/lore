@@ -30,6 +30,8 @@ type Report struct {
 	MustLine           int        `json:"must_line,omitempty" desc:"--report: must rules written as one line"`
 	HighHotfixLines    int        `json:"high_hotfix_lines,omitempty"`
 	HighHotfixesOut    []string   `json:"high_hotfixes_left_out,omitempty" desc:"--report: the high hotfixes left out to fit the budget, by id"`
+	PinnedLeftOut      []string   `json:"pinned_left_out,omitempty" desc:"--report: must rules and critical hotfixes left out to stay within the budget (every line already as short as it gets), by id"`
+	BudgetSet          int        `json:"budget_set,omitempty" desc:"--report: the budget as set when the 40000-byte ceiling clamped it"`
 	Topics             int        `json:"topics,omitempty"`
 	IndexCollapsed     bool       `json:"index_collapsed,omitempty" desc:"--report: the topic index was folded to one line"`
 	BudgetExceeded     bool       `json:"budget_exceeded,omitempty"`
@@ -57,13 +59,18 @@ type Report struct {
 type PrivateReport struct {
 	Dir      string `json:"dir" desc:"the folder of the private files"`
 	Stores   int    `json:"stores" desc:"internal stores rendered"`
-	Pinned   int    `json:"pinned" desc:"must rules and critical/high hotfixes, always in full"`
+	Pinned   int    `json:"pinned" desc:"must rules and critical/high hotfixes (in full, as a one-line index entry or not listed)"`
 	Rows     int    `json:"rows" desc:"rows shown in the private files"`
 	LeftOut  int    `json:"left_out" desc:"other notes the budget left out"`
-	Budget   int    `json:"budget" desc:"context.budget.internal in bytes"`
+	Budget   int    `json:"budget" desc:"the budget the private files were fitted to: context.budget.internal, clamped to the 40000-byte ceiling less LORE.md"`
 	Bytes    int    `json:"bytes" desc:"the private files' size"`
-	Core     int    `json:"core" desc:"bytes of the pinned part (never cut)"`
-	OverCore bool   `json:"over_core" desc:"the pinned part alone is over the budget"`
+	Core     int    `json:"core" desc:"bytes of the pinned part in full"`
+	OverCore bool   `json:"over_core" desc:"the pinned part in full is over the budget"`
+	// D-909: the budget is hard, pinned rows included
+	PinnedFull      int `json:"pinned_full" desc:"pinned rows written in full"`
+	PinnedIndex     int `json:"pinned_index" desc:"pinned rows written as a one-line index entry (full text: lore show --id)"`
+	PinnedNotListed int `json:"pinned_not_listed" desc:"pinned rows the budget left out of the index too"`
+	BudgetSet       int `json:"budget_set" desc:"context.budget.internal as set"`
 }
 
 // LineForm is one entry written as one line.

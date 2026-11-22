@@ -47,8 +47,9 @@ func TestSessionStartPinnedSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.pins) != 2 || p.pins[0].id != must || p.pins[0].kind != privatePinRule || p.pins[1].id != hfx || p.pins[1].kind != privatePinHotfix {
-		t.Fatalf("pins %+v, want the must rule %s then the hotfix %s (not the should rule %s)", p.pins, must, hfx, should)
+	// D-909: rank order, a critical hotfix before an always-on must rule
+	if len(p.pins) != 2 || p.pins[0].id != hfx || p.pins[0].kind != privatePinHotfix || p.pins[1].id != must || p.pins[1].kind != privatePinRule {
+		t.Fatalf("pins %+v, want the hotfix %s then the must rule %s (not the should rule %s)", p.pins, hfx, must, should)
 	}
 	var body string
 	for _, f := range p.files {
@@ -57,8 +58,8 @@ func TestSessionStartPinnedSet(t *testing.T) {
 		}
 	}
 	for _, pin := range p.pins {
-		if !strings.Contains(body, pin.text) {
-			t.Fatalf("pin %s is not byte for byte in the private file:\n%s\n----\n%s", pin.id, pin.text, body)
+		if pin.shown != pin.text || !strings.Contains(body, pin.shown) {
+			t.Fatalf("pin %s is not in full, byte for byte, in the private file:\n%s\n----\n%s", pin.id, pin.shown, body)
 		}
 	}
 

@@ -18,7 +18,7 @@ func TestOverCoreFixNamesTheListedRows(t *testing.T) {
 		{id: "rul_mid", kind: privatePinRule, text: strings.Repeat("m", 100)},
 	}
 	list := largestPins(pins, largestPinsShown)
-	if want := " The largest: rul_big (300 bytes), hfx_big (200 bytes), rul_mid (100 bytes)."; list != want {
+	if want := " The longest:\n  - rule rul_big (300 bytes)\n  - hotfix hfx_big (200 bytes)\n  - rule rul_mid (100 bytes)\n  - hotfix hfx_small (20 bytes)\n  - rule rul_small (10 bytes)"; list != want {
 		t.Fatalf("largestPins = %q, want %q", list, want)
 	}
 	fix := overCoreFix(630, pins, budgetFix{})

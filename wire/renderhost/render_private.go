@@ -32,16 +32,20 @@
 // id and therefore one file. A store whose marker carries no id (v0.1.17)
 // gets a name-derived file stem so its rows are not dropped.
 //
-// Budget (CONTEXT_BUDGET 6.1, P3-CTX-2): every private file of one repo
-// loads in the same session, so together they share
-// context.budget.internal. The pinned rules and hotfixes (each file's
-// core) are never cut; the "Other notes" bullets fill what is left, store
-// by store in file order, and a file whose bullets did not all fit ends
-// with one "N more notes left out" pointer at `lore search`:
+// Budget (CONTEXT_BUDGET 6.1, P3-CTX-2, devco D-909): every private file
+// of one repo loads in the same session, so together they share
+// context.budget.internal, clamped to policy.ContextCeiling less what
+// LORE.md already takes (one ceiling for everything lore adds to a tool's
+// instruction files). The budget is hard, pinned rows included: the pinned
+// rules and hotfixes are written in full in rank order while they fit, the
+// rest as a one-line index (render_private_fit.go); the "Other notes"
+// bullets fill what is left, store by store in file order, and a file
+// whose bullets did not all fit ends with one "N more notes left out"
+// pointer at `lore search`:
 //
-//	buildPrivateStore ─► privateBody{core, sections}
-//	fitPrivate(bodies, budget) ─► texts, shown, left out
-//	cores alone over the budget ─► one WARN on stderr (nothing is cut)
+//	buildPrivateStore ─► privateBody{head, pins, sections}
+//	fitPrivate(bodies, budget) ─► texts, shown, left out, pins full/line/out
+//	pinned text alone over the budget ─► one WARN naming the longest rows
 //
 // Expansion (SECRETS_AND_REFERENCES 12, CONTEXT_BUDGET 6.13):
 //
@@ -63,6 +67,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
@@ -192,12 +197,15 @@ type privatePlan struct {
 	stores    []privateStore
 	files     []privateFile  // store files, then index.md
 	locals    []privateLocal // one per profile private file to write or clean
-	rows      int            // rows shown in the store files
-	pinned    int            // pinned rules and hotfixes in the store files' cores (always shown)
+	rows      int            // rows shown in the store files (a pin as an index line counts)
+	pinned    int            // pinned rules and hotfixes of the store files (full, index line or not listed)
 	leftOut   int            // "Other notes" rows the budget left out (P3-CTX-2)
-	budget    int            // context.budget.internal
-	coreBytes int            // the store files' cores (never cut)
-	pins      []privatePin   // the cores' rule and hotfix blocks, store files in order
+	budget    int            // the effective budget: context.budget.internal, clamped (D-909)
+	setting   int            // context.budget.internal as set
+	loreBytes int            // what LORE.md takes of policy.ContextCeiling (0: none here)
+	coreBytes int            // the store files' heads and pinned rows in full (the size with no budget)
+	pinForms  pinCounts      // pinned rows in full, as an index line, not listed
+	pins      []privatePin   // the pinned rows in rank order; shown is what the file prints for each
 	fix       budgetFix      // where the raise goes and who may run each fix (devco D-636, D-637)
 }
 
@@ -205,9 +213,21 @@ type privatePlan struct {
 // critical/high hotfix, as the file prints it.
 type privatePin struct {
 	id   string
-	kind string       // privatePinRule or privatePinHotfix
-	text string       // the <rule>/<hotfix> block, byte for byte as in the file
-	src  store.Source // the store the row is kept in (a company place's row is an admin's to lower)
+	kind string // privatePinRule or privatePinHotfix
+	text string // the full <rule>/<hotfix> block
+	line string // the one-line index entry fitPins chose (one of lines)
+	// lines are the index entry at each pinIndexCuts length.
+	lines [len(pinIndexCuts)]string
+	src   store.Source // the store the row is kept in (a company place's row is an admin's to lower)
+	// rank and updated order the pins of every store file (rankPins).
+	rank    int
+	updated time.Time
+	// body is the index of the store file the pin is written in.
+	body int
+	// shown is what the file prints for the pin after the fit: text, line
+	// or "" (not listed). The SessionStart hook serves exactly this, so it
+	// obeys the same budget (D-909).
+	shown string
 }
 
 // Kinds of a privatePin (the tag the block uses).
@@ -329,12 +349,16 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 		left := ""
 		if p.leftOut > 0 {
 			left = fmt.Sprintf(", %d more left out by %s %d", p.leftOut, policy.KeyContextBudgetInternal, p.budget)
-			if p.budget > 0 && p.coreBytes > p.budget {
-				left += fmt.Sprintf(" (the pinned rules and hotfixes alone are %d bytes, never cut)", p.coreBytes)
-			}
 		}
 		fmt.Fprintf(w, "%s private context → %s (%s, %s%s, outside the checkout); %s\n",
 			h.decor.check(), h.redact(p.dir), plural.Count(len(p.stores), "store"), plural.Count(p.rows, "row"), left, where)
+		// D-909: what the hard budget did to the pinned rows, and a clamp
+		if l := p.pinForms.pinnedLine(); l != "" {
+			fmt.Fprintf(w, "  %s\n", l)
+		}
+		if c := p.clampLine(); c != "" {
+			fmt.Fprintf(w, "  %s\n", c)
+		}
 	}
 	if changed && p.overCoreWarns() {
 		fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
@@ -381,19 +405,40 @@ func (p *privatePlan) overCoreWarns() bool {
 	return p.budget > 0 && p.coreBytes > p.budget && p.fix.canFit(p.coreBytes, p.budget, p.pins)
 }
 
-// privateOverCoreWarn is the warning when the pinned part alone is over
-// context.budget.internal (a real render and, D-430, the dry run too).
-// Why the commands (devco D-573): "unpin some or raise the key" named no
-// command, and "unpin" is not what takes a row out of the pinned part: a
-// must rule or a critical/high hotfix is always written in full, so the
-// fix is a lower severity, or a larger budget.
-func privateOverCoreWarn(p *privatePlan) string {
-	return fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut.%s\n  fix: %s",
-		p.coreBytes, policy.KeyContextBudgetInternal, p.budget, largestPins(p.pins, largestPinsShown), overCoreFix(p.coreBytes, p.pins, p.fix))
+// clampLine says the budget in use is below context.budget.internal as
+// set ("" when it is not): the ceiling for everything lore adds to a
+// tool's instruction files, less what LORE.md takes (D-909).
+func (p *privatePlan) clampLine() string {
+	setting := p.setting
+	if setting <= 0 {
+		setting = policy.ContextCeiling // 0 (no budget) is clamped too
+	}
+	if p.budget >= setting {
+		return ""
+	}
+	s := fmt.Sprintf("%s %d clamped to %d: everything lore adds to a tool's instruction files stays under %d bytes", policy.KeyContextBudgetInternal, p.setting, p.budget, policy.ContextCeiling)
+	if p.loreBytes > 0 {
+		s += fmt.Sprintf(" and %s takes %d", LoreMDRel, p.loreBytes)
+	}
+	return s
 }
 
-// largestPinsShown is how many of the largest pinned rows the warning names.
-const largestPinsShown = 3
+// privateOverCoreWarn is the warning when the pinned part alone is over
+// the budget (a real render and, D-430, the dry run too; lore doctor too).
+// Why the commands (devco D-573): "unpin some or raise the key" named no
+// command, and "unpin" is not what takes a row out of the pinned part: a
+// must rule or a critical/high hotfix is pinned by its severity, so the
+// fix is a shorter text, a lower severity, or a larger budget. Since
+// D-909 the budget is hard: the warning says how many rows went to the
+// one-line index instead of claiming they are never cut.
+func privateOverCoreWarn(p *privatePlan) string {
+	return fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes in full, over %s %d; %s.%s\n  fix: %s",
+		p.coreBytes, policy.KeyContextBudgetInternal, p.budget, p.pinForms.pinnedText(), largestPins(p.pins, largestPinsShown), overCoreFix(p.coreBytes, p.pins, p.fix))
+}
+
+// largestPinsShown is how many of the largest pinned rows the warning
+// names (owner, D-909: the 10 longest, so a person can shorten or demote them).
+const largestPinsShown = 10
 
 // pinsBySize is pins, largest text first (a stable sort, so rows of one
 // size keep their order). The warning's list and its fix both read it, so
@@ -405,18 +450,21 @@ func pinsBySize(pins []privatePin) []privatePin {
 	return ps
 }
 
-// largestPins is " The largest: <id> (<n> bytes), …" for the n largest
+// largestPins is " The longest:" and one "  - <kind> <id> (<n> bytes)" line each for the n largest
 // pinned rows, "" when there are none.
 func largestPins(pins []privatePin, n int) string {
 	if len(pins) == 0 {
 		return ""
 	}
 	ps := pinsBySize(pins)
-	parts := make([]string, 0, n)
+	// one row per line: a text surface caps a line of more than a few ids
+	// (listcap), and the owner asked for the 10 longest by name (D-909)
+	var b strings.Builder
+	b.WriteString(" The longest:")
 	for _, pin := range ps[:min(n, len(ps))] {
-		parts = append(parts, fmt.Sprintf("%s (%d bytes)", pin.id, len(pin.text)))
+		fmt.Fprintf(&b, "\n  - %s %s (%d bytes)", pin.kind, pin.id, len(pin.text))
 	}
-	return " The largest: " + strings.Join(parts, ", ") + "."
+	return b.String()
 }
 
 // budgetToFit is coreBytes rounded up to the next thousand, plus a
@@ -510,15 +558,18 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 		}
 		bodies = append(bodies, body)
 	}
-	p.budget = h.loadInternalBudget(ctx)
-	if core := coreSize(bodies); p.budget > 0 && core > p.budget {
+	p.setting = h.loadInternalBudget(ctx)
+	p.loreBytes = loreMDShare(root)
+	p.budget = clampInternalBudget(p.setting, p.loreBytes)
+	if core := coreSize(bodies); core > p.budget {
 		p.fix = h.planBudgetFix(ctx, bodies)
 	}
-	fit := fitPrivate(bodies, p.budget, p.fix)
-	p.rows, p.leftOut, p.coreBytes = fit.shown, fit.leftOut, fit.coreBytes
+	p.fix.maxBudget = clampInternalBudget(policy.ContextCeiling, p.loreBytes)
+	// the stamp line withPrivateStamp adds to each file counts too
+	fit := fitPrivate(bodies, p.budget, len(privateStampLine(stampOf("", "")))+1)
+	p.rows, p.leftOut, p.coreBytes, p.pinForms, p.pins = fit.shown, fit.leftOut, fit.coreBytes, fit.pins, fit.ranked
 	for _, b := range bodies {
 		p.pinned += b.pinned
-		p.pins = append(p.pins, b.pins...)
 	}
 	for i, s := range internal {
 		// render_stamp.go: the file's rows and budget, stamped on line 2.
@@ -607,14 +658,15 @@ type privateSection struct {
 	lines   []string
 }
 
-// privateBody is one internal store's file before the budget: the core
-// (header, pinned rules and hotfixes; never cut) and the "Other notes"
-// sections fitPrivate fills.
+// privateBody is one internal store's file before the budget: the head
+// (header and guidance), the pinned rules and hotfixes and the "Other
+// notes" sections fitPrivate fits.
 type privateBody struct {
-	core   string
-	pinned int // rows in core
-	// pins are the core's rule and hotfix blocks, in the core's order
-	// (the SessionStart hook serves them where no LORE.md is: devco D-494)
+	head   string
+	pinned int // pinned rows (pins)
+	// pins are the pinned rules then hotfixes, in id order (the
+	// SessionStart hook serves what the file shows of them where no LORE.md
+	// is: devco D-494)
 	pins     []privatePin
 	sections []privateSection
 	// origins are the store, id and HLC of every row the file lists
@@ -628,6 +680,9 @@ type privateFit struct {
 	shown     int
 	leftOut   int
 	coreBytes int
+	pins      pinCounts
+	// ranked is every pin of every file in rank order, shown set.
+	ranked []privatePin
 }
 
 // Text of the "Other notes" part of a private file.
@@ -636,29 +691,123 @@ const (
 	privateEmpty     = "\n_No rows in this store yet._\n"
 )
 
-// coreSize is the bytes of every store file's core (never cut).
+// coreSize is the bytes of every store file's head and pinned rows in
+// full: the size the pinned part would take with no budget.
 func coreSize(bodies []privateBody) int {
 	n := 0
 	for _, b := range bodies {
-		n += len(b.core)
+		n += len(b.head)
+		for _, p := range b.pins {
+			n += len(p.text)
+		}
 	}
 	return n
 }
 
-// fitPrivate fits the store files into budget bytes together (6.1,
-// P3-CTX-2): every core is kept whole, then the bullets are added in file
-// order while the running total stays within budget; the first bullet
-// that does not fit ends the filling for every later file too, so what is
-// shown never depends on line lengths further down. budget <= 0 keeps
-// everything. A file that loses bullets ends with one pointer line (not
-// counted against the budget: it replaces far more than it costs).
-func fitPrivate(bodies []privateBody, budget int, fix budgetFix) privateFit {
+// fitPrivate fits the store files into budget bytes together, pinned rows
+// included (6.1, P3-CTX-2, devco D-909); perFile is what the caller adds
+// to each file afterwards (the stamp line). The pins of every file are
+// ranked and fitted first (fitPins: index lines, then full blocks), then
+// the bullets are added in file order while the running total stays
+// within budget; the first bullet that does not fit ends the filling for
+// every later file too, so what is shown never depends on line lengths
+// further down. The texts are measured at the end: a fit over the budget
+// (the reserve for headings and closing lines was short) is redone with
+// that much less room. budget <= 0 keeps everything.
+func fitPrivate(bodies []privateBody, budget, perFile int) privateFit {
+	room := budget
+	var out privateFit
+	for range 4 {
+		out = fitPrivateRoom(bodies, budget, room, perFile)
+		total := perFile * len(bodies)
+		for _, t := range out.texts {
+			total += len(t)
+		}
+		if budget <= 0 || total <= budget {
+			return out
+		}
+		room -= total - budget
+	}
+	return out
+}
+
+// privateParts is one store file's pinned part after fitPins.
+type privateParts struct {
+	rules, hotfixes, index strings.Builder
+	shown, out             int
+}
+
+// fitPrivateRoom is one try of fitPrivate: room is the budget the pins
+// and notes are fitted to; budget is the number the files print.
+func fitPrivateRoom(bodies []privateBody, budget, room, perFile int) privateFit {
 	out := privateFit{coreBytes: coreSize(bodies)}
-	used, full := out.coreBytes, false
-	for _, b := range bodies {
+	var all []privatePin
+	fixed := 0
+	for i, b := range bodies {
+		for _, p := range b.pins {
+			p.body = i
+			all = append(all, p)
+		}
+		fixed += len(b.head) + perFile
+		if budget > 0 {
+			fixed += privateFixedReserve()
+		}
+	}
+	rankPins(all)
+	pinRoom := -1
+	if budget > 0 {
+		pinRoom = max(room-fixed, 0)
+	}
+	forms := fitPins(all, pinRoom)
+	ps := make([]privateParts, len(bodies))
+	for i := range all {
+		p := &all[i]
+		bp := &ps[p.body]
+		switch forms[i] {
+		case pinFormFull:
+			p.shown = p.text
+			if p.kind == privatePinRule {
+				bp.rules.WriteString(p.text)
+			} else {
+				bp.hotfixes.WriteString(p.text)
+			}
+			bp.shown++
+			out.pins.full++
+		case pinFormLine:
+			p.shown = p.line
+			bp.index.WriteString(p.line)
+			bp.shown++
+			out.pins.line++
+		default:
+			bp.out++
+			out.pins.out++
+		}
+	}
+	out.ranked = all
+	used := fixed
+	for i := range ps {
+		used += ps[i].rules.Len() + ps[i].hotfixes.Len() + ps[i].index.Len()
+	}
+	full := false
+	for i, b := range bodies {
 		var t strings.Builder
-		t.WriteString(b.core)
-		shown, left, headed := b.pinned, 0, false
+		t.WriteString(b.head)
+		if ps[i].rules.Len() > 0 {
+			t.WriteString(privateRulesHead)
+			t.WriteString(ps[i].rules.String())
+		}
+		if ps[i].hotfixes.Len() > 0 {
+			t.WriteString(privateHotfixHead)
+			t.WriteString(ps[i].hotfixes.String())
+		}
+		if ps[i].index.Len() > 0 {
+			t.WriteString(privatePinIndexHead)
+			t.WriteString(ps[i].index.String())
+		}
+		if ps[i].out > 0 {
+			t.WriteString(pinsOutLine(ps[i].out, budget))
+		}
+		shown, left, headed := ps[i].shown, 0, false
 		for _, sec := range b.sections {
 			sh := false
 			for _, line := range sec.lines {
@@ -666,10 +815,7 @@ func fitPrivate(bodies []privateBody, budget int, fix budgetFix) privateFit {
 				if !sh {
 					add += len("\n### " + sec.heading + "\n\n")
 				}
-				if !headed {
-					add += len(privateNotesHead)
-				}
-				if full || (budget > 0 && used+add > budget) {
+				if full || (budget > 0 && used+add > room) {
 					full = true
 					left++
 					continue
@@ -689,8 +835,8 @@ func fitPrivate(bodies []privateBody, budget int, fix budgetFix) privateFit {
 		}
 		switch {
 		case left > 0:
-			fmt.Fprintf(&t, "\n_%s_\n", leftOutLine(left, budget, out.coreBytes, fix))
-		case shown == 0:
+			fmt.Fprintf(&t, "\n_%s_\n", leftOutLine(left, budget))
+		case shown == 0 && ps[i].out == 0:
 			t.WriteString(privateEmpty)
 		}
 		out.texts = append(out.texts, t.String())
@@ -712,17 +858,11 @@ func privateTrustAttr(r row.Row) string {
 }
 
 // leftOutLine is the private file's last line when notes were left out.
-// Why (devco D-430): "left out by context.budget.internal 8000 bytes" on
-// a 21 KB file read as a budget lore ignored; the budget holds for the
-// notes, while the pinned rules and hotfixes are never cut, so when they
-// alone are over it the line says so with both sizes.
-func leftOutLine(left, budget, coreBytes int, fix budgetFix) string {
-	notes := plural.Of(left, "more note", "more notes")
-	if budget > 0 && coreBytes > budget {
-		return fmt.Sprintf("%s left out: %s is %d bytes and the pinned rules and hotfixes above already take %d bytes (never cut; %s); run `lore search`.",
-			notes, policy.KeyContextBudgetInternal, budget, coreBytes, fix.raiseText(coreBytes))
-	}
-	return fmt.Sprintf("%s left out by %s %d bytes: run `lore search`.", notes, policy.KeyContextBudgetInternal, budget)
+// Since D-909 the budget holds for the pinned rows too, so it is the one
+// number the notes were measured against (devco D-430 explained a file
+// larger than its budget, which can no longer happen).
+func leftOutLine(left, budget int) string {
+	return fmt.Sprintf("%s left out by %s %d bytes: run `lore search`.", plural.Of(left, "more note", "more notes"), policy.KeyContextBudgetInternal, budget)
 }
 
 // buildPrivateStore renders one internal store's file before the budget:
@@ -788,30 +928,31 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 			pinned[r.ID.String()] = true
 		}
 	}
+	// D-909: each pinned row carries its full block and its one-line index
+	// entry; fitPrivate decides which one the file prints
 	var pins []privatePin
-	if len(rules) > 0 {
-		b.WriteString("\n## Rules\n\n")
-		for _, r := range rules {
-			block := fmt.Sprintf("<rule id=\"%s\" severity=\"%s\"%s%s>\n", r.ID, renderRuleSeverityMust, privateTrustAttr(r), reviewAttr(!trust.Approved(renderTrust(r)))) +
-				mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true) + "\n</rule>\n"
-			b.WriteString(block)
-			pins = append(pins, privatePin{id: r.ID.String(), kind: privatePinRule, text: block, src: srcOf[r.ID.String()]})
-		}
-		n += len(rules)
+	for _, r := range rules {
+		block := fmt.Sprintf("<rule id=\"%s\" severity=\"%s\"%s%s>\n", r.ID, renderRuleSeverityMust, privateTrustAttr(r), reviewAttr(!trust.Approved(renderTrust(r)))) +
+			mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true) + "\n</rule>\n"
+		act, globs := renderField(r, renderFieldActivation), renderField(r, renderFieldGlobs)
+		pins = append(pins, privatePin{id: r.ID.String(), kind: privatePinRule, text: block, src: srcOf[r.ID.String()],
+			lines:   pinIndexLines(r.ID.String(), renderRuleSeverityMust, renderField(r, schema.FieldSummary), "", renderField(r, renderFieldBody), pinApplies(privatePinRule, act, globs)),
+			rank:    pinRankOf(privatePinRule, renderRuleSeverityMust, act),
+			updated: renderUpdated(r)})
 	}
-	if len(hotfixes) > 0 {
-		b.WriteString("\n## Hotfixes (pinned, recurring warnings)\n\n")
-		for _, h := range hotfixes {
-			block := fmt.Sprintf("<hotfix id=\"%s\" severity=\"%s\">\n", h.ID, renderField(h, renderFieldSeverity)) +
-				"**" + renderField(h, renderFieldTitle) + "**\n\n" +
-				mk.withMetaLine(ctx, renderField(h, renderFieldBody), h, true) + "\n</hotfix>\n"
-			b.WriteString(block)
-			pins = append(pins, privatePin{id: h.ID.String(), kind: privatePinHotfix, text: block, src: srcOf[h.ID.String()]})
-		}
-		n += len(hotfixes)
+	for _, h := range hotfixes {
+		sev := renderField(h, renderFieldSeverity)
+		block := fmt.Sprintf("<hotfix id=\"%s\" severity=\"%s\">\n", h.ID, sev) +
+			"**" + renderField(h, renderFieldTitle) + "**\n\n" +
+			mk.withMetaLine(ctx, renderField(h, renderFieldBody), h, true) + "\n</hotfix>\n"
+		pins = append(pins, privatePin{id: h.ID.String(), kind: privatePinHotfix, text: block, src: srcOf[h.ID.String()],
+			lines:   pinIndexLines(h.ID.String(), sev, renderField(h, schema.FieldSummary), renderField(h, renderFieldTitle), renderField(h, renderFieldBody), pinApplies(privatePinHotfix, "", "")),
+			rank:    pinRankOf(privatePinHotfix, sev, ""),
+			updated: renderUpdated(h)})
 	}
+	n += len(rules) + len(hotfixes)
 
-	out := privateBody{core: b.String(), pinned: n, pins: pins, origins: origins}
+	out := privateBody{head: b.String(), pinned: n, pins: pins, origins: origins}
 	for _, t := range privateTables {
 		sec := privateSection{heading: t.heading}
 		for _, r := range byTable[t.table] {

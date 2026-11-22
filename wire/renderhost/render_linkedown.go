@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -29,13 +30,18 @@ import (
 type privateReport struct {
 	Dir      string `json:"dir"`
 	Stores   int    `json:"stores"`
-	Pinned   int    `json:"pinned"`    // must rules and critical/high hotfixes (never cut)
+	Pinned   int    `json:"pinned"`    // must rules and critical/high hotfixes (full, index line or not listed)
 	Rows     int    `json:"rows"`      // every row shown in the store files
 	LeftOut  int    `json:"left_out"`  // "Other notes" rows the budget left out
-	Budget   int    `json:"budget"`    // context.budget.internal
+	Budget   int    `json:"budget"`    // the budget the files were fitted to (context.budget.internal, clamped)
 	Bytes    int    `json:"bytes"`     // the store files' size
-	Core     int    `json:"core"`      // bytes of the pinned part
-	OverCore bool   `json:"over_core"` // the pinned part alone is over the budget
+	Core     int    `json:"core"`      // bytes of the pinned part in full
+	OverCore bool   `json:"over_core"` // the pinned part in full is over the budget
+	// D-909: how the hard budget wrote the pinned rows, and the budget as set
+	PinnedFull      int `json:"pinned_full"`
+	PinnedIndex     int `json:"pinned_index"`
+	PinnedNotListed int `json:"pinned_not_listed"`
+	BudgetSet       int `json:"budget_set"`
 	// fix is the warning's fix for this caller, "" when they can make
 	// none (a member of a company folder, devco D-725): the report then
 	// names no command, as the warning is not printed to them.
@@ -50,18 +56,21 @@ func (r *privateReport) text() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\nprivate context (outside the checkout: %s)\n", r.Dir)
 	fmt.Fprintf(&b, "  internal stores        %4d\n", r.Stores)
-	fmt.Fprintf(&b, "  pinned rules/hotfixes  %4d  full (never cut)\n", r.Pinned)
+	fmt.Fprintf(&b, "  pinned rules/hotfixes  %4d  %d full, %d one-line index, %d not listed\n", r.Pinned, r.PinnedFull, r.PinnedIndex, r.PinnedNotListed)
 	fmt.Fprintf(&b, "  rows shown             %4d  %d bytes\n", r.Rows, r.Bytes)
 	fmt.Fprintf(&b, "  notes left out         %4d  %s %d bytes\n", r.LeftOut, policy.KeyContextBudgetInternal, r.Budget)
+	if r.BudgetSet != r.Budget {
+		fmt.Fprintf(&b, "  budget                       %d as set, clamped to %d (everything lore adds to a tool's instruction files stays under %d bytes)\n", r.BudgetSet, r.Budget, policy.ContextCeiling)
+	}
 	// devco D-725: the fix is the warning's own (commands that run where
 	// printed, with the --to of the place the budget is set), and only for
 	// whoever may make it; it printed `lore policy set … --yes` with no
 	// --to, to members too
 	switch {
 	case r.OverCore && r.fix != "":
-		fmt.Fprintf(&b, "  the pinned part alone is %d bytes, over %s %d; fix: %s\n", r.Core, policy.KeyContextBudgetInternal, r.Budget, r.fix)
+		fmt.Fprintf(&b, "  the pinned part alone is %d bytes in full, over %s %d; fix: %s\n", r.Core, policy.KeyContextBudgetInternal, r.Budget, r.fix)
 	case r.OverCore:
-		fmt.Fprintf(&b, "  the pinned part alone is %d bytes, over %s %d; its rows and budget are changed by an admin of the org\n", r.Core, policy.KeyContextBudgetInternal, r.Budget)
+		fmt.Fprintf(&b, "  the pinned part alone is %d bytes in full, over %s %d; its rows and budget are changed by an admin of the org\n", r.Core, policy.KeyContextBudgetInternal, r.Budget)
 	}
 	return b.String()
 }
@@ -79,10 +88,13 @@ func (h *Host) privateReportOf(ctx context.Context, root string) *privateReport 
 	}
 	size := 0
 	for _, f := range p.files {
-		size += len(f.body)
+		if filepath.Base(f.path) != privateIndexFile { // index.md is never imported
+			size += len(f.body)
+		}
 	}
 	r := &privateReport{Dir: h.redact(p.dir), Stores: len(p.stores), Pinned: p.pinned, Rows: p.rows, LeftOut: p.leftOut,
-		Budget: p.budget, Bytes: size, Core: p.coreBytes, OverCore: p.budget > 0 && p.coreBytes > p.budget}
+		Budget: p.budget, Bytes: size, Core: p.coreBytes, OverCore: p.budget > 0 && p.coreBytes > p.budget,
+		PinnedFull: p.pinForms.full, PinnedIndex: p.pinForms.line, PinnedNotListed: p.pinForms.out, BudgetSet: p.setting}
 	if p.overCoreWarns() {
 		r.fix = overCoreFix(p.coreBytes, p.pins, p.fix)
 	}
