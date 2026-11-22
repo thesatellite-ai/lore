@@ -118,7 +118,7 @@ func (a *App) CheckHistory(ctx context.Context, root, since string) (string, err
 	if err != nil {
 		return "", err
 	}
-	allows.entries = append(allows.entries, a.linkedAllows(ctx)...) // D-736: a linked repo's entries live in its folder
+	allows.entries = append(allows.entries, a.linkedAllows(ctx).entries...) // D-736: a linked repo's entries live in its folder
 	pinned, err := historyPins(ctx, top)
 	if err != nil {
 		return "", err

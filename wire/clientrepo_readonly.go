@@ -25,7 +25,7 @@ func clientRepoWriteRefusal(remote string, linked store.Source, target string, o
 	if own {
 		why = "is an own repo whose notes live in its linked store folder, not in the repo"
 	}
-	e := errs.Wrap(errs.StoreReadOnly, "this repository ("+remote+") "+why+", so a write here (such as --to repo, the default of policy set) is refused", store.ErrReadOnly)
+	e := errs.Wrap(errs.StoreReadOnly, "this repository ("+remote+") "+why+", so a write here (such as --to repo) is refused", store.ErrReadOnly)
 	if linked == "" && target != "" {
 		return e.WithHint("it is linked to " + target + ", which this repo does not attach (`lore whoami` says why): write there with --to " + target)
 	}

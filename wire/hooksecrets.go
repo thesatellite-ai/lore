@@ -120,7 +120,8 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 	if err != nil {
 		return nil, err
 	}
-	allows.entries = append(allows.entries, a.linkedAllows(ctx)...)
+	linked := a.linkedAllows(ctx)
+	allows.entries = append(allows.entries, linked.entries...)
 	_, isGit, inStore := rowfs.StoreTop(root)
 	inStore = inStore && isGit
 	saves := a.secretsAllowSaves(ctx)
@@ -176,7 +177,7 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 	}
 	a.auditHookRefused(ctx, where, refused)
 	return inHistory, errs.New(errs.LeakBlocked, "blocked, this "+where+" carries a secret:\n"+strings.Join(lines, "\n")).
-		WithHint(leakHint(where, inStore, k))
+		WithHint(leakHint(where, inStore, linked.home, k))
 }
 
 // findingKinds is what a refusal's findings were, for its hint: in a
@@ -242,7 +243,11 @@ func allowLineOf(p string, h leakcheck.SecretHit, inStore bool) string {
 // <folder>/secret_allows/<id>.json in the store, so the person only
 // commits (or pushes) again (never --no-verify). k says what the findings
 // were: a refusal of a commit message alone never names an allow command.
-func leakHint(where string, inStore bool, k findingKinds) string {
+// linkedHome is the store folder a linked repo's allows are saved in ("" in
+// an unlinked repo): there `lore secrets allow` writes and commits the
+// entry in that folder, and the repo gets no file to add (issue #126: the
+// hint asked for a .lore/data/secret_allows file a linked repo never has).
+func leakHint(where string, inStore bool, linkedHome string, k findingKinds) string {
 	if !k.file {
 		return "the value is in a commit message: follow the `fix:` line under it (no --no-verify needed)"
 	}
@@ -265,6 +270,9 @@ func leakHint(where string, inStore bool, k findingKinds) string {
 	}
 	if inStore {
 		return vault + " (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then " + storeAgain + " (no --no-verify needed)"
+	}
+	if linkedHome != "" {
+		return vault + "; lore saves the entry in " + linkedHome + ", the store folder this repo is linked to, so there is no file to add here; then " + storeAgain + " (no --no-verify needed)"
 	}
 	return vault + ", add the new .lore/data/secret_allows file, " + again + " (no --no-verify needed)"
 }
@@ -341,26 +349,34 @@ func committedAllows(ctx context.Context, root string) (hookAllows, error) {
 // commits them to the store itself. nil in an unlinked repo, and when the
 // folder cannot be read here: the check then takes fewer allows, never
 // more (fail closed).
-func (a *App) linkedAllows(ctx context.Context) []scan.Allow {
+func (a *App) linkedAllows(ctx context.Context) linkedAllowSet {
 	src, linked, err := a.RepoHomeStore(ctx)
 	if err != nil || !linked {
-		return nil
+		return linkedAllowSet{}
 	}
+	out := linkedAllowSet{home: a.StoreLabel(src)}
 	eng, err := a.Engine(ctx)
 	if err != nil {
-		return nil
+		return out
 	}
 	rows, err := eng.List(ctx, src, schema.TableSecretAllows)
 	if err != nil {
-		return nil
+		return out
 	}
-	var out []scan.Allow
 	for _, r := range rows {
 		if al, ok := allowOfRow(r); ok {
-			out = append(out, al)
+			out.entries = append(out.entries, al)
 		}
 	}
 	return out
+}
+
+// linkedAllowSet is what linkedAllows found: the entries, and home, the
+// folder a linked repo's allows are saved in as a person names it ("" in an
+// unlinked repo), which the refusal's hint names (leakHint).
+type linkedAllowSet struct {
+	entries []scan.Allow
+	home    string
 }
 
 // allowOfFile reads one secret_allows row file; false for a deleted,

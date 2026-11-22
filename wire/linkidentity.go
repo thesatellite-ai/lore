@@ -29,6 +29,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -143,12 +144,16 @@ func (a *App) LinkedFolderProject(ctx context.Context) (ids.ID[ids.Project], boo
 // goes to (devco D-736, the secrets-allow class): the repo store in an
 // unlinked repo, the attached store folder its org link names in a linked
 // own repo whose .lore/data holds no project row (after lore doctor
-// --fix; the condition Project() uses). linked says which. A linked
-// folder this command has not opened is E_STORE_UNREACHABLE naming the
-// link: the write is refused, never put back into the repo. It satisfies
-// the optional repoHomer upgrade of ops/settings and ops/scope
-// structurally.
+// --fix; the condition Project() uses), and in a repo with no lore files
+// that a link names by its remote (a client repo, remoteLinkedHome).
+// linked says which. A linked folder this command has not opened is
+// E_STORE_UNREACHABLE naming the link: the write is refused, never put
+// back into the repo. It satisfies the optional repoHomer upgrade of
+// ops/settings and ops/scope structurally.
 func (a *App) RepoHomeStore(ctx context.Context) (src store.Source, linked bool, err error) {
+	if src, linked, err = a.remoteLinkedHome(ctx); linked {
+		return src, linked, err
+	}
 	top := a.ownLinkedTop(ctx)
 	if top == "" {
 		return store.SourceRepo, false, nil
@@ -173,6 +178,29 @@ func (a *App) RepoHomeStore(ctx context.Context) (src store.Source, linked bool,
 	src, open := a.linkedFolderSource(ctx, eng, name)
 	if !open {
 		return "", true, errs.New(errs.StoreUnreachable, "this repo is linked to "+name+", which holds its settings, and that folder is not attached here").
+			WithHint("run `lore sync` to fetch the store; `lore whoami` shows the link")
+	}
+	return src, true, nil
+}
+
+// remoteLinkedHome is RepoHomeStore of a repo with no lore files that a
+// store link names by its remote (`lore org link` in a client repo: the
+// state's linkedByRemote): the store folder the link names, the same one
+// Project() answers with (linkedFolderProject). linked is false for any
+// other repo. Why (issue #126, devco D-912): RepoHomeStore knew only an own
+// linked repo, so in a client repo `lore secrets allow --file` (the "not a
+// secret?" line a refused commit prints) wrote into the repo store, a
+// client-class store, pointing at the folder's project (F15 refused it),
+// and the commit check never read the folder's allows either. A folder not
+// attached here is E_STORE_UNREACHABLE, never a write into the repo.
+func (a *App) remoteLinkedHome(ctx context.Context) (store.Source, bool, error) {
+	st, err := a.state(ctx)
+	if err != nil || st.linkedByRemote == "" {
+		return "", false, nil
+	}
+	src, ok := orgAliases(ctx, a.opts, st.repoTop)[attach.ReservedTeam]
+	if !ok || st.byName[src] == nil {
+		return "", true, errs.New(errs.StoreUnreachable, "this repo is linked to a store folder by its remote ("+st.linkedByRemote+"), which holds its settings, and that folder is not attached here").
 			WithHint("run `lore sync` to fetch the store; `lore whoami` shows the link")
 	}
 	return src, true, nil
