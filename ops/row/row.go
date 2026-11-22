@@ -908,10 +908,9 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 		out.Children = append(out.Children, c.Row.ID.String())
 	}
 	for _, wn := range w.Warnings {
-		switch wn.Code {
-		case engine.WarnTimeKeptBack, engine.WarnInternalKeptBack, engine.WarnTimeTotals:
-			out.Notes = append(out.Notes, wn.Message) // TQ3 lines (design 8)
-		default:
+		if noteCode(wn.Code) { // TQ3 lines (design 8), D-891 tag copies
+			out.Notes = append(out.Notes, wn.Message)
+		} else {
 			out.Warnings = append(out.Warnings, wn.Message)
 		}
 	}

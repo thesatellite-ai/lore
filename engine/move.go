@@ -193,6 +193,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		// F-MOVE-1: a container only the source holds is left behind,
 		// never carried as a dangling id the next hop cannot resolve.
 		var left []Warning
+		var carriedTags []string // tag fields keeping ids no attached store holds (D-891)
 		if typed, left, err = e.leaveContainers(ctx, src, to, def, typed); err != nil {
 			return Written{}, err
 		}
@@ -241,6 +242,12 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 			if typed, err = e.rehomeProject(ctx, to, def, typed, false); err != nil {
 				return Written{}, err
 			}
+			// devco D-891: the row's tags become to's tags of the same names.
+			var tagged []Warning
+			if typed, tagged, carriedTags, err = e.placeTags(ctx, to, def, typed); err != nil {
+				return Written{}, err
+			}
+			dropped = append(dropped, tagged...)
 			if n, secs := movedTime(typed); n > 0 {
 				// TIME 11.5 (FA-LTASK-4): the entries travel with the row; the
 				// line tells the old project its history went too.
@@ -254,6 +261,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 			if names, err = e.carriedEdges(ctx, def, typed, names); err != nil {
 				return Written{}, err
 			}
+			names = slices.DeleteFunc(names, func(n string) bool { return slices.Contains(carriedTags, n) })
 		}
 		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {
 			return Written{}, err

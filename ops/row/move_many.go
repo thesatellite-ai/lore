@@ -58,7 +58,9 @@ type ManyMover interface {
 	// would give (the secret scan of devco D-717, the reference check and
 	// role guard of D-761), before it says "would move". Nothing is
 	// written.
-	PlanMove(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) error
+	// It returns what the move would do, row by row (the tags it would
+	// copy into --to, devco D-891), so the dry run lists it too.
+	PlanMove(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) (engine.MovedMany, error)
 }
 
 // NearDuplicateFinder is the optional Env upgrade (wire.App) that lists
@@ -261,9 +263,11 @@ func (o ops) moveMany(ctx context.Context, in MoveIn) (MoveOut, error) {
 		// other check): a preview never prints a next step that would be
 		// refused
 		plan := engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt, SecretRerun: o.bulkLine(ctx, in, p)}
-		if err = mm.PlanMove(moveAsk(ctx, does, o.bulkLine(ctx, in, p)), refs, p.to, plan); err != nil {
-			return MoveOut{}, err
+		planned, perr := mm.PlanMove(moveAsk(ctx, does, o.bulkLine(ctx, in, p)), refs, p.to, plan)
+		if perr != nil {
+			return MoveOut{}, perr
 		}
+		out.addRowWarnings(planned.Rows)
 		out.next = o.bulkLine(ctx, in, p)
 		return out, nil
 	}
@@ -271,18 +275,35 @@ func (o ops) moveMany(ctx context.Context, in MoveIn) (MoveOut, error) {
 	if err != nil {
 		return MoveOut{}, err
 	}
-	for _, w := range mv.Rows {
+	out.addRowWarnings(mv.Rows)
+	return out, nil
+}
+
+// addRowWarnings files each moved row's warnings under o, prefixed with
+// the row's id: an expected line (noteCode) as a note, any other as a
+// warning. The dry run and the run print the same lines.
+func (o *MoveOut) addRowWarnings(rows []engine.Written) {
+	for _, w := range rows {
 		for _, wn := range w.Warnings {
 			msg := w.Row.ID.String() + ": " + wn.Message
-			switch wn.Code {
-			case engine.WarnTimeKeptBack, engine.WarnInternalKeptBack, engine.WarnTimeTotals:
-				out.Notes = append(out.Notes, msg)
-			default:
-				out.Warnings = append(out.Warnings, msg)
+			if noteCode(wn.Code) {
+				o.Notes = append(o.Notes, msg)
+			} else {
+				o.Warnings = append(o.Warnings, msg)
 			}
 		}
 	}
-	return out, nil
+}
+
+// noteCode reports whether a move's warning code is an expected line, not
+// a warning: the client-move lines of TQ3 and a tag copied into the
+// target place (devco D-891).
+func noteCode(c engine.WarnCode) bool {
+	switch c {
+	case engine.WarnTimeKeptBack, engine.WarnInternalKeptBack, engine.WarnTimeTotals, engine.WarnTagCopied:
+		return true
+	}
+	return false
 }
 
 // nearDuplicates is what the Env's NearDuplicateFinder lists for the

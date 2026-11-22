@@ -125,10 +125,11 @@ func (a *App) MoveMany(ctx context.Context, refs []engine.Ref, to store.Source, 
 // check, role guard), then drops the batch, so a preview refuses whatever
 // the real run refuses and writes nothing. Before, the dry run ran only
 // the secret scan and promised a move whose reference check then failed.
-func (a *App) PlanMove(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) error {
+// The planned rows come back with their warnings (the tags the move would
+// copy, devco D-891) for the dry run to list.
+func (a *App) PlanMove(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) (engine.MovedMany, error) {
 	opt.Plan = true
-	_, err := a.MoveMany(ctx, refs, to, opt)
-	return err
+	return a.MoveMany(ctx, refs, to, opt)
 }
 
 // errMovePlanned ends a planned bulk move's batch (PlanMove) so
