@@ -187,6 +187,10 @@ type Lens struct {
 	// kept holds QueryKept answers of a pooled lens, by statement; it lives
 	// and dies with the lens, which any change to an attached file rebuilds.
 	kept map[string]Result
+	// keptBytes is the estimated heap the answers in kept take
+	// (resultBytes); KeptBytes sums it over the idle lenses so the read
+	// server sizes its memory limits to what it keeps (devco:D-887).
+	keptBytes int64
 }
 
 // attachedName is the schema name of the i-th source. Store names are

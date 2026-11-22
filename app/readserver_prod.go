@@ -20,3 +20,7 @@ func readServerTestDie([]string) string { return readServerDieNo }
 
 // noteServerHeap reports the server's live heap, in test builds only.
 func noteServerHeap([]string) {}
+
+// readServerBaseLive replaces the live heap the server may hold beyond
+// what it keeps (serverLimits), in test builds only: 0, the default.
+func readServerBaseLive() uint64 { return 0 }

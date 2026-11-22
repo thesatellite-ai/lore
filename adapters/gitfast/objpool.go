@@ -77,6 +77,27 @@ func ShareObjectStores() (stop func()) {
 	}
 }
 
+// KeptBytes is the bytes the kept object stores hold (decoded object
+// content and tree indexes, each store bounded by objPoolMaxBytes); 0 when
+// stores are not shared. Why (devco:D-887): the read server sizes its
+// memory limits to what it keeps on purpose, and a person with several
+// stores keeps up to objPoolMaxBytes for each.
+func KeptBytes() int64 {
+	objPool.mu.Lock()
+	stores := make([]*objectStore, 0, len(objPool.stores))
+	for _, k := range objPool.stores {
+		stores = append(stores, k.s)
+	}
+	objPool.mu.Unlock()
+	var n int64
+	for _, s := range stores {
+		s.mu.Lock()
+		n += int64(s.bytes)
+		s.mu.Unlock()
+	}
+	return n
+}
+
 // openObjectStore is the object store of the folder dir: the kept one
 // when stores are shared and it is still current, else a new one (kept
 // when shared). shared tells the caller not to close it.

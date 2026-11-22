@@ -247,7 +247,7 @@ func (l *Lens) sameShape(ctx context.Context) bool {
 		return false
 	}
 	l.mu.Lock()
-	l.kept = nil
+	l.kept, l.keptBytes = nil, 0
 	l.mu.Unlock()
 	return true
 }
@@ -349,13 +349,63 @@ func (l *Lens) QueryKept(ctx context.Context, query string, timeout time.Duratio
 	if err != nil || !pooled {
 		return res, err
 	}
+	kept := copyResult(res)
+	size := resultBytes(kept)
 	l.mu.Lock()
 	if l.kept == nil {
 		l.kept = map[string]Result{}
 	}
-	l.kept[query] = copyResult(res)
+	if old, raced := l.kept[query]; raced {
+		l.keptBytes -= resultBytes(old)
+	}
+	l.kept[query] = kept
+	l.keptBytes += size
 	l.mu.Unlock()
 	return res, nil
+}
+
+// KeptBytes is the estimated heap of the answers the idle pooled lenses
+// keep (QueryKept). Why (devco:D-887, issue #96 follow-up): lore ask keeps
+// every row's text of the stores it reads, so on a store of 100,000 rows
+// what the read server keeps on purpose is past the fixed live-heap limit
+// it exits on; the server adds this to its limits instead of exiting after
+// every call. 0 when reuse is off.
+func KeptBytes() int64 {
+	lensPool.mu.Lock()
+	idle := slices.Clone(lensPool.idle)
+	lensPool.mu.Unlock()
+	var n int64
+	for _, l := range idle {
+		l.mu.Lock()
+		n += l.keptBytes
+		l.mu.Unlock()
+	}
+	return n
+}
+
+// keptValueOverhead and keptRowOverhead estimate the heap of one kept
+// value beyond its text (the interface word pair in the row and the boxed
+// value) and of one row's slice header. Rough on purpose: the estimate
+// only has to grow with what is kept.
+const (
+	keptValueOverhead = 32
+	keptRowOverhead   = 24
+)
+
+// resultBytes is the estimated heap r takes: its rows, each value's
+// overhead and text.
+func resultBytes(r Result) int64 {
+	var n int64
+	for _, row := range r.Rows {
+		n += keptRowOverhead
+		for _, v := range row {
+			n += keptValueOverhead
+			if v != nil {
+				n += int64(len(v.String()))
+			}
+		}
+	}
+	return n
 }
 
 // copyResult copies r's column list and every row slice (the values are

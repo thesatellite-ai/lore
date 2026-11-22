@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"sync"
@@ -67,11 +68,51 @@ const (
 	// server collects more often than readServerGCPercent asks.
 	readServerMemLimit = 192 << 20
 	// readServerMaxLive is the live heap past which the server exits after
-	// the call it just served (the next call starts a fresh one): what it
-	// keeps across calls (lenses, objects, decoded rows) is bounded, so
-	// this only ever fires on growth nobody bounded (devco:D-845).
+	// the call it just served (the next call starts a fresh one), on top of
+	// what it keeps on purpose (serverLimits): what it keeps across calls
+	// (lenses and their kept answers, objects) is bounded, so this only
+	// ever fires on growth nobody bounded (devco:D-845).
 	readServerMaxLive = 128 << 20
 )
+
+// serverLimits are the read server's live-heap exit limit and soft memory
+// limit while it keeps kept bytes on purpose (sqlite.KeptBytes: ask's kept
+// answers; gitfast.KeptBytes: decoded objects). Why (devco:D-887, issue
+// #96 follow-up): lore ask keeps every row's text of the stores it reads,
+// so on a store of 100,000 rows the kept state alone is past 128 MB; with
+// fixed limits the server exited after every call (each ask one-shot,
+// ~116 ms instead of ~29 ms) and, while it lived, its soft limit sat
+// below its live heap so it collected without pause. The limits grow with
+// what the server keeps and nothing else: growth nobody bounded still
+// passes readServerMaxLive above it and ends the server.
+//
+// base 0 is readServerMaxLive (a test build may set another,
+// readServerBaseLive).
+func serverLimits(base uint64, kept int64) (maxLive uint64, memLimit int64) {
+	if base == 0 {
+		base = readServerMaxLive
+	}
+	maxLive = base + uint64(max(kept, 0))
+	return maxLive, max(readServerMemLimit, int64(maxLive)*3/2)
+}
+
+// overLiveLimit says whether the live heap is past maxLive once the call
+// is over. live is the live heap as of the last collection, which may have
+// run during the call while its temporary copies (a whole answer, the copy
+// kept of it) were still reachable, so a reading over the limit is checked
+// again after one full collection. Why (devco:D-887): on a store of 15,000
+// rows of a few KB the mid-call reading was about twice what the server
+// keeps, so a release build exited after every ask even with limits sized
+// to the kept state (test builds collected first to report their heap and
+// never saw it). The collection runs after the reply went out, and only
+// when the cheap reading is over.
+func overLiveLimit(maxLive uint64, live func() uint64, collect func()) bool {
+	if live() <= maxLive {
+		return false
+	}
+	collect()
+	return live() > maxLive
+}
 
 // errNotServed is why the CLI runs a command one-shot after asking.
 var errNotServed = errors.New("read server: not served")
@@ -478,7 +519,9 @@ func (s *readServer) loop() {
 			return // idle, closed by watch, or broken
 		}
 		s.handle(conn)
-		if time.Since(s.started) > readServerMaxLife || heapLive() > readServerMaxLive {
+		maxLive, memLimit := serverLimits(readServerBaseLive(), keptBytes())
+		debug.SetMemoryLimit(memLimit)
+		if time.Since(s.started) > readServerMaxLife || overLiveLimit(maxLive, heapLive, runtime.GC) {
 			return
 		}
 	}

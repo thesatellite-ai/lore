@@ -39,6 +39,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 )
 
@@ -208,4 +210,9 @@ func heapLive() uint64 {
 		return 0
 	}
 	return m[0].Value.Uint64()
+}
+
+// keptBytes is what the server keeps on purpose across calls (serverLimits).
+func keptBytes() int64 {
+	return sqlite.KeptBytes() + gitfast.KeptBytes()
 }

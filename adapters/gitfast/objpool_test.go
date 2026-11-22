@@ -242,3 +242,45 @@ func TestKeptObjectStoreDropsReplacedTrees(t *testing.T) {
 		t.Errorf("live heap grew %.1f MB over %d write+read rounds of a %d-row folder, want flat", float64(heap1-heap0)/(1<<20), rounds-warm, n)
 	}
 }
+
+// TestKeptBytesSumsKeptStores (devco:D-887): the read server sizes its
+// memory limits to what it keeps, so KeptBytes is the bytes the shared
+// object stores hold, and 0 once sharing stops. Not parallel: the pool is
+// process state.
+func TestKeptBytesSumsKeptStores(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	work, _, _ := fixture(t)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("HOME", t.TempDir())
+	ctx := context.Background()
+	blob := gitT(t, work, "rev-parse", "HEAD~3:org/tasks/t1.json")
+	stop := ShareObjectStores()
+	if got := KeptBytes(); got != 0 {
+		t.Fatalf("KeptBytes = %d before any read, want 0", got)
+	}
+	s := New()
+	if rep, ok := s.Answer(ctx, work, []string{"cat-file", "blob", blob}, nil, nil); !ok || rep.Code != 0 {
+		t.Fatalf("cat-file answered %v (exit %d)", ok, rep.Code)
+	}
+	objs := s.repoFor(work)
+	if objs == nil {
+		t.Fatal("no repository read")
+	}
+	store, err := objs.objects()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close() // the kept store stays open
+	store.mu.Lock()
+	want := int64(store.bytes)
+	store.mu.Unlock()
+	if got := KeptBytes(); want == 0 || got != want {
+		t.Fatalf("KeptBytes = %d, want the kept store's %d bytes (non-zero)", got, want)
+	}
+	stop()
+	if got := KeptBytes(); got != 0 {
+		t.Fatalf("KeptBytes = %d after sharing stopped, want 0", got)
+	}
+}

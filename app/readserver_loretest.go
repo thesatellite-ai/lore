@@ -31,7 +31,21 @@ const (
 	// appends its live heap to (bytes, after a full collection) once it
 	// served the call: a test reads whether what it keeps stays bounded.
 	envReadServerHeap = "LORE_TEST_READ_SERVER_HEAP"
+	// envReadServerBaseLive in the environment of the call that starts the
+	// server replaces readServerMaxLive (bytes) as the live heap it may
+	// hold beyond what it keeps: a test with a small store shows the
+	// limits grow with the kept state (devco:D-887).
+	envReadServerBaseLive = "LORE_TEST_READ_SERVER_BASE_LIVE"
 )
+
+// readServerBaseLive is LORE_TEST_READ_SERVER_BASE_LIVE when set, else 0
+// (serverLimits then uses readServerMaxLive).
+func readServerBaseLive() uint64 {
+	if n, err := strconv.ParseUint(os.Getenv(envReadServerBaseLive), 10, 64); err == nil {
+		return n
+	}
+	return 0
+}
 
 // readServerIdleFor is LORE_TEST_READ_SERVER_IDLE when set, else
 // readServerIdle.
@@ -86,4 +100,11 @@ func noteServerHeap(env []string) {
 	}
 	_, _ = f.WriteString(strconv.FormatUint(heapLive(), 10) + "\n")
 	_ = f.Close()
+	// and what it keeps on purpose (serverLimits) to <file>.kept
+	k, err := os.OpenFile(p+".kept", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	_, _ = k.WriteString(strconv.FormatInt(keptBytes(), 10) + "\n")
+	_ = k.Close()
 }

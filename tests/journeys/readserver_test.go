@@ -10,7 +10,9 @@ package journeys
 // the one-shot process does, and a write is never handed to it.
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +20,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -417,6 +420,141 @@ func TestJourneyReadServerAnswersAReleasedLore(t *testing.T) {
 		withBin(t, cp, code, q...).OK(t).Says(t, "Dana reviews")
 		if b, _ := os.ReadFile(log); string(b) != "one-shot\n" {
 			t.Errorf("[D-864] a copy of the binary (another file) must run one-shot, never be answered; the log says:\n%s", b)
+		}
+	})
+}
+
+// TestJourneyReadServerLimitsFollowWhatItKeeps (devco:D-887, public issue
+// #96 follow-up): lore ask keeps every row's text of the stores it reads,
+// so on a big store what the read server keeps on purpose passed its
+// fixed live-heap limit and it exited after every call (each ask ran
+// one-shot, ~4x slower at 100,000 rows). Its limits now add what it keeps.
+// A folder of 3,000 rows of ~8 KB committed by hand (an import); the
+// server reports its live heap and kept bytes; a new server is given a
+// base live heap between its working heap and its live heap (half the
+// kept bytes below what it holds): with limits sized to the kept state it
+// serves every ask, with the fixed base it would exit after the first.
+func TestJourneyReadServerLimitsFollowWhatItKeeps(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	uma := w.Persona("Uma Reyes", "uma@acme-co.example")
+	lap := uma.Laptop()
+	me := w.Remote("github.com/uma-reyes/lore-me")
+	const rows = 3000
+	filler := strings.Repeat("the checklist covers rollback, owners and alerts. ", 160) // ~8 KB
+	w.Step("day1/an-import-fills-the-feeds-folder", func() {
+		lap.Lore(lap.Home, "store", "init", "--name", "me", "--url", me.SSHURL(), "--yes").OK(t)
+		out := lap.Lore(lap.Home, "memory", "add", "--to", "me/feeds", "--create", "--body", "seed event: Dana reviews the deploy checklist on mondays.", "--yes").OK(t)
+		seed := regexp.MustCompile(`mem_[0-9a-f]{32}`).FindString(out.Out())
+		if seed == "" {
+			t.Fatalf("no memory id in: %s", out.Out())
+		}
+		seedFile := strings.TrimSpace(lap.Lore(lap.Home, "path", "--id", seed).OK(t).Stdout)
+		doc, err := os.ReadFile(seedFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range rows {
+			id := fmt.Sprintf("%s%012x", seed[:len(seed)-12], 0x100000+i)
+			body := strings.Replace(strings.ReplaceAll(string(doc), seed, id), "seed event", fmt.Sprintf("feed event %d: %s", i, filler), 1)
+			if err := os.WriteFile(filepath.Join(filepath.Dir(seedFile), id+".json"), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		store := &teamharness.Clone{A: lap.Actor, Dir: filepath.Dir(filepath.Dir(filepath.Dir(seedFile)))}
+		store.Git("add", "-A")
+		store.Git("commit", "-q", "-m", "import feed events")
+	})
+	w.Step("day1/a-server-keeping-big-answers-keeps-serving", func() {
+		dir := t.TempDir()
+		log, heap := filepath.Join(dir, "read-server.log"), filepath.Join(dir, "heap")
+		sock := lap.LorePath("run", "read.sock")
+		lap.SetEnv("LORE_READ_SERVER", "1")
+		lap.SetEnv("LORE_TEST_READ_SERVER_LOG", log)
+		defer func() {
+			lap.SetEnv("LORE_READ_SERVER", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_LOG", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_HEAP", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_BASE_LIVE", "")
+			_ = os.Remove(sock) // the server stops once its socket is gone
+		}()
+		ask := []string{"ask", "--store", "me", "--query", "who reviews the deploy checklist"}
+		startServer := func() {
+			t.Helper()
+			_ = os.Remove(sock) // a running server sees it gone and exits
+			// wait until no server holds the home's lock: a server started
+			// while the old one still runs finds it held and exits at once
+			lock, err := os.OpenFile(lap.LorePath("run", "read.lock"), os.O_RDWR, 0)
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+				lock, _ = os.Open(os.DevNull) // no server ran yet: nothing to wait for
+			case err != nil:
+				t.Fatal(err)
+			}
+			for deadline := time.Now().Add(20 * time.Second); syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) != nil; time.Sleep(50 * time.Millisecond) {
+				if time.Now().After(deadline) {
+					t.Fatal("the old read server still runs 20 s after its socket was removed")
+				}
+			}
+			_ = lock.Close() // releases the lock
+			_ = os.Remove(lap.LorePath("run", "read.start"))
+			lap.Lore(lap.Home, ask...).OK(t) // starts a server
+			for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+				if _, err := os.Stat(sock); err == nil {
+					return
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("no read server listens on %s", sock)
+				}
+			}
+		}
+		numbers := func(p string) []int64 {
+			t.Helper()
+			raw, _ := os.ReadFile(p)
+			var v []int64
+			for f := range strings.FieldsSeq(string(raw)) {
+				n, err := strconv.ParseInt(f, 10, 64)
+				if err != nil {
+					t.Fatalf("%s holds %q", p, f)
+				}
+				v = append(v, n)
+			}
+			return v
+		}
+		startServer()
+		lap.SetEnv("LORE_TEST_READ_SERVER_HEAP", heap)
+		const warm = 4
+		for range warm {
+			lap.Lore(lap.Home, ask...).OK(t)
+		}
+		live, kept := numbers(heap), numbers(heap+".kept")
+		if len(live) != warm || len(kept) != warm {
+			t.Fatalf("the server reported its heap after %d and its kept bytes after %d of %d asks", len(live), len(kept), warm)
+		}
+		k := kept[warm-1]
+		if k < rows*8000 {
+			t.Fatalf("the server keeps %d KB after asks over %d rows of ~8 KB, want at least their text (ask keeps every row's text)", k>>10, rows)
+		}
+		var working int64
+		for i := range warm {
+			working = max(working, live[i]-kept[i])
+		}
+		base := working + k/2 // under what it holds, over its working heap
+		t.Logf("live heap %d KB, kept %d KB, working heap %d KB: base live heap %d KB", live[warm-1]>>10, k>>10, working>>10, base>>10)
+		lap.SetEnv("LORE_TEST_READ_SERVER_HEAP", "")
+		lap.SetEnv("LORE_TEST_READ_SERVER_BASE_LIVE", strconv.FormatInt(base, 10))
+		startServer() // takes the base from the call that starts it
+		lap.SetEnv("LORE_TEST_READ_SERVER_BASE_LIVE", "")
+		_ = os.Remove(log)
+		// no heap report now: it collects before reading, and a release
+		// build reads the live heap as of the last collection, which may
+		// have run mid-call (overLiveLimit collects before it exits)
+		const n = 8
+		for range n {
+			lap.Lore(lap.Home, ask...).OK(t)
+		}
+		if b, _ := os.ReadFile(log); strings.Count(string(b), "served\n") != n || strings.Contains(string(b), "one-shot") {
+			t.Errorf("want all %d asks served by the one server (its limits add the %d KB it keeps), the log says:\n%s", n, k>>10, b)
 		}
 	})
 }
