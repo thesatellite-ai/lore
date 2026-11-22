@@ -58,7 +58,7 @@ type call struct {
 	out      string // stdout + stderr
 	code     int
 	wall     time.Duration
-	cpu      time.Duration // user + system time of the process
+	cpu      time.Duration // user + system time of the process and of its read server during the call (CallCPU)
 	timedOut bool
 }
 
@@ -76,11 +76,13 @@ func (e *benchEnv) run(limit time.Duration, args ...string) call {
 	cmd.Dir, cmd.Env = e.home, e.env
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
+	before := ServerCPU(e.bin, e.home)
 	start := time.Now()
 	err := cmd.Run()
 	c := call{out: out.String(), wall: time.Since(start), timedOut: ctx.Err() != nil}
 	if ps := cmd.ProcessState; ps != nil {
-		c.cpu = ps.UserTime() + ps.SystemTime()
+		// servercpu.go: the read server answers the call, so its CPU counts too (devco D-899)
+		c.cpu = CallCPU(ps.UserTime()+ps.SystemTime(), before, ServerCPU(e.bin, e.home))
 	}
 	if err != nil {
 		ee, ok := err.(*exec.ExitError)
