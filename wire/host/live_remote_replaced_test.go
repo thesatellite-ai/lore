@@ -87,7 +87,7 @@ func TestRemoteReplacedStopsOnlyLiveWrites(t *testing.T) {
 	if !errors.As(err, &e) || e.Code != errs.ReadOnly {
 		t.Fatalf("live write: %v, want E_READ_ONLY", err)
 	}
-	fresh, restore := strings.Index(e.Hint, "`lore live restore --fresh`"), strings.Index(e.Hint, "run `lore live restore`")
+	fresh, restore := strings.Index(e.Hint, "`lore live restore --fresh`"), strings.Index(e.Hint, "run `lore live restore --publish`")
 	if fresh < 0 || restore < 0 || fresh > restore || !strings.Contains(e.Message, "new repository") {
 		t.Fatalf("message %q / hint %q: want the new-repository reason and --fresh named before restore", e.Message, e.Hint)
 	}
@@ -102,13 +102,21 @@ func TestRemoteReplacedStopsOnlyLiveWrites(t *testing.T) {
 	if got := remoteLive(); got != "" {
 		t.Fatalf("sync pushed the old live rows to the new remote: %q", got)
 	}
-	// lore live restore --fresh: nothing pushed, the old rows kept in a backup
+	// a plain lore live restore refuses (devco D-914): publishing the old
+	// rows on the new remote takes the explicit --publish
 	r = &liveRun{h: f.s.h, sessions: map[string]*liveSession{}, kind: live.FetchAlways}
 	ctx = withRun(context.Background(), r)
 	ref, err := f.s.h.liveRef(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, rerr := ref.Restore(ctx, false); errs.CodeOf(rerr) != errs.Refused {
+		t.Fatalf("plain restore on the new remote: %v, want E_REFUSED", rerr)
+	}
+	if got := remoteLive(); got != "" {
+		t.Fatalf("the refused restore pushed the old live rows: %q", got)
+	}
+	// lore live restore --fresh: nothing pushed, the old rows kept in a backup
 	res, err := ref.StartFresh(ctx)
 	r.finish(ctx)
 	if err != nil || !res.Fresh || !strings.HasPrefix(res.Backup, live.RefBackupPrefix) {

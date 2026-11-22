@@ -1006,7 +1006,7 @@ Y
 
 # ---------------------------------------------------------------------------
 # live-repair: the live ref deleted on the server and put back with `lore live
-# restore`, and --trace showing the git commands lore runs (docs/team/commands.md,
+# restore --publish` (plain restore refuses: devco D-914), and --trace showing the git commands lore runs (docs/team/commands.md,
 # docs/team/troubleshooting.md).
 s_live_repair() {
   section live-repair
@@ -1019,10 +1019,11 @@ s_live_repair() {
   on alice work/billing "lore task add --title 'chase the unpaid February invoice'"
   on alice work/billing "git push -q origin :refs/lore/live && git ls-remote origin"
   on! alice work/billing "lore task add --title 'close the books for Q1'"
-  on alice work/billing "lore doctor | grep 'remote live ref'"
+  on alice work/billing "lore doctor | grep 'no live ref'"
 
   note "live restore"
-  on alice work/billing "lore live restore"
+  on! alice work/billing "lore live restore"
+  on alice work/billing "lore live restore --publish"
   on alice work/billing "git ls-remote origin refs/lore/live"
   on alice work/billing "lore task add --title 'close the books for Q1'"
   on alice work/billing "lore task list"

@@ -17,8 +17,9 @@ import (
 
 // TestRewrittenRemoteRefusesThenRestores (b-flow4, F8): once the remote
 // live ref is deleted, the next run's write is refused (E_READ_ONLY) with
-// the backup ref it names existing in the clone; `lore live restore`
-// pushes the rows back, and the run after it writes again.
+// the backup ref it names existing in the clone; a plain `lore live
+// restore` refuses and pushes nothing (devco D-914), `lore live restore
+// --publish` pushes the rows back, and the run after it writes again.
 func TestRewrittenRemoteRefusesThenRestores(t *testing.T) {
 	f := newLiveFixture(t)
 	f.s.release()
@@ -71,8 +72,19 @@ func TestRewrittenRemoteRefusesThenRestores(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, rerr := ref.Restore(ctx); rerr != nil {
-		t.Fatalf("restore: %v", rerr)
+	// #136 (devco D-914): a deleted ref looks like a new repository at the
+	// same url, so a plain restore refuses and pushes nothing; --publish
+	// is the explicit yes that puts the old rows back.
+	_, rerr := ref.Restore(ctx, false)
+	var re *errs.Error
+	if !errors.As(rerr, &re) || re.Code != errs.Refused || !strings.Contains(re.Hint, "`lore live restore --fresh`") || !strings.Contains(re.Hint, "`lore live restore --publish`") {
+		t.Fatalf("plain restore of a deleted remote ref: %v, want E_REFUSED naming --fresh and --publish", rerr)
+	}
+	if out, _ := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: top, Args: []string{"ls-remote", bare, live.RefLive}}); strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("the refused restore pushed: %q", out)
+	}
+	if _, rerr = ref.Restore(ctx, true); rerr != nil {
+		t.Fatalf("restore --publish: %v", rerr)
 	}
 	r.finish(ctx)
 	out, err := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: top, Args: []string{"ls-remote", bare, live.RefLive}})

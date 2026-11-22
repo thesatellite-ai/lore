@@ -161,8 +161,12 @@ type Ref interface {
 	// there is no live ref yet).
 	Log(ctx context.Context, n int) (History, error)
 	// Restore pushes the local copy (or the newest backup) back to the
-	// remote, leaving out landed and purged rows (§6.6).
-	Restore(ctx context.Context) (Restored, error)
+	// remote, leaving out landed and purged rows (§6.6). publish is the
+	// person's explicit yes (--publish) to sending every old live row to a
+	// remote that has no live ref any more (a new repository at the same
+	// url, or the ref deleted there): without it Restore refuses that case
+	// and pushes nothing (#136, devco D-914).
+	Restore(ctx context.Context, publish bool) (Restored, error)
 	// StartFresh keeps the local copy as a backup ref and removes the
 	// local live ref, pushing nothing: the next live write starts a new
 	// live ref (after the remote was replaced by a new repository, #136).
@@ -286,6 +290,13 @@ type RestoreIn struct {
 	// when the remote is a new repository (e.g. about to be public) that
 	// must not get the old live rows (#136, devco D-913).
 	Fresh bool `json:"fresh,omitempty" flag:"fresh" desc:"push nothing: keep the old live rows in a local backup ref and start a new live ref with the next live write"`
+	// Publish is the explicit yes to sending every old live row to a
+	// remote that has no live ref any more (a new repository at the same
+	// url, or the ref deleted there). Why a flag: that remote may be about
+	// to be public, so lore never publishes the old rows there unless the
+	// person names it (#136, devco D-914). A live ref rewritten by other
+	// history restores without it, as before.
+	Publish bool `json:"publish,omitempty" flag:"publish" desc:"when the remote has no live ref any more (a new repository at the same url, or the ref deleted there): publish every old live row on it"`
 }
 
 // RestoreOut is the output of live.restore.
@@ -303,7 +314,7 @@ func (o RestoreOut) Text() string {
 		if o.Backup == "" {
 			return "✓ started fresh: no local live ref to keep; nothing was pushed, the next live write starts a new live ref\n"
 		}
-		return fmt.Sprintf("✓ started fresh: your old live rows are kept in %s on this machine; nothing was pushed, the next live write starts a new live ref (`lore live restore` would publish the old rows)\n", o.Backup)
+		return fmt.Sprintf("✓ started fresh: your old live rows are kept in %s on this machine; nothing was pushed, the next live write starts a new live ref (`lore live restore --publish` would publish the old rows)\n", o.Backup)
 	}
 	return fmt.Sprintf("✓ restored refs/lore/live: %d rows (left out %d already landed or purged)\n", o.Rows, o.LeftOut)
 }
@@ -443,11 +454,11 @@ func Ops(env Env) []op.Entry {
 		}, func(ctx context.Context, in LogIn) (LogOut, error) { return logOf(ctx, env, in) }),
 		op.Define(op.Spec{
 			Name:       OpRestore,
-			Summary:    "Put the live rows back on the remote from the local copy after it was deleted or rewritten (--fresh: push nothing, keep them in a local backup and start a new live ref)",
+			Summary:    "Put the live rows back on the remote from the local copy after it was deleted or rewritten (--fresh: push nothing, keep them in a local backup and start a new live ref; a remote with no live ref gets the old rows only with --publish)",
 			Permission: op.PermWrite, Access: op.AccessWrite, RESTNoun: restNoun,
 			Confirm:  op.ConfirmRule{PersonOnlyEligible: true},
 			Errors:   writeErrors,
-			Examples: []op.Example{{Title: "the remote is a new repository: keep the old live rows off it", CLI: "lore live restore --fresh"}, {Title: "put the live rows back after the remote ref was deleted", CLI: "lore live restore"}},
+			Examples: []op.Example{{Title: "the remote is a new repository: keep the old live rows off it", CLI: "lore live restore --fresh"}, {Title: "the remote ref was deleted (or the repo moved): publish the old live rows there", CLI: "lore live restore --publish"}, {Title: "put the live rows back after the remote ref was rewritten", CLI: "lore live restore"}},
 		}, func(ctx context.Context, in RestoreIn) (RestoreOut, error) { return restore(ctx, env, in) }),
 		op.Define(op.Spec{
 			Name:       OpCompact,
@@ -535,17 +546,23 @@ func logOf(ctx context.Context, env Env, in LogIn) (LogOut, error) {
 }
 
 // restore pushes the local copy back (§6.6).
-// With --fresh it pushes nothing and starts a new live ref instead.
+// With --fresh it pushes nothing and starts a new live ref instead; a
+// remote with no live ref gets the old rows only with --publish (D-914).
 func restore(ctx context.Context, env Env, in RestoreIn) (RestoreOut, error) {
+	if in.Fresh && in.Publish {
+		return RestoreOut{}, errs.New(errs.InvalidInput, "live restore: --fresh pushes nothing and --publish publishes the old live rows; pick one").
+			WithHint("run `lore live restore --fresh` to keep the old live rows off the remote, or `lore live restore --publish` to publish them there")
+	}
 	r, err := env.LiveRef(ctx)
 	if err != nil {
 		return RestoreOut{}, err
 	}
-	run := r.Restore
+	var res Restored
 	if in.Fresh {
-		run = r.StartFresh
+		res, err = r.StartFresh(ctx)
+	} else {
+		res, err = r.Restore(ctx, in.Publish)
 	}
-	res, err := run(ctx)
 	if err != nil {
 		return RestoreOut{}, err
 	}

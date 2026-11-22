@@ -45,12 +45,13 @@ func rewrittenError(code errs.Code, blocked error) error {
 // made under its name: often about to be public) or the ref was deleted
 // there; lore cannot tell which, so it pushes nothing on its own. Only
 // live writes stop. The hint names the choice that publishes nothing
-// first, and says plainly that restore publishes every live row (G-1: a
-// repo moved to a new url restores to record it).
+// first, then `lore live restore --publish`, the explicit flag without
+// which restore refuses here (devco D-914; G-1: a repo moved to a new url
+// restores with it to record the url).
 const (
 	liveGoneText           = "the remote has no live ref any more: it is a new repository at the same url, or the ref was deleted there"
 	liveGoneURLUnknownText = "the remote has no live ref: the repo moved to a new remote url, or the ref was deleted there (this clone's last sync did not record the remote url, so lore cannot tell which)"
-	liveGoneHint           = "to keep your old live rows off that remote, run `lore live restore --fresh` (pushes nothing: they stay in a local backup ref and the next live write starts a new live ref); to publish them there, run `lore live restore`. Writes of rows that are not live go on meanwhile"
+	liveGoneHint           = "to keep your old live rows off that remote, run `lore live restore --fresh` (pushes nothing: they stay in a local backup ref and the next live write starts a new live ref); to publish them there, run `lore live restore --publish`. Writes of rows that are not live go on meanwhile"
 )
 
 // backupRefOf is the backup ref named in err's text ("" when none).

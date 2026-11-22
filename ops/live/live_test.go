@@ -24,6 +24,8 @@ type fakeRef struct {
 	compacts []bool
 	purged   []string
 	purgeErr error
+	// published is the publish of the last Restore call (--publish)
+	published bool
 }
 
 func (f *fakeRef) List(context.Context) (Listing, error) { return f.listing, nil }
@@ -38,7 +40,8 @@ func (f *fakeRef) Log(_ context.Context, n int) (History, error) {
 	f.logN = n
 	return f.hist, nil
 }
-func (f *fakeRef) Restore(context.Context) (Restored, error) {
+func (f *fakeRef) Restore(_ context.Context, publish bool) (Restored, error) {
+	f.published = publish
 	return Restored{Rows: 3, LeftOut: 2}, nil
 }
 func (f *fakeRef) StartFresh(context.Context) (Restored, error) {
@@ -109,6 +112,18 @@ func TestTexts(t *testing.T) {
 	r, _ := restore(ctx, e, RestoreIn{})
 	if r.Text() != "✓ restored refs/lore/live: 3 rows (left out 2 already landed or purged)\n" {
 		t.Fatalf("restore: %q", r.Text())
+	}
+	if f.published {
+		t.Fatal("plain restore passed publish to the ref")
+	}
+	// --publish (#136, devco D-914) reaches the ref as the explicit yes
+	if _, err = restore(ctx, e, RestoreIn{Publish: true}); err != nil || !f.published {
+		t.Fatalf("restore --publish: published=%v %v", f.published, err)
+	}
+	// --fresh with --publish contradict each other: refused, nothing run
+	f.published = false
+	if _, err = restore(ctx, e, RestoreIn{Fresh: true, Publish: true}); errs.CodeOf(err) != errs.InvalidInput || f.published {
+		t.Fatalf("restore --fresh --publish: %v published=%v", err, f.published)
 	}
 	// --fresh (#136): nothing pushed, the old rows named in their backup
 	if fr, _ := restore(ctx, e, RestoreIn{Fresh: true}); !fr.Fresh || !strings.Contains(fr.Text(), "nothing was pushed") || !strings.Contains(fr.Text(), fr.Backup) {

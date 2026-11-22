@@ -207,9 +207,15 @@ func (a *liveRefAdapter) Purge(ctx context.Context, ids []string) error {
 
 // Restore implements opslive.Ref (§6.6): it runs while the ref is blocked,
 // it is the repair. The newest local copy (or backup) goes back to the
-// remote without landed and purged rows.
-func (a *liveRefAdapter) Restore(ctx context.Context) (opslive.Restored, error) {
+// remote without landed and purged rows. When the remote has no live ref
+// any more (live.RemoteGone: a new repository at the same url, or the ref
+// deleted there) it pushes only with publish, the person's --publish:
+// that remote may be about to be public (#136, devco D-914).
+func (a *liveRefAdapter) Restore(ctx context.Context, publish bool) (opslive.Restored, error) {
 	s := a.s
+	if s.blocked != nil && live.RemoteGone(s.blocked) && !publish {
+		return opslive.Restored{}, errRestoreNeedsPublish(s.blocked)
+	}
 	src, err := s.restoreSource(ctx)
 	if err != nil {
 		return opslive.Restored{}, err
@@ -250,7 +256,7 @@ func (a *liveRefAdapter) Restore(ctx context.Context) (opslive.Restored, error) 
 	}
 	if out.Status != live.PushDone && out.Status != live.PushNoRemote {
 		return opslive.Restored{}, errs.New(errs.Offline, "the restored live ref was not confirmed by the remote ("+string(out.Status)+")").
-			WithHint("the local copy is kept; run `lore live restore` again when the remote is reachable")
+			WithHint("the local copy is kept; run `" + restoreAgain(publish) + "` again when the remote is reachable")
 	}
 	s.blocked = nil
 	s.finished = true
@@ -325,4 +331,27 @@ func (s *liveSession) restorableTree(ctx context.Context, tree live.Tree) (int, 
 	}
 	sort.Strings(dropped)
 	return keep, dropped, nil
+}
+
+// errRestoreNeedsPublish refuses a plain `lore live restore` while the
+// remote has no live ref any more (#136, devco D-914): lore cannot tell a
+// new repository at the same url from a deleted ref, and restoring would
+// publish every old live row there. Nothing was pushed; the hint names the
+// choice that publishes nothing first, then the explicit --publish.
+func errRestoreNeedsPublish(blocked error) error {
+	text := liveGoneText
+	if errors.Is(blocked, live.ErrRemoteGoneURLUnknown) {
+		text = liveGoneURLUnknownText
+	}
+	return errs.New(errs.Refused, text+"; `lore live restore` would publish every old live row there, so it runs only with --publish; nothing was pushed").
+		WithHint(liveGoneHint)
+}
+
+// restoreAgain is the restore command to run again after an unconfirmed
+// push: the same flags the person gave, so a --publish retry stays one.
+func restoreAgain(publish bool) string {
+	if publish {
+		return "lore live restore --publish"
+	}
+	return "lore live restore"
 }

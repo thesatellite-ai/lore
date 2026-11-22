@@ -88,7 +88,7 @@ var ErrRemoteRewritten = errors.New("live: the remote live ref was deleted or re
 // has no live ref and this clone's seen marker carries no remote url (it
 // was written by a lore that did not record one): a repo moved to a new
 // remote looks exactly like a deleted ref, so callers name both causes
-// and `lore live restore` as the way to confirm a move (G-1). It wraps
+// and `lore live restore --publish` as the way to confirm a move (G-1). It wraps
 // ErrRemoteRewritten, so every errors.Is check of that keeps holding.
 var ErrRemoteGoneURLUnknown = fmt.Errorf("%w: the remote has no live ref and the url of the last sync was not recorded, so a moved remote cannot be told from a deleted ref", ErrRemoteRewritten)
 
@@ -100,7 +100,8 @@ var ErrRemoteGoneURLUnknown = fmt.Errorf("%w: the remote has no live ref and the
 // rows back on its own. Why a separate error: only live writes stop (rows
 // that never touch the live ref go on), lore sync reports instead of
 // failing, and the hint names `lore live restore --fresh` (pushes nothing)
-// before `lore live restore` (publishes every live row) (devco D-913). It
+// before `lore live restore --publish` (publishes every live row; plain
+// restore refuses here, devco D-914) (devco D-913). It
 // wraps ErrRemoteRewritten, so every errors.Is check of that keeps holding.
 var ErrRemoteLiveGone = fmt.Errorf("%w: the remote has no live ref (a new repository at the same url, or the ref was deleted there)", ErrRemoteRewritten)
 
@@ -595,7 +596,7 @@ func (r *Ref) seenURLUnknown() bool {
 // then removed, with the seen marker and the pending list, so the next
 // live write starts a new live ref holding only what is written from now
 // on. Nothing is pushed. Why: after the remote was replaced by a new
-// repository (#136), `lore live restore` would publish every old live row
+// repository (#136), `lore live restore --publish` would publish every old live row
 // there; this is the choice that publishes none (devco D-913). backup is
 // "" when there was no local live ref.
 func (r *Ref) StartFresh(ctx context.Context) (backup string, err error) {

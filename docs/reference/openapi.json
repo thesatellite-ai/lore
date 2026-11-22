@@ -29918,7 +29918,7 @@
     "/v1/live/restore": {
       "post": {
         "operationId": "live.restore",
-        "summary": "Put the live rows back on the remote from the local copy after it was deleted or rewritten (--fresh: push nothing, keep them in a local backup and start a new live ref)",
+        "summary": "Put the live rows back on the remote from the local copy after it was deleted or rewritten (--fresh: push nothing, keep them in a local backup and start a new live ref; a remote with no live ref gets the old rows only with --publish)",
         "tags": [
           "live"
         ],
@@ -29932,6 +29932,10 @@
                   "fresh": {
                     "type": "boolean",
                     "description": "push nothing: keep the old live rows in a local backup ref and start a new live ref with the next live write"
+                  },
+                  "publish": {
+                    "type": "boolean",
+                    "description": "when the remote has no live ref any more (a new repository at the same url, or the ref deleted there): publish every old live row on it"
                   }
                 },
                 "additionalProperties": false
