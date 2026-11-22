@@ -335,6 +335,7 @@ These are set by lore, or read only by lore's own tests. Never set them for real
 | `LORE_RIDE_ACTIVE` | lore sets it while it makes a ride-along commit (a commit that carries waiting notes to main), so its own git hooks do not run twice. Never set it by hand |
 | `LORE_NOW` | a fixed clock for lore's own test builds only (it also dates the commits lore makes in a store); normal lore ignores it |
 | `LORE_NO_DETECT` | `1` turns coding-agent detection off, in lore's own test builds only (so example output does not depend on where it runs); normal lore ignores it |
+| `LORE_TEST_AMBIENT_AGENT` | read only inside lore's own Go unit-test binaries. A test binary drops, when it starts, every variable agent and CI detection reads, `LORE_ACTOR`, `LORE_HUMAN`, `LORE_SESSION`, `USER` and `USERNAME`, and detects without the process-tree walk or the terminal, so a test gives the same result from a coding agent's shell and from a bare one; `1` keeps the shell's agent. A shipped lore never reads it |
 | `LORE_HOOK_TIMEOUT` | a longer deadline (a Go duration, e.g. `10m`) for `lore context --hook` in lore's own test builds only, so a busy test machine cannot turn a hook's answer into the 2 s deadline's empty one; normal lore ignores it and keeps 2 s |
 | `LORE_GITHUB_API` | the GitHub API address the guided setup's account checks call instead of `https://api.github.com`. It exists for lore's own tests, which point it at a local fake server; never set it for real use |
 

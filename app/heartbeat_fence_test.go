@@ -121,6 +121,13 @@ func TestHeartbeatAfterCancelWithinFetchTTL(t *testing.T) {
 func fenceWorld(t *testing.T) (w *cliWorld, person, holder string) {
 	t.Helper()
 	w = newCLIWorld(t).person().author()
+	// the person's identity is their git email, as on a real machine:
+	// coordination (claim, heartbeat) needs a person or an agent. Before
+	// devco:D-908 the world named nobody, so the test passed only when the
+	// shell running `go test` gave lore one ($USER, or a coding agent whose
+	// session wrote the person's roster row) and failed in a bare shell.
+	w.git(t, w.root, "config", "--global", "user.email", personAuthor["GIT_AUTHOR_EMAIL"])
+	w.git(t, w.root, "config", "--global", "user.name", personAuthor["GIT_AUTHOR_NAME"])
 	person, holder = w.livePair(t)
 	// a team that turned live.autopush on (off by default, U-2): each
 	// write reaches the remote at once, which the fetch_ttl fence is about

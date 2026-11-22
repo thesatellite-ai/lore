@@ -7,12 +7,12 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/machine"
-	"github.com/thesatellite-ai/lore/adapters/procwalk"
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -76,7 +76,9 @@ func (a *App) StoreIdentities(ctx context.Context) ([]StoreIdentity, error) {
 // In loretest builds LORE_NO_DETECT=1 makes it see nothing (cl-gate).
 func DetectAgent() (agentdetect.Result, error) {
 	return detectAgent(func() agentdetect.Inputs {
-		return agentdetect.Inputs{Getenv: os.Getenv, TTY: stdinTTY(), Procs: procwalk.New(), Files: machine.OSFiles{}}
+		// a test binary walks no process tree and reads no terminal, so
+		// the shell running `go test` cannot change the answer (detect_testbinary.go)
+		return detectInputs(testing.Testing() && !hermeticOff())
 	})
 }
 

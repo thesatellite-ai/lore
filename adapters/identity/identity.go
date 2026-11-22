@@ -560,11 +560,18 @@ func gitConfig(ctx context.Context, dir, key string) string {
 	return string(out)
 }
 
+// OSUserEnv are the variables the OS-user step reads, first non-empty
+// wins: USER (Unix), USERNAME (Windows). Exported so a test binary can drop
+// them and resolve the same identity in every shell (wire, devco:D-908).
+var OSUserEnv = []string{"USER", "USERNAME"}
+
 // osUser is human:$USER@<hostname>.
 func osUser(getenv func(string) string) (Resolved, bool) {
-	user := getenv("USER")
-	if user == "" {
-		user = getenv("USERNAME")
+	var user string
+	for _, k := range OSUserEnv {
+		if user = getenv(k); user != "" {
+			break
+		}
 	}
 	if user == "" {
 		return Resolved{}, false
