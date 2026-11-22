@@ -799,6 +799,29 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-897] a name no row holds must start the answer with the not-in-memory hint, the nearest rows still printed:\n%s", out)
 		}
 	})
+	// devco:D-903 (bug hunt H-158): lore ask read a row's day metadata only
+	// inside the question's window, so a row about a day just past it was
+	// ranked by the day it was written (and was history of a newer row),
+	// and a row written yesterday about a day two months back was listed
+	// as one of yesterday's rows.
+	s.Step("personal-store/day-near-the-window-ranks-then", func() {
+		today := s.Now().UTC()
+		first := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -3, 0)
+		near := first.AddDate(0, 1, 1) // two days after that month
+		ada.Lore(ada.Home, "memory", "add", "--body", "Went kayaking on the bay with Dana.", "--meta", "day="+near.Format(time.DateOnly), "--to", "me/journal", "--yes").OK(t)
+		ada.Lore(ada.Home, "memory", "add", "--body", "Went kayaking on the river before work.", "--to", "me/journal", "--yes").OK(t)
+		q := "where did I go kayaking in " + first.Month().String()
+		out := ada.Lore(ada.Home, "ask", "--store", "me", "--query", q).OK(t).Out()
+		bay, river := strings.Index(out, "on the bay"), strings.Index(out, "on the river")
+		if bay < 0 || river >= 0 && river < bay || strings.Contains(out, "before that:") {
+			t.Errorf("[O D-903] %q: the trip dated two days after that month must lead the newer one, not as its history:\n%s", q, out)
+		}
+		yday, old := today.AddDate(0, 0, -1), today.AddDate(0, 0, -60)
+		ada.Lore(ada.Home, "memory", "add", "--body", "Typed up the notes of the dentist visit.", "--at", yday.Format(time.DateOnly), "--meta", "day="+old.Format(time.DateOnly), "--to", "me/journal", "--yes").OK(t)
+		if out := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "what happened yesterday").OK(t).Out(); strings.Contains(out, "dentist") {
+			t.Errorf("[O D-903] a row about %s (written yesterday) is listed as one of yesterday's rows:\n%s", old.Format(time.DateOnly), out)
+		}
+	})
 	// devco:D-898 (bug hunt H-156): an everything-about answer matches no
 	// question word, so its older status and budget rows were never marked
 	// replaced; with ten rows per answer (the default now) they printed as

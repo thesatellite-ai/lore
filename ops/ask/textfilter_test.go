@@ -11,6 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -46,7 +47,9 @@ func textFixture(t *testing.T) Query {
 			('mem_4', 'me/work', 'archived lumen note', NULL, NULL, '2026-11-12T00:00:00.000000000Z', NULL, NULL, '2026-11-13T00:00:00.000000000Z'),
 			('mem_5', 'me/home', 'écoute 50x done-now gym', NULL, '2026-12-01T00:00:00.000000000Z', '2026-10-30T00:00:00.000000000Z', 'typed', '', NULL),
 			('mem_1', 'me/home', 'the same id in a farther folder about lumen', NULL, NULL, '2026-11-01T00:00:00.000000000Z', NULL, NULL, NULL),
-			('mem_6', 'me/home', 'no word of the question here', NULL, NULL, '2026-09-01T00:00:00.000000000Z', NULL, NULL, NULL)`,
+			('mem_6', 'me/home', 'no word of the question here', NULL, NULL, '2026-09-01T00:00:00.000000000Z', NULL, NULL, NULL),
+			('mem_7', 'me/life', 'Went hiking at the lake trail.', NULL, NULL, '2026-11-21T00:00:00.000000000Z', NULL, NULL, NULL),
+			('mem_8', 'me/life', 'Typed up the hiking notes.', '2026-11-13T09:00:00.000000000Z', NULL, '2026-11-21T00:00:00.000000000Z', NULL, NULL, NULL)`,
 		`INSERT INTO incidents_all VALUES
 			('inc_1', 'me/work', NULL, 'Lumen outage', '2026-11-12T10:00:00.000000000Z'),
 			('inc_2', 'me/work', 'Kestrel pick', 'why we chose it', '2026-08-01T00:00:00.000000000Z'),
@@ -57,7 +60,9 @@ func textFixture(t *testing.T) Query {
 			('memories', 'inc_3', 'day', 0, '2026-11-11'),
 			('memories', 'inc_3', 'day', 1, '2026-11-12'),
 			('memories', 'mem_5', 'day', -1, '2026-11-12'),
-			('memories', 'mem_5', 'other', 0, '2026-11-12')`,
+			('memories', 'mem_5', 'other', 0, '2026-11-12'),
+			('memories', 'mem_7', 'day', 0, '2026-11-14'),
+			('memories', 'mem_8', 'day', 0, '2026-09-01')`,
 	}
 	for _, tbl := range []string{"decisions", "rules", "patterns", "hotfixes"} {
 		stmts = append(stmts, `CREATE TABLE `+tbl+`_all (id TEXT, place TEXT, title TEXT, body TEXT, created_at TEXT, superseded_by_id TEXT, archived_at TEXT)`)
@@ -128,6 +133,8 @@ func TestTextRowsMatchTheLikeStatement(t *testing.T) {
 		{"what happened on 2026-11-12 with lumen", []match{{res: lumen}}},
 		{"what happened last week", nil},
 		{"what happened in the week of 2026-10-26", []match{{res: kestrel}}},
+		{"where did I go hiking on 2026-11-13", nil},
+		{"what happened on 2026-11-13", nil},
 		{"the", nil},
 	}
 	for _, c := range cases {
@@ -166,5 +173,43 @@ func TestTextRowsMatchTheLikeStatement(t *testing.T) {
 	}
 	if !strings.Contains(textSQL, "row_refs_all") || FileOnly(textSQL+" ") {
 		t.Fatal("textSQL must read the refs, and FileOnly must name the statement exactly")
+	}
+}
+
+// TestDayMetadataNearTheWindow (devco D-903, bug hunt H-158): a date
+// question reads the day metadata of the window widened by its fuzz and
+// every day of a row written near the window, in a one-shot and a kept
+// read alike. A row about 2026-11-14 (written a week later) asked about
+// 2026-11-13 carries its day, so it ranks as dated near the window; a
+// row written on 2026-11-13 about 2026-09-01 carries that day, so it is
+// not one of the 13th's rows.
+func TestDayMetadataNearTheWindow(t *testing.T) {
+	t.Parallel()
+	run := textFixture(t)
+	for _, keeps := range []bool{false, true} {
+		q := parseQuestion("where did I go hiking on 2026-11-13", now)
+		rows, err := loadRows(context.Background(), run, q, nil, keeps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		days := map[string]string{}
+		for _, r := range rows {
+			days[r.ID] = r.Day
+		}
+		if days["mem_7"] != "2026-11-14" || days["mem_8"] != "2026-09-01" {
+			t.Errorf("keeps=%v: days %v, want mem_7 2026-11-14 (a day inside the fuzz) and mem_8 2026-09-01 (written in the window)", keeps, days)
+		}
+		if timeBonus(q, &rows[slices.IndexFunc(rows, func(r textRow) bool { return r.ID == "mem_7" })]) == 0 {
+			t.Errorf("keeps=%v: the row about the day after the window gets no time bonus", keeps)
+		}
+		q = parseQuestion("what happened on 2026-11-13", now)
+		if rows, err = loadRows(context.Background(), run, q, nil, keeps); err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range windowRows(q, nil, rows) {
+			if r.ID == "mem_8" {
+				t.Errorf("keeps=%v: a row about 2026-09-01 is listed as one of 2026-11-13's rows", keeps)
+			}
+		}
 	}
 }

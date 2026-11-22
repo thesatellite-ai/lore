@@ -49,6 +49,24 @@ func TestDateIsAPriorNotAFilter(t *testing.T) {
 	}
 }
 
+// TestRowNearTheWindowIsThen (devco D-903, bug hunt H-158): a row whose
+// day lies just outside the question's window (inside its fuzz) ranks as
+// dated then and is not history of a newer row there: "where did I go
+// hiking in August" lists the hike of September 2nd before the newer one.
+func TestRowNearTheWindowIsThen(t *testing.T) {
+	t.Parallel()
+	lake := mem(t, "mem_h1", "me/life", "2026-11-20", "Went hiking at the lake trail with Dana.")
+	lake.Day = "2026-09-02"
+	d := data{rows: []textRow{lake, mem(t, "mem_h2", "me/life", "2026-11-21", "Went hiking at the ridge trail before work.")}}
+	o := build(parseQuestion("where did I go hiking in august", now), d, 0, 0)
+	if got := rowIDs(o.Rows); len(got) < 2 || got[0] != "mem_h1" {
+		t.Fatalf("rows %v, want the hike of 2026-09-02 first\n%s", got, o.Text())
+	}
+	if o.Rows[0].History != "" {
+		t.Errorf("the hike near August is marked %q", o.Rows[0].History)
+	}
+}
+
 // TestDatePhrasesRead: the phrases windowOf does not read become a
 // window, a named date stays a question word, the counting words go, and
 // a phrase naming the future or a short month name used as a person's

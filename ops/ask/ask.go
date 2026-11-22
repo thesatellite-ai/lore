@@ -30,10 +30,12 @@ package ask
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
@@ -472,32 +474,69 @@ func historyOf(s string) []historyEntry {
 // text table's arm it ran once per table (devco D-813).
 const daysSQL = "SELECT entity_id, value_text FROM row_meta_all WHERE key_name = 'day' AND item_idx >= 0"
 
-// loadDays reads the rows whose day metadata falls in [since, end) (days
-// as YYYY-MM-DD): row id → its day; for a row with several day items the
-// last one read wins. A lens that keeps answers (keeps) reads daysSQL and
-// the window is applied here; any other reads only the window's items
-// (one read: filtering in SQL is cheaper than handing every item over).
-// Both compare the day as text (NULL is no day), so they pick the same
-// items.
-func loadDays(ctx context.Context, run Query, since, end string, keeps bool) (map[string]string, error) {
+// loadDays reads the day metadata a date question needs (row id → its
+// days, as YYYY-MM-DD): every item inside near (the window widened by the
+// question's fuzz) and every item of a row written inside near. A lens
+// that keeps answers (keeps) reads daysSQL and metaDayOf applies the same
+// cut in Go; any other reads only those items (one read: filtering in SQL
+// is cheaper than handing every item over). Why (devco D-903, bug hunt
+// H-158): reading only the window's items, a row about a day just outside
+// the window was ranked by the day it was written, and a row written in
+// the window about a day far from it was listed as one of its rows.
+func loadDays(ctx context.Context, run Query, near dayRange, keeps bool) (map[string][]string, error) {
 	stmt := daysSQL
 	if !keeps {
-		stmt += " AND value_text >= " + sqlText(since) + " AND value_text < " + sqlText(end)
+		var written []string
+		for _, t := range textTables {
+			at := "COALESCE(" + t.extra + ", m.created_at)"
+			written = append(written, "SELECT m.id FROM "+t.table+"_all m WHERE "+at+" >= "+sqlText(near.since)+" AND "+at+" < "+sqlText(near.end))
+		}
+		stmt += " AND (value_text >= " + sqlText(near.since) + " AND value_text < " + sqlText(near.end) + " OR entity_id IN (" + strings.Join(written, " UNION ALL ") + "))"
 	}
 	res, err := run(ctx, stmt)
 	if err != nil {
 		return nil, err
 	}
-	days := map[string]string{}
+	days := map[string][]string{}
 	for _, row := range res.Rows {
 		if len(row) < 2 || row[1] == nil {
 			continue
 		}
-		if day := row[1].String(); !keeps || day >= since && day < end {
-			days[cell(row[0])] = day
-		}
+		id := cell(row[0])
+		days[id] = append(days[id], row[1].String())
 	}
 	return days, nil
+}
+
+// dayRange is a range of days [since, end) as YYYY-MM-DD, compared as
+// text: a stored date (2026-11-02T00:00:00.000000000Z) sorts after its
+// day and before the next one.
+type dayRange struct{ since, end string }
+
+// holds reports whether day (or a stored date) falls in r.
+func (r dayRange) holds(day string) bool { return day >= r.since && day < r.end }
+
+// metaDayOf is the day a row is about among its day metadata items: the one
+// nearest q's window (the later of two as near), read from the items
+// inside near, or from every item when the row was written (at, a stored
+// date) inside near; "" when none counts. loadDays reads exactly the
+// items this can pick, so a one-shot and a kept read agree.
+func metaDayOf(q question, items []string, at string, near dayRange) string {
+	all := near.holds(at)
+	best, bestGap := "", math.Inf(1)
+	for _, d := range items {
+		if !all && !near.holds(d) {
+			continue
+		}
+		t, err := time.Parse(dates.DayLayout, d)
+		if err != nil {
+			continue
+		}
+		if g := gapDays(q.window, spanW(t, t)); g < bestGap || g == bestGap && d > best {
+			best, bestGap = d, g
+		}
+	}
+	return best
 }
 
 // textTables are the tables ask reads rows from, with the SQL of their
@@ -628,23 +667,20 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 	// resource filter runs in Go (answer.go)
 	f.byText = !f.win || len(ms) == 0
 	if f.win {
-		// days as YYYY-MM-DD: a stored date (2026-11-02T00:00:00.000000000Z)
-		// sorts after its day and before the next one
 		f.since, f.end = q.window.Since.Format(time.DateOnly), q.window.End.Format(time.DateOnly)
 		if q.window.End.IsZero() {
 			f.end = openEnd // "after march 3rd": every day after it
 		}
+		f.near = nearRange(q, dayRange{f.since, f.end})
 		var err error
-		if f.days, err = loadDays(ctx, run, f.since, f.end, keeps); err != nil {
+		if f.days, err = loadDays(ctx, run, f.near, keeps); err != nil {
 			return nil, err
 		}
 		dayCond := "0"
-		if len(f.days) > 0 {
-			var dayIDs []string
-			for id := range f.days {
-				dayIDs = append(dayIDs, sqlText(id))
+		if dayIDs := f.inWindow(); len(dayIDs) > 0 {
+			for i, id := range dayIDs {
+				dayIDs[i] = sqlText(id)
 			}
-			slices.Sort(dayIDs)
 			dayCond = "m.id IN (" + strings.Join(dayIDs, ", ") + ")"
 		}
 		win := []string{"(%V >= " + sqlText(f.since) + " AND %V < " + sqlText(f.end) + ")", dayCond}
@@ -678,6 +714,7 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 	}
 	f.refs = refs
 	var out []textRow
+	var stored []string // each row's date as stored, for metaDayOf
 	at := map[string]int{}
 	for _, row := range res.Rows {
 		if len(row) < textCols || cell(row[colKind]) != "row" {
@@ -693,11 +730,14 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 		at[id] = len(out)
 		t, _ := time.Parse(time.RFC3339Nano, cell(row[colAt]))
 		until, _ := time.Parse(time.RFC3339Nano, cell(row[colUntil]))
+		stored = append(stored, cell(row[colAt]))
 		out = append(out, textRow{Table: cell(row[colTable]), ID: id, Place: cell(row[colPlace]), Title: cell(row[colTitle]), Body: cell(row[colBody]), At: t, Imported: cell(row[colImported]) == "1", SupersededBy: cell(row[colSuperseded]), ValidUntil: until})
 	}
 	for i := range out {
 		out[i].Refs = refs[out[i].ID]
-		out[i].Day = f.days[out[i].ID]
+		if f.win {
+			out[i].Day = metaDayOf(q, f.days[out[i].ID], stored[i], f.near)
+		}
 	}
 	return out, nil
 }
@@ -717,7 +757,37 @@ type rowFilter struct {
 	byText     bool
 	win        bool
 	since, end string
-	days       map[string]string
+	// near is the window widened by the question's fuzz (nearRange);
+	// days are the day metadata items loadDays read for it
+	near dayRange
+	days map[string][]string
+}
+
+// nearRange is window w widened by q's fuzz on each side: a row about a
+// day in it still ranks as dated near the window (timeBonus), so its day
+// metadata is read. An open side stays open.
+func nearRange(q question, w dayRange) dayRange {
+	n := int(math.Ceil(q.fuzz))
+	if !q.window.Since.IsZero() {
+		w.since = q.window.Since.AddDate(0, 0, -n).Format(time.DateOnly)
+	}
+	if !q.window.End.IsZero() {
+		w.end = q.window.End.AddDate(0, 0, n).Format(time.DateOnly)
+	}
+	return w
+}
+
+// inWindow is the rows with a day metadata item inside [since, end),
+// sorted: the rows the window holds by their day.
+func (f *rowFilter) inWindow() []string {
+	var ids []string
+	for id, items := range f.days {
+		if slices.ContainsFunc(items, dayRange{f.since, f.end}.holds) {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 // answers reports whether a text statement row can answer: by text
@@ -742,7 +812,7 @@ func (f *rowFilter) answers(row []value.Value, id string) bool {
 		if at := cell(row[colAt]); at >= f.since && at < f.end {
 			return true
 		}
-		if _, ok := f.days[id]; ok {
+		if slices.ContainsFunc(f.days[id], dayRange{f.since, f.end}.holds) {
 			return true
 		}
 	}

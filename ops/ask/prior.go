@@ -424,7 +424,8 @@ func timeBonus(q question, r *textRow) int {
 	return int(math.Round(b))
 }
 
-// thenCurrent keeps a row dated inside the question's window current even
+// thenCurrent keeps a row dated inside the question's window, or near
+// enough to rank as dated then (timeBonus, devco D-903), current even
 // when a newer row replaced it (markReplaced): what was true then is the
 // answer to a question about then. Why: markReplaced chains a series of
 // similar notes (meetings, weekly status updates) into one fact replaced
@@ -439,7 +440,7 @@ func thenCurrent(q question, all []scored) {
 		if all[i].replacedBy == "" {
 			continue
 		}
-		if day := rowDayT(all[i].row); !day.IsZero() && gapDays(q.window, spanW(day, day)) == 0 {
+		if timeBonus(q, all[i].row) > 0 {
 			all[i].history, all[i].replacedBy = staleNote(all[i].row, q.now), ""
 		}
 	}
