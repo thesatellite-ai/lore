@@ -221,6 +221,7 @@ var noTrashReason = map[string]string{
 	"resource.alias.remove": "edits the resource's alias list; no row is deleted",
 	"resource.field.remove": "edits the kind's field list; no row is deleted",
 	"setup.remove":          "a machine-local setup in the setup trash, not a store row",
+	"setup.guard.remove":    "puts the global core.hooksPath back and deletes lore's hooks folder; no row is deleted",
 	"store.remove":          "detaches a store; its rows stay",
 	"org.store.remove":      "drops a store from lore-org.yaml; the store and its rows stay",
 	"task.checklist.rm":     "an in-row tombstone on the checklist item",

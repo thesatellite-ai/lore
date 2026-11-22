@@ -90,7 +90,12 @@ func TestStoryOMachineGuard(t *testing.T) {
 	})
 
 	s.Step("H-119/remove-restores-the-global-core-hookspath-exactly", func() {
-		ada.Lore(pc.Dir, "setup", "guard", "remove").OK(t).Says(t, "removed the machine guard", `"~/.manager-hooks" again`)
+		// devco D-884 (H-143): remove deletes no row, so it takes no
+		// --reason, and the policy delete.require_reason (on in the linked
+		// clone it runs in) never refuses it.
+		ada.Lore(lc.Dir, "policy", "set", "delete.require_reason", "true", "--to", oOrg, "--yes").OK(t)
+		ada.Lore(lc.Dir, "policy", "show").OK(t).Says(t, "delete.require_reason\ttrue")
+		ada.Lore(lc.Dir, "setup", "guard", "remove").OK(t).Says(t, "removed the machine guard", `"~/.manager-hooks" again`)
 		if got := pc.Git("config", "--global", "--get", "core.hooksPath"); got != "~/.manager-hooks" {
 			t.Fatalf("remove left the global core.hooksPath at %q, want ~/.manager-hooks", got)
 		}
