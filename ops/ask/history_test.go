@@ -82,3 +82,64 @@ func TestHistoryOnlyRowsStayMarked(t *testing.T) {
 		t.Fatalf("rows %+v", o.Rows)
 	}
 }
+
+// TestShortRowNeverReplacesLongNote (devco D-893, bug hunt H-153): a
+// newer row of the same folder that only repeats the question's words
+// does not replace an older row about something else or more: the long
+// weekly note holding the move's date stays current and is never marked
+// history of the one-line status, and of two short rows on different
+// things in one folder neither replaces the other. A newer row that
+// restates the older one still replaces it (the budget, the dentist).
+func TestShortRowNeverReplacesLongNote(t *testing.T) {
+	t.Parallel()
+	var note strings.Builder
+	note.WriteString("# Vela weekly sync\n\n")
+	for _, s := range []string{"Hiring", "Support queue", "Design review"} {
+		note.WriteString("## " + s + "\n\n")
+		for range 6 {
+			note.WriteString("The vela " + strings.ToLower(s) + " items were walked through in plain terms and everyone kept the current plan. ")
+		}
+		note.WriteString("\n\n")
+	}
+	note.WriteString("## Office move\n\nThe vela office move is booked for 2026-07-14 with the movers from Northfield.\n")
+	row := func(id, at, body string) textRow {
+		return textRow{Table: "memories", ID: id, Place: "me/work", Body: body, At: day(t, at)}
+	}
+	cases := []struct {
+		name  string
+		rows  []textRow
+		q     string
+		after map[string]string // id → the history it must carry ("" = current)
+	}{
+		{"long note, newer short status", []textRow{row("mem_n1", "2026-11-01", note.String()), row("mem_n2", "2026-11-10", "Vela status: the office move is on track.")},
+			"when is the vela office move", map[string]string{"mem_n1": "", "mem_n2": ""}},
+		{"two short rows, different things", []textRow{row("mem_o1", "2026-11-01", "Vela office move: booked for 2026-07-14 with the movers from Northfield."), row("mem_o2", "2026-11-10", "Vela status: the office move is on track.")},
+			"when is the vela office move", map[string]string{"mem_o1": "", "mem_o2": ""}},
+		{"a newer row restating the date replaces it", []textRow{row("mem_r1", "2026-11-01", "Vela office move: booked for 2026-07-14 with the movers from Northfield."), row("mem_r2", "2026-11-10", "Vela office move moved to 2026-08-02 (was 2026-07-14), same movers from Northfield.")},
+			"when is the vela office move", map[string]string{"mem_r1": "history: replaced by mem_r2 from 2026-11-10", "mem_r2": ""}},
+		{"the same label of two words replaces it", []textRow{row("mem_l1", "2026-11-01", "Vela status: waiting on the landlord to sign the lease for the new floor."), row("mem_l2", "2026-11-10", "Vela status (2026-11-10): the office move is on track.")},
+			"what is the vela status", map[string]string{"mem_l1": "history: replaced by mem_l2 from 2026-11-10", "mem_l2": ""}},
+		{"a one-word label (a name) does not", []textRow{row("mem_w1", "2026-11-01", "Vela: the office move needs the freight elevator reserved."), row("mem_w2", "2026-11-10", "Vela: the office move is on track.")},
+			"vela office move", map[string]string{"mem_w1": "", "mem_w2": ""}},
+	}
+	for _, c := range cases {
+		o := build(parseQuestion(c.q, now), data{rows: c.rows}, 0, 0)
+		got := map[string]string{}
+		for _, r := range o.Rows {
+			got[r.ID] = r.History
+		}
+		for id, want := range c.after {
+			h, ok := got[id]
+			if !ok {
+				t.Errorf("%s: %s not in the answer\n%s", c.name, id, o.Text())
+				continue
+			}
+			if h != want {
+				t.Errorf("%s: %s history %q, want %q\n%s", c.name, id, h, want, o.Text())
+			}
+		}
+		if want := c.after[c.rows[0].ID]; want == "" && strings.Contains(o.Text(), "[history:") {
+			t.Errorf("%s: text marks a current row as history\n%s", c.name, o.Text())
+		}
+	}
+}

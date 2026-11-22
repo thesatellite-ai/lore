@@ -107,7 +107,8 @@ func staleNote(r *textRow, now time.Time) string {
 
 // markReplaced marks the rows of all that a newer current row replaced:
 // the same folder and the same topics and words of the question (so the
-// same thing: a budget, a gym, a status) but older. Each points at the
+// same thing: a budget, a gym, a status) but older, and the newer row
+// repeats what the older one is about (restates). Each points at the
 // newest such row, which says what it replaces. Rows matching nothing but
 // a name are left alone: two rows that only name alice-ng say different
 // things.
@@ -120,7 +121,7 @@ func markReplaced(all []scored) {
 		var newest *scored
 		for j := range all {
 			n := &all[j]
-			if j == i || n.history != "" || n.row.Place != s.row.Place || !slices.Equal(n.matched, s.matched) || !n.row.At.After(s.row.At) {
+			if j == i || n.history != "" || n.row.Place != s.row.Place || !slices.Equal(n.matched, s.matched) || !n.row.At.After(s.row.At) || !restates(n.row, s.row) {
 				continue
 			}
 			if newest == nil || n.row.At.After(newest.row.At) {
@@ -133,6 +134,71 @@ func markReplaced(all []scored) {
 		s.history = fmt.Sprintf("history: replaced by %s from %s", newest.row.ID, newest.row.At.UTC().Format(dates.DayLayout))
 		s.replacedBy = newest.row.ID
 	}
+}
+
+// restates reports whether newer is about what older is about, so it
+// can replace it: both carry the same label of two or more words
+// (sameLabel: "Status update lumen: …" after "Status update lumen: …"),
+// or newer holds at least half of older's content words (its words but
+// the filler of skipWords; a plural counts as its singular), as "Budget
+// for orbit moved to 55k (was 40k)." holds budget, orbit and 40k of
+// "Budget for orbit is 40k for this year.". Why (devco
+// D-893, bug hunt H-153): the folder and the question's words alone made
+// a newer row that only repeated them ("Vela status: the office move is
+// on track.") replace an older row holding the answer (a long weekly note
+// with the move's date, or the booking line itself), so that row was
+// printed as history and the status line as the answer. A long note is
+// never restated by a short row that holds less of it. When in doubt both
+// rows stay current: the newer one still ranks first, nothing is hidden.
+func restates(newer, older *textRow) bool {
+	if sameLabel(newer, older) {
+		return true
+	}
+	nt := newer.tokens()
+	total, held := 0, 0
+	for w := range older.tokens() {
+		if skipWords[w] {
+			continue
+		}
+		total++
+		if nt[w] || nt[w+"s"] || (len(w) > 3 && nt[strings.TrimSuffix(w, "s")]) {
+			held++
+		}
+	}
+	return 2*held >= total
+}
+
+// maxLabel is how far into a row's first line its label's colon may be.
+const maxLabel = 60
+
+// sameLabel reports whether rows a and b carry the same label of two or
+// more content words: the title, or the text before a colon early in the
+// body's first line ("Status update lumen (2026-09-01): …"), its filler
+// and words holding digits (a date) left out. One word (a project name,
+// "Vela: …") says too little to make two rows one thing.
+func sameLabel(a, b *textRow) bool {
+	la, lb := labelOf(a), labelOf(b)
+	return len(la) >= 2 && slices.Equal(la, lb)
+}
+
+// labelOf is r's label words (sameLabel), nil when it has none.
+func labelOf(r *textRow) []string {
+	text := r.Title
+	if text == "" {
+		first, _, _ := strings.Cut(strings.TrimSpace(r.Body), "\n")
+		head, _, ok := strings.Cut(first, ":")
+		if !ok || len([]rune(head)) > maxLabel {
+			return nil
+		}
+		text = head
+	}
+	var out []string
+	for _, w := range reWord.FindAllString(strings.ToLower(text), -1) {
+		if !skipWords[w] && !hasDigit(w) {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // build answers q from d: the matched resources, the open tasks that

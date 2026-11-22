@@ -641,4 +641,24 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-892] the printed `lore show --id %s` does not print the note whole:\n%s", id, show.Out())
 		}
 	})
+	// devco:D-893 (bug hunt H-153): a newer one-line status row in the
+	// same folder that only repeated the question's words marked the
+	// weekly note holding the move's date "[history: replaced by <id>]"
+	// and led the answer with "now: <status>". A row replaces an older one
+	// only when it restates it (the same label, or half of its words).
+	s.Step("personal-store/short-row-never-replaces-long-note", func() {
+		st := ada.Lore(ada.Home, "memory", "add", "--body", "Vela status: the office move is on track.", "--to", to, "--yes", "--json")
+		st.OK(t)
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when is the vela office move")
+		r.OK(t)
+		out := r.Out()
+		for _, want := range []string{"§ Vela weekly sync > Office move\n", "booked for 2026-07-14", "Vela status: the office move is on track."} {
+			if !strings.Contains(out, want) {
+				t.Errorf("[O D-893] the answer misses %q:\n%s", want, out)
+			}
+		}
+		if strings.Contains(out, "[history: replaced by") || strings.HasPrefix(out, "now: ") {
+			t.Errorf("[O D-893] the note holding the answer is printed as history of the short status row:\n%s", out)
+		}
+	})
 }
