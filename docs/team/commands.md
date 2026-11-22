@@ -1275,6 +1275,29 @@ Flags:
 ```
 <!-- /help -->
 
+Inside a coding tool that names its session (Codex, Claude Code, OpenCode and others), `lore agent start` binds that tool session to the agent: every later command of the session, each one a new shell, writes as the agent without `LORE_ACTOR`, and `lore whoami` says `from: lore agent start in this <tool> session`. Another session of the tool stays `<you> via <tool>`, and `LORE_ACTOR` or `LORE_HUMAN=1` still win.
+
+### `lore agent stop`
+
+<!-- help: agent stop -->
+End the agent this coding-tool session was bound to by `lore agent start`: its next commands are yours again
+
+```text
+Usage:
+  lore agent stop
+
+Examples:
+  # inside the coding tool, when the agent's work is done
+  lore agent stop
+
+Flags:
+      --json   print the result (or the error) as JSON
+      --yes    answer yes to the confirmation without a terminal
+```
+<!-- /help -->
+
+The tool's session-end hook (`lore setup --agent-hooks` installs it) ends the binding too.
+
 ### `lore task claim`
 
 <!-- help: task claim -->
@@ -1620,7 +1643,7 @@ Whether a row is live (seen by everyone at once, whatever branch they are on) de
 | Variable | Effect |
 |---|---|
 | `LORE_ORG` | choose the org entry for this shell or one command (rule 1 of org resolution); the only way, with `lore org use`, to select a staging entry |
-| `LORE_ACTOR` | the actor for this session; accepted only for **agent** actors on the org's roster (a human key here is ignored with a warning, and gate approvals never come from it). `lore agent start` prints it |
+| `LORE_ACTOR` | the actor for this session; accepted only for **agent** actors on the org's roster (a human key here is ignored with a warning, and gate approvals never come from it). `lore agent start` prints it; inside a coding tool that names its session it binds the session instead, so the tool's commands need no prefix |
 | `LORE_SESSION` | the agent session id recorded on claims; printed by `lore agent start` |
 | `LORE_LIVE_AUTOPUSH` | `0` = lore never touches the network on its own (same as `live.autopush: false`); live writes wait locally, coordination writes fail with `E_OFFLINE` |
 | `LORE_LIVE` | `0` = no live rows at all in this shell: every row behaves as before live rows existed (an escape hatch for a repo that cannot use them yet) |

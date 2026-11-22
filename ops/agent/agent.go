@@ -10,7 +10,11 @@
 //	    ─▶ "✓ <id> agent L (owner …) registered in …; LORE_ACTOR=… LORE_SESSION=…"
 //	       inside a coding tool (ToolHost): "  <tool> runs each command in a new shell, … start every
 //	       lore command of this agent with LORE_ACTOR=agent:L LORE_SESSION=s-…"
+//	       inside a tool that names its session (SessionBinder, devco:D-889): the
+//	       tool session is bound instead: "  every new shell of this <tool> session
+//	       now writes as agent:L …; `lore agent stop` ends it"
 //	       "export LORE_ACTOR=agent:L LORE_SESSION=s-…"   (the line `eval "$(… | tail -1)"` runs)
+//	agent.stop ─▶ SessionBinder.UnbindToolSession: the tool session is the person's again
 //	agent.start --tool T [--session S] [--model M] [--hook-stdin]
 //	    ─▶ Host.RecordHook ─▶ never fails, prints nothing on success,
 //	       at most one stderr line (6.4: a broken hook never stops the tool)
@@ -39,6 +43,7 @@ import (
 const (
 	Noun    = "agent"
 	OpStart = "agent.start"
+	OpStop  = "agent.stop"
 )
 
 // Environment variable names the printed line sets (identity.EnvActor,
@@ -96,6 +101,33 @@ type ToolHost interface {
 	CallerTool(ctx context.Context) string
 }
 
+// SessionBinder is the optional Host upgrade that binds the caller's
+// coding-tool session to the agent agent.start registered. Why
+// (devco:D-889, owner 2026-11-22): a tool runs each command in a new
+// shell, so the printed export reaches none of them; a binding keyed on
+// the tool's own session id makes every later command of that session
+// write as the agent until agent.stop (or the tool's session-end hook).
+type SessionBinder interface {
+	// BindToolSession binds the detected tool session to actor and
+	// session. Bound is false (nothing written) outside a tool, or when
+	// the tool names no session id.
+	BindToolSession(ctx context.Context, actor, session string) (ToolBinding, error)
+	// UnbindToolSession removes the detected tool session's binding.
+	// Bound is false when there was none.
+	UnbindToolSession(ctx context.Context) (ToolBinding, error)
+}
+
+// ToolBinding is one coding-tool session's binding to an agent.
+type ToolBinding struct {
+	// Tool is the detected tool's slug ("" outside a tool).
+	Tool string
+	// Actor and Session are the bound agent's LORE_ACTOR and LORE_SESSION.
+	Actor   string
+	Session string
+	// Bound: a binding was written (start) or removed (stop).
+	Bound bool
+}
+
 // Env is what agent.start needs; *wire.App implements it. The --label
 // mode also needs the opsinfra.Roster upgrade.
 type Env interface {
@@ -126,6 +158,9 @@ type StartOut struct {
 	// Tool is the coding tool the caller runs under ("" for none), for the
 	// text only (the JSON output is unchanged).
 	Tool string `json:"-"`
+	// Bound: this tool session now writes as the agent in every new shell
+	// (SessionBinder), for the text only.
+	Bound bool `json:"-"`
 }
 
 // Text implements op.Texter: v0.1.17's two lines, the last one the export
@@ -139,7 +174,13 @@ func (o StartOut) Text() string {
 		where = "registered in the roster of " + o.Where
 	}
 	inTool := ""
-	if o.Tool != "" {
+	switch {
+	case o.Bound:
+		// devco:D-889: the binding, not the export, carries the agent to
+		// the tool's next commands; the export stays the last line
+		inTool = fmt.Sprintf("  every new shell of this %s session now writes as %s (%s=%s) without a prefix; `lore agent stop` ends it\n",
+			o.Tool, o.Actor, EnvSession, o.Session)
+	case o.Tool != "":
 		// devco:D-850: the export below stays the last line (eval scripts
 		// take it with tail -1); inside a tool it reaches no later command
 		inTool = fmt.Sprintf("  %s runs each command in a new shell, so the export below does not reach its next command: start every lore command of this agent with %s=%s %s=%s (without it the command is yours, via %s)\n",
@@ -164,13 +205,21 @@ func Ops(env Env) []op.Entry {
 		}, func(ctx context.Context, in StartIn) (StartOut, error) {
 			return Start(ctx, env, in)
 		}),
+		op.Define(op.Spec{
+			Name: OpStop, Summary: "End the agent this coding-tool session was bound to by `lore agent start`: its next commands are yours again",
+			Permission: op.PermWrite, Access: op.AccessRead,
+			Errors:   []errs.Code{errs.Unsupported, errs.Internal},
+			Examples: []op.Example{{Title: "inside the coding tool, when the agent's work is done", CLI: "lore agent stop", Want: ""}},
+		}, func(ctx context.Context, in StopIn) (StopOut, error) {
+			return Stop(ctx, env, in)
+		}),
 	}
 }
 
 // IsDirectOp reports whether name must run outside the repo engine, like
 // the roster verbs (opsinfra.IsRosterOp): the roster may be an org store
 // opened store-only outside any repo (FA-AGENT-9).
-func IsDirectOp(name string) bool { return name == OpStart }
+func IsDirectOp(name string) bool { return name == OpStart || name == OpStop }
 
 // Start is agent.start over env.
 func Start(ctx context.Context, env Env, in StartIn) (StartOut, error) {
@@ -218,10 +267,57 @@ func Start(ctx context.Context, env Env, in StartIn) (StartOut, error) {
 		return StartOut{}, errs.Wrap(errs.Internal, "make a session id", err)
 	}
 	out := StartOut{ID: reg.ID, Label: in.Label, Owner: owner, Where: reg.Where, Actor: agentKeyPrefix + in.Label, Session: session}
-	if th, ok := h.(ToolHost); ok {
+	if b, ok := h.(SessionBinder); ok {
+		tb, err := b.BindToolSession(ctx, out.Actor, out.Session)
+		if err != nil {
+			return StartOut{}, err
+		}
+		out.Tool, out.Bound = tb.Tool, tb.Bound
+	} else if th, ok := h.(ToolHost); ok {
 		out.Tool = th.CallerTool(ctx)
 	}
 	return out, nil
+}
+
+// StopIn is the input of agent.stop: none, the tool session is detected.
+type StopIn struct{}
+
+// StopOut is the output of agent.stop.
+type StopOut struct {
+	// Stopped: this tool session was bound and no longer is.
+	Stopped bool   `json:"stopped"`
+	Tool    string `json:"tool,omitempty"`
+	Actor   string `json:"lore_actor,omitempty"`
+	Session string `json:"lore_session,omitempty"`
+}
+
+// Text implements op.Texter.
+func (o StopOut) Text() string {
+	switch {
+	case o.Stopped:
+		return fmt.Sprintf("%s this %s session no longer writes as %s (%s=%s); its next commands are yours, via %s\n",
+			successMark, o.Tool, o.Actor, EnvSession, o.Session, o.Tool)
+	case o.Tool != "":
+		return "nothing to stop: this " + o.Tool + " session is not bound to an agent (`lore agent start --label <label>` binds it)\n"
+	}
+	return "nothing to stop: no coding-tool session found here (outside a tool, unset LORE_ACTOR and LORE_SESSION in your shell)\n"
+}
+
+// Stop is agent.stop over env: unbind the caller's tool session.
+func Stop(ctx context.Context, env Env, _ StopIn) (StopOut, error) {
+	h, err := env.AgentHost(ctx)
+	if err != nil {
+		return StopOut{}, err
+	}
+	b, ok := h.(SessionBinder)
+	if !ok {
+		return StopOut{}, errs.New(errs.Unsupported, "this binary cannot bind tool sessions")
+	}
+	tb, err := b.UnbindToolSession(ctx)
+	if err != nil {
+		return StopOut{}, err
+	}
+	return StopOut{Stopped: tb.Bound, Tool: tb.Tool, Actor: tb.Actor, Session: tb.Session}, nil
 }
 
 // newSessionID is a fresh LORE_SESSION value.

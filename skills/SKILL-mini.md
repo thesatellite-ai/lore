@@ -525,7 +525,7 @@ Tasks are live: they reach everyone on any branch once pushed, and land on main 
 lore whoami                                           # org, why, identity: run once per repo
 lore check pr-body --file body.md                            # before posting a PR body or comment
 lore move --id mem_01 --to repo                            # deliberate move into the client repo
-lore agent start --label agent-backend --owner @alice     # export what it prints
+lore agent start --label agent-backend --owner @alice     # export what it prints (inside a coding tool it binds the session: no export needed)
 lore inbox
 lore task next --claim --mission mis_12               # claims the next task; exit 10 = no ready work (without --claim: only shows it)
 lore task heartbeat

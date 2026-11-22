@@ -12,7 +12,8 @@ package app
 //	          deadline wire.SessionEndBudget (the 15 s piggyback limit)
 //	          watchdog: exit 0 at budget + sessionEndGrace, whatever runs
 //	          recover() a panic
-//	          run(args) ─▶ the hidden `agent end` command ─▶ App.FlushBatches
+//	          run(args) ─▶ the hidden `agent end` command ─▶ App.EndToolSession
+//	                       (the tool session's agent binding, devco:D-889) ─▶ App.FlushBatches
 //	        ─▶ exit 0, always
 //
 // A hook must never block or fail the tool's session: every outcome is
@@ -94,6 +95,7 @@ func sessionEndCommand(app *wire.App) *cobra.Command {
 		Hidden: true,
 		Args:   cobra.ArbitraryArgs, // a tool may pass more; the hook never fails on it
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			app.EndToolSession(cmd.Context()) // devco:D-889: the session's agent binding ends with it
 			app.FlushBatches(cmd.Context())
 			return nil
 		},

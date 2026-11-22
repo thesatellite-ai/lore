@@ -133,6 +133,8 @@ func (r Resolved) Source() string {
 		return "setup identity (config.yaml setups[" + r.Setup + "].identity)"
 	case r.Step == StepOrg && r.Org != "":
 		return "org entry (config.yaml orgs[" + r.Org + "].identity)"
+	case r.Step == StepBound && r.Detection != nil:
+		return "lore agent start in this " + r.Detection.Tool + " session; `lore agent stop` ends it"
 	}
 	return string(r.Step)
 }

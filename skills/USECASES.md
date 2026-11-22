@@ -77,7 +77,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | A row was filed in the wrong place | `lore move --id <id> --to <target>` |
 | Check a PR body for internal content before posting | `lore check pr-body --file <file>` (or `-` for stdin) |
 | An internal row reached the client's live ref | `lore live purge --ids <id> --confirm`, then `lore live compact` |
-| Start an agent session | `lore agent start --label <name> --owner @<you>` and export what it prints |
+| Start an agent session | `lore agent start --label <name> --owner @<you>` and export what it prints (inside a coding tool it binds the tool session instead; `lore agent stop` ends it) |
 | Create a mission and its tasks from a file (re-run adds nothing) | `lore mission apply --file <file>` |
 | See the next ready task and why | `lore task next --mission <id> [--repo <name>]` (writes nothing) |
 | Take the next ready task as an agent | `lore task next --claim --mission <id> [--repo <name>]` (exit 10: nothing ready) |

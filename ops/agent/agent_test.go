@@ -164,3 +164,86 @@ func TestStartInsideAToolSaysThePrefix(t *testing.T) {
 		t.Fatalf("outside a tool: %q", out.Text())
 	}
 }
+
+// binderHost is a Host that binds tool sessions (SessionBinder).
+type binderHost struct {
+	toolHost
+	session string // the detected tool session id ("" = the tool names none)
+	bound   map[string]ToolBinding
+}
+
+func (h *binderHost) BindToolSession(_ context.Context, actor, session string) (ToolBinding, error) {
+	if h.tool == "" || h.session == "" {
+		return ToolBinding{Tool: h.tool}, nil
+	}
+	b := ToolBinding{Tool: h.tool, Actor: actor, Session: session, Bound: true}
+	h.bound[h.session] = b
+	return b, nil
+}
+
+func (h *binderHost) UnbindToolSession(context.Context) (ToolBinding, error) {
+	b, ok := h.bound[h.session]
+	delete(h.bound, h.session)
+	b.Tool, b.Bound = h.tool, ok
+	return b, nil
+}
+
+// binderEnv hands out a binderHost.
+type binderEnv struct {
+	fakeEnv
+	bh *binderHost
+}
+
+func (e *binderEnv) AgentHost(context.Context) (Host, error) { return e.bh, nil }
+
+// TestStartBindsTheToolSession pins devco:D-889: inside a tool that names
+// its session, agent.start binds that session to the agent and says every
+// new shell of it now writes as the agent and that `lore agent stop` ends
+// it (the export stays the last line, the JSON is unchanged); agent.stop
+// removes the binding and says so, and says plainly when there is
+// nothing to stop. A tool that names no session keeps the D-850 prefix.
+func TestStartBindsTheToolSession(t *testing.T) {
+	ctx := context.Background()
+	bh := &binderHost{toolHost: toolHost{tool: "codex"}, session: "thread-1", bound: map[string]ToolBinding{}}
+	env := &binderEnv{bh: bh}
+	out, err := Start(ctx, env, StartIn{Label: "frontend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := bh.bound["thread-1"]; b.Actor != "agent:frontend" || b.Session != out.Session {
+		t.Fatalf("the tool session is not bound: %+v", bh.bound)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.Text(), "\n"), "\n")
+	if len(lines) != 3 || !strings.Contains(lines[1], "every new shell of this codex session now writes as agent:frontend (LORE_SESSION="+out.Session+") without a prefix; `lore agent stop` ends it") {
+		t.Fatalf("bound text: %q", out.Text())
+	}
+	if lines[2] != "export LORE_ACTOR=agent:frontend LORE_SESSION="+out.Session {
+		t.Fatalf("the export is not the last line: %q", lines[2])
+	}
+	if b, _ := json.Marshal(out); strings.Contains(string(b), "codex") || strings.Contains(string(b), "bound") {
+		t.Fatalf("the JSON output changed: %s", b)
+	}
+	st, err := Stop(ctx, env, StopIn{})
+	if err != nil || !st.Stopped || st.Actor != "agent:frontend" || len(bh.bound) != 0 {
+		t.Fatalf("stop = %+v %v, left %+v", st, err, bh.bound)
+	}
+	if !strings.Contains(st.Text(), "this codex session no longer writes as agent:frontend") {
+		t.Fatalf("stop text: %q", st.Text())
+	}
+	if st, _ = Stop(ctx, env, StopIn{}); st.Stopped || !strings.Contains(st.Text(), "nothing to stop: this codex session is not bound") {
+		t.Fatalf("second stop: %+v %q", st, st.Text())
+	}
+	// a tool that names no session: nothing bound, the per-command prefix
+	bh.session = ""
+	if out, _ = Start(ctx, env, StartIn{Label: "frontend"}); out.Bound || !strings.Contains(out.Text(), "start every lore command of this agent with") {
+		t.Fatalf("session-less tool: %q", out.Text())
+	}
+	// outside a tool: the two lines as before, and stop says no tool
+	bh.tool = ""
+	if out, _ = Start(ctx, env, StartIn{Label: "frontend"}); strings.Count(out.Text(), "\n") != 2 {
+		t.Fatalf("outside a tool: %q", out.Text())
+	}
+	if st, _ = Stop(ctx, env, StopIn{}); st.Stopped || !strings.Contains(st.Text(), "no coding-tool session found here") {
+		t.Fatalf("stop outside a tool: %q", st.Text())
+	}
+}

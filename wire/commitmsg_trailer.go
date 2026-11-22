@@ -31,13 +31,13 @@ import (
 const commitMsgFileMode = 0o600
 
 // coordSession is the signals session of who: an agent's LORE_SESSION when
-// set, else a detected agent's tool session (toolSession), else the
+// set (or the one its tool binding gave, identity.SessionOf), else a detected agent's tool session (toolSession), else the
 // stable key and this host (one session per person per machine).
 // coordWorld.session calls it: the claim side and the hook share this one
 // rule.
 func coordSession(who identity.Resolved) string {
 	if who.Kind == identity.KindAgent {
-		if v := strings.TrimSpace(os.Getenv(identity.EnvSession)); v != "" {
+		if v := identity.SessionOf(who); v != "" { // LORE_SESSION, else a tool binding's (D-889)
 			return v
 		}
 		if d := who.Detection; d != nil && d.SessionID != "" {

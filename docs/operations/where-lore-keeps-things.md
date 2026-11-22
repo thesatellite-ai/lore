@@ -151,7 +151,7 @@ machine.json
 state
 stores
 $ head -20 ~/.lore/README.md
-<!-- written by lore, layout 2026-11-15.2; lore rewrites this file when its layout changes -->
+<!-- written by lore, layout 2026-11-22.1; lore rewrites this file when its layout changes -->
 # lore's home on this machine
 This folder is where lore keeps what belongs to this machine: its settings, the stores it cloned, caches and small state files. Your notes themselves live in stores (git repositories or folders) and in your code repos' .lore/data folders; nothing here is synced by itself.
 `lore where` lists every file lore keeps on this machine and in the repo you run it in, one line each, with the store and repo each cache file belongs to (`lore where --json` for scripts). It also names anything in this folder lore does not recognise; lore never deletes such a file.

@@ -15,6 +15,10 @@ import (
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
+// jCodexNoSession is a codex session whose environment names no session
+// id (CODEX_SANDBOX only).
+var jCodexNoSession = jAgentsTool{slug: jAgentsCodex, env: func(string) []string { return []string{"CODEX_SANDBOX=seatbelt"} }}
+
 func TestJourneyExplicitActorInAgentSession(t *testing.T) {
 	t.Parallel()
 	w, m, app, person, claudeActor, codexActor := jAgentsDay1(t)
@@ -55,7 +59,9 @@ func TestJourneyExplicitActorInAgentSession(t *testing.T) {
 
 	w.Step("agent-start-inside-a-tool-prints-the-prefix", func() {
 		m.LoreIn(app, "actor", "register", "--yes").OK(t) // agent start registers under a person on the roster
-		r := jAgentsRun(m, app, &jCodex, "ex-2", "agent", "start", "--label", label)
+		// a codex that names no session (only CODEX_SANDBOX): nothing to bind
+		// to (devco:D-889 binds a tool session that has an id), so the prefix
+		r := jAgentsRun(m, app, &jCodexNoSession, "", "agent", "start", "--label", label)
 		r.OK(t)
 		lines := strings.Split(strings.TrimSpace(r.Stdout), "\n")
 		if len(lines) < 2 || !strings.HasPrefix(lines[len(lines)-1], "export LORE_ACTOR=agent:"+label+" LORE_SESSION=") {

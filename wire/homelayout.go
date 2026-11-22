@@ -18,6 +18,7 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/gitfast"
+	"github.com/thesatellite-ai/lore/adapters/identity"
 )
 
 // homeEntry is one kind of path in the lore home.
@@ -76,6 +77,8 @@ var homeLayout = []homeEntry{
 	{Pattern: "state/audit", Dir: true, Collapse: true, What: "the audit log of writes, one .jsonl file per store", ByHand: "deleting a file loses that store's local audit trail", Readme: true},
 	{Pattern: "state/batches", Dir: true, Collapse: true, What: "records of coordinated batch writes, so a batch can be undone", ByHand: "deleting them loses the undo of those batches", Readme: true},
 	{Pattern: "state/session-start", Dir: true, Collapse: true, What: "when each repo's last agent session started (for \"changed since your last session\")", ByHand: "safe to delete: the next session lists a little more", Readme: true},
+	{Pattern: identity.BindingsDir, Dir: true, Collapse: true, What: "the coding-tool sessions `lore agent start` bound to an agent, one file per session (<tool>-<hash of its session id>.json), so each new shell of that session writes as the agent", ByHand: "deleting one makes that session's next commands yours, via the tool (`lore agent stop` does it cleanly); lore removes one a month old", Readme: true},
+	{Pattern: identity.BindingsDir + "/.bind-*", What: "a half-written agent binding", ByHand: byHandTemp},
 	{Pattern: "state/hook-seen", Dir: true, Collapse: true, What: "the rows already sent to an agent in its current session", ByHand: "safe to delete: the agent gets them again", Readme: true},
 	{Pattern: "state/" + ReadNoticeDir, Dir: true, Collapse: true, What: "notices a read gave once (a repo not yet wired for lore), so it does not repeat them", ByHand: "safe to delete: the notice shows once more", Readme: true},
 	{Pattern: "state/upgrade-check.json", What: "when lore last looked for a new version", ByHand: "safe to delete", Readme: true},

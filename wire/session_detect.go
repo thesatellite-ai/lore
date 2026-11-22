@@ -45,7 +45,17 @@ const sessionWalkDepth = 8
 const (
 	sourceToolSessionID = "tool_session_id"
 	sourceSynthetic     = "synthetic"
+	sourceAgentBinding  = "agent_binding"
 )
+
+// sessionSourceOf names where who's LORE_SESSION came from: the variable,
+// or the tool binding `lore agent start` made (identity.StepBound).
+func sessionSourceOf(who identity.Resolved) string {
+	if strings.TrimSpace(os.Getenv(identity.EnvSession)) == "" && who.Step == identity.StepBound {
+		return sourceAgentBinding
+	}
+	return identity.EnvSession
+}
 
 // SessionDetailsOf turns a resolved identity's detection into a session
 // row's fields; ok is false when this process has no session: no agent,
@@ -57,7 +67,7 @@ func SessionDetailsOf(who identity.Resolved, actorID, home, top, cwd string) (Se
 	if who.Detection != nil {
 		det = *who.Detection
 	}
-	explicit := strings.TrimSpace(os.Getenv(identity.EnvSession))
+	explicit := identity.SessionOf(who) // LORE_SESSION, else a tool binding's (devco:D-889)
 	if det.Tool == "" && det.CI == nil && explicit == "" {
 		return SessionDetails{}, false
 	}
@@ -71,7 +81,7 @@ func SessionDetailsOf(who identity.Resolved, actorID, home, top, cwd string) (Se
 		d.ToolSessionID = det.SessionID
 	case explicit != "":
 		d.ToolSessionID = explicit
-		d.Sources = withSessionSource(d.Sources, identity.EnvSession)
+		d.Sources = withSessionSource(d.Sources, sessionSourceOf(who))
 	case det.CI != nil:
 		d.ToolSessionID = det.CI.RunID + "/" + det.CI.Attempt
 	default:

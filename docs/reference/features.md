@@ -138,7 +138,8 @@ The commands were collected from `lore --help` of the current build (every comma
 
 | Feature | What it is for | Package | Guide | Example |
 |---|---|---|---|---|
-| `lore agent start` | Register an agent (one per session label) owned by a person. | `ops/agent` | [team/commands › lore agent start](../../docs/team/commands.md#lore-agent-start) | [team example `agency`](../../tests/team/docs/transcripts/agency.txt) |
+| `lore agent start` | Register an agent (one per session label) owned by a person; inside a coding tool that names its session, bind that session to the agent so its next commands need no `LORE_ACTOR`. | `ops/agent` | [team/commands › lore agent start](../../docs/team/commands.md#lore-agent-start) | [team example `agency`](../../tests/team/docs/transcripts/agency.txt) |
+| `lore agent stop` | End the agent a coding-tool session was bound to: the session's next commands are the person's again. | `ops/agent` | [team/commands › lore agent stop](../../docs/team/commands.md#lore-agent-stop) | `TestJourneyAgentStartBindsToolSession` |
 | `lore task claim` | Take a task so no other agent works on it; the claim expires unless renewed. | `ops/coord` | [team/commands › lore task claim](../../docs/team/commands.md#lore-task-claim) | [team example `team-ops`](../../tests/team/docs/transcripts/team-ops.txt), [team example `agents`](../../tests/team/docs/transcripts/agents.txt) |
 | `lore task next` | Show my current task or the next ready one and why; `--claim` takes it. | `ops/coord` | [team/commands › lore task next](../../docs/team/commands.md#lore-task-next) | [team example `agents`](../../tests/team/docs/transcripts/agents.txt) |
 | `lore task heartbeat` | Renew your claim so it does not expire while you work. | `ops/coord` | [team/commands › lore task heartbeat](../../docs/team/commands.md#lore-task-heartbeat) | [team example `internals`](../../tests/team/docs/transcripts/internals.txt) |

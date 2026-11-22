@@ -687,7 +687,8 @@ lore check pr-body --file body.md                               # before posting
 Agents (one actor per session; claims have a lease):
 
 ```bash
-lore agent start --label agent-backend --owner @alice        # prints LORE_ACTOR / LORE_SESSION to export
+lore agent start --label agent-backend --owner @alice        # prints LORE_ACTOR / LORE_SESSION to export; inside a coding tool it binds the tool session (no export needed)
+lore agent stop                                              # inside the coding tool: its next commands are the person's again
 lore inbox
 lore task next --mission mis_12                          # shows the best ready task and why (writes nothing)
 lore task next --claim --mission mis_12                  # claims it (exit 10 = no work)

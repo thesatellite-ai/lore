@@ -387,7 +387,7 @@ func whoamiData(s *orgcfg.Situation, id identity.Resolved, actor string, red who
 	d := opswhoami.Data{Org: r.OrgName(), MatchedBy: red.str(r.MatchedBy), Rule: int(r.Step), RepoRole: string(r.Role),
 		ProjectID: s.ProjectID, Remotes: nonNilStrs(s.Remotes), Personal: personal,
 		LinkStatus: r.LinkStatus.String(), Warnings: []string{}, Stores: []opswhoami.Store{}, Trace: []opswhoami.Rule{}, Machine: m,
-		Identity: opswhoami.Identity{StableKey: id.StableKey, Name: id.DisplayName, Kind: id.Kind, ActorID: actor, Source: id.Source(), Session: os.Getenv(identity.EnvSession)}}
+		Identity: opswhoami.Identity{StableKey: id.StableKey, Name: id.DisplayName, Kind: id.Kind, ActorID: actor, Source: id.Source(), Session: identity.SessionOf(id)}}
 	for _, warn := range whoamiWarnings(s, id) {
 		d.Warnings = append(d.Warnings, red.str(warn))
 	}
@@ -547,7 +547,7 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, actor string, idErr 
 		if id.Handle != "" {
 			v += "  @" + id.Handle
 		}
-		if ses := os.Getenv(identity.EnvSession); ses != "" {
+		if ses := identity.SessionOf(id); ses != "" {
 			v += "  session " + ses
 		}
 		row("identity", v+"  (from: "+id.Source()+")")

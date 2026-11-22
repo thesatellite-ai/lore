@@ -26,7 +26,8 @@ const (
 )
 
 // Resolve runs the person chain, then agent detection (package flow).
-// LORE_ACTOR always wins; detection never changes who the person is, it
+// LORE_ACTOR always wins, then LORE_HUMAN=1, then a tool session bound by
+// `lore agent start` (binding.go); detection never changes who the person is, it
 // only says "this person's tool did it" (section 3).
 func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 	r, err := resolveChain(ctx, in)
@@ -65,6 +66,13 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 		return r, nil
 	case h != "":
 		r.Notes = append(r.Notes, EnvHuman+" ignored: only the value 1 counts")
+	}
+	if det.IsAgent() && det.SessionID != "" {
+		// devco:D-889: `lore agent start` bound this tool session to its
+		// agent, so every new shell of the session writes as that agent
+		if b, ok := BoundTo(in.Home, det.Tool, det.SessionID); ok {
+			return boundOf(r, b, &det), nil
+		}
 	}
 	if det.IsAgent() {
 		return agentOf(r, det, ownerShortHex)

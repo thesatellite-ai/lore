@@ -27,6 +27,8 @@
 //	Resolve → resolveChain (the person, steps above)
 //	  ├─ LORE_ACTOR / --actor answered → it wins; detection recorded only
 //	  ├─ LORE_HUMAN=1 → the person, declared_human (+ markers flagged)
+//	  ├─ the detected tool session bound by `lore agent start` → agent:<label>
+//	  │    and its LORE_SESSION (binding.go, devco:D-889)
 //	  ├─ a tool detected → agent:auto/<tool>/<owner short> (OQ8, OQ9)
 //	  ├─ CI, no tool → ci:<provider>/<repo>, kind system (OQ13)
 //	  └─ else the person
@@ -211,6 +213,9 @@ type Resolved struct {
 	// an org only agent and bot actors are); the open prints it on every
 	// command, so the value is never dropped without a word (H-116).
 	ActorNote string
+	// Session is the LORE_SESSION a tool binding gave (StepBound only):
+	// read it through SessionOf, where an explicit LORE_SESSION wins.
+	Session string
 	// DeclaredHuman is true when LORE_HUMAN=1 decided.
 	DeclaredHuman bool
 	// Aliases are the person's earlier keys, oldest first (a solo setup's
