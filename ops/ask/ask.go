@@ -77,7 +77,7 @@ type RunIn struct {
 	// Store names the stores to read, as every other read's --store.
 	Store    string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store alone instead of every attached one: <org> (every folder), <store>/<folder>, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder; with none outside a code repo, where no setup covers the folder, it reads your personal store"`
 	MaxChars int    `json:"max_chars,omitempty" flag:"max-chars" min:"200" desc:"cap the answer at this many characters (default 4000); what is left out is counted at the end"`
-	Top      int    `json:"top,omitempty" flag:"top" min:"1" desc:"how many best rows to print in full (default 3); a date question with no other words (what happened yesterday) prints every row of its dates"`
+	Top      int    `json:"top,omitempty" flag:"top" min:"1" desc:"how many best rows to print in full (default 10, within --max-chars); a date question with no other words (what happened yesterday) prints every row of its dates"`
 }
 
 // Out is the output of ask.run: what answers the question, each item with

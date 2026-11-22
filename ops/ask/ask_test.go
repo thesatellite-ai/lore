@@ -601,19 +601,75 @@ func TestBareNameReadsAsAbout(t *testing.T) {
 				t.Errorf("%q: no %q in\n%s", q, want, text)
 			}
 		}
-		if strings.Contains(latest, "office move round 7") {
+		_, picks, _ := strings.Cut(latest, LatestHeading)
+		picks, _, _ = strings.Cut(picks, "more rows")
+		if strings.Contains(picks, "office move round 7") {
 			t.Errorf("%q: an older meeting picked next to the newest one\n%s", q, text)
 		}
 		// each topic once: the older status and budget rows are history
 		// or more rows, never a second topic pick
-		if strings.Count(text, "Status update lumen") != 1 {
-			t.Errorf("%q: want one status row\n%s", q, text)
+		if strings.Count(picks, "Status update lumen") != 1 {
+			t.Errorf("%q: want one status row under latest\n%s", q, text)
+		}
+		// devco D-898: with ten rows the older status rows are printed
+		// too, and each is marked as replaced by the newer one, never
+		// listed as current next to it
+		for _, line := range strings.Split(text, "\n") {
+			if strings.Contains(line, `"Status update lumen`) && !strings.Contains(line, "live in production") && !strings.Contains(line, "[history: replaced by mem_s") {
+				t.Errorf("%q: an older status row printed as current: %s\n%s", q, line, text)
+			}
 		}
 	}
 	// a name with a topic, a debt, a date or another word is no bare name
 	for _, q := range []string{"lumen status", "what do I owe alice-ng", "lumen on 2026-11-01", "lumen pricing", "who is alice-ng"} {
 		if o, text := ask(t, q); o.answer == leadAbout {
 			t.Errorf("%q: read as everything about\n%s", q, text)
+		}
+	}
+}
+
+// TestAboutMarksReplacedByTopic: in an everything-about answer no row
+// matches a question word, so an older row is replaced by a newer row of
+// the same folder holding the same topic (status, budget) that restates
+// it; rows of another folder, of another topic or of no topic stay
+// current. Why (devco D-898, bug hunt H-156): with ten rows per answer the
+// older status and budget rows were printed as current next to the rows
+// that replaced them.
+func TestAboutMarksReplacedByTopic(t *testing.T) {
+	t.Parallel()
+	row := func(id, place, at, body string) scored {
+		return scored{row: &textRow{Table: "memories", ID: id, Place: place, Body: body, At: day(t, at)}}
+	}
+	all := []scored{
+		row("mem_s1", "me/work", "2026-05-01", "Status update lumen (2026-05-01): kickoff held with 10 people."),
+		row("mem_s2", "me/work", "2026-09-01", "Status update lumen (2026-09-01): beta shipped to 12 users."),
+		row("mem_s3", "me/work", "2026-11-01", "Status update lumen (2026-11-01): live in production with 15 customers."),
+		row("mem_b1", "me/work", "2026-08-01", "Budget for lumen is 45k for this year."),
+		row("mem_b2", "me/work", "2026-11-10", "Budget for lumen moved to 62k (was 45k)."),
+		row("mem_x1", "me/other", "2026-11-12", "Status update lumen (2026-11-12): moved to the new rack."),
+		row("mem_n1", "me/work", "2026-10-01", "Lumen notes: the logo is blue."),
+		row("mem_n2", "me/work", "2026-11-11", "Lumen notes: the logo is blue again."),
+	}
+	markReplaced(all)
+	want := map[string]string{"mem_s1": "mem_s3", "mem_s2": "mem_s3", "mem_b1": "mem_b2"}
+	for _, s := range all {
+		if s.replacedBy != want[s.row.ID] {
+			t.Errorf("%s replaced by %q, want %q", s.row.ID, s.replacedBy, want[s.row.ID])
+		}
+		if (s.history != "") != (want[s.row.ID] != "") {
+			t.Errorf("%s history %q", s.row.ID, s.history)
+		}
+	}
+	// the same answer through build with the default top: every older
+	// status and budget row it prints is marked history
+	d := fixture(t)
+	o := build(parseQuestion("lumen", now), d, 0, 0)
+	if len(o.Rows) <= 3 {
+		t.Fatalf("default top printed %d rows, want more than three", len(o.Rows))
+	}
+	for _, r := range o.Rows {
+		if want[r.ID] != "" && r.History == "" {
+			t.Errorf("%s printed as current in\n%s", r.ID, o.Text())
 		}
 	}
 }

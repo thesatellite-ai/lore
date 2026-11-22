@@ -799,4 +799,44 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-897] a name no row holds must start the answer with the not-in-memory hint, the nearest rows still printed:\n%s", out)
 		}
 	})
+	// devco:D-898 (bug hunt H-156): an everything-about answer matches no
+	// question word, so its older status and budget rows were never marked
+	// replaced; with ten rows per answer (the default now) they printed as
+	// current next to the rows that replaced them. They are replaced by
+	// topic now: every older status row of orbit's folder is history.
+	s.Step("personal-store/about-answer-marks-replaced-by-topic", func() {
+		var got struct {
+			Rows []struct {
+				Body    string `json:"body"`
+				History string `json:"history"`
+			} `json:"rows"`
+		}
+		j := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "orbit", "--json").OK(t)
+		if err := json.Unmarshal([]byte(j.Out()), &got); err != nil || len(got.Rows) <= 3 {
+			t.Errorf("[O D-898] `lore ask --store me --query orbit` printed %d rows, want the default of about ten", len(got.Rows))
+		}
+		out := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "orbit").OK(t).Out()
+		// one status row of orbit's folder is current (the newest); every
+		// other one printed, and the older budget, is marked history
+		status, current := 0, 0
+		for _, line := range strings.Split(out, "\n") {
+			old := strings.Contains(line, to+`: "Budget for orbit is 40k`)
+			if !old && !strings.Contains(line, to+`: "Status update orbit`) {
+				continue
+			}
+			marked := strings.Contains(line, "[history: replaced by")
+			if !old {
+				status++
+				if !marked {
+					current++
+				}
+			}
+			if old && !marked {
+				t.Errorf("[O D-898] the older budget row of orbit printed as current: %s\n%s", line, out)
+			}
+		}
+		if status < 2 || current != 1 {
+			t.Errorf("[O D-898] want one current status row of orbit and the older ones marked history (%d printed, %d current):\n%s", status, current, out)
+		}
+	})
 }

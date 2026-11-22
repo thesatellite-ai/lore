@@ -72,8 +72,11 @@ const (
 	// DefaultMaxChars is --max-chars' default: an answer an agent reads in
 	// one go, lighter than the files a grep would open.
 	DefaultMaxChars = 4000
-	// DefaultTop is how many rows are printed in full (--top).
-	DefaultTop = 3
+	// DefaultTop is how many rows are printed in full (--top): about ten,
+	// so an agent reading the answer has the evidence; --max-chars still
+	// caps the text. Why (devco D-898, owner pick list item 3): three rows
+	// cost an answering agent 11 points on two public QA sets.
+	DefaultTop = 10
 	// LatestHeading heads an everything-about answer's newest rows: the
 	// newest row of each folder, then of each topic no folder row covers.
 	LatestHeading = "latest (the newest row of each folder and the newest decision, status, budget and meeting row, word for word):"
@@ -112,19 +115,25 @@ func staleNote(r *textRow, now time.Time) string {
 // the same folder and the same topics and words of the question (so the
 // same thing: a budget, a gym, a status) but older, and the newer row
 // repeats what the older one is about (restates). Each points at the
-// newest such row, which says what it replaces. Rows matching nothing but
-// a name are left alone: two rows that only name alice-ng say different
-// things.
+// newest such row, which says what it replaces. A row matching none of the
+// question's words (an everything-about answer: the question is only a
+// name) is the same thing as another by the topics both hold instead
+// (sameThing). Rows holding neither are left alone: two rows that only
+// name alice-ng say different things.
 func markReplaced(all []scored) {
+	keys := make([][]string, len(all))
+	for i := range all {
+		keys[i] = sameThing(&all[i])
+	}
 	for i := range all {
 		s := &all[i]
-		if s.history != "" || len(s.matched) == 0 {
+		if s.history != "" || len(keys[i]) == 0 {
 			continue
 		}
 		var newest *scored
 		for j := range all {
 			n := &all[j]
-			if j == i || n.history != "" || n.row.Place != s.row.Place || !slices.Equal(n.matched, s.matched) || !n.row.At.After(s.row.At) || !restates(n.row, s.row) {
+			if j == i || n.history != "" || n.row.Place != s.row.Place || !slices.Equal(keys[j], keys[i]) || !n.row.At.After(s.row.At) || !restates(n.row, s.row) {
 				continue
 			}
 			if newest == nil || n.row.At.After(newest.row.At) {
@@ -137,6 +146,26 @@ func markReplaced(all []scored) {
 		s.history = fmt.Sprintf("history: replaced by %s from %s", newest.row.ID, newest.row.At.UTC().Format(dates.DayLayout))
 		s.replacedBy = newest.row.ID
 	}
+}
+
+// sameThing is what row s is about for markReplaced: the question's words
+// and topics it matched, or, when it matched none (a question that is only
+// a name), the topics of topicTable it holds (status, budget, …), nil when
+// it holds none. Why (devco D-898, bug hunt H-156): an everything-about
+// answer matches no question word, so its older status and budget rows were
+// never marked replaced and, once agents get ten rows instead of three,
+// were printed as current next to the rows that replaced them.
+func sameThing(s *scored) []string {
+	if len(s.matched) > 0 {
+		return s.matched
+	}
+	var out []string
+	for _, t := range topicTable {
+		if holdsTopic(s.row, t) {
+			out = append(out, t.name)
+		}
+	}
+	return out
 }
 
 // restates reports whether newer is about what older is about, so it

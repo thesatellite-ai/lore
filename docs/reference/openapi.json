@@ -6221,7 +6221,7 @@
                   },
                   "top": {
                     "type": "integer",
-                    "description": "how many best rows to print in full (default 3); a date question with no other words (what happened yesterday) prints every row of its dates"
+                    "description": "how many best rows to print in full (default 10, within --max-chars); a date question with no other words (what happened yesterday) prints every row of its dates"
                   }
                 },
                 "required": [
