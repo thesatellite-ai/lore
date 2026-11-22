@@ -541,23 +541,26 @@ A compaction force-pushes the rewritten ref to the code repo's remote, which eve
 ### `lore live restore`
 
 <!-- help: live restore -->
-Put the live rows back on the remote from the local copy after it was deleted or rewritten
+Put the live rows back on the remote from the local copy after it was deleted or rewritten (--fresh: push nothing, keep them in a local backup and start a new live ref)
 
 ```text
 Usage:
-  lore live restore
+  lore live restore [flags]
 
 Examples:
+  # the remote is a new repository: keep the old live rows off it
+  lore live restore --fresh
   # put the live rows back after the remote ref was deleted
   lore live restore
 
 Flags:
-      --json   print the result (or the error) as JSON
-      --yes    answer yes to the confirmation without a terminal
+      --fresh   push nothing: keep the old live rows in a local backup ref and start a new live ref with the next live write
+      --json    print the result (or the error) as JSON
+      --yes     answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
-Someone deleted `refs/lore/live` on the server. From then on every live write, `lore sync` and `lore land` fail with `E_READ_ONLY` and `lore doctor` says why; `lore live restore` pushes the local copy back:
+Someone deleted `refs/lore/live` on the server, or the remote was replaced by a new empty repository at the same url (an old repo renamed away and a fresh one made under its name). Lore cannot tell the two apart and pushes nothing there on its own: from then on every live write and `lore land` fail with `E_READ_ONLY`, `lore sync` reports `! live rows not sent` and does the rest, and `lore doctor` says why; writes of rows that are not live (`lore memory add`, rules, …) go on. `lore live restore --fresh` pushes nothing: it keeps the old live rows in a local backup ref (`refs/lore-backup/live/<stamp>`) and the next live write starts a new live ref with only what is written from then on (the safe choice when the new repository must not get the old rows, e.g. it is about to be public). `lore live restore` pushes the local copy back, publishing every live row on that remote:
 
 <!-- example: live-repair#live-ref-deleted only=3,4,5 -->
 ```console
@@ -568,11 +571,11 @@ remote: warning: allowing deletion of corrupt ref
 86dbae476bd6	HEAD
 86dbae476bd6	refs/heads/main
 $ lore task add --title 'close the books for Q1'
-ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it (your local copy is kept as refs/lore-backup/live/20261102T100020)
-  hint: run `lore live restore` to put your live rows back on the remote
+ERROR: [E_READ_ONLY] the remote has no live ref any more: it is a new repository at the same url, or the ref was deleted there; lore stopped writing live rows to it (your local copy is kept as refs/lore-backup/live/20261102T100020)
+  hint: to keep your old live rows off that remote, run `lore live restore --fresh` (pushes nothing: they stay in a local backup ref and the next live write starts a new live ref); to publish them there, run `lore live restore`. Writes of rows that are not live go on meanwhile
 (exit 23)
-$ lore doctor | grep 'remote live ref'
-  - live: the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`
+$ lore doctor | grep 'no live ref'
+  - live: the remote has no live ref any more: it is a new repository at the same url, or the ref was deleted there; live writes are stopped: to keep your old live rows off that remote, run `lore live restore --fresh` (pushes nothing: they stay in a local backup ref and the next live write starts a new live ref); to publish them there, run `lore live restore`. Writes of rows that are not live go on meanwhile
 ```
 <!-- /example -->
 

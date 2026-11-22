@@ -105,7 +105,9 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 	}
 	switch {
 	case errors.Is(s.blocked, live.ErrRemoteGoneURLUnknown):
-		warn(liveGoneURLUnknownText + "; writes are stopped: " + liveGoneURLUnknownHint)
+		warn(liveGoneURLUnknownText + "; live writes are stopped: " + liveGoneHint)
+	case errors.Is(s.blocked, live.ErrRemoteLiveGone):
+		warn(liveGoneText + "; live writes are stopped: " + liveGoneHint)
 	case s.blocked != nil:
 		warn("the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`")
 	}

@@ -102,6 +102,11 @@ type History struct {
 // (already landed on the default branch, or purged).
 type Restored struct {
 	Rows, LeftOut int
+	// Fresh: the old live rows were kept only in Backup and nothing was
+	// pushed (lore live restore --fresh, devco D-913).
+	Fresh bool
+	// Backup is the local backup ref holding the old live rows (fresh only).
+	Backup string
 }
 
 // CompactPlan is what a compaction keeps and changes.
@@ -158,6 +163,10 @@ type Ref interface {
 	// Restore pushes the local copy (or the newest backup) back to the
 	// remote, leaving out landed and purged rows (§6.6).
 	Restore(ctx context.Context) (Restored, error)
+	// StartFresh keeps the local copy as a backup ref and removes the
+	// local live ref, pushing nothing: the next live write starts a new
+	// live ref (after the remote was replaced by a new repository, #136).
+	StartFresh(ctx context.Context) (Restored, error)
 	// Compact rewrites the ref to one parentless commit with a higher epoch
 	// (F8); dryRun only plans.
 	Compact(ctx context.Context, dryRun bool) (Compacted, error)
@@ -270,17 +279,32 @@ type LogOut struct {
 // Text prints the epoch line and git's log lines.
 func (o LogOut) Text() string { return fmt.Sprintf("epoch %d\n%s", o.Epoch, o.Log) }
 
-// RestoreIn is the input of live.restore (none).
-type RestoreIn struct{}
+// RestoreIn is the input of live.restore.
+type RestoreIn struct {
+	// Fresh pushes nothing: the old live rows stay in a local backup ref
+	// and the next live write starts a new live ref. Why: the safe choice
+	// when the remote is a new repository (e.g. about to be public) that
+	// must not get the old live rows (#136, devco D-913).
+	Fresh bool `json:"fresh,omitempty" flag:"fresh" desc:"push nothing: keep the old live rows in a local backup ref and start a new live ref with the next live write"`
+}
 
 // RestoreOut is the output of live.restore.
 type RestoreOut struct {
 	Rows    int `json:"rows"`
 	LeftOut int `json:"left_out"`
+	// Fresh and Backup: --fresh kept the old rows in Backup, pushed nothing.
+	Fresh  bool   `json:"fresh,omitempty"`
+	Backup string `json:"backup,omitempty"`
 }
 
-// Text prints v0.1.17's confirmation line.
+// Text prints v0.1.17's confirmation line (or the --fresh line).
 func (o RestoreOut) Text() string {
+	if o.Fresh {
+		if o.Backup == "" {
+			return "✓ started fresh: no local live ref to keep; nothing was pushed, the next live write starts a new live ref\n"
+		}
+		return fmt.Sprintf("✓ started fresh: your old live rows are kept in %s on this machine; nothing was pushed, the next live write starts a new live ref (`lore live restore` would publish the old rows)\n", o.Backup)
+	}
 	return fmt.Sprintf("✓ restored refs/lore/live: %d rows (left out %d already landed or purged)\n", o.Rows, o.LeftOut)
 }
 
@@ -419,12 +443,12 @@ func Ops(env Env) []op.Entry {
 		}, func(ctx context.Context, in LogIn) (LogOut, error) { return logOf(ctx, env, in) }),
 		op.Define(op.Spec{
 			Name:       OpRestore,
-			Summary:    "Put the live rows back on the remote from the local copy after it was deleted or rewritten",
+			Summary:    "Put the live rows back on the remote from the local copy after it was deleted or rewritten (--fresh: push nothing, keep them in a local backup and start a new live ref)",
 			Permission: op.PermWrite, Access: op.AccessWrite, RESTNoun: restNoun,
 			Confirm:  op.ConfirmRule{PersonOnlyEligible: true},
 			Errors:   writeErrors,
-			Examples: []op.Example{{Title: "put the live rows back after the remote ref was deleted", CLI: "lore live restore"}},
-		}, func(ctx context.Context, _ RestoreIn) (RestoreOut, error) { return restore(ctx, env) }),
+			Examples: []op.Example{{Title: "the remote is a new repository: keep the old live rows off it", CLI: "lore live restore --fresh"}, {Title: "put the live rows back after the remote ref was deleted", CLI: "lore live restore"}},
+		}, func(ctx context.Context, in RestoreIn) (RestoreOut, error) { return restore(ctx, env, in) }),
 		op.Define(op.Spec{
 			Name:       OpCompact,
 			Summary:    "Rewrite the live ref to one commit with a higher epoch and force-push it to the code repo's remote, which every clone fetches (keeps every row and a local backup; asks first, --yes without a terminal)",
@@ -511,16 +535,21 @@ func logOf(ctx context.Context, env Env, in LogIn) (LogOut, error) {
 }
 
 // restore pushes the local copy back (§6.6).
-func restore(ctx context.Context, env Env) (RestoreOut, error) {
+// With --fresh it pushes nothing and starts a new live ref instead.
+func restore(ctx context.Context, env Env, in RestoreIn) (RestoreOut, error) {
 	r, err := env.LiveRef(ctx)
 	if err != nil {
 		return RestoreOut{}, err
 	}
-	res, err := r.Restore(ctx)
+	run := r.Restore
+	if in.Fresh {
+		run = r.StartFresh
+	}
+	res, err := run(ctx)
 	if err != nil {
 		return RestoreOut{}, err
 	}
-	return RestoreOut(res), nil
+	return RestoreOut{Rows: res.Rows, LeftOut: res.LeftOut, Fresh: res.Fresh, Backup: res.Backup}, nil
 }
 
 // compact plans (--dry-run) or runs the compaction (F8). A compaction

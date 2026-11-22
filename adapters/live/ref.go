@@ -92,6 +92,26 @@ var ErrRemoteRewritten = errors.New("live: the remote live ref was deleted or re
 // ErrRemoteRewritten, so every errors.Is check of that keeps holding.
 var ErrRemoteGoneURLUnknown = fmt.Errorf("%w: the remote has no live ref and the url of the last sync was not recorded, so a moved remote cannot be told from a deleted ref", ErrRemoteRewritten)
 
+// ErrRemoteLiveGone is the ErrRemoteRewritten case where the remote has
+// no live ref at all while this clone saw one on the same url: the remote
+// is a new repository at that address (an old repo renamed away and a
+// fresh one made under its name, #136) or the ref was deleted there. Both
+// look the same from here, and in both lore must not push the old live
+// rows back on its own. Why a separate error: only live writes stop (rows
+// that never touch the live ref go on), lore sync reports instead of
+// failing, and the hint names `lore live restore --fresh` (pushes nothing)
+// before `lore live restore` (publishes every live row) (devco D-913). It
+// wraps ErrRemoteRewritten, so every errors.Is check of that keeps holding.
+var ErrRemoteLiveGone = fmt.Errorf("%w: the remote has no live ref (a new repository at the same url, or the ref was deleted there)", ErrRemoteRewritten)
+
+// RemoteGone reports whether err says the remote has no live ref any more
+// (ErrRemoteLiveGone, or ErrRemoteGoneURLUnknown when the url of the last
+// sync was not recorded), as opposed to a live ref replaced by other
+// history: the gone cases stop live writes only (devco D-913).
+func RemoteGone(err error) bool {
+	return errors.Is(err, ErrRemoteLiveGone) || errors.Is(err, ErrRemoteGoneURLUnknown)
+}
+
 // ErrBelowFloor means this binary is older than the live ref's
 // min_lore_version (E_OLD_LORE): it may read, never write.
 var ErrBelowFloor = errors.New("live: this lore is older than the live ref's min_lore_version")
@@ -225,7 +245,7 @@ func (r *Ref) Integrate(ctx context.Context) (IntegrateResult, error) {
 			if r.seenURLUnknown() {
 				return r.rewrittenAs(ctx, s, ErrRemoteGoneURLUnknown)
 			}
-			return r.rewritten(ctx, s)
+			return r.rewrittenAs(ctx, s, ErrRemoteLiveGone)
 		}
 		return IntegrateResult{Action: IntegrateNothing}, nil
 	case s.Local == "":
@@ -568,6 +588,36 @@ func (r *Ref) seenElsewhere() bool {
 // remote moved since cannot be told.
 func (r *Ref) seenURLUnknown() bool {
 	return r.RemoteURL != "" && readTrim(r.stateFile(seenURLSuffix)) == ""
+}
+
+// StartFresh lets this clone leave its old live rows off the remote: the
+// local live ref is kept as a backup (refs/lore-backup/live/<stamp>) and
+// then removed, with the seen marker and the pending list, so the next
+// live write starts a new live ref holding only what is written from now
+// on. Nothing is pushed. Why: after the remote was replaced by a new
+// repository (#136), `lore live restore` would publish every old live row
+// there; this is the choice that publishes none (devco D-913). backup is
+// "" when there was no local live ref.
+func (r *Ref) StartFresh(ctx context.Context) (backup string, err error) {
+	local, _, err := r.Repo.ResolveRef(ctx, r.Name)
+	if err != nil {
+		return "", err
+	}
+	if local != "" {
+		if backup, err = r.ensureBackupOf(ctx, local); err != nil {
+			return "", err
+		}
+		if err = r.Repo.DeleteRef(ctx, r.Name, local); err != nil {
+			return "", fmt.Errorf("live: start fresh: %w", err)
+		}
+	}
+	if err = r.ClearSeen(); err != nil {
+		return "", err
+	}
+	if err = os.Remove(r.stateFile(pendingSuffix)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("live: start fresh: %w", err)
+	}
+	return backup, nil
 }
 
 // ClearSeen forgets the last integrated remote commit (after `lore live

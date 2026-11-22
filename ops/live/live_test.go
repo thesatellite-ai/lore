@@ -41,6 +41,9 @@ func (f *fakeRef) Log(_ context.Context, n int) (History, error) {
 func (f *fakeRef) Restore(context.Context) (Restored, error) {
 	return Restored{Rows: 3, LeftOut: 2}, nil
 }
+func (f *fakeRef) StartFresh(context.Context) (Restored, error) {
+	return Restored{Fresh: true, Backup: "refs/lore-backup/live/20261122T000000"}, nil
+}
 func (f *fakeRef) Compact(_ context.Context, dry bool) (Compacted, error) {
 	f.dryRun = dry
 	f.compacts = append(f.compacts, dry)
@@ -103,9 +106,13 @@ func TestTexts(t *testing.T) {
 	if _, err = logOf(ctx, e, LogIn{Number: -1}); errs.CodeOf(err) != errs.InvalidInput {
 		t.Fatalf("log -1: %v", err)
 	}
-	r, _ := restore(ctx, e)
+	r, _ := restore(ctx, e, RestoreIn{})
 	if r.Text() != "✓ restored refs/lore/live: 3 rows (left out 2 already landed or purged)\n" {
 		t.Fatalf("restore: %q", r.Text())
+	}
+	// --fresh (#136): nothing pushed, the old rows named in their backup
+	if fr, _ := restore(ctx, e, RestoreIn{Fresh: true}); !fr.Fresh || !strings.Contains(fr.Text(), "nothing was pushed") || !strings.Contains(fr.Text(), fr.Backup) {
+		t.Fatalf("restore --fresh: %+v %q", fr, fr.Text())
 	}
 	c, _ := compact(ctx, e, CompactIn{DryRun: true})
 	if !f.dryRun || c.Text() != "refs/lore/live has 4 commits (threshold 1000); compacting would keep 3 files, epoch 1 → 2, dropping 1 purged rows\n" {
@@ -215,7 +222,7 @@ func TestRefusals(t *testing.T) {
 		"show":    func(e Env) error { _, err := show(ctx, e, ShowIn{}); return err },
 		"diff":    func(e Env) error { _, err := diff(ctx, e); return err },
 		"log":     func(e Env) error { _, err := logOf(ctx, e, LogIn{}); return err },
-		"restore": func(e Env) error { _, err := restore(ctx, e); return err },
+		"restore": func(e Env) error { _, err := restore(ctx, e, RestoreIn{}); return err },
 		"compact": func(e Env) error { _, err := compact(ctx, e, CompactIn{}); return err },
 		"purge":   func(e Env) error { _, err := purge(ctx, e, PurgeIn{IDs: []string{purgeIDA}}); return err },
 	} {

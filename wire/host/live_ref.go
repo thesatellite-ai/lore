@@ -126,7 +126,10 @@ func (a *liveRefAdapter) Log(ctx context.Context, n int) (opslive.History, error
 // errLiveBlocked refuses a ref write after the remote ref was rewritten.
 func errLiveBlocked(blocked error) error {
 	if errors.Is(blocked, live.ErrRemoteGoneURLUnknown) {
-		return errs.New(errs.ReadOnly, liveGoneURLUnknownText).WithHint(liveGoneURLUnknownHint)
+		return errs.New(errs.ReadOnly, liveGoneURLUnknownText).WithHint(liveGoneHint)
+	}
+	if errors.Is(blocked, live.ErrRemoteLiveGone) {
+		return errs.New(errs.ReadOnly, liveGoneText).WithHint(liveGoneHint)
 	}
 	return errs.New(errs.ReadOnly, "the remote live ref was deleted or rewritten").WithHint("run `lore live restore` first")
 }
@@ -252,6 +255,22 @@ func (a *liveRefAdapter) Restore(ctx context.Context) (opslive.Restored, error) 
 	s.blocked = nil
 	s.finished = true
 	return opslive.Restored{Rows: keep, LeftOut: len(dropped)}, nil
+}
+
+// StartFresh implements opslive.Ref (lore live restore --fresh, #136): it
+// runs while the ref is blocked and pushes nothing. The local live ref is
+// kept as a backup and removed, so writes go on and the next live write
+// starts a new live ref; `lore live restore` can still publish the backup.
+func (a *liveRefAdapter) StartFresh(ctx context.Context) (opslive.Restored, error) {
+	s := a.s
+	backup, err := s.ref.StartFresh(ctx)
+	if err != nil {
+		return opslive.Restored{}, errs.Wrap(errs.Internal, "start a new live ref", err)
+	}
+	s.blocked = nil
+	s.finished = true
+	s.cache.Invalidate()
+	return opslive.Restored{Fresh: true, Backup: backup}, nil
 }
 
 // restoreSource is the local live ref when it exists, else the newest backup.

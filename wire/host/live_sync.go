@@ -112,9 +112,16 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 		}
 	}()
 	if s.blocked != nil {
-		// G-SYNC-3: the remote live ref was deleted or rewritten; nothing
-		// can be delivered, so sync refuses as every live write does
-		// (never "· already in sync"), naming the backup and the restore.
+		if live.RemoteGone(s.blocked) {
+			// #136 (devco D-913): the remote has no live ref any more (a
+			// new repository at the same url, or the ref deleted): sync
+			// sends no live row there on its own and does the rest; its
+			// report names the choice (never "· already in sync").
+			return []string{syncLiveGoneLine(s.blocked)}, 0, "", nil
+		}
+		// G-SYNC-3: the remote live ref was rewritten; nothing can be
+		// delivered, so sync refuses as every live write does (never
+		// "· already in sync"), naming the backup and the restore.
 		return nil, 0, "", rewrittenError(errs.ReadOnly, s.blocked)
 	}
 	s.syncReport = true // this report's own line says what waits (syncLiveWaiting)
@@ -136,6 +143,9 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 	s.syncReport = false
 	if !pushed || s.ref.Remote == nil {
 		if s.blocked != nil { // the push found it rewritten
+			if live.RemoteGone(s.blocked) {
+				return append(lines, syncLiveGoneLine(s.blocked)), 0, "", nil
+			}
 			return nil, 0, "", rewrittenError(errs.ReadOnly, s.blocked)
 		}
 		if !pushed && s.ref.Remote != nil {
@@ -654,4 +664,15 @@ func landErr(err error) error {
 		return err
 	}
 	return errs.Wrap(errs.Internal, "land", err)
+}
+
+// syncLiveGoneLine is lore sync's report line while the remote has no live
+// ref any more (#136): the live rows were not sent, why, and the two
+// choices, the one that publishes nothing first.
+func syncLiveGoneLine(blocked error) string {
+	var e *errs.Error
+	if !errors.As(rewrittenError(errs.ReadOnly, blocked), &e) {
+		return "! live rows not sent: " + liveGoneText
+	}
+	return "! live rows not sent: " + e.Message + "\n  " + e.Hint
 }

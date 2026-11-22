@@ -28,21 +28,29 @@ func rewrittenError(code errs.Code, blocked error) error {
 		where = "kept under " + live.RefBackupPrefix
 	}
 	if errors.Is(blocked, live.ErrRemoteGoneURLUnknown) {
-		return errs.Wrap(code, liveGoneURLUnknownText+"; lore stopped writing to it (your local copy is "+where+")", blocked).
-			WithHint(liveGoneURLUnknownHint)
+		return errs.Wrap(code, liveGoneURLUnknownText+"; lore stopped writing live rows to it (your local copy is "+where+")", blocked).
+			WithHint(liveGoneHint)
+	}
+	if errors.Is(blocked, live.ErrRemoteLiveGone) {
+		return errs.Wrap(code, liveGoneText+"; lore stopped writing live rows to it (your local copy is "+where+")", blocked).
+			WithHint(liveGoneHint)
 	}
 	return errs.Wrap(code, "the remote live ref was deleted or rewritten; lore stopped writing to it (your local copy is "+where+")", blocked).
 		WithHint("run `lore live restore` to put your live rows back on the remote")
 }
 
-// liveGoneURLUnknownText and liveGoneURLUnknownHint name both causes of a
-// remote without the live ref when this clone's last sync did not record
-// the remote url (G-1): a repo moved to a new remote (a rename, a new
-// host) is the common one, so the hint leads with the command that
-// confirms the move by publishing the local live rows there.
+// liveGoneText, liveGoneURLUnknownText and liveGoneHint: the remote has
+// no live ref any more while this clone saw one (#136, devco D-913). It is
+// a new repository at the same url (an old repo renamed away, a fresh one
+// made under its name: often about to be public) or the ref was deleted
+// there; lore cannot tell which, so it pushes nothing on its own. Only
+// live writes stop. The hint names the choice that publishes nothing
+// first, and says plainly that restore publishes every live row (G-1: a
+// repo moved to a new url restores to record it).
 const (
+	liveGoneText           = "the remote has no live ref any more: it is a new repository at the same url, or the ref was deleted there"
 	liveGoneURLUnknownText = "the remote has no live ref: the repo moved to a new remote url, or the ref was deleted there (this clone's last sync did not record the remote url, so lore cannot tell which)"
-	liveGoneURLUnknownHint = "if the repo moved (e.g. renamed), run `lore live restore` to publish your live rows on the new remote and record its url; writes go on after it"
+	liveGoneHint           = "to keep your old live rows off that remote, run `lore live restore --fresh` (pushes nothing: they stay in a local backup ref and the next live write starts a new live ref); to publish them there, run `lore live restore`. Writes of rows that are not live go on meanwhile"
 )
 
 // backupRefOf is the backup ref named in err's text ("" when none).

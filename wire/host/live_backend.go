@@ -760,6 +760,18 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		}
 		liveRows[k] = f
 	}
+	// #136 (devco D-913): a stopped live ref refuses before any row of the
+	// batch is written (rows that are not live still pass the pre-op check
+	// when the remote has no live ref any more, so a mixed batch must not
+	// half-land). A remote without the live ref keeps E_READ_ONLY, the code
+	// every other write answered before.
+	if len(liveRows) > 0 && s.blocked != nil {
+		code := errs.StoreReadOnly
+		if live.RemoteGone(s.blocked) {
+			code = errs.ReadOnly
+		}
+		return rewrittenError(code, s.blocked)
+	}
 	// F-MOVE-2b: rows the live rows point at that only this work tree
 	// holds ride with them (companions), so no teammate meets a dangling id.
 	var carried []live.RowKey
@@ -795,9 +807,6 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	}
 	if len(liveRows) == 0 {
 		return nil
-	}
-	if s.blocked != nil {
-		return rewrittenError(errs.StoreReadOnly, s.blocked)
 	}
 	res, err := s.ref.Write(ctx, live.WriteRequest{Folder: b.folder, Rows: liveRows, BinaryVersion: s.h.cfg.Version})
 	if err != nil {

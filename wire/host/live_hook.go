@@ -1153,7 +1153,11 @@ func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) err
 	if spec.Access != op.AccessWrite || opslive.IsOp(spec.Name) {
 		return nil // reads, and `lore live …` (restore is the repair), always run
 	}
-	if s.blocked != nil {
+	if s.blocked != nil && !live.RemoteGone(s.blocked) {
+		// #136 (devco D-913): when the remote has no live ref any more
+		// (a new repository at the same url, or the ref deleted) only
+		// live writes stop, in the live backend; rows that never touch
+		// the live ref are written as usual.
 		// A-6: a project still on the 0.1.17 format refuses the write
 		// anyway; that refusal comes first, so nobody pushes a live ref
 		// (`lore live restore`) for a write that cannot happen (lore

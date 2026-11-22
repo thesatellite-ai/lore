@@ -29918,7 +29918,7 @@
     "/v1/live/restore": {
       "post": {
         "operationId": "live.restore",
-        "summary": "Put the live rows back on the remote from the local copy after it was deleted or rewritten",
+        "summary": "Put the live rows back on the remote from the local copy after it was deleted or rewritten (--fresh: push nothing, keep them in a local backup and start a new live ref)",
         "tags": [
           "live"
         ],
@@ -29928,6 +29928,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "fresh": {
+                    "type": "boolean",
+                    "description": "push nothing: keep the old live rows in a local backup ref and start a new live ref with the next live write"
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -29941,6 +29947,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "backup": {
+                      "type": "string"
+                    },
+                    "fresh": {
+                      "type": "boolean"
+                    },
                     "left_out": {
                       "type": "integer"
                     },
