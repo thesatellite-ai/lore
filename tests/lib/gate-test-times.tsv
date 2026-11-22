@@ -381,6 +381,7 @@ tests/stories	TestStoryOPersonalStoreClone	31.1	parallel
 tests/stories	TestStoryOPersonalWholeStore	8.2	parallel
 tests/stories	TestStoryOPersonalWriteNote	2.4	parallel
 tests/stories	TestStoryOPrePushChecksOnlyAddedLines	8.2	parallel
+tests/stories	TestStoryOPrePushAfterRebase	8.4	parallel
 tests/stories	TestStoryOServerRemoteMarkedOwn	6.6	parallel
 tests/stories	TestStoryOSetupToolsRenderOnlyUsed	7.2	parallel
 tests/stories	TestStoryOStoreCloneIsAStoreClone	27.1	parallel

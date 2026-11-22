@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -70,7 +71,7 @@ func (h *liveHost) prePushLeakCheck(ctx context.Context, repo *gitref.Repo, remo
 		return errs.Wrap(errs.LeakBlocked, "cannot check: could not list what this push sends", err).
 			WithHint("bypassing the check is your deliberate `git push --no-verify`")
 	}
-	return checkPushDocs(wire.WithPushBases(ctx, pushBases(ctx, repo, remote, updates)), h.cfg.LeakCheck, sets, pushAddedLines(ctx, repo, remote, updates))
+	return checkPushDocs(wire.WithPushBases(ctx, pushBases(ctx, repo, remote, updates)), h.cfg.LeakCheck, sets, pushAddedLines(ctx, repo, remote, updates), pushKnown(ctx, repo, remote, updates))
 }
 
 // pushSet is one doc set of a push (pushDocs): path → content, and the
@@ -85,11 +86,17 @@ type pushSet struct {
 // id → the lines the pushed commits add, pushAddedLines) narrows F16 to
 // those lines (devco:D-728, wire.WithAddedLines); a file version it does
 // not describe, and every file when added is nil, is checked whole.
-func checkPushDocs(ctx context.Context, check func(context.Context, string, map[string][]byte) error, sets []pushSet, added map[string]map[int]bool) error {
+// When a set is refused and known is set, the set is checked once more
+// without the lines (and commit messages) the remote already has
+// (prepush_known.go, issue #128): known runs at most once per push and
+// only after a refusal, so a clean push reads nothing more.
+func checkPushDocs(ctx context.Context, check func(context.Context, string, map[string][]byte) error, sets []pushSet, added map[string]map[int]bool, known knownFunc) error {
+	var have *remoteKnown
 	for _, set := range sets {
 		setCtx := ctx
+		var lines map[string]map[int]bool
 		if added != nil {
-			lines := map[string]map[int]bool{}
+			lines = map[string]map[int]bool{}
 			for p, blob := range set.blobs {
 				if l, ok := added[blob]; ok {
 					lines[p] = l
@@ -97,11 +104,41 @@ func checkPushDocs(ctx context.Context, check func(context.Context, string, map[
 			}
 			setCtx = wire.WithAddedLines(ctx, lines)
 		}
-		if err := check(setCtx, wire.LeakWherePush, set.docs); err != nil {
+		err := check(setCtx, wire.LeakWherePush, set.docs)
+		if err == nil || lines == nil || known == nil || !errs.Has(err, errs.LeakBlocked) {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		if have == nil {
+			k := known(pushPaths(sets))
+			have = &k
+		}
+		if have.empty() {
+			return err
+		}
+		if err := check(wire.WithAddedLines(ctx, dropKnownLines(lines, set.docs, *have)), wire.LeakWherePush, set.docs); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// pushPaths are the file paths of every doc set of a push (sorted, once).
+func pushPaths(sets []pushSet) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, set := range sets {
+		for p := range set.blobs {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // pushRange is the rev-list arguments naming what a push sends: each

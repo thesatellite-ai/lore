@@ -136,7 +136,7 @@ func TestPushOfSeveralCommitsChecksEveryVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkPushDocs(ctx, leakStub, sets, nil); !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), row) {
+	if err := checkPushDocs(ctx, leakStub, sets, nil, nil); !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), row) {
 		t.Fatalf("a key in the newest of two versions of %s went through: %v", row, err)
 	}
 	cleanTip := commitFile(t, dir, row, `{"body":"retry the flaky job twice"}`+"\n", "drop the key")
@@ -144,7 +144,7 @@ func TestPushOfSeveralCommitsChecksEveryVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkPushDocs(ctx, leakStub, sets, nil); !errs.Has(err, errs.LeakBlocked) {
+	if err := checkPushDocs(ctx, leakStub, sets, nil, nil); !errs.Has(err, errs.LeakBlocked) {
 		t.Fatalf("a key an earlier commit of the push carries went through: %v", err)
 	}
 }
@@ -198,7 +198,7 @@ func TestPushLeakChecksOnlyAddedLines(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return checkPushDocs(ctx, check, sets, pushAddedLines(ctx, repo, "origin", u))
+		return checkPushDocs(ctx, check, sets, pushAddedLines(ctx, repo, "origin", u), nil)
 	}
 	tip := commitFile(t, dir, "CLAUDE.md", old+"\nRun make test first.\n", "document the build")
 	if err := push(tip); err != nil {
