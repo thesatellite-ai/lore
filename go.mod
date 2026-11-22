@@ -3,6 +3,7 @@ module github.com/thesatellite-ai/lore
 go 1.26.1
 
 require (
+	github.com/blevesearch/go-porterstemmer v1.0.3
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.19.0
@@ -14,7 +15,6 @@ require (
 )
 
 require (
-	github.com/blevesearch/go-porterstemmer v1.0.3 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
