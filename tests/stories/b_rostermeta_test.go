@@ -34,6 +34,22 @@ func TestStoryBRosterRowsHoldMeta(t *testing.T) {
 		b.lore(bCTO, "team", "list", "--json").OK(t).Says(t, `"emoji": "spider"`)
 	})
 
+	// D-885 (hunt H-144): a key can be required on teams (team add is
+	// their only create and takes --meta) but not on people, whose rows
+	// lore writes itself on a newcomer's first write, member add and actor
+	// register, none with --meta: meta edit refuses actors and names the
+	// tables it takes, so Nia's member add below still works.
+	s.Step("D-885/a-key-cannot-be-required-on-people", func() {
+		b.lore(bCTO, "meta", "edit", "--id", "desk", "--required-on", "actors", "--yes").Fails(t, 20, "E_INVALID_INPUT").
+			Says(t, `"actors" holds metadata but no required or default key`, "--required-on takes: ", "teams")
+		b.lore(bCTO, "meta", "edit", "--id", "desk", "--default", "4F", "--default-on", "actors", "--yes").Fails(t, 20, "E_INVALID_INPUT")
+		b.lore(bCTO, "meta", "edit", "--id", "emoji", "--required-on", "teams", "--yes").OK(t)
+		r := b.lore(bCTO, "team", "add", "--handle", "@ops", "--name", "Ops", "--yes").Fails(t, 20, "E_META_REQUIRED").Says(t, "--meta emoji=")
+		s.NamedFlags(t, r)
+		b.lore(bCTO, "team", "add", "--handle", "@ops", "--name", "Ops", "--meta", "emoji=gear", "--yes").OK(t).Says(t, "@ops")
+		b.lore(bCTO, "meta", "edit", "--id", "emoji", "--required-on", "none", "--yes").OK(t)
+	})
+
 	s.Step("D-862/meta-unset-and-a-teammate-reads-them", func() {
 		team := b.lore(bCTO, "team", "show", "--handle", "@web", "--json").OK(t)
 		var out struct {

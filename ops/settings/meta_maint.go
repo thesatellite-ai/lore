@@ -230,6 +230,29 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 			add(MetaFinding{Key: name, Problem: fmt.Sprintf("retired (merged into %s) but still on %d rows", text(k.Row, mMergedInto), u.rows),
 				Fix: "lore meta edit --id " + name + " --merge-into " + text(k.Row, mMergedInto) + " --yes"})
 		}
+		// a create rule on a table that takes none (actors, set on lore
+		// v0.1.29 or v0.1.30) is inert since D-885: say so, with the edit
+		// that drops it.
+		for _, f := range []string{mRequiredOn, mDefaultOn} {
+			var keep, drop []string
+			for _, t := range jsonTexts(k.Row, f) {
+				if engine.AcceptsMetaRules(row.Table(t)) {
+					keep = append(keep, t)
+				} else {
+					drop = append(drop, t)
+				}
+			}
+			if len(drop) == 0 {
+				continue
+			}
+			rest := strings.Join(keep, ",")
+			if rest == "" {
+				rest = clearWord
+			}
+			flag := "--" + strings.ReplaceAll(f, "_", "-")
+			add(MetaFinding{Key: name, Problem: f + " names a table that takes no create rule (" + strings.Join(drop, ", ") + "); lore ignores it there",
+				Fix: "lore meta edit --id " + name + " " + flag + " " + rest + " --yes"})
+		}
 		if u != nil && len(vs) == 0 && len(u.values) > hint {
 			add(MetaFinding{Key: name, Problem: fmt.Sprintf("%d distinct values; when the values need facts of their own (an owner, a contact), consider a resource kind (meta.resource_hint_values: %d)", len(u.values), hint)})
 		}
@@ -260,7 +283,8 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 		}
 		for _, k := range keyRows {
 			name := text(k.Row, mName)
-			if slices.Contains(jsonTexts(k.Row, mRequiredOn), string(r.Row.Table)) && !slices.Contains(have, name) && text(k.Row, mMergedInto) == "" {
+			// a rule on a table that takes none (actors) is inert: engine.AcceptsMetaRules
+			if engine.AcceptsMetaRules(r.Row.Table) && slices.Contains(jsonTexts(k.Row, mRequiredOn), string(r.Row.Table)) && !slices.Contains(have, name) && text(k.Row, mMergedInto) == "" {
 				add(MetaFinding{Key: name, Row: rid, Problem: "required on " + string(r.Row.Table) + " but missing (written before the rule)", Fix: "lore meta set --id " + rid + " --pair " + name + "=<value>"})
 			}
 		}

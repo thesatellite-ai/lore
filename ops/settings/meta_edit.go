@@ -251,8 +251,13 @@ func (o ops) everydayPatch(k located, in MetaEditIn, patch map[string]value.Valu
 		default:
 			tables := splitList(v)
 			for _, t := range tables {
+				flag := "--" + strings.ReplaceAll(f, "_", "-")
+				takes := "; " + flag + " takes: " + strings.Join(engine.MetaRuleTables(), ", ")
 				if !engine.AcceptsMeta(row.Table(t)) {
-					return errs.New(errs.InvalidInput, "--"+strings.ReplaceAll(f, "_", "-")+": "+quote(t)+" is not a table that takes metadata")
+					return errs.New(errs.InvalidInput, flag+": "+quote(t)+" is not a table that takes metadata"+takes)
+				}
+				if !engine.AcceptsMetaRules(row.Table(t)) {
+					return errs.New(errs.InvalidInput, flag+": "+quote(t)+" holds metadata but no required or default key (lore writes most of those rows itself: a person's first write, actor register, member add, all without --meta)"+takes)
 				}
 			}
 			j, jerr := jsonList(tables)

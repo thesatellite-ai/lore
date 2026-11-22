@@ -174,6 +174,28 @@ var metaTables = map[row.Table]bool{
 // AcceptsMeta reports whether rows of table take metadata from the CLI.
 func AcceptsMeta(table row.Table) bool { return metaTables[table] }
 
+// AcceptsMetaRules reports whether a key's create rules (required_on,
+// default_on: METADATA 3.19) may name table. People hold metadata but are
+// left out: an actor row is mostly written by lore itself (a person's or an
+// agent's first write, actor register, member add, an invite accepted), and
+// none of those writes carries --meta, so a key required on actors would
+// refuse every newcomer's first write with a hint they cannot follow
+// (devco D-885). Teams stay: team add is their only create and takes --meta.
+func AcceptsMetaRules(table row.Table) bool { return metaTables[table] && table != schema.TableActors }
+
+// MetaRuleTables lists the tables AcceptsMetaRules allows, sorted, for the
+// message that refuses any other.
+func MetaRuleTables() []string {
+	out := make([]string, 0, len(metaTables))
+	for t := range metaTables {
+		if AcceptsMetaRules(t) {
+			out = append(out, string(t))
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // meta_keys / meta_values fields read here (schema.Builtin).
 const (
 	mkName, mkScope, mkType            = "name", "scope", "type"
@@ -585,6 +607,12 @@ func (p *metaPlan) checkRules(d keyDef, raw []byte) error {
 // (through the normal set path, so every check runs); then every key whose
 // required_on names the table must have a value, or E_META_REQUIRED.
 func (p *metaPlan) createRules(ctx context.Context, table string) error {
+	// A rule naming a table that takes none (actors: a key edited on
+	// lore v0.1.29 or v0.1.30, before meta edit refused it) stays inert, so
+	// it can never block a person's first write.
+	if !AcceptsMetaRules(row.Table(table)) {
+		return nil
+	}
 	have := func(d keyDef) bool { _, ok := p.entries[d.id]; return ok }
 	for _, d := range p.reg {
 		if d.retired || d.dflt == "" || !slices.Contains(d.defaultOn, table) || have(d) {

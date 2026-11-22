@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -57,5 +58,26 @@ func TestRosterRowsTakeMeta(t *testing.T) {
 	}
 	if _, check, err = BindInputMeta(context.Background(), none); err != nil || check() != nil {
 		t.Fatalf("no --meta: %v / %v, want nothing bound and no refusal", err, check())
+	}
+}
+
+// TestMetaRulesSkipActors pins devco D-885 (hunt H-144): a create rule
+// (required_on, default_on) cannot name actors, and one an older lore
+// stored is inert there: a person's actor row is created without the key,
+// while the same rule still refuses a memory without it.
+func TestMetaRulesSkipActors(t *testing.T) {
+	t.Parallel()
+	if AcceptsMetaRules(schema.TableActors) || !AcceptsMetaRules(schema.TableTeams) || !AcceptsMetaRules(schema.TableMemories) {
+		t.Fatal("AcceptsMetaRules: actors refused, teams and memories accepted")
+	}
+	if got := MetaRuleTables(); slices.Contains(got, string(schema.TableActors)) || !slices.Contains(got, string(schema.TableTeams)) || !slices.IsSorted(got) {
+		t.Fatalf("MetaRuleTables = %v: sorted, teams in, actors out", got)
+	}
+	p := &metaPlan{reg: []keyDef{{name: "desk", requiredOn: []string{string(schema.TableActors), string(schema.TableMemories)}}}}
+	if err := p.createRules(context.Background(), string(schema.TableActors)); err != nil {
+		t.Fatalf("an actor create under required_on actors: %v, want no refusal", err)
+	}
+	if err := p.createRules(context.Background(), string(schema.TableMemories)); !errs.Has(err, errs.MetaRequired) {
+		t.Fatalf("a memory create under required_on memories: %v, want E_META_REQUIRED", err)
 	}
 }
