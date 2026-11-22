@@ -59,8 +59,13 @@ func TestLoreDirIgnoredAsksGitOncePerIgnoreState(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".git", "info", "exclude"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if LoreDirIgnored(ctx, root) || LoreDirIgnored(ctx, root) {
-		t.Fatal("after the exclude was emptied .lore/ still reads as ignored")
+	// two asks after one change: the first runs git, the second is served
+	// from the cache (two calls, not one expression twice, so the count
+	// below checks the cache and staticcheck does not read it as a typo)
+	first := LoreDirIgnored(ctx, root)
+	second := LoreDirIgnored(ctx, root)
+	if first || second {
+		t.Fatalf("after the exclude was emptied .lore/ still reads as ignored (first ask %v, second %v)", first, second)
 	}
 	if n := checkIgnoreRuns(t, log); n != 2 {
 		t.Fatalf("after one ignore change git check-ignore ran %d times in all, want 2", n)
