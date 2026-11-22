@@ -76,7 +76,7 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 		}
 	}
 	if det.IsAgent() {
-		return agentOf(r, det, ownerShortHex)
+		return agentOf(r, det, ownerShortHex, in.AgentDisplay)
 	}
 	if det.CI != nil {
 		c := ciOf(det)
@@ -88,17 +88,18 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 
 // agentOf is the detected agent's identity, owned by person (6.1): key
 // agent:auto/<tool>/<first 6 hex of the owner's act_ id>, display
-// "<owner> via <tool>", label the tool slug. The owner's handle is only
+// "<owner> via <tool>" (or what mode makes of it, agentdisplay.go), label
+// the tool slug. The owner's handle is only
 // the display, because handles change and stable_key cannot (OQ9).
-func agentOf(person Resolved, det agentdetect.Result, width int) (Resolved, error) {
+func agentOf(person Resolved, det agentdetect.Result, width int, mode AgentDisplay) (Resolved, error) {
 	ownerID, err := person.ActorID() // an email change keeps the owner's id, so its agents keep theirs
 	if err != nil {
 		return person, err
 	}
 	key := agentAutoKey(ownerID, det.Tool, width)
 	owner := person
-	out := Resolved{StableKey: key, DisplayName: person.DisplayName + " via " + det.Tool, Kind: KindAgent, Step: StepDetected,
-		Org: person.Org, Notes: person.Notes, ActorNote: person.ActorNote, Agent: key, Label: det.Tool, Owner: &owner, Detection: &det}
+	out := Resolved{StableKey: key, DisplayName: agentDisplayName(person.DisplayName, det.Tool, mode), Kind: KindAgent, Step: StepDetected,
+		Org: person.Org, Notes: person.Notes, ActorNote: person.ActorNote, Agent: key, Label: det.Tool, Owner: &owner, Detection: &det, AgentDisplay: mode}
 	return out, nil
 }
 
@@ -134,7 +135,7 @@ func ReownAgent(r Resolved, owner Resolved) (Resolved, bool, error) {
 	if r.Step != StepDetected || r.Owner == nil || r.Detection == nil {
 		return r, false, nil
 	}
-	w, err := agentOf(owner, *r.Detection, ownerShortHex)
+	w, err := agentOf(owner, *r.Detection, ownerShortHex, r.AgentDisplay)
 	if err != nil {
 		return r, false, err
 	}
@@ -158,7 +159,7 @@ func WidenAgentKey(r Resolved) (Resolved, bool, error) {
 	if r.Step != StepDetected || r.Owner == nil || r.Detection == nil {
 		return r, false, nil
 	}
-	w, err := agentOf(*r.Owner, *r.Detection, ownerWideHex)
+	w, err := agentOf(*r.Owner, *r.Detection, ownerWideHex, r.AgentDisplay)
 	if err != nil {
 		return r, false, err
 	}

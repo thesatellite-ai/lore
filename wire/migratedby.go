@@ -21,21 +21,32 @@ package wire
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 )
 
+// migratedViaAgent is migrated_via when identity.agent_display hides the
+// tool: an agent ran the migration, which one is not named.
+const migratedViaAgent = "agent"
+
 // migratedBy splits who into the person who ran the migration (their
 // display name; "" when they have none, or it holds an address: no name is
 // ever made up from an email) and the agent it ran through ("<tool>
-// (<agent key>)", "" for the person, CI or an agent with no tool label).
+// (<agent key>)", "agent" when identity.agent_display hides the tool, ""
+// for the person, CI or an agent with no tool label).
 func migratedBy(who identity.Resolved) (by, via string) {
 	if name := strings.TrimSpace(who.Person().DisplayName); !strings.Contains(name, "@") {
 		by = name
 	}
 	if key := strings.TrimSpace(who.Agent); key != "" {
+		if who.HidesTool() {
+			// #113 (devco:D-900): identity.agent_display hides the tool, and
+			// the key carries its slug: record only that an agent ran it
+			return by, migratedViaAgent
+		}
 		via = key
 		if label := strings.TrimSpace(who.Label); label != "" {
 			via = label + " (" + key + ")"
@@ -75,11 +86,49 @@ func (a *App) migrateMigratedByEmail(ctx context.Context, dryRun bool) ([]string
 	if err != nil || top == "" || !loreFolderAt(top) {
 		return nil, nil //nolint:nilerr // no repo with lore data here: no _meta.json to look at
 	}
+	var out []string
 	line, err := fixMigratedByEmail(top, dryRun)
-	if err != nil || line == "" {
+	if err != nil {
 		return nil, err
 	}
-	return []string{line}, nil
+	if line != "" {
+		out = append(out, line)
+	}
+	// #113 (devco:D-900): a migrated_via that names the tool, written
+	// before identity.agent_display hid it
+	if mode, _ := agentDisplayMode(a.opts, os.Getenv); mode.HidesTool() {
+		via, err := fixMigratedVia(top, dryRun)
+		if err != nil {
+			return nil, err
+		}
+		if via != "" {
+			out = append(out, via)
+		}
+	}
+	return out, nil
+}
+
+// fixMigratedVia is the migrate run step that takes the tool out of a
+// recorded migrated_via when identity.agent_display hides it (#113): the
+// value becomes "agent" (an agent ran it, which one is not named); under
+// --dry-run it only says what it would write. "" when migrated_via is
+// empty or already "agent". Every other key of _meta.json is kept.
+func fixMigratedVia(top string, dryRun bool) (string, error) {
+	pf, err := rowfs.ReadProjectFormat(top)
+	if err != nil || !pf.Recorded || pf.Format < rowfs.ProjectFormatCurrent {
+		return "", nil //nolint:nilerr // an unreadable _meta.json is the format step's report, not this one's
+	}
+	if v := strings.TrimSpace(pf.MigratedVia); v == "" || v == migratedViaAgent {
+		return "", nil
+	}
+	const why = ": migrated_via names the agent's tool, and identity.agent_display hides it; "
+	if dryRun {
+		return rowfs.RepoMetaPath + why + "would keep migrated_via \"" + migratedViaAgent + "\", not written (dry run)", nil
+	}
+	if _, err := rowfs.WriteProjectFormat(top, pf.Format, rowfs.ProjectMigration{By: pf.MigratedBy, Via: migratedViaAgent, At: pf.MigratedAt}); err != nil {
+		return "", err
+	}
+	return rowfs.RepoMetaPath + why + "now keeps migrated_via \"" + migratedViaAgent + "\"", nil
 }
 
 // fixMigratedByEmail is migrateMigratedByEmail on the checkout at top: the

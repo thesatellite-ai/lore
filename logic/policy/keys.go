@@ -72,6 +72,12 @@ const (
 	KeyBranchesLayers Key = "branches.layers"
 	// KeyBranchesDefaultMode: step 4, isolate (strictest) | share.
 	KeyBranchesDefaultMode Key = "branches.default_mode"
+	// KeyIdentityAgentDisplay: how a detected agent's coding tool shows in
+	// the files lore writes (actor display_name, migrated_via, the
+	// Lore-Agent trailer; issue #113): person (strictest) | agent | tool.
+	// The values mirror identity.AgentDisplays (this package imports no
+	// adapter).
+	KeyIdentityAgentDisplay Key = "identity.agent_display"
 	// KeyBranchesIsolate: step 2, glob patterns always isolated.
 	KeyBranchesIsolate Key = "branches.isolate"
 	// KeyBranchesMainLike: step 3, glob patterns that write to the shared
@@ -438,6 +444,8 @@ func Keys() []KeyDef {
 			Doc: "branch layers on: writes on an isolated code branch stay with that branch until lore branch land"},
 		{Key: KeyBranchesDefaultMode, Shape: ShapeRank, Choices: []string{"isolate", "share"}, Default: mustText("isolate"),
 			Doc: "a code branch no exact choice and no pattern names: isolate (its own layer) or share (the shared notes)"},
+		{Key: KeyIdentityAgentDisplay, Shape: ShapeRank, Choices: []string{"person", "agent", "tool"}, Default: mustText("tool"),
+			Doc: "a detected agent's name in written files: person (the person's name), agent (\"<person> (agent)\") or tool (\"<person> via <tool>\"); a lower level may only hide more"},
 		{Key: KeyBranchesIsolate, Shape: ShapeSet, Default: mustList(), Doc: "glob patterns of code branches that always get their own layer"},
 		{Key: KeyBranchesMainLike, Shape: ShapeSet, Default: mustTexts("dev", "staging", "release/*"),
 			Doc: "glob patterns of code branches that write to the shared notes (the default branch always does)"},

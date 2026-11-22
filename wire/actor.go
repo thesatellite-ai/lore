@@ -37,6 +37,10 @@ func resolveIdentity(ctx context.Context, opts Options) (identity.Resolved, erro
 	// R11 (#7): agent detection is part of the identity chain (LORE_ACTOR and
 	// LORE_HUMAN=1 still win inside it).
 	in := identity.Inputs{Home: opts.Home, FlagActor: opts.FlagActor, Config: mc.Config, Dir: opts.RepoDir, Detect: DetectAgent}
+	// #113 (devco:D-900): how much of the detected tool the written prose
+	// names, decided before anything is written (agentdisplay.go)
+	mode, modeNotes := agentDisplayMode(opts, os.Getenv)
+	in.AgentDisplay = mode
 	if opts.PersonOnly {
 		in.Detect = nil // `lore api`: the server is the person, not its starter's tool
 		// devco D-440: an agent key in LORE_ACTOR is the starter's tool too
@@ -54,7 +58,11 @@ func resolveIdentity(ctx context.Context, opts Options) (identity.Resolved, erro
 		}
 		in.Org = org
 	}
-	return identity.Resolve(ctx, in)
+	r, err := identity.Resolve(ctx, in)
+	if err == nil && len(modeNotes) > 0 {
+		r.Notes = append(r.Notes, modeNotes...)
+	}
+	return r, err
 }
 
 // EnsureActor writes the caller's actor row into target unless it is
@@ -174,6 +182,9 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		rctx := store.WithSupportingRefresh(ctx)
 		if berr := a.backfillKey(rctx, st, ref, cur, who); berr != nil {
 			return berr
+		}
+		if herr := hideAgentTool(rctx, st, ref, cur, who); herr != nil {
+			return herr
 		}
 		// SOURCE_OF_TRUTH actors: a copy whose stamp is not its source's
 		// version is rewritten on this first write to its store
@@ -673,6 +684,31 @@ func (a *App) backfillKey(ctx context.Context, st *state, ref engine.Ref, cur ro
 	}
 	if _, err := st.eng.Update(ctx, ref, patch); err != nil && !errs.Has(err, errs.Stale) {
 		return errs.Prefix("wire: add the stable key to the actor row in store "+string(ref.Store), err)
+	}
+	return nil
+}
+
+// hideAgentTool renames the caller's own detected agent row written before
+// identity.agent_display hid the tool (#113, devco:D-900): a row that still
+// reads "<person> via <tool>" gets the name the mode gives now, on the
+// agent's next write to that store. Only toward hiding: a row already
+// hiding the tool is left as it is when the mode names it again (a machine
+// with the default never undoes a stricter one's rename), and only the
+// caller's own agent row, never a copy of someone else's.
+func hideAgentTool(ctx context.Context, st *state, ref engine.Ref, cur row.Row, who ids.ID[ids.Actor]) error {
+	if who != st.actor || !st.who.HidesTool() {
+		return nil
+	}
+	want := st.who.DisplayName
+	if have := actorField(cur, actorFieldDisplay); have == "" || have == want {
+		return nil
+	}
+	t, err := value.TextOf(want)
+	if err != nil {
+		return errs.Wrap(errs.InvalidInput, "wire: the agent's display name is not valid text", err)
+	}
+	if _, err := st.eng.Update(ctx, ref, map[string]value.Value{actorFieldDisplay: t}); err != nil && !errs.Has(err, errs.Stale) {
+		return errs.Prefix("wire: rename the agent row in store "+string(ref.Store)+" (identity.agent_display)", err)
 	}
 	return nil
 }

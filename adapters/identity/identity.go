@@ -218,6 +218,9 @@ type Resolved struct {
 	Session string
 	// DeclaredHuman is true when LORE_HUMAN=1 decided.
 	DeclaredHuman bool
+	// AgentDisplay is the mode a detected agent's display name was made
+	// with (StepDetected only): HidesTool reads it, ReownAgent keeps it.
+	AgentDisplay AgentDisplay
 	// Aliases are the person's earlier keys, oldest first (a solo setup's
 	// aliases:, or the key_aliases of the actor found at open after an
 	// email change made on another machine). The actor id is derived from
@@ -332,6 +335,9 @@ type Inputs struct {
 	// Detect runs agent detection (wire passes the real one); nil means
 	// no detection, so a caller that never asks gets today's chain.
 	Detect func() (agentdetect.Result, error)
+	// AgentDisplay is how a detected agent's display name reads
+	// (agentdisplay.go); zero is the default, "<person> via <tool>".
+	AgentDisplay AgentDisplay
 }
 
 // ErrOrgIdentityMissing is returned when the resolved org entry has no

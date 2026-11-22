@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitcommit"
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
@@ -438,7 +439,7 @@ func (s storeSigner) agentTrailers() func(context.Context) []string {
 		}
 		var out []string
 		if who, err := resolveIdentity(ctx, s.opts); err == nil && who.Agent != "" {
-			out = []string{gitcommit.AgentTrailer(who.Label, who.Agent)}
+			out = []string{gitcommit.AgentTrailer(identity.AgentTrailerParts(who))}
 		}
 		done[key] = out
 		return out

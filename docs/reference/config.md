@@ -299,6 +299,8 @@ policies:
   meta.max_bytes: 4096
 ```
 
+`identity.agent_display: person` (or `agent`) keeps a detected coding tool's name out of the files this machine writes (the agent's actor row, `migrated_via`, the `Lore-Agent:` trailer); a team sets the same key for everyone with `lore policy set --key identity.agent_display --value person --to <store>/org --yes` ([agents](../team/agents.md#your-coding-agent-acts-as-you)).
+
 In the [setups example](#setups-and-their-page-setups-setup-doctor) above, `meta.max_bytes: 4096` shows up in `lore policy show` with the source `machine`, and the misspelled `meta.max_bytez` is only a warning. A value of the wrong type is an error, as in the [refused setups below](#what-lore-config-check-refuses).
 
 ### Your own tool profiles (`context.profiles`)

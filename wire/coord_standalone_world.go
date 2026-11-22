@@ -731,7 +731,7 @@ func (w *coordWorld) signalsTrailers() []string {
 	if !w.isAgent() || w.who.Agent == "" {
 		return nil
 	}
-	if t := gitcommit.AgentTrailer(w.who.Label, w.who.Agent); t != "" {
+	if t := gitcommit.AgentTrailer(identity.AgentTrailerParts(w.who)); t != "" {
 		return []string{t}
 	}
 	return nil
