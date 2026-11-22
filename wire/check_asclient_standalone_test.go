@@ -80,7 +80,7 @@ func TestCheckAsClient(t *testing.T) {
 	t.Setenv("CI", "")
 	h, mem := asClientRepo(t)
 	ctx := context.Background()
-	if err := h.App.CheckAsClient(ctx, h.Repo, false); err != nil {
+	if err := h.App.CheckAsClient(ctx, nil, h.Repo, false); err != nil {
 		t.Fatalf("clean repo: %v", err)
 	}
 	secret := "ACMETOK-" + strings.Repeat("7", 12)
@@ -104,7 +104,7 @@ func TestCheckAsClient(t *testing.T) {
 				t.Fatal(err)
 			}
 			commitAll(t, h.Repo)
-			err := h.App.CheckAsClient(ctx, h.Repo, false)
+			err := h.App.CheckAsClient(ctx, nil, h.Repo, false)
 			if !errs.Has(err, errs.LeakBlocked) {
 				t.Fatalf("want E_LEAK_BLOCKED, got %v", err)
 			}
@@ -129,7 +129,7 @@ func TestCheckAsClient(t *testing.T) {
 	}
 	commitAll(t, h.Repo)
 	t.Setenv("CI", "true")
-	err := h.App.CheckAsClient(ctx, h.Repo, false)
+	err := h.App.CheckAsClient(ctx, nil, h.Repo, false)
 	if !errs.Has(err, errs.LeakBlocked) || strings.Contains(err.Error(), mem) || !strings.Contains(err.Error(), "details hidden in CI") {
 		t.Fatalf("CI report: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestCheckAsClient(t *testing.T) {
 func TestCheckAsClientNeedsProject(t *testing.T) {
 	t.Parallel()
 	h := opstest.Bare(t)
-	if err := h.App.CheckAsClient(context.Background(), h.Repo, false); !errs.Has(err, errs.InvalidInput) {
+	if err := h.App.CheckAsClient(context.Background(), nil, h.Repo, false); !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("want E_INVALID_INPUT, got %v", err)
 	}
 }

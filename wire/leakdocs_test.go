@@ -187,7 +187,7 @@ func TestLeakRowsStoreChoice(t *testing.T) {
 	}
 	for _, tc := range cases {
 		a := leakWorld(t, tc.client)
-		got, err := a.leakRows(background(), tc.client, nil)
+		got, err := a.leakRows(background(), tc.client, nil, nil)
 		if err != nil {
 			t.Fatalf("client=%v: %v", tc.client, err)
 		}
@@ -229,7 +229,7 @@ func TestLeakRowsFailsClosed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			a := leakWorld(t, tc.client)
-			got, err := a.leakRows(background(), tc.client, tc.expected)
+			got, err := a.leakRows(background(), tc.client, tc.expected, nil)
 			if !tc.refused {
 				if err != nil {
 					t.Fatalf("want no refusal, got %v", err)
@@ -307,7 +307,7 @@ func TestLeakRowsFailsClosedOnReadFailures(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := tc.fault
 			f.App = leakWorld(t, tc.client)
-			got, err := leakRowsFrom(background(), f, tc.client, nil)
+			got, err := leakRowsFrom(background(), f, tc.client, nil, nil)
 			if !tc.refused {
 				if err != nil {
 					t.Fatalf("want no refusal, got %v", err)
@@ -337,7 +337,7 @@ func TestLeakRowsNamesANeverReadStore(t *testing.T) {
 		return
 	}
 	f := faultyLeakReader{App: leakWorld(t, true)}
-	_, err := leakRowsFrom(background(), f, true, []store.Source{"client-store"})
+	_, err := leakRowsFrom(background(), f, true, []store.Source{"client-store"}, nil)
 	var coded *errs.Error
 	if !errors.As(err, &coded) || coded.Code != errs.LeakBlocked {
 		t.Fatalf("want E_LEAK_BLOCKED, got %v", err)
@@ -362,7 +362,7 @@ func TestLeakRowsRosterOnlyForClientRepos(t *testing.T) {
 	if _, err := a.Create(background(), "me", schema.TableActors, leakActorFields(t)); err != nil {
 		t.Fatalf("actor in me: %v", err)
 	}
-	got, err := a.leakRows(background(), false, nil)
+	got, err := a.leakRows(background(), false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

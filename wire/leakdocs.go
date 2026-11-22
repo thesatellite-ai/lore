@@ -149,11 +149,21 @@ func (a *App) leakCheckDocsAllowed(ctx context.Context, res *OrgResolution, wher
 	for _, e := range expected {
 		names = append(names, e.Name)
 	}
-	rows, err := a.leakRows(ctx, client, names)
-	if err != nil {
-		return nil, err
-	}
-	allows, err := leakTextAllows(ctx, a, rows) // #129, before the repo's own key rows join rows
+	// #133/#135: in a client repo the index reads every folder of the
+	// org's internal stores and none of the stores shared with the
+	// client's team (leakscope.go)
+	scope := a.leakScopeOf(s, client, a.leakAttached(ctx, expected))
+	var rows []leakcheck.IndexRow
+	var allows []leakcheck.TextAllow
+	err = a.withExtra(scope.Extra, func() error {
+		var rerr error
+		rows, rerr = a.leakRows(ctx, client, names, scope.Shared)
+		if rerr != nil {
+			return rerr
+		}
+		allows, rerr = leakTextAllows(ctx, a, rows) // #129, before the repo's own key rows join rows
+		return rerr
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -432,14 +442,16 @@ type leakReader interface {
 var _ leakReader = (*App)(nil)
 
 // leakRows is the index rows of every attached store internal to this repo
-// (see the file comment); expected stores must be attached.
-func (a *App) leakRows(ctx context.Context, client bool, expected []store.Source) ([]leakcheck.IndexRow, error) {
-	return leakRowsFrom(ctx, a, client, expected)
+// (see the file comment); expected stores must be attached. shared names
+// the attached stores shared with a client repo's team (leakScope.Shared):
+// never indexed, whatever their class (#133).
+func (a *App) leakRows(ctx context.Context, client bool, expected []store.Source, shared map[store.Source]bool) ([]leakcheck.IndexRow, error) {
+	return leakRowsFrom(ctx, a, client, expected, shared)
 }
 
 // leakRowsFrom is leakRows over any leakReader; a read that fails refuses
 // (E_LEAK_BLOCKED "cannot check"), never counts as empty.
-func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []store.Source) ([]leakcheck.IndexRow, error) {
+func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []store.Source, shared map[store.Source]bool) ([]leakcheck.IndexRow, error) {
 	idents, err := a.StoreIdentities(ctx)
 	if err != nil {
 		return nil, leakCannotCheckErr("", err)
@@ -455,7 +467,7 @@ func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []sto
 	}
 	var out []leakcheck.IndexRow
 	for _, si := range idents {
-		if si.Shareable {
+		if si.Shareable || shared[si.Name] {
 			continue
 		}
 		class, err := a.StoreClass(ctx, si.Name)

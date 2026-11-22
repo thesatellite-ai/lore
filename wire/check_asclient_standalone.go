@@ -74,7 +74,10 @@ const (
 // explain adds each finding's rule and source. nil means nothing would
 // become visible; otherwise one E_LEAK_BLOCKED report (in CI only the
 // count: a CI log is the client's to read).
-func (a *App) CheckAsClient(ctx context.Context, root string, explain bool) error {
+// orgRes is the repo's org resolution: with it the index also reads every
+// folder of the org's stores cloned here (asClientIndex); nil reads the
+// attached stores only.
+func (a *App) CheckAsClient(ctx context.Context, orgRes *OrgResolution, root string, explain bool) error {
 	if r, err := a.knownRepoTop(ctx); err == nil && r != "" {
 		root = r // the project's own folder, also when run from a sub-folder
 	}
@@ -108,7 +111,7 @@ func (a *App) CheckAsClient(ctx context.Context, root string, explain bool) erro
 	// neither reads the other.
 	scanned := make(chan leakcheck.SecretScan, 1)
 	go func() { scanned <- presetSecrets(items, secrets) }()
-	idx, err := a.asClientIndex(ctx)
+	idx, err := a.asClientIndex(ctx, orgRes)
 	secrets = <-scanned
 	if err != nil {
 		return err
@@ -171,18 +174,40 @@ func asClientLine(f leakcheck.Finding, explain bool) string {
 }
 
 // asClientIndex is the leak index of a repo read as a client's: every
-// internal and personal row of every attached store, plus this repo's own
+// internal and personal row of every attached store and of every folder
+// of the org's stores cloned here (#135: the client must see no internal
+// row, not only none of the folders this repo attaches; a hand-over names
+// no client team yet, so no org store is shared), plus this repo's own
 // key rows for the foreign-key rule. An unreadable store refuses.
-func (a *App) asClientIndex(ctx context.Context) (*leakcheck.Index, error) {
-	idents, err := a.StoreIdentities(ctx)
-	if err != nil {
-		return nil, leakCannotCheckErr("", err)
+func (a *App) asClientIndex(ctx context.Context, res *OrgResolution) (*leakcheck.Index, error) {
+	var scope leakScope
+	if res != nil {
+		s, serr := res.Situation(ctx)
+		if serr != nil {
+			return nil, leakCannotCheckErr("", serr)
+		}
+		if s.ResolveErr == nil && s.Result.Org != nil {
+			expected, oerr := res.OrgStores(ctx)
+			if oerr != nil {
+				return nil, leakCannotCheckErr("", oerr)
+			}
+			scope = a.leakScopeFor(s.Result.Org, "", a.leakAttached(ctx, expected))
+		}
 	}
-	names := make([]store.Source, 0, len(idents))
-	for _, si := range idents {
-		names = append(names, si.Name)
-	}
-	rows, err := a.leakRows(ctx, true, names)
+	var rows []leakcheck.IndexRow
+	err := a.withExtra(scope.Extra, func() error {
+		idents, ierr := a.StoreIdentities(ctx)
+		if ierr != nil {
+			return leakCannotCheckErr("", ierr)
+		}
+		names := make([]store.Source, 0, len(idents))
+		for _, si := range idents {
+			names = append(names, si.Name)
+		}
+		var rerr error
+		rows, rerr = a.leakRows(ctx, true, names, nil)
+		return rerr
+	})
 	if err != nil {
 		return nil, err
 	}

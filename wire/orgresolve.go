@@ -503,16 +503,7 @@ func (r *OrgResolution) OrgStores(ctx context.Context) ([]attach.Store, error) {
 		return nil, nil
 	}
 	var out []attach.Store
-	var linked *orgresolve.Link
-	for i := range links {
-		l := &links[i]
-		if l.Entry != org.Name {
-			continue
-		}
-		if linked == nil || (l.Default && !linked.Default) {
-			linked = l
-		}
-	}
+	linked := primaryLink(org.Name, links) // the leak guard's client team comes from this same link (leakscope.go)
 	switch {
 	case linked != nil:
 		if sc := org.StoreFor(linked.StoreURL); sc != nil {

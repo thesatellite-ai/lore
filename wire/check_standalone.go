@@ -120,7 +120,7 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 		if aerr != nil {
 			return opscheck.LeaksOut{}, aerr
 		}
-		if cerr := a.CheckAsClient(ctx, root, in.Explain); cerr != nil {
+		if cerr := a.CheckAsClient(ctx, l.res, root, in.Explain); cerr != nil {
 			return opscheck.LeaksOut{}, cerr
 		}
 		return opscheck.LeaksOut{Message: AsClientClean}, nil
