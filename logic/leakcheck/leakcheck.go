@@ -240,6 +240,12 @@ type Finding struct {
 	// Secret is set on a secret-rule finding of a row field (19.4): what
 	// a `lore secrets allow` entry for it names. Zero otherwise.
 	Secret SecretHit
+	// Hash is a text finding's PassageHash (the matched run of words): what
+	// a `lore leaks allow --match-hash` entry for it names (#129).
+	Hash uint32
+	// Allowed is the text allow that covered this finding (ID set); such a
+	// finding is Warn, so it never blocks, and `lore check leaks` names it.
+	Allowed TextAllow
 }
 
 // StableKeyBlocks records that a person's stable_key, handle or email in a
@@ -268,7 +274,7 @@ func TextDetail(rowID string, words int) string {
 // store acme") does not get it a second time (D-651).
 func (f Finding) Describe(explain bool) string {
 	detail := f.Detail
-	if f.Rule == RuleText && !explain {
+	if f.Rule == RuleText && !explain && f.Allowed.ID == "" {
 		detail = TextDetail(f.RowID, f.Words)
 	}
 	if !explain {
@@ -317,6 +323,10 @@ type Options struct {
 	// Any of them in an item blocks it (RuleSession); the finding never
 	// prints the id.
 	SessionIDs []string
+	// TextAllows are the text-rule allows of the internal stores (#129):
+	// a text finding whose note, passage hash and (when set) path match one
+	// is reported as allowed, never blocking.
+	TextAllows []TextAllow
 }
 
 // SecretHit is one secret finding in an item, safe to print: the rule id
@@ -592,7 +602,7 @@ func checkItem(it Item, idx *Index, o Options, secrets SecretScan, projected map
 	}
 	if idx != nil {
 		allowed := allowedRows(it, idx)
-		out = append(out, textHits(it, content, idx, allowed)...)
+		out = append(out, textHits(it, content, idx, allowed, o.TextAllows)...)
 		out = append(out, metaHits(it, content, idx, allowed)...) // METADATA 3.15 steps 1, 6
 	}
 	out = append(out, sessionHits(it, content, o.SessionIDs)...)
@@ -851,8 +861,11 @@ func emailHits(it Item, content string, idx *Index) []Finding {
 
 // textHits finds runs of ≥ MinRunWords words shared with an internal row:
 // one finding per (item, internal row), with the longest run's length.
-// Rows in allowed are skipped (a deliberate shared copy of them).
-func textHits(it Item, content string, idx *Index, allowed map[string]bool) []Finding {
+// Rows in allowed are skipped (a deliberate shared copy of them). A run a
+// text allow covers (#129) is reported apart, as an allowed (Warn)
+// finding, and never hides a second run of the same row that is not
+// covered: each run is measured from its own first word.
+func textHits(it Item, content string, idx *Index, allowed map[string]bool, allows []TextAllow) []Finding {
 	if len(idx.shingles) == 0 {
 		return nil
 	}
@@ -867,36 +880,50 @@ func textHits(it Item, content string, idx *Index, allowed map[string]bool) []Fi
 			words = append(words, wordPos{w, i + 1})
 		}
 	}
-	best := map[string]Finding{}
-	for i := 0; i+MinRunWords <= len(words); i++ {
+	window := func(i int) string {
 		parts := make([]string, MinRunWords)
 		for j := 0; j < MinRunWords; j++ {
 			parts[j] = words[i+j].w
 		}
-		for _, row := range idx.shingles[strings.Join(parts, " ")] {
+		return strings.Join(parts, " ")
+	}
+	best := map[string]Finding{}
+	var covered []Finding
+	for i := 0; i+MinRunWords <= len(words); i++ {
+		key := window(i)
+		for _, row := range idx.shingles[key] {
 			if allowed[row] {
 				continue
 			}
+			if i > 0 && containsID(idx.shingles[window(i-1)], row) {
+				continue // inside a run that started earlier: measured there
+			}
 			n := MinRunWords
-			run := append([]string(nil), parts...)
-			for i+n < len(words) {
-				run = append(run[1:], words[i+n].w)
-				if !containsID(idx.shingles[strings.Join(run, " ")], row) {
-					break
-				}
+			for i+n < len(words) && containsID(idx.shingles[window(i+n-MinRunWords+1)], row) {
 				n++
 			}
-			if f, ok := best[row]; !ok || n > f.Words {
-				best[row] = Finding{Rule: RuleText, Where: it.Where, Line: words[i].line, RowID: row, Label: idx.IDs[row], Words: n,
-					Detail: TextDetail(row, n)}
+			run := make([]string, n)
+			for j := range run {
+				run[j] = words[i+j].w
+			}
+			h := PassageHash(run)
+			f := Finding{Rule: RuleText, Where: it.Where, Line: words[i].line, RowID: row, Label: idx.IDs[row], Words: n,
+				Detail: TextDetail(row, n), Hash: h}
+			if a, ok := matchTextAllow(allows, row, h, it.Path); ok {
+				f.Warn, f.Allowed, f.Detail = true, a, AllowedDetail(row, n, a)
+				covered = append(covered, f)
+				continue
+			}
+			if b, ok := best[row]; !ok || n > b.Words {
+				best[row] = f
 			}
 		}
 	}
-	out := make([]Finding, 0, len(best))
+	out := make([]Finding, 0, len(best)+len(covered))
 	for _, f := range best {
 		out = append(out, f)
 	}
-	return out
+	return append(out, covered...)
 }
 
 func lineOf(s string, off int) int {

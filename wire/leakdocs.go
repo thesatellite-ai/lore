@@ -97,24 +97,31 @@ func (a *App) LeakCheckDocs(ctx context.Context, res *OrgResolution, where strin
 // each finding's rule, its full detail and the internal row's source
 // (`lore check leaks|pr-body --explain`, v0.1.17 leakBlockedError).
 func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, where string, docs map[string][]byte, explain bool) error {
+	_, err := a.leakCheckDocsAllowed(ctx, res, where, docs, explain)
+	return err
+}
+
+// leakCheckDocsAllowed is LeakCheckDocsExplain that also returns the text
+// findings a text allow covered (#129), which `lore check leaks` names.
+func (a *App) leakCheckDocsAllowed(ctx context.Context, res *OrgResolution, where string, docs map[string][]byte, explain bool) ([]leakcheck.Finding, error) {
 	docs = AddedLinesOnly(ctx, docs) // devco:D-728: a push reads only the lines its commits add
 	if len(docs) == 0 || res == nil {
-		return nil
+		return nil, nil
 	}
 	s, err := res.Situation(ctx)
 	if err != nil {
-		return leakCannotCheckErr("", err)
+		return nil, leakCannotCheckErr("", err)
 	}
 	if s.ResolveErr != nil {
-		return leakCannotCheckErr("the org of this repo", s.ResolveErr)
+		return nil, leakCannotCheckErr("the org of this repo", s.ResolveErr)
 	}
 	client := s.Result.Role == orgresolve.RoleClient
 	if (s.Result.Role == orgresolve.RoleOwn && !s.Result.LinkUnknown) || s.ProjectID == "" {
-		return nil // an own repo with a known link (or no project) is not checked
+		return nil, nil // an own repo with a known link (or no project) is not checked
 	}
 	expected, err := res.OrgStores(ctx)
 	if err != nil {
-		return leakCannotCheckErr("", err)
+		return nil, leakCannotCheckErr("", err)
 	}
 	names := make([]store.Source, 0, len(expected))
 	for _, e := range expected {
@@ -122,12 +129,16 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 	}
 	rows, err := a.leakRows(ctx, client, names)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	allows, err := leakTextAllows(ctx, a, rows) // #129, before the repo's own key rows join rows
+	if err != nil {
+		return nil, err
 	}
 	if client {
 		keys, kerr := a.List(ctx, store.SourceRepo, schema.TableMetaKeys)
 		if kerr != nil {
-			return leakCannotCheckErr("the repo's key rows", kerr)
+			return nil, leakCannotCheckErr("the repo's key rows", kerr)
 		}
 		rows = withRepoKeys(rows, keys)
 	}
@@ -140,15 +151,26 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 		items = append(items, leakcheck.Item{Where: label, Path: p, Content: b, LiveRow: liveRowDoc(where, p)})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
-	fs := leakcheck.Blocking(a.leakCheckByProject(ctx, items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client})) // per monorepo project folder (leakdocs_projects.go)
-	fs, moved := withoutSelfMatches(where, fs, rows)
+	all := a.leakCheckByProject(ctx, items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client, TextAllows: allows}) // per monorepo project folder (leakdocs_projects.go)
+	fs, moved := withoutSelfMatches(where, leakcheck.Blocking(all), rows)
 	if len(fs) == 0 {
-		return nil
+		return textAllowed(all), nil
 	}
 	if moved {
-		return leakBlocked(leakWhereMove, fs, explain)
+		return nil, leakBlocked(leakWhereMove, fs, explain)
 	}
-	return withUnlistedHint(leakBlocked(where, fs, explain), UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.ClassRemotes())))
+	return nil, withUnlistedHint(leakBlocked(where, fs, explain), UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.ClassRemotes())))
+}
+
+// textAllowed are the findings of fs a text allow covered (#129).
+func textAllowed(fs []leakcheck.Finding) []leakcheck.Finding {
+	var out []leakcheck.Finding
+	for _, f := range fs {
+		if f.Allowed.ID != "" {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // withUnlistedHint adds why (UnlistedOwnStep) to a client repo's leak
@@ -238,6 +260,9 @@ func leakBlocked(where string, fs []leakcheck.Finding, explain bool) error {
 		}
 		if metaEmailHit(f) {
 			h = metaEmailFix // lore 0.1.18's migrated_by: migrate run rewrites it (devco:D-705)
+		}
+		if f.Rule == leakcheck.RuleText && where != leakWhereMove {
+			h += "; " + textAllowFix(f, where) // #129: approved public text the note quotes
 		}
 		if !seen[h] {
 			seen[h] = true

@@ -11,7 +11,7 @@ type ops struct{ env Env }
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	var out []op.Entry
-	for _, group := range [][]op.Entry{o.kindOps(), o.resourceOps(), o.varOps(), o.policyOps(), o.metaOps(), o.secretOps()} {
+	for _, group := range [][]op.Entry{o.kindOps(), o.resourceOps(), o.varOps(), o.policyOps(), o.metaOps(), o.secretOps(), o.leaksOps()} {
 		out = append(out, group...)
 	}
 	return out

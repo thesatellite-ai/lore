@@ -157,6 +157,7 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	compiled := compiledProgramsLine(ctx, gitTop(ctx, root), docs)
 	// Secrets first, in every repo (hooksecrets.go), then F16 (client repos).
 	old, serr := a.hookSecrets(ctx, root, checkWhereCommit, docs)
+	var allowed []leakcheck.Finding // #129: text findings a text allow covered, named below
 	if serr == nil {
 		// devco:D-720: F16 reads only the lines this commit adds, so an
 		// edit to an already-committed file is not refused for its old text.
@@ -169,7 +170,7 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 			leakDocs = addedLinesOnly(docs, added)
 		}
 		if serr == nil {
-			serr = a.LeakCheckDocsExplain(ctx, l.res, checkWhereCommit, leakDocs, in.Explain)
+			allowed, serr = a.leakCheckDocsAllowed(ctx, l.res, checkWhereCommit, leakDocs, in.Explain)
 		}
 	}
 	if serr != nil {
@@ -182,6 +183,7 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	// values already in history (the same row at HEAD, the same file on
 	// the remote): let through, named once
 	lines = append(lines, historyLines(old, checkWhereCommit)...)
+	lines = append(lines, textAllowedLines(allowed)...)
 	if compiled != "" {
 		lines = append(lines, "lore: "+compiled)
 	}

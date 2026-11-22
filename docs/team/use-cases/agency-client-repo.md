@@ -190,7 +190,7 @@ $ mkdir -p src && echo '// they approve estimates faster when we send them on Wh
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
   commit src/notes.ts:1                    matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
-  hint: Remove the internal text from src/notes.ts
+  hint: Remove the internal text from src/notes.ts; if that passage is approved public text the note quotes: lore leaks allow --note mem_c0f3…b5b8 --file src/notes.ts --match-hash 1314822779 --reason "<why it is public>"
 (exit 1)
 ```
 <!-- /example -->

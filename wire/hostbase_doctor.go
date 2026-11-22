@@ -41,6 +41,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/selfupdate"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
+	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
@@ -113,6 +114,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	a.doctorTaskTree(ctx, warn)
 	a.doctorMetaQuarantine(ctx, warn)
 	a.doctorSecretRulesOff(ctx, note)
+	a.doctorTextAllows(ctx, note) // #129
 	a.doctorCIPins(ctx, warn)
 	a.doctorClaudeLocal(ctx, warn)
 	a.doctorAttrOverride(ctx, warn)    // gitattr_override.go: a later .gitattributes line beats lore's block (devco:Q-11)
@@ -255,6 +257,49 @@ func (a *App) doctorSecretRulesOff(ctx context.Context, note func(string)) {
 		}
 		note(line + "; turn it back on: lore secrets rule on --id " + rule.RuleID + " --to " + rule.Store)
 	}
+}
+
+// doctorTextAllows lists every text allow (#129): a passage of an internal
+// note that may ship in a client repo is never invisible; each line names
+// the note, where, the reason, the author and the command that removes it.
+func (a *App) doctorTextAllows(ctx context.Context, note func(string)) {
+	e, ok := a.Registry().Lookup(opssettings.OpSecretAllowList)
+	if !ok {
+		return
+	}
+	res, err := runDirect(ctx, e, op.JSONDecoder{Body: []byte("{}")})
+	if err != nil {
+		note("text allows could not be read: " + err.Error())
+		return
+	}
+	raw, err := res.JSON()
+	if err != nil {
+		return
+	}
+	var out opssettings.AllowsOut
+	if err := json.Unmarshal(raw, &out); err != nil {
+		note("text allows could not be decoded: " + err.Error())
+		return
+	}
+	for _, al := range out.Data {
+		if al.RuleID != leakcheck.TextAllowRule {
+			continue
+		}
+		note(textAllowDoctorLine(al))
+	}
+}
+
+// textAllowDoctorLine is doctor's line for one text allow.
+func textAllowDoctorLine(al opssettings.Allow) string {
+	where := "anywhere"
+	if al.Path != "" {
+		where = "in " + al.Path
+	}
+	line := "text allow " + al.ID + ": a passage of internal note " + al.RowID + " may ship " + where + " (" + al.Reason
+	if al.CreatedBy != "" {
+		line += "; by " + al.CreatedBy
+	}
+	return line + "); remove it: lore secrets allow rm --id " + al.ID
 }
 
 // workflowsDir is where GitHub keeps CI workflows (FORMAT_EVOLUTION 4).

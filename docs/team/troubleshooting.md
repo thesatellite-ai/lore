@@ -215,7 +215,7 @@ A **leak** is internal or personal content reaching something the client can rea
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
   commit src/notes.ts:1                    matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
-  hint: Remove the internal text from src/notes.ts
+  hint: Remove the internal text from src/notes.ts; if that passage is approved public text the note quotes: lore leaks allow --note mem_c0f3…b5b8 --file src/notes.ts --match-hash 1314822779 --reason "<why it is public>"
 (exit 1)
 ```
 <!-- /example -->
@@ -224,6 +224,7 @@ ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with t
 - When the leaking file is a lore row of this repo (a rule, memory or task file), the hint names that row: `lore move --id <row> --to <org>` to keep it internal, or `lore <kind> delete <row> --confirm` to remove it.
 - When a `lore <kind> add --to repo` is refused, the hint says "Nothing written": nothing was saved; write it with `--to <org>` instead.
 - It really should be shared with the client: `lore move --id <id> --to repo` (it keeps the id; see [Sharing an internal note](use-cases/sharing-a-note.md)).
+- The passage is public text the note quotes on purpose (approved product wording, a release note, an error message): run the `lore leaks allow` line the refusal prints, with a reason (see [Allowing public text a note quotes](how-it-works.md#allowing-public-text-a-note-quotes)).
 - `lore check leaks --explain` shows the rule and the matched words.
 - When the file is a team profile row (`actor_contacts`, `actor_periods`, `project_members`, `roles` or `contact_types` under `.lore/data/`) or an actor file with a profile field, the message says "team profile rows live only in the org store; remove the file". Remove the file from the commit: those rows belong only in the org's store (see [Team profiles](profiles.md#client-repos)).
 

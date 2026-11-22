@@ -75,6 +75,7 @@ func nounDocs() map[string]NounDoc {
 		"hotfix":          {Short: "Manage hotfixes (loud recurring warnings)"},
 		"identity":        {Short: "Manage persisted identity (identity: in " + lorehome.Shown() + "/config.yaml)"},
 		"incident":        {Short: "Manage incidents"},
+		"leaks":           {Short: "Allow public text an internal note quotes (the commit and push leak check's text rule)"},
 		"link":            {Short: "Link git commits to any entity (task / run / mission / decision / …)"},
 		"live":            {Short: "Inspect and maintain the live ref (refs/lore/live)"},
 		"memory":          {Short: "Manage memories (free-form learned knowledge)"},
