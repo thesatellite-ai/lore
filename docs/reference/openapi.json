@@ -6375,7 +6375,7 @@
                           },
                           "full_chars": {
                             "type": "integer",
-                            "description": "set when the row is longer than --max-chars: body is then only the part that answers the question (… marks text left out) and this is the whole body's length; lore show --id \u003cid\u003e prints it whole"
+                            "description": "set when the row is longer than --max-chars: body is then only the part that answers the question (a markdown row: its best sections by heading, best first, each after a line § \u003cheading path\u003e; else its best paragraph, … marking text left out) and this is the whole body's length; lore show --id \u003cid\u003e prints it whole"
                           },
                           "history": {
                             "type": "string",

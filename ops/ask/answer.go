@@ -843,7 +843,8 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 }
 
 // cutRow cuts row i of o.Rows, the last item of o.Ranked, to the part of
-// its text that answers the question in the room the answer has left,
+// its text that answers the question (cutBody: a markdown row's best
+// sections by heading, else its best paragraph) in the room the answer has left,
 // at most half of maxChars and at least minCut characters, and reports whether it was cut: false
 // when what is above it leaves less than minCut characters (the row is
 // then left out whole, as before).

@@ -112,8 +112,102 @@ func TestExcerpt(t *testing.T) {
 	if ex, cut := excerpt("short", words, 100); cut || ex != "short" {
 		t.Errorf("a text that fits is cut: %q", ex)
 	}
-	body, _ := cutBody(doc, words, 600)
-	if !strings.HasPrefix(body, elision+"\n") || !strings.HasSuffix(body, "\n"+elision) {
+	if body := cutText(doc, words, 600); !strings.HasPrefix(body, elision+"\n") || !strings.HasSuffix(body, "\n"+elision) {
 		t.Errorf("cut body has no elision marks: %q", body)
+	}
+	// a row with no heading is cut by paragraph, marked where text was left out
+	plain := strings.ReplaceAll(strings.ReplaceAll(doc, "# ", ""), "#", "")
+	if body, cut := cutBody(plain, words, 600); !cut || !strings.Contains(body, "vault-seven") || !strings.HasSuffix(body, "\n"+elision) || strings.Contains(body, sectionMark) {
+		t.Errorf("a row with no heading: %q", body)
+	}
+}
+
+// sectionNote is a ~5,000-character design note shaped like the long
+// notes of the follow-up of issue #86 (devco D-888): every section
+// repeats some of the question's words, the Overview has a paragraph
+// holding as many of them as the paragraph with the answer, and only the
+// Rollout plan section (by its heading and its text) holds all of them.
+func sectionNote() string {
+	filler := func(topic string) string {
+		return strings.Repeat("The "+topic+" notes cover the rollout in plain terms; the team reviewed them in a sprint, kept the layout and wrote every follow-up down in the tracker. ", 4)
+	}
+	var b strings.Builder
+	b.WriteString("# Orbit design notes\n\n## Overview\n\n")
+	b.WriteString("Phase two of the rollout is the biggest step of the year, and the whole team takes part in it.\n\n")
+	b.WriteString(filler("overview") + "\n\n" + filler("scope") + "\n\n")
+	for _, topic := range []string{"Goals", "Architecture", "Budget"} {
+		b.WriteString("## " + topic + "\n\n" + filler(strings.ToLower(topic)) + "\n\n" + filler(strings.ToLower(topic)+" review") + "\n\n")
+	}
+	b.WriteString("## Rollout plan\n\n" + filler("pilot") + "\n\n")
+	b.WriteString("Phase two starts on 2026-06-05, once the pilot has run for a month.\n\n")
+	b.WriteString("## Risks\n\n" + filler("risk") + "\n\n" + filler("mitigation") + "\n")
+	return b.String()
+}
+
+// TestCutBodyBestSections (devco D-888, follow-up of public issue #86):
+// a long markdown row is cut to its best sections by heading, best first,
+// each after a § line with its heading path: the section whose heading
+// and text hold the question's words that the other sections do not,
+// not the first paragraph holding as many of them (the old cut printed
+// the Overview).
+func TestCutBodyBestSections(t *testing.T) {
+	t.Parallel()
+	doc := sectionNote()
+	words := cutWords([]string{"phase", "two", "orbit", "rollout", "start"}, nil)
+	for _, room := range []int{2000, 900, minCut} {
+		body, cut := cutBody(doc, words, room)
+		first, _, _ := strings.Cut(body, "\n")
+		if !cut || first != sectionMark+"Orbit design notes > Rollout plan" || !strings.Contains(body, "starts on 2026-06-05") {
+			t.Errorf("room %d: the best section is not printed first:\n%s", room, body)
+		}
+		if len(body) > room {
+			t.Errorf("room %d: %d characters", room, len(body))
+		}
+		if strings.Contains(body, "## ") {
+			t.Errorf("room %d: a heading line is printed, not the § path:\n%s", room, body)
+		}
+	}
+	// the next best section follows while it fits (the Overview holds
+	// phase and two too); a section holding only words every section
+	// holds (rollout, orbit in the path) is not printed
+	body, _ := cutBody(doc, words, 2400)
+	if !strings.Contains(body, "\n\n"+sectionMark+"Orbit design notes > Overview\n") || strings.Count(body, sectionMark) != 2 {
+		t.Errorf("the second best section does not follow alone:\n%s", body)
+	}
+	if body, _ := cutBody(doc, words, 2000); strings.Count(body, sectionMark) != 1 {
+		t.Errorf("a section holding only common words is printed:\n%s", body)
+	}
+	// through the answer: the best row is printed as its best sections
+	d := data{rows: []textRow{{Table: "memories", ID: "mem_note", Place: "me/notes", Body: doc, At: now.AddDate(0, 0, -1)}}}
+	o := build(parseQuestion("when does phase two of the orbit rollout start", now), d, 0, DefaultMaxChars)
+	text := o.Text()
+	if len(o.Rows) != 1 || o.Rows[0].FullChars != len(doc) || !strings.Contains(text, "   "+sectionMark+"Orbit design notes > Rollout plan\n") || !strings.Contains(text, "starts on 2026-06-05") || len(o.body()) > DefaultMaxChars {
+		t.Errorf("the answer does not print the best section:\n%s", text)
+	}
+}
+
+// TestSections: headings split a note into sections with their heading
+// path (ATX and setext), never inside a code fence; a heading with no
+// text of its own joins the section after it; text before the first
+// heading is a section of its own; a text with no heading has none.
+func TestSections(t *testing.T) {
+	t.Parallel()
+	doc := "intro line\n\n# Title\n\n## Part one ##\n\none text\n\n```sh\n# not a heading\n```\n\nPart two\n--------\n\ntwo text\n\n### Deep\n\ndeep text\n\n## Part three\n\nthree text\n"
+	var got []string
+	for _, s := range sections(doc) {
+		got = append(got, s.path+"="+strings.Join(strings.Fields(s.text), " "))
+	}
+	want := []string{
+		topPath + "=intro line",
+		"Title > Part one=one text ```sh # not a heading ```",
+		"Title > Part two=two text",
+		"Title > Part two > Deep=deep text",
+		"Title > Part three=three text",
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("sections:\n got %q\nwant %q", got, want)
+	}
+	if s := sections("no heading here\n\n- a list\n---\n"); s != nil {
+		t.Errorf("a text with no heading has sections: %q", s)
 	}
 }

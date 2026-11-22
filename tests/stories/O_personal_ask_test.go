@@ -571,4 +571,37 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			t.Errorf("[O D-859] the printed `lore show --id %s` does not print the row whole:\n%s", id, show)
 		}
 	})
+	// devco:D-888 (bug hunt H-147, follow-up of public issue #86): a
+	// long design note whose sections all repeat the question's words
+	// was cut to the first paragraph holding as many of them as the
+	// answer (the Overview), so the answer was not printed. The note is
+	// now cut to its best sections by heading, best first, each after a
+	// § line with its heading path.
+	s.Step("personal-store/long-best-row-prints-its-best-section", func() {
+		filler := func(topic string) string {
+			return strings.Repeat("The "+topic+" notes cover the rollout in plain terms; the team reviewed them in a sprint, kept the layout and wrote every follow-up down in the tracker. ", 4)
+		}
+		var doc strings.Builder
+		doc.WriteString("# Orbit design notes\n\n## Overview\n\nPhase two of the rollout is the biggest step of the year, and the whole team takes part in it.\n\n")
+		doc.WriteString(filler("overview") + "\n\n" + filler("scope") + "\n\n")
+		for _, topic := range []string{"Goals", "Architecture", "Budget"} {
+			doc.WriteString("## " + topic + "\n\n" + filler(strings.ToLower(topic)) + "\n\n" + filler(strings.ToLower(topic)+" review") + "\n\n")
+		}
+		doc.WriteString("## Rollout plan\n\n" + filler("pilot") + "\n\nPhase two starts on 2026-06-05, once the pilot has run for a month.\n\n")
+		doc.WriteString("## Risks\n\n" + filler("risk") + "\n\n" + filler("mitigation") + "\n")
+		add := ada.Lore(ada.Home, "memory", "add", "--body", doc.String(), "--to", to, "--yes", "--json")
+		add.OK(t)
+		id := regexp.MustCompile(`mem_[0-9a-f]{20,}`).FindString(add.Out())
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when does phase two of the orbit rollout start")
+		r.OK(t)
+		out := r.Out()
+		for _, want := range []string{"§ Orbit design notes > Rollout plan\n", "Phase two starts on 2026-06-05", "lore show --id " + id + " prints it whole"} {
+			if id == "" || !strings.Contains(out, want) {
+				t.Errorf("[O D-888] the long note is not printed as its best section: no %q in\n%s", want, out)
+			}
+		}
+		if strings.Contains(out, "## Rollout plan") || strings.Contains(out, "(no answer)") {
+			t.Errorf("[O D-888] the cut prints a heading line instead of the § path, or nothing:\n%s", out)
+		}
+	})
 }

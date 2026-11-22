@@ -1,6 +1,9 @@
 package ask
 
 import (
+	"cmp"
+	"math"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -153,11 +156,25 @@ func cutWords(matched, asked []string) []string {
 }
 
 // cutBody returns body cut to the part that best answers words in room
-// bytes, with an elision mark on the side where text was left out; ok
-// false when body fits whole.
+// bytes; ok false when body fits whole. A markdown row with headings is
+// cut to its best sections (bestSections), anything else to its best
+// paragraph with an elision mark on the side where text was left out
+// (cutText).
 func cutBody(body string, words []string, room int) (string, bool) {
 	if len(body) <= room {
 		return body, false
+	}
+	if out, ok := bestSections(body, words, room); ok {
+		return out, true
+	}
+	return cutText(body, words, room), true
+}
+
+// cutText is body cut to its excerpt in room bytes, with an elision mark
+// on the side where text was left out.
+func cutText(body string, words []string, room int) string {
+	if len(body) <= room {
+		return body
 	}
 	marks := 2 * (len(elision) + 1)
 	ex, _ := excerpt(body, words, max(room-marks, 1))
@@ -170,5 +187,220 @@ func cutBody(body string, words []string, room int) (string, bool) {
 	if i >= 0 && strings.TrimSpace(body[i+len(core):]) != "" {
 		out += "\n" + elision
 	}
-	return out, true
+	return out
+}
+
+// sectionMark leads each section a cut row prints, followed by the
+// section's heading path ("Orbit design notes > Rollout plan").
+const sectionMark = "§ "
+
+// topPath is the heading path printed for the text before a row's first
+// heading.
+const topPath = "(top of the row)"
+
+// section is one heading-bounded part of a markdown text: the path of
+// headings it sits under (its own last) and its text without its own
+// heading line.
+type section struct {
+	path string
+	text string
+}
+
+// sections splits text at its markdown headings (ATX "## Title" and
+// setext "Title" over a line of = or -, never inside a code fence) into
+// the text before the first heading (when it holds any) and one section
+// per heading. A heading with no text of its own (a note title right
+// above its first sub-heading) is merged into the section after it, so
+// no section is a bare heading. Nil when text has no heading.
+func sections(text string) []section {
+	lines := strings.SplitAfter(text, "\n")
+	type head struct {
+		level int
+		title string
+	}
+	var (
+		out   []section
+		stack []head
+		cur   = section{path: topPath}
+		body  strings.Builder
+		fence string
+		found bool
+	)
+	flush := func() {
+		cur.text = body.String()
+		body.Reset()
+		if strings.TrimSpace(cur.text) == "" {
+			return // a bare heading: the next section's path holds it
+		}
+		out = append(out, cur)
+	}
+	open := func(level int, title string) {
+		flush()
+		for len(stack) > 0 && stack[len(stack)-1].level >= level {
+			stack = stack[:len(stack)-1]
+		}
+		stack = append(stack, head{level, title})
+		titles := make([]string, len(stack))
+		for i, h := range stack {
+			titles[i] = h.title
+		}
+		cur = section{path: strings.Join(titles, " > ")}
+		found = true
+	}
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		trim := strings.TrimSpace(line)
+		if f := fenceOf(trim); f != "" && (fence == "" || strings.HasPrefix(trim, fence)) {
+			if fence == "" {
+				fence = f
+			} else {
+				fence = ""
+			}
+			body.WriteString(line)
+			continue
+		}
+		if fence != "" {
+			body.WriteString(line)
+			continue
+		}
+		if level, title, ok := atxHeading(line); ok {
+			open(level, title)
+			continue
+		}
+		if i+1 < len(lines) && trim != "" && !strings.HasPrefix(trim, ">") && !strings.HasPrefix(trim, "-") {
+			if level := setextLevel(lines[i+1]); level > 0 {
+				open(level, trim)
+				i++
+				continue
+			}
+		}
+		body.WriteString(line)
+	}
+	flush()
+	if !found {
+		return nil
+	}
+	return out
+}
+
+// fenceOf is the code fence a trimmed line opens or closes ("```" or
+// "~~~"), "" when it is no fence line.
+func fenceOf(trim string) string {
+	for _, f := range []string{"```", "~~~"} {
+		if strings.HasPrefix(trim, f) {
+			return f
+		}
+	}
+	return ""
+}
+
+// atxHeading reads an ATX heading line ("## Rollout plan", at most three
+// spaces in): its level and its title without the #s.
+func atxHeading(line string) (int, string, bool) {
+	l := strings.TrimRight(line, "\r\n")
+	indent := len(l) - len(strings.TrimLeft(l, " "))
+	if indent > 3 {
+		return 0, "", false
+	}
+	l = l[indent:]
+	level := len(l) - len(strings.TrimLeft(l, "#"))
+	if level < 1 || level > 6 || (len(l) > level && l[level] != ' ' && l[level] != '\t') {
+		return 0, "", false
+	}
+	title := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(l[level:]), "#"))
+	if title == "" {
+		return 0, "", false
+	}
+	return level, title, true
+}
+
+// setextLevel is 1 for a line of = and 2 for a line of - (at least three)
+// under a heading's text, 0 for any other line.
+func setextLevel(line string) int {
+	t := strings.TrimSpace(line)
+	if len(t) < 3 {
+		return 0
+	}
+	switch {
+	case strings.Trim(t, "=") == "":
+		return 1
+	case strings.Trim(t, "-") == "":
+		return 2
+	}
+	return 0
+}
+
+// bestSections is body's sections that answer words best, best first,
+// as many as fit in room bytes, each after a line with sectionMark and
+// its heading path; the first one cut to its best part (cutText) when it
+// is longer than room. A section's score is the sum, over the words its
+// heading path or text holds, of ln(1 + n/df) (n sections, df of them
+// holding the word): a word most sections repeat weighs little, a word
+// every section holds nothing (a section holding only such words is not
+// printed) and a word only one section holds picks it. ok is false when
+// body has no heading or no section holds a word the others do not (the
+// caller cuts by paragraph then).
+//
+// Why (devco D-888, the follow-up of public issue #86): a long note's
+// filler repeats the question's words in every section, so the paragraph
+// holding the most of them was rarely the one with the answer (103 of
+// 152 long-note questions answered); its heading ("Rollout plan") and
+// the words only one section holds name the right section, and the next
+// best sections of the same note follow while they fit.
+func bestSections(body string, words []string, room int) (string, bool) {
+	secs := sections(body)
+	if len(secs) < 2 || len(words) == 0 {
+		return "", false
+	}
+	toks := make([]map[string]bool, len(secs))
+	for i, s := range secs {
+		toks[i] = tokensOf(s.path + "\n" + s.text)
+	}
+	score := make([]float64, len(secs))
+	n := float64(len(secs))
+	for _, w := range words {
+		var hold []int
+		for i := range secs {
+			if hasWord(toks[i], strings.ToLower(w)) {
+				hold = append(hold, i)
+			}
+		}
+		if len(hold) == len(secs) {
+			continue // held by every section: it picks none of them
+		}
+		for _, i := range hold {
+			score[i] += math.Log(1 + n/float64(len(hold)))
+		}
+	}
+	order := make([]int, 0, len(secs))
+	for i := range secs {
+		if score[i] > 0 {
+			order = append(order, i)
+		}
+	}
+	if len(order) == 0 {
+		return "", false
+	}
+	// best first; a tie keeps the order of the note
+	slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(score[b], score[a]) })
+	var parts []string
+	used := 0
+	for _, i := range order {
+		head := sectionMark + secs[i].path + "\n"
+		text := strings.TrimSpace(secs[i].text)
+		sep := 0
+		if len(parts) > 0 {
+			sep = 2 // the blank line between two sections
+		}
+		left := room - used - sep - len(head)
+		if len(text) > left {
+			if len(parts) > 0 {
+				continue // a lower section that fits may still follow
+			}
+			text = cutText(text, words, max(left, 1))
+		}
+		parts = append(parts, head+text)
+		used += sep + len(head) + len(text)
+	}
+	return strings.Join(parts, "\n\n"), true
 }
