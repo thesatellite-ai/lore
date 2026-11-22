@@ -33,7 +33,10 @@ TOKEN = re.compile(
     # brackets, commas or a tab ("[branch sha]" too), or as a whole JSON string (the
     # provenance "git": {"commit": "…"} of a row file: the commit's tree holds random
     # row ids, so its sha differs on every run); dates, times and paths never match.
-    r'|(?:(?<=^)|(?<=[\s(,\["]))(?P<sha>[0-9a-f]{7,64})(?=$|[\s),;:…\]"])'
+    # The value after --match-hash is not one: a leak or secret finding's hash (a decimal
+    # number, or sha256:…) depends only on the matched text, so it is the same on every run,
+    # and a stand-in would print an allow command that cannot match (H-173).
+    r'|(?:(?<=^)|(?<=[\s(,\["]))(?<!--match-hash )(?P<sha>[0-9a-f]{7,64})(?=$|[\s),;:…\]"])'
 )
 # A row or machine id printed short: its first 8 hex (`act_055c2238`, `mch_fac0df3a`) or
 # an ellipsis and its last 4 (`sal_…4e57`). Mapped after the full ids, so a short id on

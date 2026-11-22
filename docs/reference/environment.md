@@ -300,7 +300,6 @@ agent      codex  (from: CODEX_CI)  LORE_HUMAN=1: writes stay yours
 |---|---|
 | `NO_COLOR` | any non-empty value turns colours off (when `--color` is `auto`) |
 | `FORCE_COLOR` | any non-empty value turns colours on (when `--color` is `auto` and `NO_COLOR` is not set) |
-| `OLLAMA_HOST` | address of a local model server for `lore skill compile` (default `localhost:11434`; `http://` is added when missing) |
 
 Into a pipe lore prints no colours; `FORCE_COLOR` turns them on (`cat -v` shows the colour codes), and `NO_COLOR` wins when both are set. The example shell sets `NO_COLOR` for every command, hence the `unset`:
 
@@ -318,6 +317,13 @@ Status: HEALTHY
 
 <!-- ds:block id=team-ci-markers-ec4tqnjs -->
 **CI variables.** When any of `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD` or `BITBUCKET_BUILD_NUMBER` is set, lore treats its output as something other people may read: `lore check leaks --as-client` then hides the details of what it found. Store URLs, org folders and local paths are printed as they are in every mode (a store's address is not a secret); only a credential inside a URL is shown as `<redacted>`. A tool session id is masked when the output does not go to a terminal or a CI variable is set.
+
+## Local models
+
+<!-- ds:block id=env-ollama-host-hj0y341b -->
+| Variable | What it does |
+|---|---|
+| `OLLAMA_HOST` | address of a local model server for `lore skill compile` (default `localhost:11434`; `http://` is added when missing) |
 
 ## Upgrades
 

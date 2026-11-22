@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 func TestJourneyOrgStoreWriteIdentity(t *testing.T) {
@@ -34,7 +36,8 @@ func TestJourneyOrgStoreWriteIdentity(t *testing.T) {
 		m.LoreIn(side, "init").OK(t)
 		m.LoreIn(side, "store", "folder", "add", "--store", "acme", "--folder", "clients").OK(t)
 		// the repo matches no org: the open's identity is the OS-user fallback
-		m.LoreIn(side, "whoami").OK(t).Says(t, "OS user").Never(t, orgKey)
+		// (the World's fixed OS user, whatever shell runs the suite: H-173)
+		m.LoreIn(side, "whoami").OK(t).Says(t, "OS user").Says(t, "human:"+teamharness.OSUser+"@").Never(t, orgKey)
 	})
 
 	w.Step("day1/write-into-the-org-store", func() {

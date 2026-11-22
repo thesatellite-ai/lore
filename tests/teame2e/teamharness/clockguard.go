@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -128,7 +129,7 @@ func probeEnv(home string) []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
-		if strings.HasPrefix(k, "LORE_") || strings.HasPrefix(k, "GIT_") || isCIMarker(k) || k == "HOME" {
+		if strings.HasPrefix(k, "LORE_") || strings.HasPrefix(k, "GIT_") || isCIMarker(k) || k == "HOME" || slices.Contains(osUserEnv, k) {
 			continue
 		}
 		env = append(env, kv)
@@ -136,6 +137,8 @@ func probeEnv(home string) []string {
 	return append(env,
 		"HOME="+home,
 		"USERPROFILE="+home, // os.UserHomeDir on Windows
+		"USER="+OSUser,
+		"USERNAME="+OSUser,
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",
 		"LORE_HUMAN=1",

@@ -55,3 +55,43 @@ func TestDocsNormaliseMachineIDs(t *testing.T) {
 		}
 	}
 }
+
+// TestDocsNormaliseKeepsMatchHash (H-173, devco:D-915): the hash after
+// --match-hash in a printed allow command (`lore leaks allow --match-hash
+// 1314822779`, `lore secrets allow --match-hash sha256:…`) depends only on
+// the matched text, so it is the same on every run. The normalisers took a
+// 10-digit one for a git object id and printed a hex stand-in, so the docs
+// showed an allow command whose hash matches nothing. A sha elsewhere on the
+// line still gets its stand-in.
+func TestDocsNormaliseKeepsMatchHash(t *testing.T) {
+	t.Parallel()
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 is not installed; the docs runners need it and run in the full gate")
+	}
+	const transcript = "$ git commit -m 'add notes'\n[main 4f2a9c1] add notes\n" +
+		"  hint: lore leaks allow --note mem_0123456789abcdef0123456789abcdef --file src/notes.ts --match-hash 1314822779 --reason \"<why it is public>\"\n" +
+		"  not a secret? lore secrets allow --row-id tsk_0123456789abcdef0123456789abcdef --field title --rule aws_access_key --match-hash sha256:1a5d44a2dca1 --reason \"<why>\"\n"
+	for _, script := range []string{"tests/docs/normalize.py", "tests/team/docs/normalize.py"} {
+		p := filepath.Join(t.TempDir(), "t.txt")
+		if err := os.WriteFile(p, []byte(transcript), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command(py, filepath.Join(repoRoot, script), p).CombinedOutput(); err != nil {
+			t.Fatalf("%s: %v\n%s", script, err, out)
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := string(b)
+		for _, keep := range []string{"--match-hash 1314822779 ", "--match-hash sha256:1a5d44a2dca1 "} {
+			if !strings.Contains(got, keep) {
+				t.Errorf("%s: %q was rewritten:\n%s", script, keep, got)
+			}
+		}
+		if strings.Contains(got, "4f2a9c1") {
+			t.Errorf("%s: the commit sha 4f2a9c1 kept its run's value; it needs a stand-in:\n%s", script, got)
+		}
+	}
+}

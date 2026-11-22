@@ -212,7 +212,7 @@ $ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on 
 $ lore check pr-body --file pr.md
 ERROR: [E_LEAK_BLOCKED] blocked, this PR body would share internal content with the client repo:
   PR body                                  matches internal note mem_c0f3…b5b8 (11 words in a row; the check blocks a verbatim copy of 8 or more words)
-  hint: Remove the internal text before posting
+  hint: Remove the internal text before posting; if that passage is approved public text the note quotes: lore leaks allow --note mem_c0f3…b5b8 --match-hash 2364819413 --reason "<why it is public>"
 (exit 19)
 $ printf 'Fixes checkout totals for INR.\n' | lore check pr-body --file -
 ✓ nothing internal found (a copy-paste check: a paraphrase passes it)

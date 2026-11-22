@@ -85,7 +85,7 @@ Measured on a 48-core Linux machine: the quick tier takes about 48 s with an emp
 
 The quick tier stays fast only while no unit package is slow: a package that takes minutes is a test-design bug, not a reason to drop it from the tier: time it with `go test -json`, then make it fast without weakening it (independent tests `t.Parallel()` with their own temp dirs, fixtures and binaries built once per package, events or short deadline polls instead of sleeps). The end-to-end suites are behind build tags (`userscen`, `teame2e`, `setupe2e`, `machines`, `journeys`) or are shell/node runners, so `go test ./...` never starts them.
 
-A unit test gives the same result in every shell: a Go test binary drops the agent markers, identity overrides and `USER` / `USERNAME` it inherited and detects no agent from the process tree (`wire/detect_testbinary.go`), so a test that needs a person or an agent sets one itself (a git identity in the test's HOME, `LORE_HUMAN`, cliWorld's `claude()`). `LORE_TEST_AMBIENT_AGENT=1` keeps the shell's agent for a run by hand.
+A unit test gives the same result in every shell: a Go test binary drops the agent markers, identity overrides and `USER` / `USERNAME` it inherited and detects no agent from the process tree (`wire/detect_testbinary.go`), so a test that needs a person or an agent sets one itself (a git identity in the test's HOME, `LORE_HUMAN`, cliWorld's `claude()`). The journey and team World (`tests/teame2e/teamharness`) runs lore with `USER` and `USERNAME` set to its fixed OS user `tester` on every simulated machine, so the OS-user step of the identity chain answers the same from any shell. `LORE_TEST_AMBIENT_AGENT=1` keeps the shell's agent for a run by hand.
 
 ## Test time limits
 

@@ -256,15 +256,29 @@ func parkLinkOnCleanup(t testing.TB, bin, link string) {
 // GitHub tokens gh and the API client read. A World never inherits them.
 var developerCredentials = []string{"SSH_AUTH_SOCK", "SSH_AGENT_PID", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_CONFIG_DIR"}
 
+// OSUser is the OS user name ($USER, %USERNAME%) of every simulated
+// machine: the last step of lore's identity chain (`OS user` in whoami)
+// names a person nothing else names by it. The World sets it instead of
+// passing the parent's on, because a Go test binary drops the USER it
+// inherited (wire, devco:D-908) and a bare shell (env -i, a service) has
+// none: a journey of the OS-user fallback then saw the machine-id step
+// instead, depending on the shell that ran it (H-173, devco:D-915). One
+// name for every machine keeps what the parent's single USER gave before.
+const OSUser = "tester"
+
+// osUserEnv are the variables lore's OS-user step reads
+// (identity.OSUserEnv); the World sets each to OSUser.
+var osUserEnv = []string{"USER", "USERNAME"}
+
 // baseEnv is the environment every process in the World starts from: the
 // parent's environment minus anything that would leak the developer's own
 // lore or git state (LORE_*, GIT_*, CI) or credentials (developerCredentials)
-// into the test, plus fixed settings.
+// into the test, plus fixed settings (HOME, PATH, the OS user OSUser).
 func (w *World) baseEnv(home, actorName string) []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
-		if strings.HasPrefix(k, "LORE_") || strings.HasPrefix(k, "GIT_") || isCIMarker(k) || k == "HOME" || k == "PATH" || slices.Contains(developerCredentials, k) {
+		if strings.HasPrefix(k, "LORE_") || strings.HasPrefix(k, "GIT_") || isCIMarker(k) || k == "HOME" || k == "PATH" || slices.Contains(developerCredentials, k) || slices.Contains(osUserEnv, k) {
 			continue
 		}
 		env = append(env, kv)
@@ -276,6 +290,8 @@ func (w *World) baseEnv(home, actorName string) []string {
 	return append(append(env,
 		"HOME="+home,
 		"USERPROFILE="+home, // os.UserHomeDir on Windows
+		"USER="+OSUser,
+		"USERNAME="+OSUser,
 		"PATH="+w.shimDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",

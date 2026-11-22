@@ -141,14 +141,14 @@ alice (work/website)$ mkdir -p src && echo '// they approve estimates faster whe
 alice (work/website)$ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
   commit src/notes.ts:1                    matches internal note mem_c0f3c11a5724b0cfd74b256190d9b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
-  hint: Remove the internal text from src/notes.ts
+  hint: Remove the internal text from src/notes.ts; if that passage is approved public text the note quotes: lore leaks allow --note mem_c0f3c11a5724b0cfd74b256190d9b5b8 --file src/notes.ts --match-hash 1314822779 --reason "<why it is public>"
 (exit 1)
 alice (work/website)$ git reset -q src/notes.ts && rm -rf src
 alice (work/website)$ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on WhatsApp first.\n' > pr.md
 alice (work/website)$ lore check pr-body --file pr.md
 ERROR: [E_LEAK_BLOCKED] blocked, this PR body would share internal content with the client repo:
   PR body                                  matches internal note mem_c0f3c11a5724b0cfd74b256190d9b5b8 (11 words in a row; the check blocks a verbatim copy of 8 or more words)
-  hint: Remove the internal text before posting
+  hint: Remove the internal text before posting; if that passage is approved public text the note quotes: lore leaks allow --note mem_c0f3c11a5724b0cfd74b256190d9b5b8 --match-hash 2364819413 --reason "<why it is public>"
 (exit 19)
 alice (work/website)$ printf 'Fixes checkout totals for INR.\n' | lore check pr-body --file -
 ✓ nothing internal found (a copy-paste check: a paraphrase passes it)

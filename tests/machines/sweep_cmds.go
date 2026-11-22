@@ -389,6 +389,13 @@ var rowChains = []sweepChain{
 		r("secrets rule off", "sweep-token", "--reason", "fixtures hold sample tokens", "--yes"),
 		r("secrets rule on", "sweep-token", "--yes"), r("secrets rule edit", "sweep-token", "--regex", "sweep_[a-z]{9}", "--yes"),
 	}},
+	// a public passage an internal note quotes, allowed for the commit and
+	// push leak check's text rule (#129), then the reads that show it
+	{Name: "leaks-allow", Steps: []sweepStep{
+		rs("memory add", "--body", sampleWord+" the banner says Your order ships within two days of payment."),
+		r("leaks allow", "--note", varID, "--phrase", "Your order ships within two days of payment.", "--reason", "approved public copy", "--yes"),
+		r("secrets allow list"), r("check leaks"),
+	}},
 	{Name: "tools", Steps: []sweepStep{
 		{Cmd: "skill install", Args: []string{"--all"}, In: inHome}, {Cmd: "skill status", In: inBoth},
 		{Cmd: "directive install", In: inRepo}, {Cmd: "directive show", In: inRepo},
