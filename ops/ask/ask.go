@@ -185,13 +185,14 @@ type Row struct {
 	// replaced by a newer row of the same folder on the same thing. Such
 	// a row ranks after every current row and an agent reads it as what
 	// used to be true.
-	// FullChars is set on a row longer than the answer's --max-chars
-	// (devco D-859): Body is then only the part of it that answers the
-	// question (a markdown row: its best sections, each after a "§
-	// <heading path>" line, devco D-888; else its best paragraph, with …
-	// where text was left out), and FullChars is the whole body's length
-	// (lore show --id prints it).
-	FullChars int    `json:"full_chars,omitempty" desc:"set when the row is longer than --max-chars: body is then only the part that answers the question (a markdown row: its best sections by heading, best first, each after a line § <heading path>; else its best paragraph, … marking text left out) and this is the whole body's length; lore show --id <id> prints it whole"`
+	// FullChars is set on a row cut to the part of it that answers the
+	// question: a row longer than the answer's --max-chars (devco D-859),
+	// or a markdown row longer than 1,500 characters (devco D-892, even
+	// under the cap). Body is then only that part (a markdown row: its
+	// best sections, each after a "§ <heading path>" line, devco D-888;
+	// else its best paragraph, with … where text was left out), and
+	// FullChars is the whole body's length (lore show --id prints it).
+	FullChars int    `json:"full_chars,omitempty" desc:"set when the row was cut to the part that answers the question: a markdown row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, best first, each after a line § <heading path>), and a row longer than --max-chars its best sections or else its best paragraph (… marking text left out); this is the whole body's length; lore show --id <id> prints it whole"`
 	History   string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
 	// readTitle and readBody are Title and Body as the text answer prints
 	// them: each ${res:…} naming a resource the ask read replaced by the

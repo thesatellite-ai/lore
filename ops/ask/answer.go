@@ -191,6 +191,7 @@ func build(q question, d data, top, maxChars int) Out {
 	if leadOf(q, identity, &out) == leadAbout {
 		out.lead = lead
 	}
+	out.chunkLong()
 	out.cap(out.rank(q, identity, lead), maxChars)
 	for _, r := range out.Ranked {
 		out.Cited = append(out.Cited, r.ID)
@@ -851,22 +852,27 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 func (o *Out) cutRow(i, maxChars int) bool {
 	r := &o.Rows[i]
 	whole, wholeRead := *r, r.readBody
-	r.Body, r.readBody, r.FullChars = "", "", len(whole.Body)
+	// a long row chunkLong already cut keeps its whole length
+	r.Body, r.readBody, r.FullChars = "", "", cmp.Or(whole.FullChars, len(whole.Body))
 	// at most half the cap: the rows under it that fit are printed too
 	room := min(maxChars-len(o.body()), max(maxChars/2, minCut))
+	alone := false // the answer's only item: kept at minCut even when over
 	if room < minCut {
 		if len(o.Ranked) > 1 {
 			*r = whole
 			return false
 		}
-		room = minCut
+		room, alone = minCut, true
 	}
 	words := cutWords(r.Matched, o.asked)
 	text, cut := cutBody(cmp.Or(wholeRead, whole.Body), words, room)
 	if !cut {
-		// its text fits: what is above it leaves no room
+		// its text fits: what is above it leaves no room, unless nothing
+		// is above it (a long row chunkLong already cut to its best
+		// sections, whose cut note alone fills a small --max-chars): the
+		// answer is never empty while a row matched
 		*r = whole
-		return false
+		return alone
 	}
 	r.Body, _ = cutBody(whole.Body, words, room)
 	if wholeRead != "" {
@@ -964,10 +970,13 @@ func (o Out) body() string {
 			rows[r.ID] = r
 		}
 	}
+	about := o.lead > 0
+	if !about && !o.cards() {
+		return o.compactBody(res, tsk, rows)
+	}
 	var b strings.Builder
 	b.WriteString(o.header())
 	b.WriteString(o.nowLine(rows))
-	about := o.lead > 0
 	runs := 0 // how many runs of rows the answer has
 	for i, it := range o.Ranked {
 		if it.Kind == KindRow && (i == 0 || o.Ranked[i-1].Kind != KindRow) {
@@ -1214,9 +1223,10 @@ func (r Row) text(i int) string {
 	return b.String()
 }
 
-// cutNote says a row was cut to fit --max-chars and how long it is whole.
+// cutNote says a row was cut (to fit --max-chars, or a long markdown row
+// to its best sections, chunkLong) and how long it is whole.
 func (r Row) cutNote() string {
-	return fmt.Sprintf("cut to the part that answers the question to fit --max-chars; the whole row is %d characters", r.FullChars)
+	return fmt.Sprintf("cut to the part that answers the question; the whole row is %d characters", r.FullChars)
 }
 
 // readable is r's title and body as the text answer prints them: the

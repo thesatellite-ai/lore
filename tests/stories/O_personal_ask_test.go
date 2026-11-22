@@ -75,8 +75,8 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			{"what do I owe Bobby", []string{"send the price list to robert-kim"}, []string{"board deck"}},
 			{"what does robert-kim owe me", []string{"robert-kim owes me the board deck"}, []string{"price list"}},
 			{"what was the reasoning behind orbit's pick", []string{"we chose postgres over mongodb because the reports need joins"}, nil},
-			{"how much money can orbit spend now", []string{"moved to 55k (was 40k)", "newest: it replaces"}, nil},
-			{"what happened on 2026-11-02", []string{"baked sourdough", "(me/journal)"}, []string{"kitchen tap"}},
+			{"how much money can orbit spend now", []string{"moved to 55k (was 40k)", "(changed 2026-10-01; before that: ", "[history: replaced by mem_"}, nil},
+			{"what happened on 2026-11-02", []string{"baked sourdough", "- me/journal: "}, []string{"kitchen tap"}},
 		}
 		for _, c := range cases {
 			r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", c.q)
@@ -602,6 +602,43 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		}
 		if strings.Contains(out, "## Rollout plan") || strings.Contains(out, "(no answer)") {
 			t.Errorf("[O D-888] the cut prints a heading line instead of the § path, or nothing:\n%s", out)
+		}
+	})
+	// devco:D-892 (bug hunt H-151, pick list item 6): a markdown note of
+	// 1,500-4,000 characters fit under --max-chars and was printed whole,
+	// so the agent read every section for one fact; the rows of an answer
+	// each took a numbered block with its table and id. The note now
+	// prints its best sections (each after a § line) with its whole
+	// length and lore show --id under it, every row is one line, and the
+	// ids stand once on the cited line.
+	s.Step("personal-store/mid-note-prints-its-best-section-compact", func() {
+		var doc strings.Builder
+		doc.WriteString("# Vela weekly sync\n\n")
+		for _, topic := range []string{"Hiring", "Support queue", "Design review"} {
+			doc.WriteString("## " + topic + "\n\n" + strings.Repeat("The vela "+strings.ToLower(topic)+" items were walked through in plain terms and everyone kept the current plan. ", 6) + "\n\n")
+		}
+		doc.WriteString("## Office move\n\nThe vela office move is booked for 2026-07-14 with the movers from Northfield.\n\n")
+		if n := doc.Len(); n <= 1500 || n >= 4000 {
+			t.Fatalf("[O D-892] fixture note is %d characters, want 1,500-4,000", n)
+		}
+		add := ada.Lore(ada.Home, "memory", "add", "--body", doc.String(), "--to", to, "--yes", "--json")
+		add.OK(t)
+		id := regexp.MustCompile(`mem_[0-9a-f]{20,}`).FindString(add.Out())
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when is the vela office move")
+		r.OK(t)
+		out := r.Out()
+		for _, want := range []string{"§ Vela weekly sync > Office move\n", "booked for 2026-07-14", "lore show --id " + id + " prints it whole", "cited: " + id} {
+			if id == "" || !strings.Contains(out, want) {
+				t.Errorf("[O D-892] the note is not printed as its best section: no %q in\n%s", want, out)
+			}
+		}
+		if strings.Contains(out, "support queue items were walked") || strings.Contains(out, "best rows, in full") || strings.Contains(out, "memories "+id) {
+			t.Errorf("[O D-892] the answer prints the whole note or the long row form:\n%s", out)
+		}
+		show := ada.Lore(ada.Home, "show", "--id", id)
+		show.OK(t)
+		if !strings.Contains(show.Out(), "support queue items were walked") {
+			t.Errorf("[O D-892] the printed `lore show --id %s` does not print the note whole:\n%s", id, show.Out())
 		}
 	})
 }

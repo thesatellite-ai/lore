@@ -1,0 +1,194 @@
+package ask
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Long rows: a row longer than longRow characters whose text has markdown
+// headings is printed as its best sections by heading, at most longRoom
+// characters of them, not whole.
+//
+// Why (devco D-892, pick list item 6): a design doc or weekly notes of
+// 2-10 KB fit under the 4,000-character cap and were printed whole, so
+// one long note filled the answer while its one matching section was
+// what the agent needed (long-note bench: 128 of 152 questions answered
+// at 1,847 characters with the best sections, against 17,288 for whole
+// notes). The recall gate's rows are all shorter than longRow, so short
+// notes print exactly as before.
+const (
+	longRow  = 1500
+	longRoom = 1000
+)
+
+// chunkLong replaces the body of every row of o longer than longRow that
+// has markdown headings by its best sections for the question
+// (bestSections: each after a "§ <heading path>" line, best first, at
+// most longRoom characters) and sets FullChars to the whole body's
+// length, so the answer says lore show --id <id> prints it whole. A row
+// whose sections hold no word of the question the others do not (no
+// basis to pick one) stays whole. A date question keeps whole rows: the
+// rows of its dates are the answer.
+func (o *Out) chunkLong() {
+	if o.When != "" {
+		return
+	}
+	for i := range o.Rows {
+		r := &o.Rows[i]
+		if len(r.Body) <= longRow || r.FullChars > 0 {
+			continue
+		}
+		words := cutWords(r.Matched, o.asked)
+		body, ok := bestSections(r.Body, words, longRoom)
+		if !ok {
+			continue
+		}
+		read := ""
+		if r.readBody != "" {
+			if read, ok = bestSections(r.readBody, words, longRoom); !ok {
+				continue
+			}
+		}
+		r.FullChars, r.Body, r.readBody = len(r.Body), body, read
+	}
+}
+
+// compactBody is body() in its compact form (devco D-892, pick list item
+// 6, "level 1"): one line per row ("- <day> <folder>: <text>"), its id
+// only on the answer's cited line (every id stays there, in reading
+// order), no "best rows" heading or blank lines between items, the
+// folder said once above the rows when they all share it, the day left
+// out when the answer's one date says it, a changed fact's rows folded
+// into its "now:" line, and a resource under rows on one line. A row cut
+// to its best sections keeps its lines under its line, then says how to
+// read it whole. A resource with no row under it is the answer and keeps
+// its full form. --json is unchanged.
+//
+// Why: on the recall gate the same 70 answers (70/70 correct, top-1 and
+// recall@3 unchanged) took about a third fewer characters; the per-row
+// id, table and headings were read by every agent and used by none (the
+// cited line and --json keep the ids).
+func (o Out) compactBody(res map[string]Resource, tsk map[string]Task, rows map[string]Row) string {
+	var b strings.Builder
+	b.WriteString(o.header())
+	now := o.nowLine(rows)
+	// the rows the now line already states: the newest and the one it
+	// replaces
+	folded := map[string]bool{}
+	if now != "" {
+		for _, it := range o.Ranked {
+			if r, ok := rows[it.ID]; ok && it.Kind == KindRow && r.replaces != "" {
+				folded[r.ID] = true
+				if old, ok := rows[r.replaces]; ok {
+					folded[old.ID] = true
+					if old.History != "" {
+						// its "before that" part is history: say so, with
+						// the row that replaced it (devco D-820)
+						now = strings.TrimSuffix(now, "\n") + "  [" + old.History + "]\n"
+					}
+				}
+				break
+			}
+		}
+	}
+	b.WriteString(now)
+	places := map[string]bool{}
+	nrows := 0
+	for _, it := range o.Ranked {
+		if it.Kind == KindRow && !folded[it.ID] {
+			places[rows[it.ID].Place] = true
+			nrows++
+		}
+	}
+	one := ""
+	if len(places) == 1 && nrows > 1 {
+		for p := range places {
+			one = p
+		}
+		b.WriteString(one + ":\n")
+	}
+	oneDay := o.When != "" && !strings.Contains(o.When, " to ")
+	for i, it := range o.Ranked {
+		switch it.Kind {
+		case KindResource:
+			if nrows+len(folded) == 0 {
+				b.WriteString(strings.TrimPrefix(res[it.ID].text(), "\n"))
+				continue
+			}
+			b.WriteString(res[it.ID].line())
+		case KindTask:
+			if i == 0 || o.Ranked[i-1].Kind != KindTask {
+				b.WriteString("open tasks:\n")
+			}
+			b.WriteString(tsk[it.ID].line(false))
+		case KindRow:
+			if folded[it.ID] {
+				continue
+			}
+			b.WriteString(rows[it.ID].line(one == "", oneDay))
+		}
+	}
+	return b.String()
+}
+
+// line is one row in the compact answer: its day (unless the answer's one
+// date says it), its folder (unless the line above the rows says it), its
+// text word for word on one line, and its history when it is no longer
+// the current answer. A row cut to its best sections keeps its lines (the
+// § heading paths) under the line, then the note that names lore show
+// --id <id>.
+func (r Row) line(place, oneDay bool) string {
+	var b strings.Builder
+	b.WriteString("-")
+	if !oneDay && r.At != "" {
+		b.WriteString(" " + r.At)
+	}
+	if place {
+		b.WriteString(" " + r.Place)
+	}
+	b.WriteString(":")
+	if r.FullChars > 0 {
+		title, body := r.readable()
+		if title != "" && title != body {
+			b.WriteString(" " + title)
+		}
+		r.historyMark(&b)
+		b.WriteString("\n")
+		for _, l := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
+			b.WriteString(strings.TrimRight("   "+l, " ") + "\n")
+		}
+		fmt.Fprintf(&b, "   (%s; lore show --id %s prints it whole)\n", r.cutNote(), r.ID)
+		return b.String()
+	}
+	b.WriteString(" " + oneLine(r))
+	r.historyMark(&b)
+	return b.String() + "\n"
+}
+
+// historyMark adds "  [<history>]" to b when r is no longer the current
+// answer, so an agent reads it as what used to be true.
+func (r Row) historyMark(b *strings.Builder) {
+	if r.History != "" {
+		b.WriteString("  [" + r.History + "]")
+	}
+}
+
+// line is a resource under rows in the compact answer: its kind, name and
+// field values on one line (a changed value with what it was); a resource
+// with no field value is its kind and name.
+func (r Resource) line() string {
+	var b strings.Builder
+	b.WriteString(r.Kind + " " + r.Name)
+	sep := ": "
+	for _, f := range r.Fields {
+		if f.Value == "" {
+			continue
+		}
+		b.WriteString(sep + f.Name + " " + f.Value)
+		if f.Was != "" {
+			b.WriteString(" (was " + f.Was + ")")
+		}
+		sep = ", "
+	}
+	return b.String() + "\n"
+}

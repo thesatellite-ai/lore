@@ -160,7 +160,7 @@ func TestAnswers(t *testing.T) {
 		{"how far along is lumen these days", []string{"live in production with 15 customers"}, nil},
 		{"what did we decide for lumen and why", []string{"stripe", "4 basis points lower"}, []string{"Budget for lumen"}},
 		{"what was the reasoning behind lumen's pick", []string{"stripe", "because"}, nil},
-		{"how much money can lumen spend now", []string{"moved to 62k (was 45k)", "newest: it replaces mem_b1"}, nil},
+		{"how much money can lumen spend now", []string{"moved to 62k (was 45k)", "[history: replaced by mem_b2 from 2026-11-10]"}, nil},
 		{"what do I owe Bobby", []string{"send the price list #3 to robert-kim"}, []string{"board deck"}},
 		{"what does robert-kim owe me", []string{"board deck #2"}, []string{"price list"}},
 		{"what happened yesterday", []string{"ran along the river"}, []string{"baked sourdough", "Feed github"}},
@@ -270,7 +270,7 @@ func TestRankedAnswerFirst(t *testing.T) {
 // a tight status answer keeps the status row and drops the project.
 func TestCapKeepsReadingOrder(t *testing.T) {
 	t.Parallel()
-	o := build(parseQuestion("what is the status of lumen", now), fixture(t), 1, 200)
+	o := build(parseQuestion("what is the status of lumen", now), fixture(t), 1, 100)
 	if len(o.Rows) != 1 || o.Rows[0].ID != "mem_s3" || len(o.Resources) != 0 || o.Left != 1 {
 		t.Fatalf("capped status answer: rows %v resources %v left %d\n%s", o.Rows, o.Resources, o.Left, o.Text())
 	}
@@ -536,7 +536,7 @@ func TestTypedAnswersCompact(t *testing.T) {
 func TestNowLeadsAChangedFact(t *testing.T) {
 	t.Parallel()
 	o, text := ask(t, "what are my dentist appointments now")
-	want := "now: My dentist appointments changed to thursdays (was tuesdays). (changed 2026-11-01; before that: My dentist appointments: tuesdays.)\n"
+	want := "now: My dentist appointments changed to thursdays (was tuesdays). (changed 2026-11-01; before that: My dentist appointments: tuesdays.)  [history: replaced by mem_l2 from 2026-11-01]\n"
 	if !strings.HasPrefix(text, want) {
 		t.Errorf("changed fact:\n got %q\nwant it to start %q", text, want)
 	}
