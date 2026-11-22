@@ -29,7 +29,11 @@ func TestRosterRowsHoldMeta(t *testing.T) {
 			{Name: rosterStore, URL: orgURL, Folder: "org"},
 		}, nil
 	}
-	a, err := New(Options{RepoDir: t.TempDir(), Home: t.TempDir(), FlagActor: testEmail, OrgStores: hook, Wall: time.Now,
+	// PersonOnly: the caller is the person whatever process runs the test.
+	// With agent detection on, a test run under a coding tool wrote the
+	// person's roster row as the agent's owner row (D-17), so the actor
+	// edit below passed there and failed in a plain shell (devco D-907).
+	a, err := New(Options{RepoDir: t.TempDir(), Home: t.TempDir(), FlagActor: testEmail, PersonOnly: true, OrgStores: hook, Wall: time.Now,
 		Org: func(context.Context) (*identity.Org, error) {
 			return &identity.Org{Name: "agency", Identity: identity.Entry{Key: testEmail}}, nil
 		}})
@@ -64,7 +68,11 @@ func TestRosterRowsHoldMeta(t *testing.T) {
 	if out, err = run("team.list", `{}`); err != nil || !strings.Contains(out, `"emoji":"web-spider"`) {
 		t.Fatalf("team list --json lacks the team's meta: %v\n%s", err, out)
 	}
-	// the caller is on the roster (team add registered them); edit them
+	// a person joins the roster with actor register (team add writes no
+	// row for its caller); then they edit their own row
+	if _, err = run("actor.register", `{}`); err != nil {
+		t.Fatalf("actor register: %v", err)
+	}
 	if out, err = run("actor.edit", `{"actor":"`+testEmail+`","meta":["desk=4F"]}`); err != nil || !strings.Contains(out, "meta") {
 		t.Fatalf("actor edit --meta only: %v\n%s", err, out)
 	}
