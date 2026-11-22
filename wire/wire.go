@@ -455,7 +455,11 @@ type App struct {
 
 // state is everything Open built; nil until the first use.
 type state struct {
-	eng *engine.Engine
+	// poolKey is the read server's key of a store-only open it may keep
+	// across calls (statepool.go, devco:D-890); "" never kept.
+	poolKey  string
+	openedAt time.Time // when it was opened (statepool.go stateMaxAge)
+	eng      *engine.Engine
 	// linkedByRemote is the remote a store link names this repo by when it
 	// holds no lore data (Options.RepoLinkedByRemote): the repo store is
 	// read-only and the repo cache lives under ~/.lore; "" otherwise.
@@ -1508,7 +1512,9 @@ func (a *App) Close() error {
 		a.cfgErr = errs.New(errs.Internal, "wire: the app is closed")
 	}
 	if a.st != nil {
-		all = append(all, a.st.close())
+		if a.err != nil || !putState(a.st, a.opts.Home, a.opts.RepoDir) { // statepool.go: the read server keeps it (devco:D-890)
+			all = append(all, a.st.close())
+		}
 		a.st = nil
 		a.err = errs.New(errs.Internal, "wire: the app is closed")
 	}

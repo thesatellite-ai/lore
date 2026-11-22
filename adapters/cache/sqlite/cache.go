@@ -135,6 +135,9 @@ func openCache(ctx context.Context, path string, reg *schema.Registry, exp Expan
 	if _, err := fileDSN(path); err != nil {
 		return nil, err // a bad path or a symlink is refused before any template copy
 	}
+	if c := takeHandle(ctx, path, reg, exp, free); c != nil {
+		return c, nil // handlepool.go: the read server kept this file's handle (devco:D-890)
+	}
 	dropOrphanWAL(path)
 	seedFromTemplate(ctx, path, reg, exp)
 	return openFile(ctx, path, reg, exp, free)
@@ -643,6 +646,10 @@ func (c *Cache) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
+		return nil
+	}
+	if putHandle(context.Background(), c) {
+		c.closed = true // handlepool.go: kept idle for the read server's next command (devco:D-890)
 		return nil
 	}
 	c.closed = true

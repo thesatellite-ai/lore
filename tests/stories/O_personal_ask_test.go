@@ -14,6 +14,7 @@ package stories
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -459,6 +460,91 @@ func TestStoryOPersonalAsk(t *testing.T) {
 			}
 			same("who is robert-kim after "+c.flag, r, one)
 		}
+		// devco:D-890 (bug hunt H-148): the server keeps each folder cache's
+		// connection and the opened store between calls. A deleted cache is
+		// rebuilt, never read from the kept connection, and a row that
+		// arrives the way a sync brings it (a plain-git fast-forward of the
+		// store clone with a commit made elsewhere) shows in
+		// the next served ask; both exactly as one-shot prints them.
+		servedAndOneShot := func(what, q, want string) {
+			t.Helper()
+			r := ask(q)
+			ada.SetEnv("LORE_READ_SERVER", "0")
+			one := ask(q)
+			ada.SetEnv("LORE_READ_SERVER", "1")
+			if !strings.Contains(r.Out(), want) {
+				t.Errorf("[O D-890] %s: the served ask %q misses %q:\n%s", what, q, want, r)
+			}
+			same(q+" "+what, r, one)
+		}
+		ask("what is the status of orbit") // every folder's connection is kept now
+		caches, _ := filepath.Glob(filepath.Join(ada.Home, ".lore", "cache", "*", "*.db"))
+		more, _ := filepath.Glob(filepath.Join(ada.Home, ".lore", "cache", "*.db"))
+		if caches = append(caches, more...); len(caches) == 0 {
+			t.Fatalf("[O D-890] no folder cache under %s/.lore/cache", ada.Home)
+		}
+		for _, c := range caches {
+			for _, suf := range []string{"", "-wal", "-shm"} {
+				_ = os.Remove(c + suf)
+			}
+		}
+		servedAndOneShot("after its caches were deleted", "what is the status of orbit", "75 users on the paid plan")
+		// The row is committed in a second clone of the store with plain git
+		// (as the person's other machine pushes it) and fast-forwarded into
+		// this clone: the server's kept open and its caches never saw it,
+		// only the refresh from git can bring it, so a kept open handed out
+		// without the fingerprint check misses it.
+		clone := oStoreCloneLocal(t, ada)
+		git := func(args ...string) string {
+			t.Helper()
+			c := exec.Command("git", append([]string{"-c", "core.hooksPath=/dev/null", "-c", "user.name=ada", "-c", "user.email=ada@example.com"}, args...)...)
+			c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+			out, err := c.CombinedOutput()
+			if err != nil {
+				t.Fatalf("[O D-890] git %v: %v\n%s", args, err, out)
+			}
+			return strings.TrimSpace(string(out))
+		}
+		side := filepath.Join(t.TempDir(), "side")
+		git("clone", "-q", clone, side)
+		mems, _ := filepath.Glob(filepath.Join(side, psFolder, "memories", "mem_*.json"))
+		if len(mems) == 0 {
+			t.Fatalf("[O D-890] no memory row file under %s", filepath.Join(side, psFolder, "memories"))
+		}
+		rowRaw, rerr := os.ReadFile(mems[0])
+		if rerr != nil {
+			t.Fatal(rerr)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(rowRaw, &fields); err != nil {
+			t.Fatalf("[O D-890] row file %s: %v", mems[0], err)
+		}
+		var oldID string
+		if err := json.Unmarshal(fields["id"], &oldID); err != nil || len(oldID) < 12 {
+			t.Fatalf("[O D-890] row file %s has no id: %v", mems[0], err)
+		}
+		newID := oldID[:len(oldID)-12] + "0000000d0890" // same time part, a random part no row has
+		str := func(v string) json.RawMessage { b, _ := json.Marshal(v); return b }
+		fields["id"] = str(newID)
+		fields["body"] = str("Status update orbit: 90 users on the paid plan.")
+		for _, k := range []string{"valid_at", "created_at", "updated_at", "tx_at"} {
+			if _, ok := fields[k]; ok {
+				fields[k] = str("2026-11-20T00:00:00.000000000Z")
+			}
+		}
+		rowJSON, merr := json.MarshalIndent(fields, "", "  ")
+		if merr != nil {
+			t.Fatal(merr)
+		}
+		if err := os.WriteFile(filepath.Join(filepath.Dir(mems[0]), newID+".json"), append(rowJSON, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git("-C", side, "add", "-A")
+		git("-C", side, "commit", "-q", "-m", "a row from the other machine")
+		ask("what is the status of orbit") // the server keeps an open of the clone without the row
+		git("-C", clone, "fetch", "-q", side, "HEAD")
+		git("-C", clone, "merge", "-q", "--ff-only", "FETCH_HEAD") // the row arrives as a sync brings it
+		servedAndOneShot("after a fast-forward brought a row", "what is the status of orbit", "90 users on the paid plan")
 		ada.SetEnv("LORE_TEST_READ_SERVER_DIE", "1")
 		_ = os.Remove(log)
 		same("a server gone mid-command", ask(qs[1]), oneShot[qs[1]])

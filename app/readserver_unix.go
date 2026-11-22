@@ -463,6 +463,10 @@ func serveReads() int {
 	cli.ClosedPipe = s.closedPipe
 	stopLenses := sqlite.EnableLensReuse()
 	defer stopLenses()
+	stopHandles := sqlite.EnableCacheReuse() // folder cache handles kept across calls (devco:D-890)
+	defer stopHandles()
+	stopStates := wire.EnableStateReuse() // a store-only open kept across calls, fingerprint-checked (devco:D-890)
+	defer stopStates()
 	stopObjects := gitfast.ShareObjectStores() // decoded git objects kept across calls (D-838)
 	defer stopObjects()
 	done := make(chan struct{})

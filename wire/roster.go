@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
@@ -619,9 +620,21 @@ func storeOnlyApp(ctx context.Context, opts Options, one attach.Store) (*App, er
 // also are attached beside one for reads (the org's company folder above
 // a project folder, so its kinds resolve); writes still go to one.
 func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.Source, also ...attach.Store) error {
-	st, err := openDetachedHere(ctx, a.opts, &one, here, also...) // a.opts: New filled the defaults (Wall)
-	if err != nil {
-		return err
+	key := ""
+	if stateReuseOn() { // statepool.go: the read server keeps a store-only open (devco:D-890)
+		key = stateKey(a.opts, one, here, also)
+	}
+	var st *state
+	if key != "" {
+		st = takeState(key, a.opts.Home, a.opts.RepoDir)
+	}
+	if st == nil {
+		var err error
+		st, err = openDetachedHere(ctx, a.opts, &one, here, also...) // a.opts: New filled the defaults (Wall)
+		if err != nil {
+			return err
+		}
+		st.poolKey, st.openedAt = key, time.Now()
 	}
 	st.here = here      // "" for the roster: its rows name no project folder
 	st.storeOnly = true // its folders are the read's whole scope (lensFolders)
