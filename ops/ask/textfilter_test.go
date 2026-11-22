@@ -110,10 +110,11 @@ func textFixture(t *testing.T) Query {
 }
 
 // TestTextRowsMatchTheLikeStatement: for word, topic, resource and date
-// questions (with and without a matched resource), loadRows on a lens
-// that keeps answers (reading only FileOnly statements, which the read
-// server keeps) picks the rows, refs and days the per-question LIKE
-// statement of a one-shot read picks, in its order.
+// questions (with and without a matched resource), loadRows picks, from
+// the kept textSQL alone (the FileOnly statements the read server keeps),
+// the rows, refs and days the per-question LIKE statement (likeOracle)
+// picks, in its order, and a one-shot read picks the same (devco D-902:
+// both read every row, so the meaning rows and BM25 see the same corpus).
 func TestTextRowsMatchTheLikeStatement(t *testing.T) {
 	t.Parallel()
 	run := textFixture(t)
@@ -139,35 +140,26 @@ func TestTextRowsMatchTheLikeStatement(t *testing.T) {
 	}
 	for _, c := range cases {
 		q := parseQuestion(c.q, now)
-		var oneShot, read []string
-		want, err := loadRows(context.Background(), func(ctx context.Context, s string) (opssql.Result, error) {
-			oneShot = append(oneShot, s)
-			return run(ctx, s)
-		}, q, c.ms, false)
-		if err != nil {
-			t.Fatalf("%s: like statement: %v", c.q, err)
-		}
-		for _, s := range oneShot {
-			if FileOnly(s) {
-				t.Errorf("%s: a one-shot read handed every row over:\n%s", c.q, s)
-			}
-		}
+		want := likeOracle(t, run, q, c.ms)
 		if len(want) == 0 && len(c.ms) > 0 {
 			t.Errorf("%s: the fixture picks no row; the case proves nothing", c.q)
 		}
-		got, err := loadRows(context.Background(), func(ctx context.Context, s string) (opssql.Result, error) {
-			read = append(read, s)
-			return run(ctx, s)
-		}, q, c.ms, true)
-		if err != nil {
-			t.Fatalf("%s: %v", c.q, err)
-		}
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s (%d resources): rows differ from the LIKE statement\n got %+v\nwant %+v", c.q, len(c.ms), got, want)
-		}
-		for _, s := range read {
-			if !FileOnly(s) {
-				t.Errorf("%s: read a statement the read server cannot keep:\n%s", c.q, s)
+		for _, keeps := range []bool{true, false} {
+			var read []string
+			got, _, _, err := loadRows(context.Background(), func(ctx context.Context, s string) (opssql.Result, error) {
+				read = append(read, s)
+				return run(ctx, s)
+			}, q, c.ms, keeps)
+			if err != nil {
+				t.Fatalf("%s: %v", c.q, err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("%s (%d resources, keeps %v): rows differ from the LIKE statement\n got %+v\nwant %+v", c.q, len(c.ms), keeps, got, want)
+			}
+			for _, s := range read {
+				if keeps && !FileOnly(s) {
+					t.Errorf("%s: read a statement the read server cannot keep:\n%s", c.q, s)
+				}
 			}
 		}
 	}
@@ -188,7 +180,7 @@ func TestDayMetadataNearTheWindow(t *testing.T) {
 	run := textFixture(t)
 	for _, keeps := range []bool{false, true} {
 		q := parseQuestion("where did I go hiking on 2026-11-13", now)
-		rows, err := loadRows(context.Background(), run, q, nil, keeps)
+		rows, _, _, err := loadRows(context.Background(), run, q, nil, keeps)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -203,7 +195,7 @@ func TestDayMetadataNearTheWindow(t *testing.T) {
 			t.Errorf("keeps=%v: the row about the day after the window gets no time bonus", keeps)
 		}
 		q = parseQuestion("what happened on 2026-11-13", now)
-		if rows, err = loadRows(context.Background(), run, q, nil, keeps); err != nil {
+		if rows, _, _, err = loadRows(context.Background(), run, q, nil, keeps); err != nil {
 			t.Fatal(err)
 		}
 		for _, r := range windowRows(q, nil, rows) {
@@ -212,4 +204,100 @@ func TestDayMetadataNearTheWindow(t *testing.T) {
 			}
 		}
 	}
+}
+
+// likeOracle is the rows the per-question LIKE statement picks for q (the
+// one-shot read before devco D-902): what rowFilter.answers must decide
+// exactly.
+func likeOracle(t *testing.T, run Query, q question, ms []match) []textRow {
+	t.Helper()
+	ctx := context.Background()
+	var terms []string
+	for _, m := range ms {
+		terms = append(terms, m.res.Name)
+		terms = append(terms, m.res.Aliases...)
+	}
+	if len(ms) == 0 {
+		terms = append(terms, q.words...)
+		for _, tp := range q.topics {
+			terms = append(terms, tp.row...)
+		}
+	}
+	like := func(s string) string {
+		r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+		return sqlText("%" + r.Replace(strings.ToLower(s)) + "%")
+	}
+	var conds, refIDs []string
+	for _, w := range terms {
+		conds = append(conds, "lower(%T || ' ' || %B) LIKE "+like(w)+` ESCAPE '\'`)
+	}
+	for _, m := range ms {
+		refIDs = append(refIDs, sqlText(m.res.ID))
+	}
+	if len(refIDs) > 0 {
+		conds = append(conds, "m.id IN (SELECT entity_id FROM row_refs_all WHERE ref_id IN ("+strings.Join(refIDs, ", ")+"))")
+	}
+	var days map[string][]string
+	var near dayRange
+	if !q.window.IsZero() {
+		since, end := q.window.Since.Format(time.DateOnly), q.window.End.Format(time.DateOnly)
+		if q.window.End.IsZero() {
+			end = openEnd
+		}
+		near = nearRange(q, dayRange{since, end})
+		var err error
+		if days, err = loadDays(ctx, run, near, false); err != nil {
+			t.Fatal(err)
+		}
+		dayCond := "0"
+		var ids []string
+		for id, items := range days {
+			if slices.ContainsFunc(items, dayRange{since, end}.holds) {
+				ids = append(ids, sqlText(id))
+			}
+		}
+		if len(ids) > 0 {
+			slices.Sort(ids)
+			dayCond = "m.id IN (" + strings.Join(ids, ", ") + ")"
+		}
+		win := []string{"(%V >= " + sqlText(since) + " AND %V < " + sqlText(end) + ")", dayCond}
+		if len(ms) == 0 {
+			conds = append(conds, win...)
+		} else {
+			conds = win
+		}
+	}
+	if len(conds) == 0 {
+		return nil
+	}
+	if refIDs == nil {
+		refIDs = []string{}
+	}
+	res, err := run(ctx, textStatement(strings.Join(conds, " OR "), refIDs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := map[string][]string{}
+	for _, row := range res.Rows {
+		if cell(row[colKind]) == "ref" {
+			refs[cell(row[colID])] = append(refs[cell(row[colID])], cell(row[colRefID]))
+		}
+	}
+	var out []textRow
+	seen := map[string]bool{}
+	for _, row := range res.Rows {
+		id := cell(row[colID])
+		if cell(row[colKind]) != "row" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		at, _ := time.Parse(time.RFC3339Nano, cell(row[colAt]))
+		until, _ := time.Parse(time.RFC3339Nano, cell(row[colUntil]))
+		r := textRow{Table: cell(row[colTable]), ID: id, Place: cell(row[colPlace]), Title: cell(row[colTitle]), Body: cell(row[colBody]), At: at, Imported: cell(row[colImported]) == "1", SupersededBy: cell(row[colSuperseded]), ValidUntil: until, Refs: refs[id], stored: cell(row[colAt])}
+		if !q.window.IsZero() {
+			r.Day = metaDayOf(q, days[id], r.stored, near)
+		}
+		out = append(out, r)
+	}
+	return out
 }

@@ -1,7 +1,7 @@
 package ask
 
 import (
-	"hash/fnv"
+	"maps"
 	"slices"
 	"sync"
 
@@ -17,103 +17,101 @@ import (
 // of stemmed BM25 and the static-vector cosine to the question, newest
 // first only among rows the fusion cannot tell apart.
 //
-// The fusion runs over the rows ask scored (the rows holding a question
-// word), the same set whether the read server or a one-shot call answers,
-// so both print the same answer byte for byte. A row's vector is kept
-// per process by its text's hash: the read server embeds a row once,
-// not per question; a one-shot call embeds at most maxEmbedded rows.
+// The fusion runs over every live row the call reads (corpus.go, devco
+// D-902), the same set whether the read server or a one-shot call
+// answers, so both print the same answer byte for byte.
 
-// maxEmbedded bounds the rows a question's vectors are computed for: the
-// first ones by lore's score, then BM25 (a one-shot call with a word held
-// by thousands of rows embeds these only, ~40 µs each). Twice the fusion
-// pool: a row past it could not enter the vector source's pool anyway
-// unless BM25 ranked it below a hundred tied rows.
-const maxEmbedded = 2 * hybrid.Pool
-
-// maxKeptVectors bounds the process's vector cache (~1 KB each): past it
-// the cache starts again, so a long-lived read server stays under its
-// heap limit on a big store.
+// maxKeptVectors bounds the process's vector cache (~1 KB each) beyond
+// the corpus in use: past it the cache keeps only the vectors of the
+// corpus just indexed (keepCorpusVectors), so a long-lived read server
+// drops the vectors of rows gone or changed, never the ones it reads.
 const maxKeptVectors = 50_000
 
-var (
-	vecMu   sync.Mutex
-	vecKept = map[uint64][]float32{}
-)
-
-// vectorOf is text's vector from the process cache, embedded on a miss.
-func vectorOf(m *embed.Model, text string) []float32 {
-	h := fnv.New64a()
-	h.Write([]byte(text))
-	k := h.Sum64()
-	vecMu.Lock()
-	v, ok := vecKept[k]
-	vecMu.Unlock()
-	if ok {
-		return v
-	}
-	v = m.Embed(text)
-	vecMu.Lock()
-	if len(vecKept) >= maxKeptVectors {
-		clear(vecKept)
-	}
-	vecKept[k] = v
-	vecMu.Unlock()
-	return v
+// VectorFile keeps row vectors between processes, by text hash (devco
+// D-902): a one-shot ask reads the vectors of the rows it saw before and
+// embeds only the new ones. Env may implement it (wire keeps a file under
+// the lore home); without it vectors live as long as the process.
+type VectorFile interface {
+	// Vectors are the kept vectors of model (name, width); empty when
+	// none are kept or the file is of another model.
+	Vectors(model string, dim int) map[uint64][]float32
+	// Keep adds vecs, the vectors of the corpus a call just indexed, to
+	// the file (best effort); a file past its bound keeps vecs alone, so
+	// the rows in use are never dropped.
+	Keep(model string, dim int, vecs map[uint64][]float32)
 }
 
-// fuseScores sets each scored row's fused score for q (wsum50 of BM25
-// over the scored rows and the cosine to the question). Vectors are
-// computed only for the rows that can reach the answer: lore's score
-// bands down to the 2×top-th row (a margin for rows history and the
-// folder picks move), at most maxEmbedded; a row below gets its BM25
-// share alone. Why (devco D-894): embedding every scored row made the
-// first call after a change ~7 ms slower on the recall gate. Without the
-// model (it cannot be read) every fused score stays 0 and the order is
-// the one before: newest first among equals.
-func fuseScores(q question, all []scored, top int) {
-	if len(all) < 2 {
+var (
+	vecMu     sync.Mutex
+	vecKept   = map[uint64][]float32{}
+	vecLoaded bool
+)
+
+// loadVectorFile seeds the process cache from vf once per process.
+func loadVectorFile(vf VectorFile, m *embed.Model) {
+	if vf == nil {
 		return
 	}
-	m, err := embed.Default()
-	if err != nil {
+	vecMu.Lock()
+	done := vecLoaded
+	vecLoaded = true
+	vecMu.Unlock()
+	if done {
+		return
+	}
+	got := vf.Vectors(m.Name(), m.Dim())
+	vecMu.Lock()
+	maps.Copy(vecKept, got)
+	vecMu.Unlock()
+}
+
+// keptVector is the process's vector of a text hash.
+func keptVector(k uint64) ([]float32, bool) {
+	vecMu.Lock()
+	defer vecMu.Unlock()
+	v, ok := vecKept[k]
+	return v, ok
+}
+
+// keepCorpusVectors adds a corpus's vectors (by text hash) to the
+// process cache; past maxKeptVectors the cache becomes that corpus's
+// vectors alone.
+func keepCorpusVectors(vecs map[uint64][]float32) {
+	vecMu.Lock()
+	defer vecMu.Unlock()
+	maps.Copy(vecKept, vecs)
+	if len(vecKept) > maxKeptVectors {
+		vecKept = maps.Clone(vecs)
+	}
+}
+
+// vectorBytes is the heap the process's vectors take (KeptBytes).
+func vectorBytes() int64 {
+	vecMu.Lock()
+	defer vecMu.Unlock()
+	var n int64
+	for _, v := range vecKept {
+		n += int64(4*len(v)) + 48 // the floats, the slice header and map entry
+	}
+	return n
+}
+
+// fuseScores sets each scored row's fused score for q: wsum50 of BM25 over
+// the whole corpus (the store's word weights, not the scored rows') and
+// the row's cosine to the question (meaningView, computed once per call;
+// devco D-902). The pools are the corpus's: a scored row outside both
+// gets 0. Without the view (the model cannot be read) every fused score
+// stays 0 and the order is the one before: newest first among equals.
+func fuseScores(q question, all []scored, v *meaningView) {
+	if len(all) < 2 || v == nil {
 		return
 	}
 	words := append(slices.Clone(q.words), topicWords(q)...)
-	docs := make([]hybrid.Doc, len(all))
+	fused := hybrid.Fuse(v.ci.ix.BM25(words), v.cos, hybrid.Pool)
 	for i := range all {
-		docs[i].Text = all[i].row.Title + "\n" + all[i].row.Body
-	}
-	bm := hybrid.Build(docs).BM25(words)
-	// the rows whose vectors are worth computing: lore's best first, then
-	// BM25's
-	order := make([]int, len(all))
-	for i := range order {
-		order[i] = i
-	}
-	slices.SortStableFunc(order, func(a, b int) int {
-		if all[a].score != all[b].score {
-			return all[b].score - all[a].score
+		if p, ok := v.at[all[i].row.ID]; ok {
+			all[i].fused = fused[p]
 		}
-		switch {
-		case bm[a] > bm[b]:
-			return -1
-		case bm[a] < bm[b]:
-			return 1
-		}
-		return 0
-	})
-	cutoff := all[order[min(2*top, len(order))-1]].score
-	qv := m.Embed(q.text)
-	cos := make([]float64, len(all))
-	for n, i := range order {
-		if n >= maxEmbedded || all[i].score < cutoff {
-			break
-		}
-		cos[i] = float64(embed.Cosine(qv, vectorOf(m, docs[i].Text)))
-	}
-	fused := hybrid.Fuse(bm, cos, hybrid.Pool)
-	for i := range all {
-		all[i].fused = fused[i]
 	}
 }
 

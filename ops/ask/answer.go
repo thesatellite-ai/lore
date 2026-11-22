@@ -41,6 +41,13 @@ type textRow struct {
 	ValidUntil time.Time
 	// Day is the row's day metadata (YYYY-MM-DD), "" when none.
 	Day string
+	// stored is the row's date as the lens stores it (metaDayOf reads
+	// it), "" for a row not read from the lens.
+	stored string
+	// meaning marks a row that joined by meaning alone: among the rows
+	// nearest the question in the whole corpus, holding none of its words
+	// (corpus.go, devco D-902).
+	meaning bool
 	// Refs are the resources the row's text references (row_refs).
 	Refs []string
 	// words is the word set of Title and Body (tokens), built once per
@@ -65,6 +72,9 @@ type data struct {
 	resources []resourceRow
 	tasks     []taskRow
 	rows      []textRow
+	// view is the question's view of every live row the call read
+	// (corpus.go); nil builds it from rows (a test's data).
+	view *meaningView
 }
 
 // Defaults of ask.
@@ -101,6 +111,8 @@ type scored struct {
 	// fused is the row's meaning-and-words score for the question
 	// (fuseScores, wsum50 in 0..1): it orders rows of equal score.
 	fused float64
+	// meaning says the row answers by meaning alone (textRow.meaning).
+	meaning bool
 }
 
 // staleNote says why row r is no longer the current answer as lore
@@ -274,17 +286,17 @@ func build(q question, d data, top, maxChars int) Out {
 		out.Rows = windowRows(q, ms, d.rows)
 	case !q.window.IsZero():
 		// "what did I buy last weekend": the date is a soft prior (prior.go)
-		out.Rows, lead = priorRows(q, ms, d.rows, top)
+		out.Rows, lead = priorRows(q, ms, d.rows, d.view, top)
 		out.prior = true
 	case q.file != "":
 		// a change to a file: its context says what applies; a row is
 		// added only when it holds two or more of the question's words
 		// (one shared word, such as "invoice", is not about the change)
-		rows, _ := topRows(q, ms, d.rows, top)
+		rows, _ := topRows(q, ms, d.rows, d.view, top)
 		out.Rows = slices.DeleteFunc(rows, func(r Row) bool { return len(r.Matched) < 2 })
 		lead = len(out.Rows)
 	default:
-		out.Rows, lead = topRows(q, ms, d.rows, top)
+		out.Rows, lead = topRows(q, ms, d.rows, d.view, top)
 	}
 	names := nameIndex(d.resources)
 	for i := range out.Rows {
@@ -649,10 +661,17 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 			s.matched = append(s.matched, w)
 		}
 	}
+	if s.score == 0 && r.meaning {
+		// nearest the question in meaning, sharing none of its words: the
+		// lowest band, after every row holding a word (corpus.go, devco
+		// D-902), so it fills places the words leave and never pushes a
+		// word's answer out; the fused order places it among its kind
+		s.score, s.meaning = 1, true
+	}
 	if s.score == 0 {
 		return s, false
 	}
-	if len(ms) == 0 && len(s.matched) == 0 {
+	if len(ms) == 0 && len(s.matched) == 0 && !s.meaning {
 		return s, false
 	}
 	// a row dated in (or near) the question's window ranks up (prior.go);
@@ -693,7 +712,7 @@ func firstLine(s string) string {
 // meeting note about the same person). Those picks stay first, newest
 // first, and lead says how many there are: a newer row of a folder already
 // shown comes after the newest row of every other folder.
-func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
+func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([]Row, int) {
 	var all []scored
 	for i := range rows {
 		if s, ok := score(q, ms, &rows[i]); ok {
@@ -703,7 +722,10 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 	// an everything-about answer leads with the newest row of each folder
 	// and topic (lore's structure): the fused order stays out of it
 	if !q.about {
-		fuseScores(q, all, top)
+		if v == nil {
+			v = viewOf(q, corpusOfRows(rows), nil)
+		}
+		fuseScores(q, all, v)
 	}
 	slices.SortStableFunc(all, func(a, b scored) int {
 		if c := cmp.Compare(b.score, a.score); c != 0 {
@@ -723,7 +745,7 @@ func topRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
 	if len(all[0].matched) > 0 {
 		// some rows hold what the question asks (a topic, a word): rows
 		// that only name the resource would pad the answer
-		all = slices.DeleteFunc(all, func(s scored) bool { return len(s.matched) == 0 })
+		all = slices.DeleteFunc(all, func(s scored) bool { return len(s.matched) == 0 && !s.meaning })
 	}
 	for i := range all {
 		all[i].history = staleNote(all[i].row, q.now)

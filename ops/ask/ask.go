@@ -261,7 +261,14 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 		if q.owe != oweNone || (isIdentity(q.text) && len(ms) > 0) {
 			return nil // answered by resources and tasks
 		}
-		d.rows, lerr = loadRows(ctx, run, q, ms, keeps)
+		var c *corpus
+		var fill func(*textRow)
+		d.rows, c, fill, lerr = loadRows(ctx, run, q, ms, keeps)
+		if lerr == nil && c != nil {
+			vf, _ := env.(VectorFile)
+			d.view = viewOf(q, c, vf)
+			d.rows = withMeaning(q, ms, d.rows, c, d.view, fill)
+		}
 		return lerr
 	})
 	if err != nil {
@@ -620,22 +627,17 @@ func likeText(w string) string { return strings.ToLower(w) }
 // sqlText quotes s as an SQL string literal.
 func sqlText(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
-// sqlLike is a LIKE pattern finding s anywhere (ESCAPE '\').
-func sqlLike(s string) string {
-	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-	return sqlText("%" + r.Replace(strings.ToLower(s)) + "%")
-}
-
 // loadRows reads the rows that can answer q: rows holding a word of the
 // question, a topic word or a matched resource's name, rows referencing a
-// matched resource, and for a date question the rows of its window. A lens
-// that keeps answers (keeps: the read server) reads textSQL, kept across
-// calls, and the rows are picked here; any other runs one statement that
-// picks them in SQL (one read: SQLite's scan is cheaper than handing every
-// row over). rowFilter.answers decides as that statement does
-// (TestTextRowsMatchTheLikeStatement compares the two), so both give the
-// same rows in the same order (nearest store first).
-func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool) ([]textRow, error) {
+// matched resource, and for a date question the rows of its window; and
+// corpus, every live row (nearest store first), which corpus.go indexes.
+// Both come from textSQL, which a lens that keeps answers (keeps: the read
+// server) keeps across calls; rowFilter.answers picks the rows as the
+// per-question LIKE statement did (TestTextRowsMatchTheLikeStatement
+// compares the two). Why every row (devco D-902): a row nearest the
+// question in meaning may hold none of its words, so one-shot and served
+// calls read the same corpus and print the same answer.
+func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool) (rows []textRow, c *corpus, fill func(*textRow), err error) {
 	var terms []string
 	for _, m := range ms {
 		terms = append(terms, m.res.Name)
@@ -652,16 +654,8 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 	for _, t := range terms {
 		f.pats = append(f.pats, likeText(t))
 	}
-	var conds, refIDs []string
-	for _, t := range terms {
-		conds = append(conds, "lower(%T || ' ' || %B) LIKE "+sqlLike(t)+` ESCAPE '\'`)
-	}
 	for _, m := range ms {
 		f.ids[m.res.ID] = true
-		refIDs = append(refIDs, sqlText(m.res.ID))
-	}
-	if len(refIDs) > 0 {
-		conds = append(conds, "m.id IN (SELECT entity_id FROM row_refs_all WHERE ref_id IN ("+strings.Join(refIDs, ", ")+"))")
 	}
 	// with a window and a matched resource the window decides; the
 	// resource filter runs in Go (answer.go)
@@ -672,74 +666,98 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 			f.end = openEnd // "after march 3rd": every day after it
 		}
 		f.near = nearRange(q, dayRange{f.since, f.end})
-		var err error
 		if f.days, err = loadDays(ctx, run, f.near, keeps); err != nil {
-			return nil, err
-		}
-		dayCond := "0"
-		if dayIDs := f.inWindow(); len(dayIDs) > 0 {
-			for i, id := range dayIDs {
-				dayIDs[i] = sqlText(id)
-			}
-			dayCond = "m.id IN (" + strings.Join(dayIDs, ", ") + ")"
-		}
-		win := []string{"(%V >= " + sqlText(f.since) + " AND %V < " + sqlText(f.end) + ")", dayCond}
-		if f.byText {
-			conds = append(conds, win...)
-		} else {
-			conds = win
+			return nil, nil, nil, err
 		}
 	}
-	if len(conds) == 0 {
-		return nil, nil
+	if len(terms) == 0 && !f.win {
+		return nil, nil, nil, nil
 	}
-	stmt := textSQL
-	if !keeps {
-		if refIDs == nil {
-			refIDs = []string{} // no ref lines: no resource matched
-		}
-		stmt = textStatement(strings.Join(conds, " OR "), refIDs)
-	}
-	res, err := run(ctx, stmt)
+	// every live row, kept or not: the rows nearest the question in
+	// meaning are among the rows holding none of its words, and BM25
+	// weighs words by the whole store (corpus.go, devco D-902)
+	res, err := run(ctx, textSQL)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	refs := map[string][]string{}
 	for _, row := range res.Rows {
-		if len(row) < textCols || cell(row[colKind]) != "ref" || keeps && !f.ids[cell(row[colRefID])] {
+		if len(row) < textCols || cell(row[colKind]) != "ref" || !f.ids[cell(row[colRefID])] {
 			continue
 		}
 		ent := cell(row[colID])
 		refs[ent] = append(refs[ent], cell(row[colRefID]))
 	}
 	f.refs = refs
-	var out []textRow
-	var stored []string // each row's date as stored, for metaDayOf
-	at := map[string]int{}
+	// fill sets a row's day metadata for the question (metaDayOf, devco
+	// D-903): the rows picked here and the rows joining by meaning
+	fill = func(r *textRow) {
+		if f.win {
+			r.Day = metaDayOf(q, f.days[r.ID], r.stored, f.near)
+		}
+	}
+	c = corpusOf(res.Rows)
+	seen := make(map[string]bool, len(c.rows))
 	for _, row := range res.Rows {
 		if len(row) < textCols || cell(row[colKind]) != "row" {
 			continue
 		}
 		id := cell(row[colID])
-		if keeps && !f.answers(row, id) {
-			continue // a one-shot statement picked its rows in SQL
-		}
-		if _, dup := at[id]; dup {
+		if seen[id] {
 			continue // nearest store first
 		}
-		at[id] = len(out)
-		t, _ := time.Parse(time.RFC3339Nano, cell(row[colAt]))
-		until, _ := time.Parse(time.RFC3339Nano, cell(row[colUntil]))
-		stored = append(stored, cell(row[colAt]))
-		out = append(out, textRow{Table: cell(row[colTable]), ID: id, Place: cell(row[colPlace]), Title: cell(row[colTitle]), Body: cell(row[colBody]), At: t, Imported: cell(row[colImported]) == "1", SupersededBy: cell(row[colSuperseded]), ValidUntil: until})
-	}
-	for i := range out {
-		out[i].Refs = refs[out[i].ID]
-		if f.win {
-			out[i].Day = metaDayOf(q, f.days[out[i].ID], stored[i], f.near)
+		seen[id] = true
+		if f.answers(row, id) {
+			r := c.rows[c.at[id]]
+			r.Refs = refs[id]
+			fill(&r)
+			rows = append(rows, r)
 		}
 	}
-	return out, nil
+	return rows, c, fill, nil
+}
+
+// rowOfLine is the text row of a text statement's row line (Refs and Day
+// unset).
+func rowOfLine(row []value.Value, id string) textRow {
+	t, _ := time.Parse(time.RFC3339Nano, cell(row[colAt]))
+	until, _ := time.Parse(time.RFC3339Nano, cell(row[colUntil]))
+	return textRow{Table: cell(row[colTable]), ID: id, Place: cell(row[colPlace]), Title: cell(row[colTitle]), Body: cell(row[colBody]), At: t, Imported: cell(row[colImported]) == "1", SupersededBy: cell(row[colSuperseded]), ValidUntil: until, stored: cell(row[colAt])}
+}
+
+// withMeaning adds to rows the rows of c nearest q in meaning that rows
+// does not hold yet (at most meaningRows), marked meaning. A row joins
+// only when it is at least as near the question as the nearest row
+// holding a word, and at least meaningFloor: a row the words found
+// answers better than a row merely about the same things, so the meaning
+// rows come in where the words miss, not as padding after every answer.
+// Only for a question asked in words about no named resource, not an
+// everything-about, debt or date-only one: a named resource's answer is
+// the rows about it, and a date question's the rows of its dates. Why
+// (devco D-902, hunt H-157): a question asked in other words than the
+// note that answers it ("which physician do I see" for "My doctor is Dr
+// Patel …") found nothing.
+func withMeaning(q question, ms []match, rows []textRow, c *corpus, v *meaningView, fill func(*textRow)) []textRow {
+	if v == nil || len(ms) > 0 || q.about || q.owe != oweNone || len(q.words) == 0 {
+		return rows
+	}
+	floor := meaningFloor
+	skip := make(map[int]bool, len(rows))
+	for i := range rows {
+		if p, ok := v.at[rows[i].ID]; ok {
+			skip[p] = true
+			floor = max(floor, v.cos[p])
+		}
+	}
+	for _, p := range v.nearest(meaningRows, floor, skip) {
+		r := c.rows[p]
+		r.meaning = true
+		if fill != nil {
+			fill(&r)
+		}
+		rows = append(rows, r)
+	}
+	return rows
 }
 
 // openEnd is the end of a window open to the future, as a day: after
@@ -775,19 +793,6 @@ func nearRange(q question, w dayRange) dayRange {
 		w.end = q.window.End.AddDate(0, 0, n).Format(time.DateOnly)
 	}
 	return w
-}
-
-// inWindow is the rows with a day metadata item inside [since, end),
-// sorted: the rows the window holds by their day.
-func (f *rowFilter) inWindow() []string {
-	var ids []string
-	for id, items := range f.days {
-		if slices.ContainsFunc(items, dayRange{f.since, f.end}.holds) {
-			ids = append(ids, id)
-		}
-	}
-	slices.Sort(ids)
-	return ids
 }
 
 // answers reports whether a text statement row can answer: by text

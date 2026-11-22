@@ -45,6 +45,10 @@ const (
 type Doc struct {
 	Text string
 	Vec  []float32
+	// Terms are Text's index terms (Terms of Text) when the caller kept
+	// them, nil to read them from Text: a store's index rebuilt after one
+	// row changed reads only that row's text (devco D-902).
+	Terms []string
 }
 
 // Index is the BM25 postings and vectors of a set of texts.
@@ -66,10 +70,16 @@ func Build(docs []Doc) *Index {
 	ix := &Index{post: map[string][]posting{}, lens: make([]float32, len(docs)), vecs: make([][]float32, len(docs))}
 	total := 0
 	tf := map[string]int{}
-	var toks []string
+	var scratch []string
 	for i, d := range docs {
 		clear(tf)
-		toks = Terms(toks[:0], d.Text)
+		toks := d.Terms
+		if toks == nil {
+			// scratch, never a kept Terms slice: reusing one would write
+			// over another doc's kept terms
+			scratch = Terms(scratch[:0], d.Text)
+			toks = scratch
+		}
 		for _, w := range toks {
 			tf[w]++
 		}
@@ -84,6 +94,17 @@ func Build(docs []Doc) *Index {
 		ix.avg = float64(total) / float64(len(docs))
 	}
 	return ix
+}
+
+// Bytes estimates the heap the index takes besides its vectors (which
+// the caller keeps): postings, terms and lengths. The read server counts
+// it in what it keeps on purpose (devco D-902).
+func (ix *Index) Bytes() int64 {
+	n := int64(len(ix.lens))*(4+24) + 48
+	for t, ps := range ix.post {
+		n += int64(len(t)) + 16 + 24 + 48 + int64(cap(ps))*8
+	}
+	return n
 }
 
 // Len is the number of indexed texts.

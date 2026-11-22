@@ -77,7 +77,8 @@ const (
 
 // serverLimits are the read server's live-heap exit limit and soft memory
 // limit while it keeps kept bytes on purpose (sqlite.KeptBytes: ask's kept
-// answers; gitfast.KeptBytes: decoded objects). Why (devco:D-887, issue
+// answers; gitfast.KeptBytes: decoded objects; opsask.KeptBytes: ask's
+// corpus indexes and row vectors). Why (devco:D-887, issue
 // #96 follow-up): lore ask keeps every row's text of the stores it reads,
 // so on a store of 100,000 rows the kept state alone is past 128 MB; with
 // fixed limits the server exited after every call (each ask one-shot,

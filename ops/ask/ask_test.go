@@ -302,10 +302,9 @@ func (f *fakeEnv) AskLens(_ context.Context, _ bool, fn func(q Query, keeps bool
 }
 
 // TestRunOneLens: run reads through one lens: the typed statement, then
-// the rows statement naming the matched resource; on a lens that keeps
-// answers (the read server) the text statement naming nothing of the
-// question instead, kept across calls (devco:D-846); a blank question is
-// refused.
+// the text statement naming nothing of the question, which the read
+// server keeps across calls (devco:D-846) and a one-shot call reads too,
+// every row being the corpus (devco D-902); a blank question is refused.
 func TestRunOneLens(t *testing.T) {
 	t.Parallel()
 	for _, keeps := range []bool{false, true} {
@@ -317,7 +316,7 @@ func TestRunOneLens(t *testing.T) {
 		if len(env.stmts) != 2 {
 			t.Fatalf("keeps %v: statements: %q", keeps, env.stmts)
 		}
-		if named := strings.Contains(env.stmts[1], "'%alice-ng%'") && strings.Contains(env.stmts[1], "'%ally%'"); named == keeps || FileOnly(env.stmts[1]) != keeps {
+		if !FileOnly(env.stmts[1]) {
 			t.Fatalf("keeps %v: rows statement %q", keeps, env.stmts[1])
 		}
 		if len(out.Resources) != 1 || out.Resources[0].Fields[0].Value != "engineer" || len(out.Rows) != 1 || strings.Join(out.Resources[0].Aliases, ",") != "Ally" {

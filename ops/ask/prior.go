@@ -482,8 +482,8 @@ const maxFillDays = 8
 // for: "what did I buy last weekend" lists that weekend's rows when no
 // row says "buy", but "the budget for orbit this year" is not padded
 // with every row written this year.
-func priorRows(q question, ms []match, rows []textRow, top int) ([]Row, int) {
-	out, lead := topRows(q, ms, rows, top)
+func priorRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([]Row, int) {
+	out, lead := topRows(q, ms, rows, v, top)
 	if len(out) > 0 && (q.window.Since.IsZero() || q.window.End.IsZero() || q.window.End.Sub(q.window.Since).Hours()/24 > maxFillDays) {
 		return out, lead
 	}

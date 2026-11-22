@@ -42,6 +42,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
+	opsask "github.com/thesatellite-ai/lore/ops/ask"
 )
 
 const (
@@ -212,7 +213,9 @@ func heapLive() uint64 {
 	return m[0].Value.Uint64()
 }
 
-// keptBytes is what the server keeps on purpose across calls (serverLimits).
+// keptBytes is what the server keeps on purpose across calls (serverLimits):
+// the lenses' kept answers, decoded git objects and lore ask's corpus
+// indexes and row vectors (devco D-902).
 func keptBytes() int64 {
-	return sqlite.KeptBytes() + gitfast.KeptBytes()
+	return sqlite.KeptBytes() + gitfast.KeptBytes() + opsask.KeptBytes()
 }

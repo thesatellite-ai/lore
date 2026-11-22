@@ -2,8 +2,10 @@ package wire
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	"github.com/thesatellite-ai/lore/adapters/vecfile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsask "github.com/thesatellite-ai/lore/ops/ask"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
@@ -39,3 +41,24 @@ func (a *App) AskLens(ctx context.Context, repoOnly bool, fn func(q opsask.Query
 		return ferr
 	})
 }
+
+// askVectorsFile is the file under the lore home's cache that keeps the
+// row vectors of lore ask between processes (adapters/vecfile, devco
+// D-902).
+const askVectorsFile = "ask-vectors.bin"
+
+// Vectors implements opsask.VectorFile: the vectors earlier calls kept in
+// the home's cache, so a one-shot ask embeds only the rows it has not seen.
+func (a *App) Vectors(model string, dim int) map[uint64][]float32 {
+	return vecfile.Read(filepath.Join(a.opts.Home, cacheDir, askVectorsFile), model, dim)
+}
+
+// Keep implements opsask.VectorFile: it adds vecs to the home's vector
+// file. Best effort: a file that cannot be written only costs the next
+// call the embedding, so the error is dropped.
+func (a *App) Keep(model string, dim int, vecs map[uint64][]float32) {
+	_ = vecfile.Write(filepath.Join(a.opts.Home, cacheDir, askVectorsFile), model, dim, vecs)
+}
+
+// App keeps lore ask's vectors in the home's cache (opsask.VectorFile).
+var _ opsask.VectorFile = (*App)(nil)

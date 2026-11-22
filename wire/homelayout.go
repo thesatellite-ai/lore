@@ -112,6 +112,9 @@ var homeLayout = []homeEntry{
 	{Pattern: "cache/repos/**", What: "a repo's cache use record (older layout)", ByHand: "safe to delete"},
 	// devco:D-418: git answers kept between commands (adapters/gitfast)
 	{Pattern: "cache/" + gitfast.CacheDirName, Dir: true, Collapse: true, What: "git answers kept between commands so an everyday command starts few git processes: each repo folder's git config with the files it came from, and the history and org checks of each store at one commit; an answer is dropped when a config file or git itself changes, and the oldest go past 256 files", ByHand: "safe to delete: the next command asks git again", Readme: true},
+	// devco:D-902: lore ask's row vectors (adapters/vecfile)
+	{Pattern: "cache/" + askVectorsFile, What: "the meaning vectors of the rows lore ask read, by a hash of each row's text, so a call computes only the vectors of rows that are new or changed", ByHand: "safe to delete: the next lore ask computes them again", Readme: true},
+	{Pattern: "cache/" + askVectorsFile + ".tmp-*", What: "a vector file being written (left by a stopped lore ask)", ByHand: "safe to delete while no lore command runs"},
 	{Pattern: "cache/doctor-health.json", What: "the last `lore doctor` summary, for the setup page", ByHand: "safe to delete", Readme: true},
 	{Pattern: "cache/prj_*", What: "a cache from lore 0.1.17; `lore cache prune` removes it", ByHand: "safe to delete"},
 	{Pattern: "cache/links-*.json", What: "lore 0.1.17's index of an org's store links; this lore reads the links from the store clones; `lore cache prune` removes it", ByHand: "safe to delete"},

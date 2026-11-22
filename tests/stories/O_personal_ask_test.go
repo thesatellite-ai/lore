@@ -772,6 +772,20 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		}
 	})
 
+	// devco:D-902 (bug hunt H-157): lore ask read only the rows holding a
+	// word of the question, so the note answering a question asked in
+	// other words ("which physician do I see" → "My doctor is Dr Patel")
+	// was never found. Every live row is now indexed with its vector; the
+	// rows nearest the question in meaning join after the word rows.
+	s.Step("personal-store/meaning-finds-a-row-sharing-no-word", func() {
+		ada.Lore(ada.Home, "memory", "add", "--body", "My doctor is Dr Patel at the Elm Street clinic.", "--at", "2026-04-02", "--to", to, "--yes").OK(t)
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "which physician do I see")
+		r.OK(t)
+		if out := r.Out(); !strings.Contains(out, "Dr Patel") {
+			t.Errorf("[O D-902] the note answering in other words (no word shared) must be found by meaning:\n%s", out)
+		}
+	})
+
 	// devco:D-897 (bug hunt H-150): a date phrase lore ask did not read
 	// ("in <month>") ranked rows newest first, so the hike of that month
 	// came after a newer one; a date phrase is now a soft prior (rows

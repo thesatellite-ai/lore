@@ -3,6 +3,7 @@ package hybrid
 import (
 	"math"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/embed"
@@ -80,5 +81,33 @@ func TestFusedFindsAParaphrase(t *testing.T) {
 	}
 	if best != 0 {
 		t.Fatalf("fused %v: want the relocation text first", f)
+	}
+}
+
+// TestKeptTermsBuildTheSameIndex: an index built from terms the caller
+// kept (devco D-902) scores as one built from the texts, and building
+// does not write over a kept terms slice.
+func TestKeptTermsBuildTheSameIndex(t *testing.T) {
+	texts := []string{"Parking at the cabin: the north lot", "Code freeze starts Monday", "Parking code 4417 for the gate"}
+	plain := make([]Doc, len(texts))
+	kept := make([]Doc, len(texts))
+	var saved [][]string
+	for i, s := range texts {
+		plain[i] = Doc{Text: s}
+		ts := Terms(nil, s)
+		saved = append(saved, append([]string(nil), ts...))
+		kept[i] = Doc{Text: s, Terms: ts}
+	}
+	kept[1].Terms = nil // a mix: one doc read from its text
+	a, b := Build(plain).BM25([]string{"parking", "code"}), Build(kept).BM25([]string{"parking", "code"})
+	for i := range a {
+		if a[i] != b[i] {
+			t.Fatalf("scores differ at %d: %v vs %v", i, a, b)
+		}
+	}
+	for i, d := range kept {
+		if d.Terms != nil && strings.Join(d.Terms, " ") != strings.Join(saved[i], " ") {
+			t.Fatalf("doc %d's kept terms were written over: %v", i, d.Terms)
+		}
 	}
 }
