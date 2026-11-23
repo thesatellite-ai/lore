@@ -975,7 +975,7 @@ func (a *App) SearchStatus(ctx context.Context, targets []opssearch.Target) ([]o
 			if err != nil {
 				return nil, err
 			}
-			n, err := c.FTSCounts(ctx, s, t.Table)
+			n, err := c.FTSCounts(ctx, st.caches.keyOf(s), t.Table)
 			if errs.Has(err, errs.NotFound) {
 				continue // a cache without this table (kinds only)
 			}

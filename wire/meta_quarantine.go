@@ -21,6 +21,9 @@ func (a *App) MetaQuarantined(ctx context.Context) ([]sqlite.MetaQuarantine, err
 		if qerr != nil {
 			return nil, qerr
 		}
+		for i := range q {
+			q[i].Source = st.caches.nameOf(q[i].Source) // devco D-933: a folder key reads as the name
+		}
 		out = append(out, q...)
 	}
 	return out, nil

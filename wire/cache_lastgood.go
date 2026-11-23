@@ -15,11 +15,11 @@ var _ engine.LastGoodKinds = (*caches)(nil)
 // LastGoodKind implements engine.LastGoodKinds by routing to source's
 // cache file (RES 3.13, OV35-LASTGOOD).
 func (c *caches) LastGoodKind(ctx context.Context, source store.Source, kindID string) (row.Row, []row.Row, bool, error) {
-	f, err := c.of(source)
+	f, key, err := c.at(source)
 	if err != nil {
 		return row.Row{}, nil, false, err
 	}
-	return f.LastGoodKind(ctx, source, kindID)
+	return f.LastGoodKind(ctx, key, kindID)
 }
 
 // LastGoodKind is the ops/settings lastGooder Env upgrade: the engine's

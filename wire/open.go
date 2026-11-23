@@ -223,7 +223,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		}
 	}
 
-	st.caches = newCaches()
+	st.caches = newCachesFor(opts.Home)
 	// AGENT_IDENTITY 6.1 / OQ9: a detected agent whose 6-hex key another
 	// owner already holds uses 10 hex; its store reads start now and run
 	// beside the cache opens below (devco:D-826), settled before the
@@ -322,10 +322,10 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		// the record. A failed write is ignored: it can only make prune
 		// drop a cache that the next command rebuilds.
 		_ = sqlite.RecordUse(cacheRoot, st.repoTop, uses)
-		// devco D-930 (#142): rows under a name no attachment uses any
-		// more go now, not at the next `lore search rebuild`; a failure
-		// leaves them to doctor's search_index check.
-		st.caches.noteOtherUses(cacheRoot, st.repoTop)
+		// devco D-930, D-933 (#142): rows under a key this open does not
+		// use (an older lore's copies under an attach name) go now, not at
+		// the next `lore search rebuild`; a failure leaves them to doctor's
+		// search_index check.
 		_ = st.caches.dropUnusedNames(ctx)
 	}
 
@@ -1428,7 +1428,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 			}
 		}
 	}
-	st.caches = newCaches()
+	st.caches = newCachesFor(opts.Home)
 	rv := newResolver(st)
 	exp := refs.Expander{Resolver: rv}
 	st.byName = map[store.Source]store.Backend{}
@@ -1442,6 +1442,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	if err = openDetachedCaches(ctx, opts.Home, st.caches, attached, reg, exp); err != nil {
 		return fail(joinFlat(err, settled()))
 	}
+	_ = st.caches.dropUnusedNames(ctx) // devco D-933: as a repo's open does
 	if err = settled(); err != nil {
 		return fail(err)
 	}

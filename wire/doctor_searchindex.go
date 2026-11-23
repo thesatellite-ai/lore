@@ -20,6 +20,7 @@ package wire
 
 import (
 	"context"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -80,7 +81,7 @@ func (a *App) staleIndexRows(ctx context.Context, st *state, src store.Source) (
 	if err != nil {
 		return nil, err
 	}
-	held, err := c.HeldVersions(ctx, src)
+	held, err := c.HeldVersions(ctx, st.caches.keyOf(src))
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,7 @@ func leftoverIndexMessage(ctx context.Context, st *state, src, old store.Source)
 	if err != nil {
 		return "the search index of " + string(src) + " still holds rows under the name " + string(old) + ", which no attachment uses any more"
 	}
-	mine, merr := c.HeldVersions(ctx, src)
+	mine, merr := c.HeldVersions(ctx, st.caches.keyOf(src))
 	theirs, terr := c.HeldVersions(ctx, old)
 	if merr != nil || terr != nil {
 		return "the search index of " + string(src) + " still holds rows under the name " + string(old) + ", which no attachment uses any more"
@@ -126,7 +127,11 @@ func leftoverIndexMessage(ctx context.Context, st *state, src, old store.Source)
 			twice++
 		}
 	}
-	return "the search index of " + string(src) + " holds " + plural(twice, "id") + " twice: also under the name " + string(old) + " (" + plural(len(theirs), "row") + "), which no attachment uses any more (the folder was attached under that name before): search and ask find their old text"
+	why := "which no attachment uses any more (the folder was attached under that name before)"
+	if strings.HasPrefix(string(st.caches.keyOf(src)), folderKeyPrefix) {
+		why = "an older lore's copy, kept by the name the folder was attached under (lore now keeps one copy per folder)"
+	}
+	return "the search index of " + string(src) + " holds " + plural(twice, "id") + " twice: also under the name " + string(old) + " (" + plural(len(theirs), "row") + "), " + why + ": search and ask find their old text"
 }
 
 // staleIndexMessage is the finding's line for src's stale rows.

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
-	opscache "github.com/thesatellite-ai/lore/ops/cache"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -42,9 +42,13 @@ type caches struct {
 	// combinedPath is the file of combined ("" without one): the lens
 	// attaches it (lensSources), on a repo's open and a store-only one.
 	combinedPath string
-	// others are, per cache file path, the names other live checkouts
-	// apply that file under (noteOtherUses): kept, never leftovers.
-	others map[string]map[store.Source]bool
+	// keys is, per attach name, the `_source` value the name's rows are
+	// kept under in its file (keyOf). A store folder's file keys them by
+	// the folder's identity, never the name (folderKey).
+	keys map[store.Source]store.Source
+	// storesRoot is <home>/cache/stores, the folder of the per store
+	// folder files ("" in a test router: every name is its own key).
+	storesRoot string
 	// healed are the notices of damaged cache files moved aside and
 	// rebuilt during open (openHealing); the App hands them to
 	// Options.Notice once the open succeeds.
@@ -61,9 +65,93 @@ func (a *App) Combined() bool {
 
 var _ store.Cache = (*caches)(nil)
 
-// newCaches returns an empty router.
+// newCaches returns an empty router that keys every name's rows by the
+// name itself (tests; an open uses newCachesFor).
 func newCaches() *caches {
-	return &caches{by: map[store.Source]*sqlite.Cache{}, paths: map[store.Source]string{}}
+	return &caches{by: map[store.Source]*sqlite.Cache{}, paths: map[store.Source]string{}, keys: map[store.Source]store.Source{}}
+}
+
+// newCachesFor returns an empty router for an open over home: the files
+// under <home>/cache/stores key their rows by the folder's identity.
+func newCachesFor(home string) *caches {
+	c := newCaches()
+	c.storesRoot = filepath.Join(writableHome(home), cacheDir, cacheStoresDir)
+	return c
+}
+
+// folderKeyPrefix starts the `_source` value of a store folder's rows; no
+// store name starts with it, so a key never reads as a name.
+const folderKeyPrefix = "@"
+
+// folderKey is the `_source` value the rows of the store folder cached at
+// path are kept under: "@" + the file's place under <home>/cache/stores
+// (store id / branch / [layer /] folder, cachePath), the same whatever
+// name a checkout attaches the folder under; "" for any other file (the
+// repo's own cache, a combined one), whose rows stay under their name.
+//
+// Why (devco D-933, hunt H-194, public issue #142): one folder's file is
+// shared by every checkout and every open that reads the folder, and its
+// rows were keyed by the attach name, so two names (`kb/app` in one
+// checkout, `notes` in another, or the name before a rename) kept two
+// copies of every row. An edit refreshed only the copy of the name that
+// read it, and search, which reads the whole file, could show the other
+// copy's old text. Keyed by the folder, the file holds one copy of each
+// row; an edit replaces it; a rename has nothing left to drop.
+func (c *caches) folderKey(path string) store.Source {
+	if c.storesRoot == "" {
+		return ""
+	}
+	rel, err := filepath.Rel(c.storesRoot, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return ""
+	}
+	return store.Source(folderKeyPrefix + filepath.ToSlash(strings.TrimSuffix(rel, cacheExt)))
+}
+
+// keyOf is the `_source` value name's rows are kept under in its file:
+// the folder key for a store folder's file, the name itself otherwise.
+// Every call into a sqlite.Cache that names a source goes through it.
+func (c *caches) keyOf(name store.Source) store.Source {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if k, ok := c.keys[name]; ok {
+		return k
+	}
+	return name
+}
+
+// nameOf is the attach name a `_source` value read back from a file
+// stands for in this open: the nearest name (repo, then stores.yaml
+// order) kept under key, or key itself when no name is (a combined file's
+// own names, an older lore's leftover). Every result that carries a
+// source from a file goes through it, so a person never sees a key.
+func (c *caches) nameOf(key store.Source) store.Source {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, s := range c.order {
+		if k, ok := c.keys[s]; ok && k == key {
+			return s
+		}
+	}
+	return key
+}
+
+// at returns name's cache file and the key its rows are kept under there.
+func (c *caches) at(name store.Source) (*sqlite.Cache, store.Source, error) {
+	f, err := c.of(name)
+	if err != nil {
+		return nil, "", err
+	}
+	return f, c.keyOf(name), nil
+}
+
+// setKey records the key of name opened at path (caller holds c.mu).
+func (c *caches) setKey(name store.Source, path string) {
+	if k := c.folderKey(path); k != "" {
+		c.keys[name] = k
+		return
+	}
+	c.keys[name] = name
 }
 
 // open opens source's cache file at path. A path another source already
@@ -78,6 +166,7 @@ func (c *caches) open(ctx context.Context, source store.Source, path string, reg
 		defer c.mu.Unlock()
 		c.by[source] = f
 		c.paths[source] = path
+		c.setKey(source, path)
 		c.order = append(c.order, source)
 		return nil
 	}
@@ -89,6 +178,7 @@ func (c *caches) open(ctx context.Context, source store.Source, path string, reg
 	defer c.mu.Unlock()
 	c.by[source] = f
 	c.paths[source] = path
+	c.setKey(source, path)
 	c.order = append(c.order, source)
 	return nil
 }
@@ -107,7 +197,10 @@ func (c *caches) openedAt(path string) *sqlite.Cache {
 
 // openCombined opens ONE cache file at path for every source in names
 // (the CFG3 fallback): each source's rows are applied under its own name,
-// so the file's `_source` column tells them apart.
+// so the file's `_source` column tells them apart. A combined file is one
+// checkout's own (named by its path, or by the names and places of a
+// store-only open), so no other name fills it; a rename within the
+// checkout is dropped by dropUnusedNames.
 func (c *caches) openCombined(ctx context.Context, names []store.Source, path string, reg *schema.Registry, exp sqlite.Expander) error {
 	f, err := c.openHealing(ctx, path, reg, exp)
 	if err != nil {
@@ -117,6 +210,7 @@ func (c *caches) openCombined(ctx context.Context, names []store.Source, path st
 	defer c.mu.Unlock()
 	for _, n := range names {
 		c.by[n] = f
+		c.keys[n] = n
 		c.order = append(c.order, n)
 	}
 	c.combined = f
@@ -243,43 +337,44 @@ func (c *caches) of(source store.Source) (*sqlite.Cache, error) {
 
 // Apply implements store.Cache.
 func (c *caches) Apply(ctx context.Context, source store.Source, rows []store.Row, next store.Cursor) error {
-	f, err := c.of(source)
+	f, key, err := c.at(source)
 	if err != nil {
 		return err
 	}
-	return f.Apply(ctx, source, rows, next)
+	return f.Apply(ctx, key, rows, next)
 }
 
 // Cursor implements store.Cache.
 func (c *caches) Cursor(ctx context.Context, source store.Source) (store.Cursor, error) {
-	f, err := c.of(source)
+	f, key, err := c.at(source)
 	if err != nil {
 		return "", err
 	}
-	return f.Cursor(ctx, source)
+	return f.Cursor(ctx, key)
 }
 
 // Mirror implements store.MirrorCache (perf3): source's row mirror in the
 // file that caches source; nil when that file cannot be opened, and a read
 // then opens the row files as before.
 func (c *caches) Mirror(source store.Source) store.RowMirror {
-	f, err := c.of(source)
+	f, key, err := c.at(source)
 	if err != nil {
 		return nil
 	}
-	return f.Mirror(source)
+	return f.Mirror(key)
 }
 
-// Rebuild implements store.Cache. Rows the same file holds under a name
-// no attachment uses for it any more (the folder was attached under
-// another name before) go too: they were searched with the rest and no
-// edit or rebuild reached them (devco D-920, public issue #142).
+// Rebuild implements store.Cache. Rows the same file holds under any
+// other key (an older lore's copies under an attach name, a combined
+// file's rows under a name no attachment uses any more) go too: they were
+// searched with the rest and no edit or rebuild reached them (devco
+// D-920, D-933, public issue #142).
 func (c *caches) Rebuild(ctx context.Context, source store.Source) error {
-	f, err := c.of(source)
+	f, key, err := c.at(source)
 	if err != nil {
 		return err
 	}
-	if err := f.Rebuild(ctx, source); err != nil {
+	if err := f.Rebuild(ctx, key); err != nil {
 		return err
 	}
 	for _, old := range c.leftoverSources(ctx, f) {
@@ -290,47 +385,15 @@ func (c *caches) Rebuild(ctx context.Context, source store.Source) error {
 	return nil
 }
 
-// noteOtherUses records, per cache file, the names every other live
-// checkout on this machine applies it under (their cache use records,
-// sqlite.ReadUses; self is this open's own checkout, "" for a store-only
-// open). Why (devco D-930, hunt H-188): a folder's cache is shared by
-// every repo using the folder, each under its own attach name; a name
-// another repo still uses is that repo's live copy, not a leftover, so
-// dropping it would only make that repo read the whole folder again.
-func (c *caches) noteOtherUses(cacheRoot, self string) {
-	recs, err := sqlite.ReadUses(cacheRoot)
-	if err != nil {
-		return // no records: only this open's names are kept
-	}
-	others := map[string]map[store.Source]bool{}
-	for _, rf := range recs {
-		rec := rf.Record
-		if rec.Repo == "" || (self != "" && filepath.Clean(rec.Repo) == filepath.Clean(self)) || !opscache.RepoAlive(rec.Repo) {
-			continue
-		}
-		for _, u := range rec.Caches {
-			p := filepath.Join(cacheRoot, filepath.FromSlash(u.Path))
-			if others[p] == nil {
-				others[p] = map[store.Source]bool{}
-			}
-			others[p][store.Source(u.Store)] = true
-		}
-	}
-	c.mu.Lock()
-	c.others = others
-	c.mu.Unlock()
-}
-
 // dropUnusedNames removes from every cache file this open uses the rows
-// of names no attachment uses any more (leftoverSources), at once on the
-// open. Why (devco D-930, hunt H-188, public issue #142): a folder's cache
-// keyed rows by the name the folder is attached under, so after a
-// `lore store remove` and a `lore store add` under another name (or a
-// rename) the copies under the earlier name stayed in the file: no edit
-// reached them and search and ask kept finding their old text until a
-// `lore search rebuild`. Every attach, detach or rename now takes effect
-// on the next command, and a cache an older lore filled is cleaned on its
-// first open. A file that cannot be read is left to the doctor check.
+// kept under any key this open does not apply it under (leftoverSources),
+// at once on the open, a repo's and a store-only one. Why (devco D-930,
+// D-933, public issue #142): an older lore keyed a folder's rows by the
+// attach name, so its file can still hold one copy per name it was read
+// under; those copies are dropped on the first open (the folder's rows
+// are read again under the folder key), and a combined file drops the
+// rows of a name the checkout no longer attaches. A file that cannot be
+// read is left to the doctor check.
 func (c *caches) dropUnusedNames(ctx context.Context) error {
 	c.mu.Lock()
 	files := map[*sqlite.Cache]bool{}
@@ -351,26 +414,22 @@ func (c *caches) dropUnusedNames(ctx context.Context) error {
 	return errors.Join(all...)
 }
 
-// leftoverSources lists the sources f holds rows of that no attachment
-// maps to f: neither this open nor the last open of another live checkout
-// (noteOtherUses).
+// leftoverSources lists the keys f holds rows under that this open does
+// not apply f under. A store folder's file has one key (folderKey), the
+// same in every checkout, so anything else there is an older lore's copy
+// under an attach name; a combined file belongs to one checkout, so a
+// name it no longer attaches is gone for good.
 func (c *caches) leftoverSources(ctx context.Context, f *sqlite.Cache) []store.Source {
 	c.mu.Lock()
 	keep := map[store.Source]bool{}
-	var path string
 	for s, g := range c.by {
 		if g == f {
-			keep[s] = true
-			if p := c.paths[s]; p != "" {
-				path = p
+			if k, ok := c.keys[s]; ok {
+				keep[k] = true
+			} else {
+				keep[s] = true
 			}
 		}
-	}
-	if f == c.combined {
-		path = c.combinedPath
-	}
-	for s := range c.others[path] {
-		keep[s] = true
 	}
 	c.mu.Unlock()
 	all, err := f.Sources(ctx)
@@ -400,6 +459,7 @@ func (c *caches) Close() error {
 	}
 	c.by = map[store.Source]*sqlite.Cache{}
 	c.paths = map[store.Source]string{}
+	c.keys = map[store.Source]store.Source{}
 	c.order = nil
 	c.combined = nil
 	c.combinedPath = ""
@@ -414,7 +474,7 @@ func (c *caches) Close() error {
 // place attached twice, Engine.ReadStores): their rows are found through
 // the first name, so each row is a hit once and is labelled with that name
 // (issue #1). A file that several names were opened at holds each row once
-// per name, so it is searched once and a row id counts once.
+// (folderKey), so it is searched once.
 func (c *caches) search(ctx context.Context, table row.Table, match string, limit int, shadowed map[store.Source]bool) ([]opsmemory.Hit, error) {
 	return c.searchWith(ctx, table, match, limit, shadowed, false)
 }
@@ -429,11 +489,9 @@ func (c *caches) searchWith(ctx context.Context, table row.Table, match string, 
 	c.mu.Lock()
 	order := append([]store.Source(nil), c.order...)
 	combined := c.combined
-	sharers := map[string]int{} // file path -> names opened at it
 	paths := make(map[store.Source]string, len(c.paths))
 	for s, p := range c.paths {
 		paths[s] = p
-		sharers[p]++
 	}
 	c.mu.Unlock()
 	var out []opsmemory.Hit
@@ -473,10 +531,9 @@ func (c *caches) searchWith(ctx context.Context, table row.Table, match string, 
 			continue
 		}
 		searchedPath[path] = true
-		// A shared file returns each row once per name it holds it under:
-		// ask for that many hits per wanted one, then keep each id once.
-		want := limit - len(out)
-		got, err := hits(f, ctx, table, match, want*max(sharers[path], 1))
+		// One copy of each row per file (folderKey); an id is still kept
+		// once, should an older lore's copy not be dropped yet.
+		got, err := hits(f, ctx, table, match, limit-len(out))
 		if err != nil {
 			return nil, err
 		}

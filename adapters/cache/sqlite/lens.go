@@ -55,12 +55,27 @@ const MaxLensSources = 10
 // "<table>_all" views then keeps only the rows applied under that name,
 // so a query over both names sees each row once per name, not once per
 // name per name.
+//
+// Key is the `_source` value the source's rows are kept under in a Shared
+// file, when that is not Name: a store folder's file keys its rows by the
+// folder's identity, the same whatever name each checkout attaches it
+// under (devco D-933, public issue #142), so the file holds each row once.
+// "" means Name.
 type LensSource struct {
 	Name     string
 	Path     string
+	Key      string
 	Combined bool
 	Deleted  bool
 	Shared   bool
+}
+
+// key is the `_source` value s's own rows are kept under (Key, or Name).
+func (s LensSource) key() string {
+	if s.Key != "" {
+		return s.Key
+	}
+	return s.Name
 }
 
 // ownSource reports whether the file's rows carry their own source name
@@ -563,7 +578,7 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 		}
 		part := head + sel + ` FROM ` + st.fromSQL(tq)
 		if l.sources[st.src].Shared && !l.sources[st.src].ownSource() && slices.Contains(st.cols, colSource) {
-			part += ` WHERE "` + colSource + `" = ` + literal(l.sources[st.src].Name)
+			part += ` WHERE "` + colSource + `" = ` + literal(l.sources[st.src].key())
 		}
 		parts = append(parts, part)
 	}
@@ -612,7 +627,7 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 	}
 	body := "SELECT " + sel + ` FROM ` + first.fromSQL(tq)
 	if own {
-		body += ` WHERE "` + colSource + `" = ` + literal(l.sources[first.src].Name)
+		body += ` WHERE "` + colSource + `" = ` + literal(l.sources[first.src].key())
 	}
 	if del != nil {
 		dsel, dErr := m.columns(n, plainCols, del.cols)

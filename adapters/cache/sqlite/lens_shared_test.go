@@ -70,3 +70,40 @@ func TestLensSharedPlainViewOncePerRow(t *testing.T) {
 		}
 	}
 }
+
+// TestLensSharedReadsTheFolderKey (devco D-933, public issue #142): a
+// store folder's file keeps its rows under the folder's key, not the
+// attach name, so a Shared source that names its Key lists those rows
+// (labelled with its own name) and none of an older lore's name-keyed
+// copies.
+func TestLensSharedReadsTheFolderKey(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	prj := newPrj()
+	c := f.open("folder.db")
+	rows := []store.Row{f.memory(newMem(), prj, "first note"), f.memory(newMem(), prj, "second note")}
+	f.apply(c, "@sto_acme/main/app", "1", rows...)
+	f.apply(c, "kb/app", "1", rows...) // an older lore's copy under an attach name
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	src := LensSource{Name: "notes", Key: "@sto_acme/main/app", Path: filepath.Join(f.dir, "folder.db"), Shared: true}
+	l, err := OpenLensWith(context.Background(), []LensSource{src}, LensOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = l.Close() }()
+	for q, want := range map[string]string{
+		`SELECT COUNT(*) FROM memories`:                            "2",
+		`SELECT COUNT(*) FROM memories_all`:                        "2",
+		`SELECT COUNT(*) FROM memories_all WHERE source = 'notes'`: "2",
+	} {
+		res, qerr := l.Query(context.Background(), q)
+		if qerr != nil {
+			t.Fatalf("%s: %v", q, qerr)
+		}
+		if got := res.Rows[0][0].String(); got != want {
+			t.Errorf("%s = %s, want %s (the folder key's rows once, labelled with the name)", q, got, want)
+		}
+	}
+}

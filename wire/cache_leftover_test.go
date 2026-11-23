@@ -1,11 +1,9 @@
 package wire
 
 import (
-	"path/filepath"
 	"slices"
 	"testing"
 
-	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -100,23 +98,5 @@ func TestOpenDropsRowsUnderANameNoAttachmentUses(t *testing.T) {
 	repo, home, _ := leftoverFixture(t)
 	if srcs := sourcesAfterOpen(t, repo, home); slices.Contains(srcs, leftoverName) {
 		t.Fatalf("the open left the rows under %s: %v", leftoverName, srcs)
-	}
-}
-
-// TestOpenKeepsANameAnotherCheckoutUses (devco D-930): a cache file is
-// shared by every checkout using the folder, each under its own name; a
-// name another live checkout's last open used (its cache use record) is
-// that checkout's copy and stays, so the two checkouts never empty each
-// other's rows.
-func TestOpenKeepsANameAnotherCheckoutUses(t *testing.T) {
-	t.Parallel()
-	repo, home, path := leftoverFixture(t)
-	other := gitRepo(t)
-	root := filepath.Join(home, cacheDir)
-	if err := sqlite.RecordUse(root, other, []sqlite.Use{sqlite.UseOf(root, path, string(leftoverName), false)}); err != nil {
-		t.Fatal(err)
-	}
-	if srcs := sourcesAfterOpen(t, repo, home); !slices.Contains(srcs, leftoverName) {
-		t.Fatalf("the open dropped the rows another checkout uses: %v", srcs)
 	}
 }

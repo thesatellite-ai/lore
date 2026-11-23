@@ -233,7 +233,7 @@ func (a *App) lensSources(ctx context.Context, st *state, sc lensScope) ([]sqlit
 		if err != nil {
 			return nil, nil, err
 		}
-		srcs = append(srcs, sqlite.LensSource{Name: string(name), Path: path})
+		srcs = append(srcs, sqlite.LensSource{Name: string(name), Path: path, Key: string(st.caches.keyOf(name))})
 	}
 	// a folder attached for this command (lensfolders.go, idfolder.go) is
 	// read through a cache file other opens fill under their own names, as
@@ -266,13 +266,14 @@ func onePerPlace(srcs []sqlite.LensSource) []sqlite.LensSource {
 // markShared sets Shared on every store's source (never the repo's own
 // cache, which no other open fills): a store's cache file is one per place
 // on the machine, and every open that reads the place applies its rows
-// under the name it gives it (a repo's `acme/org`, `--store acme`'s
-// `acme`, a store clone's `<org>/<folder>`), each once in _source. A
-// source's part of the `<table>_all` views keeps only the rows applied
-// under its own name, so a query sees each row once whichever opens
-// filled the file before (devco D-473: `sql --store acme` after reads
-// from a repo and a clone listed every rule three times). Two names on
-// one file in this lens are dropped to one by onePerPlace.
+// under the folder's key (caches.folderKey, devco D-933; an older lore
+// applied them under each name it gave the place: a repo's `acme/org`,
+// `--store acme`'s `acme`, a store clone's `<org>/<folder>`). A source's
+// part of the `<table>_all` views keeps only the rows under its key, so a
+// query sees each row once even in a file an older lore filled (devco
+// D-473: `sql --store acme` after reads from a repo and a clone listed
+// every rule three times). Two names on one file in this lens are dropped
+// to one by onePerPlace.
 func markShared(srcs []sqlite.LensSource) {
 	for i := range srcs {
 		srcs[i].Shared = srcs[i].Name != string(store.SourceRepo)
