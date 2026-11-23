@@ -1,10 +1,7 @@
 name: CI
 
-# Manual only: the local `task check` is the real gate. To run on every
-# push, replace on: below with
-#   push:
-#     branches: [main]
-#   pull_request:
+# Manual only, a quick build and test. The full gate is gate.yml (every GATE_STEPS step on every
+# push to dev and on demand; docs/DEVELOPMENT.md "Where the full gate runs").
 on:
   workflow_dispatch:
 

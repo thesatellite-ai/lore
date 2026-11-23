@@ -13,17 +13,19 @@ import (
 // TestAmbientIdentityChild must check: "clean" or "kept".
 const envAmbientProbe = "LORE_TEST_AMBIENT_PROBE"
 
-// ambientProbeEnv is the shell a coding agent gives `go test`: tool
-// markers, the generic AI_AGENT, an OS user and identity overrides.
+// ambientProbeEnv is the shell a coding agent or a CI runner gives `go
+// test`: tool markers, the generic AI_AGENT, CI markers, an OS user and
+// identity overrides.
 var ambientProbeEnv = map[string]string{
 	"CLAUDECODE": "1", "CLAUDE_CODE_CHILD_SESSION": "1", "CLAUDE_CODE_SESSION_ID": "s-1",
 	"AI_AGENT": "claude-code", "CODEX_THREAD_ID": "t-1", "USER": "dev", "USERNAME": "dev",
 	identity.EnvHuman: "1", identity.EnvActor: "agent:x", identity.EnvSession: "s-2",
+	"CI": "true", "GITHUB_ACTIONS": "true", "GITLAB_CI": "true",
 }
 
-// TestTestBinaryIgnoresAmbientAgent (devco:D-908): a test binary started
-// from a coding agent's shell resolves the same identity as one started
-// from a bare shell: the agent's markers, $USER and the identity overrides
+// TestTestBinaryIgnoresAmbientAgent (devco:D-908, D-919): a test binary started
+// from a coding agent's shell or a CI runner resolves the same identity, and
+// sees no CI run, as one started from a bare shell: the agent's markers, $USER and the identity overrides
 // it inherited are dropped when it starts. A child the test starts with
 // explicit markers keeps them (the parent already cleaned, so cliWorld's
 // claude() still detects its agent), and LORE_TEST_AMBIENT_AGENT=1 keeps
@@ -82,6 +84,9 @@ func TestAmbientIdentityChild(t *testing.T) {
 		if got := os.Getenv(k) != ""; got != (want == "kept") {
 			t.Errorf("%s set = %v, want %s", k, got, want)
 		}
+	}
+	if ci := InCIEnv(); ci != (want == "kept") {
+		t.Errorf("CI run detected = %v, want %s (devco:D-919: a CI runner's markers reached the tests)", ci, want)
 	}
 	if agent := r.IsAgent(); agent != (want == "kept") {
 		t.Errorf("agent detected = %v (%s), want %s", agent, r.Tool, want)

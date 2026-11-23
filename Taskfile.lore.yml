@@ -106,20 +106,24 @@ vars:
   # load stays under the core count, so no step waits for a core and the kernel does not spend
   # the CPU switching between hundreds of runnable processes (the old e2e stage averaged a load
   # of 161 and spent 42 % of its CPU in the kernel). One full gate runs at a time (testlock).
-  # Override for another machine: GATE_SLOTS=12 task check.
-  GATE_SLOTS: '{{env "GATE_SLOTS" | default "40"}}'
+  # GATE_SLOTS in the environment wins; unset, it is five sixths of this machine's cores (40 of
+  # 48 on the gate server, 3 of 4 on a small runner), at least 1.
+  GATE_SLOTS:
+    sh: 'if [ -n "${GATE_SLOTS:-}" ]; then echo "$GATE_SLOTS"; else n=$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || echo 48); s=$((n * 5 / 6)); [ "$s" -ge 1 ] || s=1; echo "$s"; fi'
   # Every step of the gate (lore:check), one per line: name, the cores it keeps busy on average
   # (its share of GATE_SLOTS: CPU seconds / wall seconds measured in the gate of 2026-11-11 at
   # the -parallel, JOBS or SHARDS it is given), the task with its vars. Heaviest first, so the
   # steps that take longest at their share never start late: tests/lib/gate-parallel.sh starts
   # them in this order as cores free up. The journeys are long walks of a few serial tests, so
   # they cost few cores but go early too. Each e2e step builds its own binary under its own name (lore-team,
-  # lore-docs-verify, lore-setupe2e, lore-machines-<part>, lore-journeys-<part>, userscen's temp
+  # lore-docs-verify, lore-setupe2e-<i>of<n>, lore-machines-<part>, lore-journeys-<part>, userscen's temp
   # dir), so no two steps write one file. lore:check:fast runs a subset of these same lines
   # (FAST_MAP). tests/lib/gate-steps.sh reads the table.
   GATE_STEPS: |
     userscen          13  test:scen PARALLEL=13
-    setupe2e          11  test:setupe2e:run PARALLEL=10
+    setupe2e          4   test:setupe2e:shard SHARD=1/3 PARALLEL=4
+    setupe2e-2        4   test:setupe2e:shard SHARD=2/3 PARALLEL=4
+    setupe2e-3        4   test:setupe2e:shard SHARD=3/3 PARALLEL=4
     stories-ww-writes 4   test:stories:ww:writes PARALLEL=12
     stories-ww-stand  4   test:stories:ww:stand PARALLEL=12
     stories-ww        3   test:stories:ww PARALLEL=6
@@ -194,6 +198,11 @@ vars:
   # step in a separate shell). TASKFILE is this file's own path, so it works when this file is
   # included as `lore:` and when it is run alone with `task -t Taskfile.lore.yml`.
   SELF: 'task --taskfile "{{.TASKFILE}}"'
+  # The machine-wide test lock in front of the long suites: `testlock` when it is on PATH (a shared
+  # box installs it so two full suites never run at once), else nothing. A plain machine, a
+  # contributor's laptop or a GitHub Actions runner has none and runs the suite directly.
+  TESTLOCK:
+    sh: command -v testlock >/dev/null 2>&1 && echo testlock || true
 
 tasks:
   build:
@@ -381,7 +390,7 @@ tasks:
   check:
     desc: "FULL tier, THE gate — run before every push (the pre-push hook enforces it; a small fix may land on lore:check:fast, then this runs on main): bound the Go cache, compile once, build, then every step of GATE_STEPS (lint, cross-builds, the Windows and macOS compile check of every package with its tests (cross-tests), tidy, docsync, every unit test, the race set, every end-to-end suite) under the GATE_SLOTS load budget, heaviest first; per-step logs, wall and CPU times in tmp/check"
     cmds:
-      - testlock task --taskfile "{{.TASKFILE}}" check:run
+      - '{{.TESTLOCK}} task --taskfile "{{.TASKFILE}}" check:run'
 
   check:run:
     desc: "Body of lore:check WITHOUT the machine-wide test lock; call lore:check instead"
@@ -478,7 +487,7 @@ tasks:
   test:team:
     desc: "Team e2e suite (LORE_TEAM_SPEC.md): real binary, real git, many actors. Not built yet = PENDING (skip); LORE_TEAM_STRICT=1 fails pending tests, LORE_TEAM_FORCE=1 skips the capability probe. Extra go test flags after --"
     cmds:
-      - testlock task lore:test:team:run -- {{.CLI_ARGS}}
+      - '{{.TESTLOCK}} task lore:test:team:run -- {{.CLI_ARGS}}'
 
   test:team:run:
     desc: "Body of lore:test:team WITHOUT the machine-wide test lock (every test of tests/teame2e); call lore:test:team instead"
@@ -535,7 +544,7 @@ tasks:
   test:setupe2e:
     desc: "Setup page e2e suite (tests/setupe2e, tag setupe2e): every valid machine shape (1764) through the real binary's HTTP API. Fails, never skips, when a world or the server cannot start. Narrow with SETUPE2E_ONLY=<text in the shape name>"
     cmds:
-      - testlock task lore:test:setupe2e:run
+      - '{{.TESTLOCK}} task lore:test:setupe2e:run'
 
   test:setupe2e:run:
     desc: "Body of lore:test:setupe2e WITHOUT the machine-wide test lock; call lore:test:setupe2e instead"
@@ -552,10 +561,20 @@ tasks:
       # PARALLEL: the gate passes its share of the load budget.
       - "SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel {{.PARALLEL | default 32}} -timeout $({{.TEST_TIME}} 60m) ./tests/setupe2e/"
 
+  test:setupe2e:shard:
+    desc: "One part of tests/setupe2e for the gate (SHARD=<i>/<n>, SETUPE2E_SHARD): part 1 runs every test and its share of TestAPIMatrix's shapes, the other parts only their share of the shapes. Why: the whole suite took over 35 minutes on a 4-core CI runner, past one job's limit"
+    vars:
+      SETUPE2E_BIN: "{{.BIN_DIR}}/lore-setupe2e-{{.SHARD | replace \"/\" \"of\"}}"
+      FILTER: '{{if hasPrefix "1/" .SHARD}}{{else}}-run ''^TestAPIMatrix$''{{end}}'
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -o {{.SETUPE2E_BIN}} ./cmd/lore
+      - "SETUPE2E_SHARD={{.SHARD}} SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel {{.PARALLEL | default 32}} -timeout $({{.TEST_TIME}} 60m) {{.FILTER}} ./tests/setupe2e/"
+
   test:machines:
     desc: "Real-machine suite (tests/machines, tag machines): homes shaped like real users' (fresh, v0.1.17, migrated with *.migrated backups, several gh accounts and ssh aliases with a key without .pub, org member, setups disabled/trashed/purged) and every valid 4-step setup lifecycle sequence on them, checking after each step that nothing purged or trashed is offered, disabled never applies, config check knows every key, doctor --all reports, and repo files are 0644 / ~/.lore owner-only. MACHINES_FULL=1 runs every sequence on every shape"
     cmds:
-      - testlock task lore:test:machines:run
+      - '{{.TESTLOCK}} task lore:test:machines:run'
 
   test:machines:run:
     desc: "Body of lore:test:machines WITHOUT the machine-wide test lock; call lore:test:machines instead"
@@ -881,7 +900,7 @@ tasks:
   test:team:race:
     desc: "Team e2e race tests repeated (default -count=5; override: task lore:test:team:race -- -count=10)"
     cmds:
-      - testlock task lore:test:team:race:run -- {{.CLI_ARGS}}
+      - '{{.TESTLOCK}} task lore:test:team:race:run -- {{.CLI_ARGS}}'
 
   test:team:race:run:
     desc: "Body of lore:test:team:race WITHOUT the machine-wide test lock; call lore:test:team:race instead (the gate's teame2e-race step)"
@@ -897,7 +916,7 @@ tasks:
   docs:examples:
     desc: "Run every docs/team example against the real binary (tests/team/docs/run-examples.sh), then refresh the pages from the transcripts (paste.py); fails when an example misbehaves or a page is stale. One section: task lore:docs:examples -- agents"
     cmds:
-      - testlock task lore:docs:examples:run -- {{.CLI_ARGS}}
+      - '{{.TESTLOCK}} task lore:docs:examples:run -- {{.CLI_ARGS}}'
 
   docs:examples:run:
     desc: "Body of lore:docs:examples WITHOUT the machine-wide test lock; call lore:docs:examples instead"
@@ -913,7 +932,7 @@ tasks:
   docs:examples:core:
     desc: "Run every non-team docs example (tests/docs/run-examples.sh, one file per section in tests/docs/sections) against the real binary, then refresh docs/** (not docs/team) from the transcripts and regenerate the commands index; fails when an example misbehaves. One section: task lore:docs:examples:core -- start"
     cmds:
-      - testlock task lore:docs:examples:core:run -- {{.CLI_ARGS}}
+      - '{{.TESTLOCK}} task lore:docs:examples:core:run -- {{.CLI_ARGS}}'
 
   docs:examples:core:run:
     desc: "Body of lore:docs:examples:core WITHOUT the machine-wide test lock; call lore:docs:examples:core instead"
@@ -1051,9 +1070,9 @@ tasks:
         done
 
   lint:fmt:
-    desc: "Fail when a Go file is not gofmt-formatted"
+    desc: "Fail when a Go file is not gofmt-formatted by the gofmt of go.mod's Go version (tests/lib/gofmt.sh), the version the Actions gate installs"
     cmds:
-      - 'test -z "$(gofmt -l .)" || (echo "gofmt failures:"; gofmt -l .; exit 1)'
+      - 'out=$(tests/lib/gofmt.sh -l .) && test -z "$out" || (echo "gofmt failures (the gofmt of the Go version in go.mod; fix with task lore:fmt):"; echo "$out"; exit 1)'
 
   lint:staticcheck:
     desc: "staticcheck on the root module (skipped with a note when it is not installed)"
@@ -1061,9 +1080,9 @@ tasks:
       - if which staticcheck > /dev/null; then staticcheck ./...; else echo "staticcheck not installed; skipping"; fi
 
   fmt:
-    desc: "Format code"
+    desc: "Format code with the gofmt of go.mod's Go version (tests/lib/gofmt.sh), so lint:fmt and the Actions gate agree"
     cmds:
-      - gofmt -w .
+      - tests/lib/gofmt.sh -w .
 
   tui:run:
     desc: "Launch the lore TUI on the current project's stores (flags after --, e.g. task lore:tui:run -- --kind task)"

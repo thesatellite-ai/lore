@@ -9,6 +9,7 @@ package setupe2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,9 +23,16 @@ import (
 func TestAPIMatrix(t *testing.T) {
 	shapes := AllShapes()
 	only := os.Getenv(envOnly)
+	part, parts, err := parseShard(os.Getenv(envShard))
+	if err != nil {
+		t.Fatal(err)
+	}
 	ran := 0
-	for _, s := range shapes {
+	for i, s := range shapes {
 		if only != "" && !strings.Contains(s.Name(), only) {
+			continue
+		}
+		if !inShard(i, part, parts) {
 			continue
 		}
 		ran++
@@ -33,7 +41,7 @@ func TestAPIMatrix(t *testing.T) {
 			runAPIShape(t, s)
 		})
 	}
-	if only == "" || strings.Contains(teamPushCase, only) {
+	if (only == "" || strings.Contains(teamPushCase, only)) && part == 1 {
 		ran++
 		t.Run(teamPushCase, func(t *testing.T) {
 			t.Parallel()
@@ -44,6 +52,23 @@ func TestAPIMatrix(t *testing.T) {
 		t.Fatalf("no shape matched %s=%q", envOnly, only)
 	}
 }
+
+// parseShard reads SETUPE2E_SHARD, "<i>/<n>" with 1 <= i <= n; empty is
+// part 1 of 1 (every shape). Anything else is an error naming the variable,
+// never a silently smaller run.
+func parseShard(v string) (part, parts int, err error) {
+	if v == "" {
+		return 1, 1, nil
+	}
+	if _, err := fmt.Sscanf(v, "%d/%d", &part, &parts); err != nil || parts < 1 || part < 1 || part > parts || fmt.Sprintf("%d/%d", part, parts) != v {
+		return 0, 0, fmt.Errorf("%s=%q: want <i>/<n> with 1 <= i <= n, for example %s=2/3", envShard, v, envShard)
+	}
+	return part, parts, nil
+}
+
+// inShard reports whether the shape at place i of AllShapes runs in part
+// part of parts.
+func inShard(i, part, parts int) bool { return i%parts == part-1 }
 
 // teamPushCase is the admin walk of TestAPIMatrix: the shapes walk a solo
 // setup, so the Start a team step's push question gets its own case.

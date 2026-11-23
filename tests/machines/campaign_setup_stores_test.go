@@ -250,7 +250,10 @@ func csBareRepoStore(t *testing.T, m *Machine, name, repo string) {
 	if s := csOK(t, m.Lore(t, "", "setup", "show", name, "--json")); !strings.Contains(s, repo) {
 		t.Errorf("setup show lacks the bare repository %s: %s", repo, s)
 	}
-	out, err := exec.Command("/usr/bin/git", "--git-dir", repo, "ls-tree", "-r", "--name-only", "HEAD").CombinedOutput()
+	// Every branch, not HEAD: the bare repository's HEAD names git's default branch of the
+	// machine that ran git init (init.defaultBranch, master when unset), which need not be
+	// the branch lore pushed the store to.
+	out, err := exec.Command("/usr/bin/git", "--git-dir", repo, "log", "--branches", "--name-only", "--format=").CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "lore-store.yaml") {
 		t.Errorf("the store's first commit is not in the bare repository: %v %s", err, out)
 	}

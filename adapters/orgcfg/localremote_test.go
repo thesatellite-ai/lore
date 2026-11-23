@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -27,7 +28,10 @@ func TestReadRemotesLocalKey(t *testing.T) {
 	}
 	norm, local, notes := readRemotes(ctx, dir)
 	top, _ := workTreeTop(ctx, dir)
+	// LocalRemotes is sorted; the temp folder's key sorts before or after
+	// _local/srv/... depending on where TMPDIR is, so want is sorted too.
 	want := []string{"_local" + filepath.ToSlash(filepath.Join(filepath.Dir(top), "kit")), "_local/srv/git/acme/tools"}
+	sort.Strings(want)
 	if len(norm) != 0 || !reflect.DeepEqual(local, want) || len(notes) != 3 {
 		t.Fatalf("readRemotes = %v, %v, notes %v; want no hosted, %v, three notes", norm, local, notes, want)
 	}

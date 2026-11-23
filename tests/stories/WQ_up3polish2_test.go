@@ -204,7 +204,10 @@ func TestStoryWQUp3Polish2(t *testing.T) {
 		if removed != 2 {
 			t.Fatalf("want both agents' actors rows in the store clone, found %d", removed)
 		}
-		wqGit(t, clone, "commit", "-q", "-m", "test: the agents' actors rows have not arrived")
+		// The commit runs as the admin on that laptop: the store clone's lore hook checks it with
+		// the lore on the laptop's PATH, the binary under test (a raw git from the test's own
+		// environment found no lore on a clean runner, or a different installed lore elsewhere).
+		wqGitAs(t, m.Environ(), clone, "commit", "-q", "-m", "test: the agents' actors rows have not arrived")
 		known := wKnownActors(m.LoreIn(pc, "actor", "list", "--json").Out())
 		for _, c := range []struct {
 			dir  string
@@ -241,6 +244,21 @@ func wqCounts(t *testing.T, r teamharness.Result) (sent, received int) {
 func wqGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// wqGitAs runs real git in dir with env, a machine's environment
+// (Machine.Environ: its HOME, git identity and the binary under test first on
+// PATH), for a git command that runs lore's hooks (commit, push): the hook
+// must find the lore under test, as it does on that machine.
+func wqGitAs(t *testing.T, env []string, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
 	}

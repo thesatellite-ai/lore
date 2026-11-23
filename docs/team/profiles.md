@@ -655,9 +655,9 @@ $ lore machine label --label 'office desktop'
 lore: wrote ~/.lore/personal/agency/actors/act_4f89…b64b.json (store me/agency)
 lore: wrote ~/.lore/personal/agency/machines/mch_ada3…c018.json (store me/agency)
 ✓ machine mch_017941fe labelled "office desktop"
-$ lore machine list | cut -c1-38
-ID            LABEL           HOST    
-mch_017941fe  office desktop  devbox  
+$ lore machine list | cut -c1-30
+ID            LABEL           
+mch_017941fe  office desktop  
 $ lore machine show --id mch_017941fe | grep -e '^mch_' -e 'label:' -e 'host:' -e 'runtime:' -e 'last_write:'
 mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff
   label:     office desktop

@@ -11,6 +11,13 @@ package wire
 // a person's write recorded an agent session, which put the person on the
 // roster as a side effect, only when an agent was above `go test`).
 //
+// The same holds for a CI runner's markers (CI, GITHUB_ACTIONS, ...,
+// ciMarkers): lore changes behaviour in CI (reads skip the live fetch,
+// wire/host/live_still.go; no read server; no upgrade notice), so tests that
+// expected a read to fetch failed only when `go test` ran on a CI runner
+// (devco:D-919). The agent detection list already held GITHUB_ACTIONS but not
+// the plain CI that the CI checks read.
+//
 // The same holds for the identity chain's own fallbacks: $USER (or
 // %USERNAME%) names the person when nothing else does, and a bare shell
 // (env -i, a service) has neither, so a test that named no person passed
@@ -19,7 +26,7 @@ package wire
 // So in a test binary (testing.Testing(), which is never true in a shipped
 // binary, AGENT_IDENTITY 10.6) lore:
 //   - drops, once when the binary starts, every variable detection reads
-//     (agentdetect.AllowedNames), the identity overrides LORE_ACTOR,
+//     (agentdetect.AllowedNames), the CI markers (ciMarkers), the identity overrides LORE_ACTOR,
 //     LORE_HUMAN and LORE_SESSION, and USER / USERNAME (the OS-user
 //     fallback): only what a test sets itself (t.Setenv,
 //     a child's cmd.Env) counts. It then sets envTestAmbientCleared, which
@@ -56,10 +63,12 @@ func init() {
 }
 
 // ambientIdentityEnv is every variable clearAmbientIdentity drops: the ones
-// agent and CI detection read, the identity overrides and the OS-user
-// fallback (identity.OSUserEnv).
+// agent and CI detection read, the CI markers lore's CI checks read
+// (ciMarkers, inCIEnv), the identity overrides and the OS-user fallback
+// (identity.OSUserEnv).
 func ambientIdentityEnv() []string {
-	return append(append(agentdetect.AllowedNames(nil), identity.EnvActor, identity.EnvHuman, identity.EnvSession), identity.OSUserEnv...)
+	names := append(agentdetect.AllowedNames(nil), ciMarkers...)
+	return append(append(names, identity.EnvActor, identity.EnvHuman, identity.EnvSession), identity.OSUserEnv...)
 }
 
 // clearAmbientIdentity drops ambientIdentityEnv from this process unless

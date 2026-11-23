@@ -17,6 +17,11 @@ const (
 	envLore = "SETUPE2E_LORE"
 	// envOnly runs only the shapes whose Name contains this text.
 	envOnly = "SETUPE2E_ONLY"
+	// envShard runs one part of TestAPIMatrix's shapes, "<i>/<n>" (1 <= i <= n): the shapes
+	// whose place in AllShapes is i-1 modulo n, plus the team push case in part 1. The gate
+	// splits the matrix into parts (lore:test:setupe2e:shard) so each fits one CI runner's
+	// time limit; unset runs every shape.
+	envShard = "SETUPE2E_SHARD"
 )
 
 // loreBin is the binary every world runs.

@@ -23,6 +23,17 @@ new_world() {
   mkdir -p "$HOSTS" "$SHIM" "$HOMES"
   # Hooks lore installs call plain `lore` from PATH: put the binary under test first.
   ln -sf "$LORE_BIN" "$SHIM/lore"
+  # The host's programs (/usr/local/bin, /usr/bin, /bin in PATH order), minus the secrets
+  # managers lore's setup probes (adapters/probe secretsHints): which of them a machine has
+  # installed changed the setup steps' detected values (a CI runner ships aws, az and gcloud),
+  # so the examples always run on a machine without them.
+  HOSTBIN="$WORLD/hostbin"
+  mkdir -p "$HOSTBIN"
+  local d
+  for d in /bin /usr/bin /usr/local/bin; do
+    [ -d "$d" ] && ln -sf "$d"/* "$HOSTBIN"/ 2>/dev/null
+  done
+  rm -f "$HOSTBIN"/aws "$HOSTBIN"/az "$HOSTBIN"/bw "$HOSTBIN"/gcloud "$HOSTBIN"/gopass "$HOSTBIN"/op "$HOSTBIN"/vault
 }
 if [ -n "${WORLD:-}" ]; then new_world "$WORLD"; fi
 
@@ -75,7 +86,7 @@ CFG
 # LORE_NO_DETECT=1 (loretest builds only): agent detection sees nothing, so whoami lines do not depend on where the run starts.
 envfor() {
   local home="$HOMES/$1"
-  echo env -i "HOME=$home" "PATH=$SHIM:/usr/local/bin:/usr/bin:/bin" "USER=$1" "TERM=dumb" "NO_COLOR=1" \
+  echo env -i "HOME=$home" "PATH=$SHIM:$HOSTBIN" "USER=$1" "TERM=dumb" "NO_COLOR=1" \
     "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8" "LORE_HUMAN=1" "LORE_NO_DETECT=1"
   # The gate's Go runtime settings for lore processes (LORE_E2E_GOENV, Taskfile.lore.yml; the
   # names tests/e2eenv allows): they change what a lore process costs, never what it prints.

@@ -1,8 +1,19 @@
 name: Gate
 
-# The full gate (owner 2026-11-23): every step of `task check` (GATE_STEPS in Taskfile.lore.yml), one matrix job per
-# step, on every push to dev and on demand for any ref. Releases wait for this run on the exact release commit.
-# This first version runs the build and the lint steps only; the matrix of every GATE_STEP follows.
+# The full gate (owner 2026-11-23): every step of `task lore:check` (GATE_STEPS in Taskfile.lore.yml),
+# one matrix job per step on a plain ubuntu runner, on every push to dev and on demand for any ref:
+#
+#   gh workflow run gate.yml --repo thesatellite-ai/lore --ref <branch> [-f ref=<commit>]
+#
+# The steps job reads GATE_STEPS (tests/lib/gate-matrix.sh), so a step added there runs here with no
+# edit of this file. Two more jobs: docs-index (re-run the docs examples and the commands index; the
+# tree must stay clean) and recall (the recall benchmark, a REPORT that never fails the run). The
+# final job, summary, writes PASS/FAIL and wall time per step into the run summary and fails when
+# any step failed, so the run's conclusion is the gate's verdict. Releases wait for this run on the
+# exact release commit and find it by its title (run-name) and its `summary` job: keep both names.
+# internal/repoguard/actionsgate_test.go guards the shape. docs/DEVELOPMENT.md "Two test tiers".
+run-name: Gate ${{ inputs.ref || github.sha }}
+
 on:
   push:
     branches: [dev]
@@ -17,26 +28,235 @@ permissions:
   contents: read
 
 concurrency:
-  group: gate-${{ github.event.inputs.ref || github.sha }}
+  group: gate-${{ inputs.ref || github.sha }}
   cancel-in-progress: false
 
+env:
+  # The commit every job tests.
+  GATE_REF: ${{ inputs.ref || github.sha }}
+  # The Taskfile's own GOFLAGS (-trimpath -buildvcs=false) apply to every task; the warm job and
+  # the steps then share one Go build cache.
+  TASK_VERSION: "3.53.1"
+  STATICCHECK_VERSION: "2026.2.2"
+  DOCSYNC_VERSION: "v0.1.10"
+
 jobs:
-  build-lint:
+  steps:
+    name: steps
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.inputs.ref || github.sha }}
+          ref: ${{ env.GATE_REF }}
+      - id: matrix
+        name: GATE_STEPS to matrix
+        run: |
+          m=$(tests/lib/gate-matrix.sh Taskfile.lore.yml)
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+          echo "$m" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]), "steps")'
+
+  # Compile the module once (plain and race, lore:build:warm) and save Go's build cache for this
+  # commit, so the matrix jobs do not each compile lore and the SQLite translation from nothing.
+  warm:
+    name: warm
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GATE_REF }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: gofmt
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: gate-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            gate-go-${{ hashFiles('go.sum') }}-
+            gate-go-
+      - name: install task
+        run: tests/lib/ci-tools.sh task
+      - name: warm the build cache
         run: |
-          out=$(gofmt -l $(git ls-files '*.go'))
-          if [ -n "$out" ]; then echo "::error::gofmt needs to be run on:"; echo "$out"; exit 1; fi
-      - name: go vet
-        run: go vet ./...
-      - name: go build
+          task --taskfile Taskfile.lore.yml build:warm
+          CGO_ENABLED=0 go build -tags loretest -o /dev/null ./cmd/lore
+          CGO_ENABLED=0 go build -o /dev/null ./cmd/lore
+
+  gate:
+    name: ${{ matrix.step }}
+    needs: [steps, warm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.steps.outputs.matrix) }}
+    steps:
+      # Full history with tags: the compatibility tests build lore v0.1.17 from its tag.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GATE_REF }}
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: gate-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            gate-go-${{ hashFiles('go.sum') }}-
+            gate-go-
+      - name: install tools
         env:
-          CGO_ENABLED: "0"
-        run: go build -o "$RUNNER_TEMP/lore" ./cmd/lore
+          GATE_STEP: ${{ matrix.step }}
+        run: tests/lib/ci-tools.sh task "$GATE_STEP"
+      - name: run ${{ matrix.step }}
+        id: run
+        env:
+          GATE_STEP: ${{ matrix.step }}
+          GATE_TASK: ${{ matrix.task }}
+        run: tests/lib/ci-step.sh "$GATE_STEP" "$GATE_TASK"
+      - name: upload result
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gate-result-${{ matrix.step }}
+          path: tmp/check/result-${{ matrix.step }}.tsv
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: upload log
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gate-log-${{ matrix.step }}
+          path: tmp/check/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The docs examples and the commands index re-run from scratch: every transcript and
+  # docs/reference index they write must equal the committed one (the tree stays clean).
+  docs-index:
+    name: docs-index
+    needs: [warm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GATE_REF }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: gate-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            gate-go-${{ hashFiles('go.sum') }}-
+            gate-go-
+      - name: install task
+        run: tests/lib/ci-tools.sh task
+      - name: run docs-index
+        run: tests/lib/ci-step.sh docs-index "docs:examples:core:run"
+      - name: upload result
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gate-result-docs-index
+          path: tmp/check/result-docs-index.tsv
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: upload log
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gate-log-docs-index
+          path: tmp/check/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The recall gate (lore:bench:recall) as a REPORT: its numbers go into the run summary, and a
+  # failure here never fails the run (continue-on-error).
+  recall:
+    name: recall
+    needs: [warm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GATE_REF }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: gate-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            gate-go-${{ hashFiles('go.sum') }}-
+            gate-go-
+      - name: install tools
+        run: tests/lib/ci-tools.sh task recall
+      - name: run recall
+        run: tests/lib/ci-step.sh recall "bench:recall"
+      - name: upload result
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gate-result-recall
+          path: tmp/check/result-recall.tsv
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: upload log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: gate-log-recall
+          path: tmp/check/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The verdict: one row per step (PASS / FAIL / NO RESULT, wall seconds) in the run summary; fails
+  # when any step but the recall report did not pass. Keep the name: releases read this job.
+  summary:
+    name: summary
+    needs: [steps, warm, gate, docs-index, recall]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GATE_REF }}
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: gate-result-*
+          path: results
+          merge-multiple: true
+      # shell: bash runs with -eo pipefail (a step without shell: runs bash -e only), so the
+      # verdict's exit status survives the tee into the summary page.
+      - name: verdict
+        shell: bash
+        env:
+          STEPS_MATRIX: ${{ needs.steps.outputs.matrix }}
+          WARM_RESULT: ${{ needs.warm.result }}
+        run: tests/lib/ci-summary.sh results | tee -a "$GITHUB_STEP_SUMMARY"

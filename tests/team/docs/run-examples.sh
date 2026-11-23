@@ -1149,8 +1149,10 @@ s_profiles() {
 
   note "machines"
   on tomas work/acme-hub "lore machine label --label 'office desktop'"
-  # Only the columns that do not describe the build machine's hardware (and never its OS user).
-  on tomas work/acme-hub "lore machine list | cut -c1-38"
+  # Only the ID and LABEL columns: the others describe the build machine (its hostname, whose
+  # length also sets the HOST column's width, its hardware and OS user); machine show below
+  # prints the host, which the runner turns into "devbox".
+  on tomas work/acme-hub "lore machine list | cut -c1-30"
   local m; m=$(grep -o 'mch_[0-9a-f]\{8\}' <<<"$LAST_OUT" | head -1 || true)
   on tomas work/acme-hub "lore machine show --id ${m:-mch_missing} | grep -e '^mch_' -e 'label:' -e 'host:' -e 'runtime:' -e 'last_write:'"
   on tomas work/acme-hub "lore machine label --label ''"

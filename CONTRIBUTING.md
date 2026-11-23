@@ -19,6 +19,8 @@ task check:fast           # fast tier (~5 min): enough to land a small fix; the 
 task check                # full tier, the gate — must pass before you push anything bigger
 ```
 
+The full gate also runs on GitHub Actions (`.github/workflows/gate.yml`): on every push to `dev`, and on demand for a branch with `gh workflow run gate.yml --ref <branch>`; releases wait for it. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#two-test-tiers).
+
 The landing rule (a small fix after `check:fast`, then `task check:after-land` on the landed `main`, a failure there fixed at once; a release always on a full pass) is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#landing-checkfast-for-a-small-fix-the-full-gate-on-main).
 
 Before a release, or after changing sync, leak checks, claims or landing, also run the manual [real-repo trial](docs/team/real-repo-trial.md) (`task lore:trial:github`) against two empty private repos of your own. It is never part of `task check` or CI.

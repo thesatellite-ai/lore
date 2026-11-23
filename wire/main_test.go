@@ -8,13 +8,14 @@ import (
 	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
-// TestMain first removes the CI variables (ciMarkers) the test process
-// inherited: under them lore behaves as in CI on purpose (redacted output,
-// findings hidden, a CI session per run, no host name in the profile), so a
-// test that wants CI sets them itself. Without this every such test failed
-// on a CI runner and passed on a workstation.
+// The CI variables (ciMarkers) the test process inherited are already gone
+// when TestMain runs: detect_testbinary.go drops them in every test binary
+// that links wire (under them lore behaves as in CI on purpose: redacted
+// output, findings hidden, a CI session per run, no host name in the
+// profile, reads without the live fetch), so a test that wants CI sets them
+// itself.
 //
-// It then starts every SQLite cache that wire's tests create from an empty
+// TestMain starts every SQLite cache that wire's tests create from an empty
 // template built once per test process (sqlite.UseEmptyTemplates) instead of
 // running the full table DDL for each new cache: most of a test world's
 // start-up cost. The cache is derived data and Open still syncs the copied
@@ -25,9 +26,6 @@ import (
 // is this same test binary, so it passes through this TestMain too and gets
 // the same templates.
 func TestMain(m *testing.M) {
-	for _, k := range ciMarkers {
-		_ = os.Unsetenv(k)
-	}
 	sqlite.UseEmptyTemplates()
 	// the macOS temp-folder shape on every system (devco D-413): $TMPDIR
 	// is a symlink to the real folder, as macOS /var links to

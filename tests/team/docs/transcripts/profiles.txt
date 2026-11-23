@@ -384,9 +384,9 @@ tomas (work/acme-hub)$ lore machine label --label 'office desktop'
 lore: wrote ~/.lore/personal/agency/actors/act_4f89f5fcb1d81152bdf3f52979ebb64b.json (store me/agency)
 lore: wrote ~/.lore/personal/agency/machines/mch_ada321d27469d49114b952fdeed0c018.json (store me/agency)
 ✓ machine mch_017941fe labelled "office desktop"
-tomas (work/acme-hub)$ lore machine list | cut -c1-38
-ID            LABEL           HOST    
-mch_017941fe  office desktop  devbox  
+tomas (work/acme-hub)$ lore machine list | cut -c1-30
+ID            LABEL           
+mch_017941fe  office desktop  
 tomas (work/acme-hub)$ lore machine show --id mch_017941fe | grep -e '^mch_' -e 'label:' -e 'host:' -e 'runtime:' -e 'last_write:'
 mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff
   label:     office desktop
