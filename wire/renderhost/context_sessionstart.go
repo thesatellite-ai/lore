@@ -138,6 +138,16 @@ func (h *Host) contextSessionStart(ctx context.Context) (contextResult, error) {
 	stamp := sessionStartFile(h.loreHome())
 	last := readSessionStart(stamp)
 	now := h.now()
+	// devco:D-921: the private files the tool imports at start are brought
+	// up to date with their rows first (a rule edited or archived by a
+	// write outside this checkout, or by an older lore), so the session
+	// never starts on an edited rule's old text.
+	if wd, werr := os.Getwd(); werr == nil {
+		h.rerenderStaleQuiet(ctx, wd) // LORE.md, under the sync's rules (a clean committed render is held)
+		if _, rerr := h.RefreshPrivateStaleIn(ctx, wd); rerr != nil {
+			h.logHookError(rerr)
+		}
+	}
 	// D-494: the always-on rules first, where no LORE.md carries them.
 	picks, pinnedBytes := h.sessionStartPinned(ctx)
 	pinned := make(map[string]bool, len(picks))

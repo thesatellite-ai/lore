@@ -273,6 +273,8 @@ func run(ctx context.Context, args []string) int {
 	hooks = append(hooks, doctorRenderHook(rend, wd, home))
 	// after `lore sync`: private renders rebuilt, scope rename hints (syncrender.go).
 	hooks = append(hooks, syncRenderHook(rend, wd))
+	// after any other write: stale private render files refreshed (writerender.go, devco:D-921).
+	hooks = append(hooks, writeRenderHook(rend, wd))
 	base.Context.Render, base.Context.RenderHistory, base.Context.Fetch, base.Context.Setup = rend, rend, rend, &lateSetup{r: rend}
 	repoInit := &lateInit{} // init.go: repo.init gets the command host once it is built
 	base.Context.RepoInit = repoInit
