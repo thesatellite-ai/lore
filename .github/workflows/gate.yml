@@ -27,8 +27,11 @@ on:
 permissions:
   contents: read
 
+# Pushes to one branch share one group: the run already going finishes, and of the pushes that arrive meanwhile
+# only the newest waits (GitHub cancels an older pending run in the group), so a burst of landings tests the
+# newest commit next instead of queueing one full matrix per push. Dispatched runs group by the ref they test.
 concurrency:
-  group: gate-${{ inputs.ref || github.sha }}
+  group: ${{ github.event_name == 'push' && format('gate-push-{0}', github.ref) || format('gate-{0}', inputs.ref || github.sha) }}
   cancel-in-progress: false
 
 env:
