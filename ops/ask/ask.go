@@ -560,14 +560,19 @@ var textTables = []struct{ table, title, body, extra, until string }{
 
 // Columns of a text statement line: kind ('row' or 'ref'), then for a row
 // its table, id, place, title, text, date (COALESCE(extra, created_at)),
-// imported, superseded-by, valid-until and the lowered "title text" the
+// imported, superseded-by, valid-until, the lowered "title text" the
 // words are found in (NULL when the title or the text is NULL, which no
-// word matches, as LIKE on NULL does not); for a ref its entity table,
-// entity id and the resource id it references.
+// word matches, as LIKE on NULL does not), and its created_at and
+// updated_at (which copy of an id two stores hold answers: pickLines);
+// for a ref its entity table, entity id and the resource id it references.
 const (
 	colKind, colTable, colID, colPlace, colTitle, colBody, colAt, colImported, colSuperseded, colUntil, colLower = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+	colCreated, colUpdated                                                                                       = 11, 12
 	colRefID                                                                                                     = 3
-	textCols                                                                                                     = 11
+	// textCols is the fewest cells a line has; colCreated and colUpdated
+	// follow when the statement reads them (a line without them keeps the
+	// nearest store's copy, newerCopy)
+	textCols = 11
 )
 
 // textStatement is the statement reading the text tables' rows that pass
@@ -591,14 +596,14 @@ func textStatement(cond string, refIDs []string) string {
 			superseded = "COALESCE(m.superseded_by_id, '')"
 			where = append(where, "m.archived_at IS NULL")
 		}
-		stmt := "SELECT 'row', '" + t.table + "', m.id, m.place, COALESCE(" + t.title + ", ''), COALESCE(" + t.body + ", ''), COALESCE(" + t.extra + ", m.created_at), " + imported + ", " + superseded + ", COALESCE(" + t.until + ", ''), lower(" + t.title + " || ' ' || " + t.body + ")" +
+		stmt := "SELECT 'row', '" + t.table + "', m.id, m.place, COALESCE(" + t.title + ", ''), COALESCE(" + t.body + ", ''), COALESCE(" + t.extra + ", m.created_at), " + imported + ", " + superseded + ", COALESCE(" + t.until + ", ''), lower(" + t.title + " || ' ' || " + t.body + "), COALESCE(m.created_at, ''), COALESCE(m.updated_at, '')" +
 			" FROM " + t.table + "_all m"
 		if len(where) > 0 {
 			stmt += " WHERE " + strings.Join(where, " AND ")
 		}
 		parts = append(parts, stmt)
 	}
-	refs := "SELECT 'ref', entity_table, entity_id, ref_id, '', '', '', 0, '', '', NULL FROM row_refs_all"
+	refs := "SELECT 'ref', entity_table, entity_id, ref_id, '', '', '', 0, '', '', NULL, '', '' FROM row_refs_all"
 	switch {
 	case refIDs == nil:
 	case len(refIDs) == 0:
@@ -697,16 +702,9 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 		}
 	}
 	c = corpusOf(res.Rows)
-	seen := make(map[string]bool, len(c.rows))
-	for _, row := range res.Rows {
-		if len(row) < textCols || cell(row[colKind]) != "row" {
-			continue
-		}
+	for i := range pickLines(res.Rows) {
+		row := res.Rows[i]
 		id := cell(row[colID])
-		if seen[id] {
-			continue // nearest store first
-		}
-		seen[id] = true
 		if f.answers(row, id) {
 			r := c.rows[c.at[id]]
 			r.Refs = refs[id]

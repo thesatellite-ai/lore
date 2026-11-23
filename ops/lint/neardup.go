@@ -80,7 +80,7 @@ func nearDupRows(all map[row.Table][]sourced) []sourced {
 			}
 		}
 	}
-	return out
+	return oneCopyEach(out) // devco:D-929: two copies of one row are copied_id, not a near duplicate
 }
 
 // nearDuplicates reports each pair of rows that repeat each other, once,

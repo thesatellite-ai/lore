@@ -103,7 +103,8 @@ func (e *Engine) dropMoveLeftovers(live []copyHit) []copyHit {
 }
 
 // hideMoveLeftovers drops from rows (one store's list of table) the rows a
-// move to another attached store left behind: that store lists the row. A
+// move to another attached store left behind: that store lists the row
+// (and the stale copies of a row another store holds newer, staleCopyOf). A
 // store that cannot be read is passed over (its rows were not moved here
 // as far as this read can tell).
 func (e *Engine) hideMoveLeftovers(ctx context.Context, source store.Source, table row.Table, rows []row.Row) []row.Row {
@@ -133,7 +134,9 @@ func (e *Engine) hideMoveLeftovers(ctx context.Context, source store.Source, tab
 			if derr != nil {
 				continue
 			}
-			if e.leftoverOf(source, rows[i], moved) {
+			// devco:D-929: a stale copy of one row (stale_copy.go) is
+			// listed at its newest copy, as a move leftover at the moved one
+			if e.leftoverOf(source, rows[i], moved) || e.staleCopyOf(ctx, source, rows[i], name, moved) {
 				drop[i] = true
 			}
 		}

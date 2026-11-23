@@ -73,7 +73,7 @@ func (e *Engine) ListIDs(ctx context.Context, source store.Source, table row.Tab
 
 // dropListedLeftovers is hideMoveLeftovers for a few rows: each row's id
 // is looked up in the other attached stores (getRow) instead of listing
-// their whole table, with the same rule (leftoverOf).
+// their whole table, with the same rules (leftoverOf, staleCopyOf).
 func (e *Engine) dropListedLeftovers(ctx context.Context, source store.Source, table row.Table, rows []row.Row) []row.Row {
 	if len(rows) == 0 || len(e.order) < 2 || table == "" {
 		return rows
@@ -89,7 +89,7 @@ func (e *Engine) dropListedLeftovers(ctx context.Context, source store.Source, t
 				continue // not there, or unreadable: passed over as hideMoveLeftovers does
 			}
 			moved, derr := decode(ctx, sr)
-			if derr == nil && e.leftoverOf(source, r, moved) {
+			if derr == nil && (e.leftoverOf(source, r, moved) || e.staleCopyOf(ctx, source, r, name, moved)) { // devco:D-929
 				return true
 			}
 		}

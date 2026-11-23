@@ -50,7 +50,7 @@ const (
 // Codes lists every finding code.
 func Codes() []Code {
 	return []Code{UnknownScheme, DanglingRef, VarOldName, VarShadowed, VarShareableDiffers,
-		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate}
+		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate, CopiedID}
 }
 
 // ManyTimeEntries is where lint warns that a task should be split (TQ4,
@@ -175,6 +175,8 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	out = append(out, metaFindings(all)...)
 	// devco D-926: rows that repeat each other, every archivable kind
 	out = append(out, nearDuplicates(nearDupRows(all), false)...)
+	// devco D-929: one row live in two stores (store adopt keeps ids)
+	out = append(out, copiedIDs(all)...)
 	// SECRETS 5.2: stale holder labels
 	out = append(out, holderFindings(all)...)
 	secrets, err := o.secretScan(ctx, all) // SQ12: re-scan with today's team rules
@@ -214,7 +216,7 @@ func (o ops) rowsOf(ctx context.Context, tables []row.Table) (map[row.Table][]so
 	out := map[row.Table][]sourced{}
 	// devco:R-14: reads mask a stored secret match; secret_found must see
 	// the stored text to report it.
-	ctx = engine.WithRawRead(ctx)
+	ctx = engine.WithEveryCopy(engine.WithRawRead(ctx)) // devco:D-929: copied_id sees both copies
 	for _, t := range tables {
 		for _, src := range engine.ReadStoresOf(o.env) {
 			rs, err := o.env.List(ctx, src, t)

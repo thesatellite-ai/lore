@@ -114,6 +114,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	b.RepoAddresses = a.doctorRepoAddresses(ctx, warn, note)
 	a.doctorDuplicateImports(ctx, warn)
 	a.doctorNearDuplicates(ctx, warn) // devco D-926: an import and its rewrite, both live
+	a.doctorCopiedIDs(ctx, warn)      // devco D-929: one row live in two stores
 	a.doctorTaskTree(ctx, warn)
 	a.doctorMetaQuarantine(ctx, warn)
 	a.doctorSecretRulesOff(ctx, note)
@@ -208,6 +209,22 @@ func (a *App) doctorNearDuplicates(ctx context.Context, warn func(string)) {
 		return
 	}
 	warn(string(opslint.NearDuplicate) + ": " + strconv.Itoa(len(found)) + " pair(s) of live rows say the same thing (an import and its rewrite, a copy in two folders), so both copies are rendered and found; each pair with the command that archives the older one: lore lint --code " + string(opslint.NearDuplicate))
+}
+
+// doctorCopiedIDs counts the rows live in two stores (devco D-929, bug
+// hunt H-187: `lore store adopt` keeps ids, so an edit reached one copy and
+// search kept finding the other's old text) and names the lint command
+// that lists each with the command that keeps one copy.
+func (a *App) doctorCopiedIDs(ctx context.Context, warn func(string)) {
+	found, err := opslint.FindCopiedIDs(ctx, a)
+	if err != nil {
+		warn(string(opslint.CopiedID) + ": the rows could not be read: " + err.Error())
+		return
+	}
+	if len(found) == 0 {
+		return
+	}
+	warn(string(opslint.CopiedID) + ": " + strconv.Itoa(len(found)) + " row(s) live in two stores (lore store adopt and a copied row file keep ids), so an edit reaches one copy only; list, search and ask show the newest; each with the command that keeps one copy: lore lint --code " + string(opslint.CopiedID))
 }
 
 // doctorTaskTree is the sub-task tree check (TASK 6.13): cycles, orphans,

@@ -131,7 +131,7 @@ func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Re
 	}
 	var hits []Located
 	for _, src := range engine.ReadStoresOf(env) {
-		rows, lerr := env.List(ctx, src, sp.Table)
+		rows, lerr := env.List(engine.WithEveryCopy(ctx), src, sp.Table) // devco:D-929: every copy of a matching row
 		if lerr != nil {
 			return Result{}, lerr
 		}

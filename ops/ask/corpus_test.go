@@ -252,7 +252,7 @@ func TestKeptCorporaBoundedAndCounted(t *testing.T) {
 	txt := func(s string) value.Value { v, _ := value.TextOf(s); return v }
 	lines := func(n int) [][]value.Value {
 		body := fmt.Sprintf("corpus %d: the ferry timetable", n)
-		return [][]value.Value{{txt("row"), txt("memories"), txt(fmt.Sprintf("mem_c%d", n)), txt("me/life"), txt(""), txt(body), txt("2026-11-01T00:00:00.000000000Z"), txt("0"), txt(""), txt(""), txt(body)}}
+		return [][]value.Value{{txt("row"), txt("memories"), txt(fmt.Sprintf("mem_c%d", n)), txt("me/life"), txt(""), txt(body), txt("2026-11-01T00:00:00.000000000Z"), txt("0"), txt(""), txt(""), txt(body), txt("2026-11-01T00:00:00Z"), txt("2026-11-01T00:00:00Z")}}
 	}
 	first := corpusOf(lines(0))
 	ci := first.index(nil)

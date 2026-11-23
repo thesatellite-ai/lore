@@ -210,7 +210,9 @@ func (o ops) planMany(ctx context.Context, in MoveIn) (ManyMover, bulkPlan, erro
 		if !ok {
 			continue
 		}
-		rows, lerr := mm.List(ctx, from, t)
+		// devco:D-929: every copy the store holds, a stale one too (the
+		// copy lint's copied_id fix moves out)
+		rows, lerr := mm.List(engine.WithEveryCopy(ctx), from, t)
 		if lerr != nil {
 			return nil, bulkPlan{}, lerr
 		}

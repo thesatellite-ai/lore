@@ -71,6 +71,10 @@ func textFixture(t *testing.T) Query {
 		('dec_1', 'me/work', 'Pick Postgres for lumen', 'Because WHY not', '2026-11-12T00:00:00.000000000Z', NULL, NULL),
 		('dec_2', 'me/work', NULL, 'lumen with no title', '2026-11-12T00:00:00.000000000Z', NULL, NULL),
 		('dec_3', 'me/work', 'Kestrel', 'decide on kestrel', '2026-11-03T00:00:00.000000000Z', 'dec_4', NULL)`)
+	// every row view has updated_at (the version ask's pickLines compares)
+	for _, tbl := range []string{"memories", "incidents", "decisions", "rules", "patterns", "hotfixes"} {
+		stmts = append(stmts, `ALTER TABLE `+tbl+`_all ADD COLUMN updated_at TEXT`)
+	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
 			t.Fatalf("%v\n%s", err, s)

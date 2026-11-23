@@ -119,16 +119,10 @@ func corpusOf(lines [][]value.Value) *corpus {
 		return c
 	}
 	c = &corpus{at: map[string]int{}}
-	for _, row := range lines {
-		if len(row) < textCols || cell(row[colKind]) != "row" {
-			continue
-		}
-		id := cell(row[colID])
-		if _, dup := c.at[id]; dup {
-			continue // nearest store first
-		}
+	for i := range pickLines(lines) {
+		id := cell(lines[i][colID])
 		c.at[id] = len(c.rows)
-		c.rows = append(c.rows, rowOfLine(row, id))
+		c.rows = append(c.rows, rowOfLine(lines[i], id))
 	}
 	corpusMu.Lock()
 	if len(corpusKept) >= maxKeptCorpora {
