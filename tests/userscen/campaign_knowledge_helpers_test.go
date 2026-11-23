@@ -24,17 +24,18 @@ import (
 
 // campKnowCRUDNouns are the nouns whose commands share the generic CRUD
 // shape; campKnowVerbs lists each noun's verbs as `lore <noun> --help`
-// names them (the inventory of the knowledge area, 2026-11-08).
+// names them (the inventory of the knowledge area, 2026-11-08; every kind
+// archives and unarchives and techdoc edits since devco:D-924, H-202).
 var campKnowVerbs = map[string][]string{
-	"architecturenote": {"add", "delete", "edit", "list", "search", "show"},
-	"behaviour":        {"add", "delete", "edit", "list", "search", "show"},
-	"cookbookrecipe":   {"add", "delete", "edit", "list", "search", "show"},
+	"architecturenote": {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
+	"behaviour":        {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
+	"cookbookrecipe":   {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
 	"decision":         {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
 	"directive":        {"install", "show"},
 	"explain":          {"run"},
 	"handoff":          {"ack", "add", "delete", "list", "search", "show"},
 	"hotfix":           {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
-	"incident":         {"add", "delete", "edit", "list", "search", "show"},
+	"incident":         {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
 	"lint":             {"run"},
 	"memory":           {"add", "archive", "delete", "edit", "invalidate", "list", "move", "search", "show", "unarchive"},
 	"pattern":          {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
@@ -43,9 +44,9 @@ var campKnowVerbs = map[string][]string{
 	"prompt":           {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
 	"rule":             {"add", "approve", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
 	"snapshot":         {"add", "archive", "delete", "list", "search", "show", "unarchive"},
-	"suggestion":       {"add", "delete", "edit", "list", "search", "show"},
-	"tastepref":        {"add", "delete", "edit", "list", "search", "show"},
-	"techdoc":          {"add", "delete", "list", "search", "show"},
+	"suggestion":       {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
+	"tastepref":        {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
+	"techdoc":          {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
 	"why-context":      {"show"},
 }
 

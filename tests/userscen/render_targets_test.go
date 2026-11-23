@@ -268,8 +268,14 @@ func TestRenderUserProfileFromConfig(t *testing.T) {
 		t.Errorf("an at-style user profile at the root imports .lore/LORE.md: %q", got)
 	}
 	// The row may name a user profile; render wires it with the built-ins.
+	// The policy write re-renders LORE.md for the new targets (devco:D-921,
+	// H-202), so the render after it finds the file current and wires the
+	// pointers; the file carries codex's budget.
 	c.MustLore("policy", "set", "context.targets", "mytool,codex", "--yes")
-	c.MustLore("render").Says(t, "budget 16000 codex", filepath.FromSlash("docs/MYTOOL.md")+" (pointer present)", "AGENTS.md")
+	c.MustLore("render").Says(t, filepath.FromSlash("docs/MYTOOL.md")+" (pointer present)", "AGENTS.md")
+	if md := renderRead(t, c, renderLoreMD); !strings.Contains(md, "budget codex 16000 bytes") {
+		t.Errorf("LORE.md is rendered for codex's 16000 budget:\n%s", md)
+	}
 
 	// The profile disappears from this machine's config (a teammate's
 	// row, a cleaned config): render refuses and names the profile.

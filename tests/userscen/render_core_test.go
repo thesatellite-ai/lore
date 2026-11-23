@@ -214,8 +214,12 @@ func TestRenderReadOnlyModesWriteNothing(t *testing.T) {
 	// After a render: each read-only mode leaves every file as it is.
 	c.MustLore("render")
 	c.WriteFile("CLAUDE.md", "# my own notes\n")
+	// H-202: a write at the project root re-renders an untracked LORE.md
+	// (devco:D-921, D-936); one run in a subfolder leaves it stale until
+	// the next render or commit: the stale copy every mode below must
+	// leave as it is.
+	c.In("src").MustLore("rule", "add", "--body", "a rule added after the render", "--severity", "must")
 	before := renderSnapshot(c, files...)
-	c.MustLore("rule", "add", "--body", "a rule added after the render", "--severity", "must")
 	for _, args := range [][]string{{"--dry-run"}, {"--report"}, {"--report", "--scopes"}, {"--trend"}, {"--dry-run", "--target", "claude_code"}} {
 		c.MustLore(append([]string{"render"}, args...)...)
 		renderSameFiles(t, fmt.Sprintf("render %v", args), before, renderSnapshot(c, files...))
@@ -331,8 +335,10 @@ func TestRenderLargeRuleSetStaysInBudget(t *testing.T) {
 	}
 	// The inverse: deleting most rules brings LORE.md back under the warn
 	// level, and --check passes.
+	// H-202: deleted from a subfolder, so the write leaves the root's
+	// LORE.md stale (a write at the root re-renders it, devco:D-921).
 	for _, id := range ids[8:] {
-		c.MustLore("rule", "delete", id, "--yes")
+		c.In("src").MustLore("rule", "delete", id, "--yes")
 	}
 	// The deletes made the rendered LORE.md stale (SOURCE_OF_TRUTH row
 	// 10): --check fails for that, not for the budget, until a render.

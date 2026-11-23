@@ -176,6 +176,19 @@ func TestKnowledgeTechdocLifecycle(t *testing.T) {
 		t.Fatalf("techdoc list: %+v", l)
 	}
 	c.Lore("techdoc", "add").Fails(t, 20, "name")
+	// edit, archive and unarchive (devco:D-924; inventory H-202): an
+	// edit changes the base URL, an archived doc leaves list, unarchive
+	// brings it back
+	c.Lore("techdoc", "edit", "--id", add.ID, "--base-url", "https://pkg.go.dev/std/v2").OK(t)
+	c.Lore("techdoc", "show", add.ID).OK(t).Says(t, "https://pkg.go.dev/std/v2")
+	c.Lore("techdoc", "archive", add.ID).OK(t)
+	if l := th.DecodeJSON[docs](t, c.Lore("techdoc", "list", "--json")); l.Count != 0 {
+		t.Fatalf("techdoc list after archive: %+v", l)
+	}
+	c.Lore("techdoc", "unarchive", add.ID).OK(t)
+	if l := th.DecodeJSON[docs](t, c.Lore("techdoc", "list", "--json")); l.Count != 1 || l.Data[0].BaseURL != "https://pkg.go.dev/std/v2" {
+		t.Fatalf("techdoc list after unarchive: %+v", l)
+	}
 	c.Lore("techdoc", "delete", add.ID).Fails(t, th.ExitNeedsConfirm, "E_NEEDS_CONFIRM")
 	c.Lore("techdoc", "delete", add.ID, "--yes").OK(t)
 	if l := th.DecodeJSON[docs](t, c.Lore("techdoc", "list", "--json")); l.Count != 0 {

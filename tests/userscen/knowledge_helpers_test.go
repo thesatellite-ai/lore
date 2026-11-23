@@ -39,14 +39,14 @@ var knowKinds = []knowKind{
 	{noun: "pattern", prefix: "pat", table: "patterns", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, archive: true, creator: true, textBody: true},
 	{noun: "playbook", prefix: "pbk", table: "playbooks", addTitle: true, titleKey: "name", editFlag: "--name", canEdit: true, archive: true, creator: true, textBody: true},
 	{noun: "prompt", prefix: "prm", table: "prompts", addTitle: true, titleKey: "name", editFlag: "--name", canEdit: true, archive: true, creator: true, textBody: true},
-	{noun: "architecturenote", prefix: "anr", table: "architecture_notes", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, creator: true, textBody: true},
-	{noun: "cookbookrecipe", prefix: "cbr", table: "cookbook_recipes", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, creator: true, textBody: true},
-	{noun: "incident", prefix: "inc", table: "incidents", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, creator: true, textBody: true},
-	{noun: "tastepref", prefix: "tst", table: "taste_prefs", canEdit: true, creator: true, textBody: true},
-	{noun: "behaviour", prefix: "bhv", table: "behaviours", addTitle: true, titleKey: "name", editFlag: "--name", canEdit: true, creator: true, textBody: true},
+	{noun: "architecturenote", prefix: "anr", table: "architecture_notes", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, archive: true, creator: true, textBody: true},
+	{noun: "cookbookrecipe", prefix: "cbr", table: "cookbook_recipes", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, archive: true, creator: true, textBody: true},
+	{noun: "incident", prefix: "inc", table: "incidents", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, archive: true, creator: true, textBody: true},
+	{noun: "tastepref", prefix: "tst", table: "taste_prefs", canEdit: true, archive: true, creator: true, textBody: true},
+	{noun: "behaviour", prefix: "bhv", table: "behaviours", addTitle: true, titleKey: "name", editFlag: "--name", canEdit: true, archive: true, creator: true, textBody: true},
 	{noun: "snapshot", prefix: "snp", table: "snapshots", addTitle: true, titleKey: "title", archive: true, creator: true, textBody: true},
-	{noun: "workflow", prefix: "wfl", table: "workflows", addTitle: true, titleKey: "name", editFlag: "--name", canEdit: true, textBody: true},
-	{noun: "suggestion", prefix: "sug", table: "suggestions", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, creator: true, textBody: true},
+	{noun: "workflow", prefix: "wfl", table: "workflows", addTitle: true, titleKey: "name", editFlag: "--name", canEdit: true, archive: true, textBody: true},
+	{noun: "suggestion", prefix: "sug", table: "suggestions", addTitle: true, titleKey: "title", editFlag: "--title", canEdit: true, archive: true, creator: true, textBody: true},
 }
 
 // knowAdded is the --json answer of every `lore <noun> add`.

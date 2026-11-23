@@ -213,14 +213,13 @@ scope:        1 rules, 1 hotfixes, 0 memories in full; 3341 of 32000 bytes (prof
 ```
 <!-- /example -->
 
-`lore render --trend` shows how big each render was over the last 14 days, how fast LORE.md grows and when it reaches its budget. It writes nothing:
+`lore render --trend` shows how big each render was over the last 14 days, how fast LORE.md grows and when it reaches its budget. Renders in a row that leave the file with the same text (a write keeps LORE.md current, then `lore render` finds it unchanged) are one line, at the newest of them. It writes nothing:
 
 <!-- example: render#render-trend -->
 ```console
 # alice, in website
 $ lore render --trend
 .lore/LORE.md: renders in the last 14 days (budget 32000 bytes, profile claude_code)
-  2026-11-02 10:00     3341 bytes
   2026-11-02 10:00     3341 bytes
   2026-11-02 10:00     3335 bytes
   2026-11-02 10:00     3341 bytes

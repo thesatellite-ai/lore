@@ -75,12 +75,16 @@ func TestResourcesImportRefusalNamesRowAndReason(t *testing.T) {
 }
 
 // --skip-errors writes the good rows and lists the bad ones with their
-// reason; --dry-run lists the plan and writes nothing.
+// reason; --dry-run lists the plan and writes nothing. A dry run fails
+// where the write fails (devco:D-928, D-931; H-201 docs; H-202): without
+// --skip-errors it is refused like the import, with --skip-errors it lists
+// the plan.
 func TestResourcesImportSkipErrorsAndDryRun(t *testing.T) {
 	c := resRepo(t)
 	resHostService(t, c)
 	f := resWriteFile(t, c, "mixed.yaml", "resources:\n  - kind: host\n    name: a1\n    fields:\n      provider: aws\n  - kind: host\n    name: a2\n    fields:\n      provider: gcp\n")
-	dry := th.DecodeJSON[importJSON](t, c.Lore("resource", "import", f, "--dry-run", "--json"))
+	c.Lore("resource", "import", f, "--dry-run").Fails(t, resExitRefused, "E_RESOURCE_BATCH", "host a2", "nothing written", "--skip-errors")
+	dry := th.DecodeJSON[importJSON](t, c.Lore("resource", "import", f, "--dry-run", "--skip-errors", "--json"))
 	if !dry.DryRun || dry.Errors != 1 || len(dry.Rows) != 2 || dry.Rows[0].Action != "create" || dry.Rows[1].Action != "error" || dry.Batch != "" {
 		t.Fatalf("dry run report = %+v", dry)
 	}

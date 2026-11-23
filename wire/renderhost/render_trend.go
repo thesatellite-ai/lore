@@ -6,6 +6,7 @@ package renderhost
 // the core file reaches its budget. Writes nothing.
 //
 //	--trend ─▶ render_histories rows of the machine store (project, target = --out, last 14 days, oldest first)
+//	        ─▶ one point per run of records with the same text (the newest)
 //	        ─▶ growth/day = (last − first) / days between them
 //	        ─▶ budget (CQ6: smallest target budget) ─▶ days left = (budget − last) / growth
 //	        ─▶ text (one line per render + summary) or --json
@@ -64,6 +65,7 @@ func (h *Host) renderTrend(ctx context.Context, projectID string, f *renderFlags
 			rows = append(rows, r)
 		}
 	}
+	rows = collapseSameText(rows)
 	root, err := os.Getwd()
 	if err != nil {
 		return errs.Wrap(errs.Internal, "getwd", err)
@@ -92,6 +94,25 @@ func (h *Host) renderTrend(ctx context.Context, projectID string, f *renderFlags
 	}
 	fmt.Fprint(f.out(), out.text())
 	return nil
+}
+
+// collapseSameText keeps one point per run of consecutive records (oldest
+// first) that hold the same text: the newest of the run, the last time
+// the file was seen at that size. Why (devco:D-944, H-202): since a write
+// re-renders LORE.md (devco:D-921), the `lore render` after it records
+// the same text again and the trend listed every render twice. Keeping
+// the newest of a run measures growth from the last time the old size was
+// seen, and a later render of unchanged text still moves the last point.
+func collapseSameText(rows []wire.RenderRecord) []wire.RenderRecord {
+	out := make([]wire.RenderRecord, 0, len(rows))
+	for _, r := range rows {
+		if n := len(out); n > 0 && out[n-1].SHA256 == r.SHA256 {
+			out[n-1] = r
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // trendSummary fills growth per day and the projected budget date.

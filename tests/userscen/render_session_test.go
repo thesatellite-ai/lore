@@ -102,13 +102,23 @@ func TestRenderTrendOverDays(t *testing.T) {
 
 	// Renders minutes apart give no rate: a growth from them would be
 	// meaningless, so the trend says what it needs instead.
+	// Two renders of different text (a render of the same text again is
+	// the same point, at its newest time: devco:D-944, H-202).
 	c.A.Advance(15 * 24 * time.Hour)
 	c.MustLore("render")
 	c.A.Advance(5 * time.Minute)
+	c.MustLore("rule", "add", "--body", "Keep the changelog in the same commit as the change")
 	c.MustLore("render")
 	tr = renderTrend(t, c)
 	if len(tr.Renders) != 2 || tr.Growth != 0 || tr.Reach != "" {
 		t.Errorf("two renders minutes apart: no growth, no date: %+v", tr)
+	}
+	// The same text rendered again moves its point to the newest render
+	// and adds no line.
+	c.A.Advance(time.Minute)
+	c.MustLore("render")
+	if again := renderTrend(t, c); len(again.Renders) != 2 || !again.Renders[1].At.Equal(c.A.Now()) {
+		t.Errorf("a render of unchanged text is its run's newest point, no new one: %+v", again.Renders)
 	}
 	c.MustLore("render", "--trend").Says(t, "growth: needs renders at least a day apart")
 
