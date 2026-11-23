@@ -190,6 +190,18 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 	for _, k := range slices.Clone(adopted) {
 		adopted = append(adopted, srcRows.links[k.ID.String()]...)
 	}
+	// D-939: the copies meet only where the repo reads the folder, and
+	// --remove-source leaves none
+	if in.RemoveSource || !a.adoptRepoReadsFolder(ctx, top, src, folderName) {
+		out.HeldTwice = 0
+	}
+	if in.RemoveSource && !in.Move {
+		// D-939: the actor rows a row left in the repo was saved by stay
+		// (--move's D-731 step settles them once the repo is linked)
+		if adopted, err = adoptKeepWriters(top, adopted); err != nil {
+			return opsstores.AdoptOut{}, err
+		}
+	}
 	if in.DryRun {
 		if in.RemoveSource {
 			out.Removed = countPresent(top, adopted) // what the run would delete
@@ -580,6 +592,9 @@ func adoptChanges(ctx context.Context, rows []adoptRow, have []store.Row, pid id
 		}
 		if x.file {
 			adopted = append(adopted, sr.Key())
+		}
+		if (x.file || x.from == fromLive) && engine.CopiesHide(def) && !adoptGone(r) && (!held || !cur.Deleted) {
+			out.HeldTwice++ // the repo keeps it live beside the folder's copy (D-939; Adopt clears it when they never meet)
 		}
 		if !held || (string(cur.Doc) != string(sr.Doc) && !cur.Deleted && cur.HLC.Compare(sr.HLC) < 0) {
 			out.Written++

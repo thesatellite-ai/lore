@@ -137,7 +137,8 @@ func TestStoreAdopt(t *testing.T) {
 		t.Fatal(err)
 	}
 	// tag, memory, two tasks, comment from the files; task, mission from the live ref
-	if dry.Written != 7 || dry.Live != 3 || !dry.DryRun || !slices.Contains(dry.Left, "projects: 1 row (the folder is its own project)") {
+	// D-939: the source repo does not read the folder, so nothing is held twice
+	if dry.Written != 7 || dry.Live != 3 || !dry.DryRun || !slices.Contains(dry.Left, "projects: 1 row (the folder is its own project)") || dry.HeldTwice != 0 || dry.Settle != "" {
 		t.Fatalf("dry run: %+v", dry)
 	}
 	if _, err = adoptRun(t, a, in, false); !errs.Has(err, errs.NeedsConfirm) || !strings.Contains(err.Error(), "copy 7 rows") {

@@ -62,3 +62,28 @@ func TestAdoptCommitCommandQuotesTheRepoPath(t *testing.T) {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
 }
+
+// TestAdoptSettleCommand (devco:D-939): the rows a plain adopt leaves held
+// twice are settled by the same adopt with --remove-source, --from kept
+// and quoted when the path needs it; none held twice, or a run that
+// already removes the source, prints nothing.
+func TestAdoptSettleCommand(t *testing.T) {
+	in := AdoptIn{Target: "acme/client_a", From: "../my app"}
+	if got, want := AdoptSettleCommand(in, 3), "lore store adopt --target acme/client_a --from '../my app' --remove-source --yes"; got != want {
+		t.Fatalf("settle: %q, want %q", got, want)
+	}
+	if got := AdoptSettleCommand(AdoptIn{Target: "acme/client_a"}, 0); got != "" {
+		t.Fatalf("nothing held twice: %q", got)
+	}
+	if got := AdoptSettleCommand(AdoptIn{Target: "acme/client_a", RemoveSource: true}, 2); got != "" {
+		t.Fatalf("--remove-source: %q", got)
+	}
+	o := AdoptOut{Store: "acme", Folder: "client_a", From: "/work/app", Written: 2, HeldTwice: 2, Settle: "lore store adopt --target acme/client_a --remove-source --yes"}
+	if got := o.Text(); !strings.Contains(got, "2 rows now held twice") || !strings.Contains(got, o.Settle) {
+		t.Fatalf("text:\n%s", got)
+	}
+	o.HeldTwice, o.Settle = 0, ""
+	if got := o.Text(); strings.Contains(got, "held twice") {
+		t.Fatalf("nothing held twice, yet:\n%s", got)
+	}
+}

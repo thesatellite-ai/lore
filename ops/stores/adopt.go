@@ -131,6 +131,16 @@ type AdoptOut struct {
 	// Next are the commands left to run, exactly as they run (the repo
 	// commit of the removal when --commit was not given).
 	Next []string `json:"next,omitempty"`
+	// HeldTwice counts the adopted rows the repo keeps live beside their
+	// folder copy (devco:D-939, bug hunt H-200): an adopt without
+	// --remove-source into a folder the repo reads (a folder of a store
+	// it attaches whole), so a command by id on one answers
+	// E_AMBIGUOUS_ID and lore doctor is DEGRADED (copied_id) until one
+	// copy goes. Settle is the one command that settles them all: the
+	// same adopt with --remove-source (the newest copy stays, in the
+	// folder). Both empty when nothing is held twice.
+	HeldTwice int    `json:"held_twice,omitempty"`
+	Settle    string `json:"settle,omitempty"`
 	// Commit is the repo commit --commit made ("" when none).
 	Commit string `json:"commit,omitempty"`
 	DryRun bool   `json:"dry_run,omitempty"`
@@ -224,6 +234,7 @@ func adoptOp(m Manager) op.Entry {
 		plan := in
 		plan.DryRun = true
 		p, err := ad.Adopt(ctx, plan, st, folder)
+		p.Settle = AdoptSettleCommand(in, p.HeldTwice)
 		if err != nil || in.DryRun {
 			return p, err
 		}
@@ -237,8 +248,25 @@ func adoptOp(m Manager) op.Entry {
 			return AdoptOut{}, errs.New(errs.NeedsConfirm, verb+" "+in.Target+": "+q).
 				WithQuestion(q).WithHint("ask the person, then rerun with --yes")
 		}
-		return ad.Adopt(ctx, in, st, folder)
+		out, err := ad.Adopt(ctx, in, st, folder)
+		out.Settle = AdoptSettleCommand(in, out.HeldTwice)
+		return out, err
 	})
+}
+
+// AdoptSettleCommand is the one command that settles the rows an adopt
+// left held twice (devco:D-939): the same adopt with --remove-source,
+// which writes the newer repo copies into the folder and takes the
+// repo's copies out (a diff the person commits). "" when none is.
+func AdoptSettleCommand(in AdoptIn, heldTwice int) string {
+	if heldTwice == 0 || in.RemoveSource {
+		return ""
+	}
+	c := "lore store adopt --target " + cdArg(in.Target)
+	if in.From != "" {
+		c += " --from " + cdArg(in.From)
+	}
+	return c + " --remove-source --yes"
 }
 
 // AdoptCommitCommand is the repo commit of an adoption's removal, as
@@ -314,6 +342,9 @@ func adoptQuestion(p AdoptOut, in AdoptIn) string {
 	if in.RemoveSource {
 		q += "; then " + del
 	}
+	if p.HeldTwice > 0 {
+		q += "; " + plural(p.HeldTwice, "row") + " stay live in the repo too, held twice (commands by id on them ask which copy to keep; --remove-source takes the repo's copies out)"
+	}
 	return q
 }
 
@@ -361,6 +392,7 @@ func (o AdoptOut) Text() string {
 	for _, l := range o.Left {
 		b.WriteString("  left in the repo: " + l + "\n")
 	}
+	b.WriteString(o.heldTwiceText())
 	switch {
 	case o.LiveRemoved > 0 && o.DryRun:
 		b.WriteString("  would take " + plural(o.LiveRemoved, "adopted row") + " off the repo's live ref (refs/lore/live)\n")
@@ -416,4 +448,18 @@ func (o AdoptOut) Text() string {
 		b.WriteString("  " + o.Note + "\n")
 	}
 	return b.String()
+}
+
+// heldTwiceText says the rows the adopt leaves live in the repo and in
+// the folder it reads, and the one command that settles them (D-939).
+func (o AdoptOut) heldTwiceText() string {
+	if o.HeldTwice == 0 || o.Settle == "" {
+		return ""
+	}
+	place := o.Store + "/" + o.Folder
+	n := plural(o.HeldTwice, "row")
+	if o.DryRun {
+		return "  " + n + " would stay live in " + o.From + " too, held twice with " + place + " (this repo reads that folder): commands by id on them would ask which copy to keep (E_AMBIGUOUS_ID) and lore doctor would be DEGRADED (copied_id); adopt and take the repo's copies out in one go: " + o.Settle + "\n"
+	}
+	return "  " + n + " now held twice, in " + o.From + " and in " + place + " (this repo reads that folder): commands by id on them ask which copy to keep (E_AMBIGUOUS_ID) and lore doctor is DEGRADED (copied_id) until one copy goes; settle them all at once (the newest copy stays, in " + place + "; the repo's copies go): " + o.Settle + "\n"
 }

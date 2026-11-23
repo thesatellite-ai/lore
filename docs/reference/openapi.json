@@ -92328,6 +92328,9 @@
                     "from": {
                       "type": "string"
                     },
+                    "held_twice": {
+                      "type": "integer"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -92387,6 +92390,9 @@
                     },
                     "removed": {
                       "type": "integer"
+                    },
+                    "settle": {
+                      "type": "string"
                     },
                     "store": {
                       "type": "string"
