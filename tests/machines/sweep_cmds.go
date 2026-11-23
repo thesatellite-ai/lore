@@ -549,7 +549,7 @@ var notUserRun = map[string]string{
 	"task reassign": whyTaskFixture,
 
 	"task time stop": whyTaskFixture,
-	"batch show":     whyBatch, "batch undo": whyBatch,
+	"batch show":     whyBatch, "batch undo": whyBatch, "batch apply": whyFixtureFile,
 	"link add": whyNoCommit, "link remove": whyNoCommit, "land run": whyNoCommit, "link remap": whyHook,
 	"identity set": whyIdentity, "identity unset": whyIdentity,
 	"store init": whyStoreAdmin, "store folder add": whyStoreAdmin, "store folder remove": whyStoreAdmin, "store adopt": whyStoreAdopt, "store visibility": whyStoreAdmin, "store use": whyStoreUse,

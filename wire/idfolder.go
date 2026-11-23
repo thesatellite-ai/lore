@@ -80,7 +80,12 @@ type idSearch struct {
 // attachFolderOfID is the B2-21 step (see the file comment); the returned
 // search is non-nil when the id was not found anywhere, for the hint.
 func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*idSearch, error) {
-	id := idArg(e, d)
+	return a.attachFolderOfRow(ctx, idArg(e, d))
+}
+
+// attachFolderOfRow is attachFolderOfID for the row id id ("" or no row
+// id: nothing to do). batchundo_folders.go runs it for the rows of a batch.
+func (a *App) attachFolderOfRow(ctx context.Context, id string) (*idSearch, error) {
 	if id == "" {
 		return nil, nil
 	}

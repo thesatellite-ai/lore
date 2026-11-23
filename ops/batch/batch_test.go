@@ -108,8 +108,8 @@ func TestShowKindAndRows(t *testing.T) {
 }
 
 func TestOpsRegister(t *testing.T) {
-	if len(Ops(fakeEnv{})) != 3 { // FA-DEL-3: list, show and undo
-		t.Fatal("want list, show and undo")
+	if len(Ops(fakeEnv{})) != 4 { // FA-DEL-3: list, show and undo; devco:D-925: apply
+		t.Fatal("want list, show, undo and apply")
 	}
 }
 

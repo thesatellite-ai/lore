@@ -39,11 +39,15 @@ const (
 	// KindArchive is `<noun> archive --where` (bug hunt G-7): every
 	// matching row archived as one batch, undone by `lore batch undo`.
 	KindArchive Kind = "archive"
+	// KindApply is `lore batch apply --file` (devco D-925): a file of mixed
+	// writes (adds, edits, archives, metadata) landed as one commit per
+	// store, undone by `lore batch undo`.
+	KindApply Kind = "apply"
 )
 
 // Kinds lists every kind in CLI_REFERENCE order.
 func Kinds() []Kind {
-	return []Kind{KindTask, KindMeta, KindDelete, KindResource, KindImport, KindSecrets, KindArchive}
+	return []Kind{KindTask, KindMeta, KindDelete, KindResource, KindImport, KindSecrets, KindArchive, KindApply}
 }
 
 // Valid reports whether k is one of Kinds.

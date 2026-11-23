@@ -36,6 +36,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -423,7 +424,12 @@ func (o ops) undoCreate(ctx context.Context, u Undoer, id ids.ID[ids.Batch], evs
 		return err
 	}
 	dctx = engine.WithDeleteReason(dctx, "undo of "+id.String())
+	incidental := rosterIncidental(evs)
 	for _, ev := range evs {
+		if incidental && rosterTable(ev.Table) {
+			out.Skipped = append(out.Skipped, Skip{ID: ev.ID.String(), Reason: reasonRosterKept})
+			continue
+		}
 		_, derr := u.Delete(dctx, engine.Ref{Store: ev.Store, Table: ev.Table, ID: ev.ID})
 		switch {
 		case derr == nil:
@@ -438,6 +444,33 @@ func (o ops) undoCreate(ctx context.Context, u Undoer, id ids.ID[ids.Batch], evs
 		out.Into = into.String()
 	}
 	return nil
+}
+
+// reasonRosterKept is the skip reason of a roster row an undo keeps.
+const reasonRosterKept = "kept: the writer's own roster row, made by the batch's first write in that store"
+
+// rosterTable reports the roster tables a write makes for its writer on
+// its first write into a store (the person's actor row, the machine row).
+func rosterTable(t row.Table) bool {
+	return t == schema.TableActors || t == schema.TableMachines
+}
+
+// rosterIncidental reports whether a create batch's roster rows rode along
+// with rows of other tables (devco:D-925): the first write of `lore batch
+// apply` into a store adds the writer's machine (and actor) row under the
+// batch, and undoing the notes must not take the writer out of the
+// roster. A batch that created only roster rows undoes them as before.
+func rosterIncidental(evs []Event) bool {
+	other := false
+	roster := false
+	for _, ev := range evs {
+		if rosterTable(ev.Table) {
+			roster = true
+		} else {
+			other = true
+		}
+	}
+	return roster && other
 }
 
 // Text implements op.Texter.

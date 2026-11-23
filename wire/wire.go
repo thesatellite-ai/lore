@@ -1324,6 +1324,9 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err != nil {
 		return op.Result{}, err
 	}
+	// devco:D-925: batch undo reaches the folders its batch wrote that this
+	// repo does not attach, as a row id does (batchundo_folders.go)
+	a.attachBatchFolders(ctx, e, d)
 	// D-484: a list or search reads every folder of a store the repo
 	// attaches whole, as sql does (readscope.go); attached for this run only
 	var res op.Result

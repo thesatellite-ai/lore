@@ -363,7 +363,7 @@ When the user wants to flag, revisit, or update an EXISTING capture, do NOT crea
 | "Update dec_<id>'s body" / "Edit decision dec_<id>" | `lore decision edit --id dec_<id> --body "<new>"` (direct mutation; no need to show first if user provided the new content) |
 | "Update the X prompt template" | `lore prompt edit --id <X> --body "<new>"` |
 | "Update pattern X" | `lore pattern edit --id <X> --body "<new>"` |
-| "Bulk archive mem_<id>, mem_<id>, mem_<id>" | One `lore memory archive` call per ID (no bulk syntax — emit 3 commands) |
+| "Bulk archive mem_<id>, mem_<id>, mem_<id>" | A few IDs: one `lore memory archive --id <id>` call each. Dozens or more (or a mix of adds, edits, archives and `meta set`): write one JSON line per write to a file and run `lore batch apply --file <file> --dry-run`, then without `--dry-run`: one commit per store instead of one per row; undo with `lore batch undo --id <bat_id>` |
 | "Mission msn_<id> is complete / ship msn_<id>" | `lore mission done --id msn_<id>` (mission has its own `done` verb; do NOT use `task done` for msn_<id> IDs) |
 | "Done with mission msn_<id>" | `lore mission done --id msn_<id>` (mission/handoff have no `archive` — use status transitions: `mission done`, `mission cancel`, `mission pause`/`resume`, `handoff ack`) |
 | "Flag dec_<id> for re-eval (don't archive)" | `lore comment add --on-table decisions --on-id dec_<id> --body "REVISIT: <why>"` (dec_<id> stays active; do NOT create a new decision) |
@@ -659,6 +659,14 @@ lore rule add --severity must --body "<a hard rule from the file>"
 lore decision add --title "<choice>" --body "<the choice and why>"
 lore memory add --body "<a fact worth keeping>"
 lore render
+```
+For more than a handful of rows (an import of hundreds of notes), put one write per line in a JSON-lines file and apply it as one commit per store instead of one commit per row; every line gets the same checks as the single command:
+```bash
+# notes.jsonl: {"op": "memory add", "input": {"to": "<store>/<folder>", "body": "…"}}
+#              {"op": "rule edit", "input": {"id": "rul_…", "body": "…"}}
+#              {"op": "meta set", "input": {"id": "mem_…", "pair": "team=core"}}
+lore batch apply --file notes.jsonl --dry-run   # checks every line, writes nothing
+lore batch apply --file notes.jsonl --yes       # one commit per store; prints the undo
 ```
 
 ### P2 — Capture correction
