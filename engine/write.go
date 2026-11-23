@@ -1247,6 +1247,9 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 		s.addFinish(e, source, rows, evs)
 		return nil, nil
 	}
+	if CheckOnly(ctx) { // D-928: nothing was written, so nothing to cache or audit
+		return nil, nil
+	}
 	e.openMu.Lock()
 	e.settingsMemo = nil // a write reached a store: a settings row may have changed
 	e.openMu.Unlock()
@@ -1393,6 +1396,9 @@ func (e *Engine) writePurge(ctx context.Context, st Attached, p Purger, changes 
 	if err := refuseNarrowedWrite(ctx, st, changes); err != nil {
 		return err // D-617: the run's first write lands where --store names (narrow.go)
 	}
+	if CheckOnly(ctx) { // D-928: a dry run checked everything; nothing is written
+		return checkChanges(ctx, st, changes)
+	}
 	dropSnapshot(ctx, st)
 	defer dropSnapshot(ctx, st) // readsnap.go: the next read sees this write
 	pj, ok := st.Backend.(store.PurgeAuditJournal)
@@ -1430,6 +1436,9 @@ func (e *Engine) writeChanges(ctx context.Context, st Attached, changes []store.
 	}
 	if err := refuseNarrowedWrite(ctx, st, changes); err != nil {
 		return err // D-617: the run's first write lands where --store names (narrow.go)
+	}
+	if CheckOnly(ctx) { // D-928: a dry run checked everything; nothing is written
+		return checkChanges(ctx, st, changes)
 	}
 	ctx = withBatchTrailer(ctx) // XQ1: the commit names its bulk action
 	dropSnapshot(ctx, st)

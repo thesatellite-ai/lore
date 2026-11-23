@@ -71,6 +71,10 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		// a read: no row made on first use (a store folder's project row,
 		// T-11) and no push. The writable check below still runs, as before.
 		cl.access = op.AccessRead
+		// D-928: and as a check-only write, so an operation that previews
+		// by running its real write path fails exactly as the write would,
+		// and one whose preview forgets to stop writes nothing (checkonly.go)
+		ctx = WithCheckOnly(ctx)
 	}
 	named := false
 	for _, tv := range in.Texts() {

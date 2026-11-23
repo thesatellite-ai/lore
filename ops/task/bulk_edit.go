@@ -49,6 +49,17 @@ func (o ops) editOp(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		items[i] = bulk.Item{ID: s.Row.ID.String(), Label: work.Field(s.Row, work.FieldTitle)}
 	}
 	if in.DryRun {
+		// D-928: the dry run runs every task's real edit, check-only (Run
+		// marks a write's preview engine.WithCheckOnly), so a value the
+		// write refuses is refused here with the same code, and nothing
+		// is written.
+		for _, s := range hits {
+			one := in
+			one.Where, one.ID, one.DryRun = nil, s.Row.ID.String(), false
+			if _, eerr := o.edit(engine.WithCheckOnly(ctx), one); eerr != nil {
+				return work.WriteOut{}, errs.Prefix("task edit --where --dry-run: "+s.Row.ID.String()+" would fail (nothing written)", eerr)
+			}
+		}
 		var b strings.Builder
 		b.WriteString("would change " + strconv.Itoa(len(hits)) + " tasks (nothing written, --dry-run):\n")
 		for _, it := range items {
@@ -149,6 +160,16 @@ func (o ops) deleteOp(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 		b.WriteString(" " + s.Row.ID.String() + " " + work.Field(s.Row, work.FieldTitle) + ";")
 	}
 	if in.DryRun {
+		// D-928: the dry run runs every root's real delete, check-only, so
+		// a task the write refuses is refused here with the same code;
+		// confirmed as the write is once bulk.Ask has its yes (a dry run
+		// asks nothing, needsConfirm)
+		cctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
+		for _, s := range roots {
+			if _, derr := work.Delete(cctx, o.env, Noun, table, s.Row.ID, ""); derr != nil {
+				return work.WriteOut{}, errs.Prefix("task delete --where --dry-run: "+s.Row.ID.String()+" would fail (nothing written)", derr)
+			}
+		}
 		return work.WriteOut{Human: "would delete " + b.String() + " (nothing written, --dry-run)\n"}, nil
 	}
 	if err = bulk.Ask(ctx, "delete "+b.String()+" move all of them to the trash?"); err != nil {

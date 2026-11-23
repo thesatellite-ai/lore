@@ -929,6 +929,13 @@ func (o ops) metaSetDry(ctx context.Context, id ids.AnyID, mw engine.MetaWrite, 
 			return RowOut{}, err
 		}
 	}
+	// D-928: then the real write, check-only (Run marks a preview so too):
+	// every value check of the write (a key's type, a strict key's allowed
+	// values, secrets, policy) refuses here with the write's code, and
+	// nothing is written or registered
+	if _, err := o.metaRowWrite(engine.WithCheckOnly(ctx), id, mw, func(row.Row) string { return "" }); err != nil {
+		return RowOut{}, err
+	}
 	return RowOut{ID: id.String(), Store: string(src), DryRun: true, IDs: []string{id.String()},
 		Human: "would set " + strings.Join(names, ", ") + " on " + id.String() + "; nothing written (dry run)\n"}, nil
 }
@@ -986,6 +993,15 @@ func (o ops) metaUnsetDry(ctx context.Context, rawID string, keys []string) (Row
 			return RowOut{}, errs.New(errs.MetaUnknown, fmt.Sprintf("%s has no metadata key %q", got.ID, k)).
 				WithHint("lore meta show --id " + got.ID + " lists its keys")
 		}
+	}
+	// D-928: then the real write, check-only: what the write refuses
+	// (role, policy, a required key) is refused here with its code
+	id, err := rowID(rawID)
+	if err != nil {
+		return RowOut{}, err
+	}
+	if _, err = o.metaRowWrite(engine.WithCheckOnly(ctx), id, engine.MetaWrite{ID: id, Unset: keys}, func(row.Row) string { return "" }); err != nil {
+		return RowOut{}, err
 	}
 	return RowOut{ID: got.ID, DryRun: true, IDs: []string{got.ID},
 		Human: "would remove " + strings.Join(keys, ", ") + " from " + got.ID + "; nothing written (dry run)\n"}, nil

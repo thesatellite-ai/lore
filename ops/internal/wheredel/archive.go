@@ -84,6 +84,18 @@ func Archive(ctx context.Context, env ArchiveEnv, sp Spec, where []string, dryRu
 		}
 	}
 	if dryRun {
+		// D-928: the dry run runs every row's real archive (Run made ctx
+		// check-only; the stage is discarded besides), so a row the write
+		// refuses (role, policy, a stale or purged row) is refused here
+		// with the same code, and nothing is written.
+		for _, h := range hits {
+			sctx := engine.Staging(engine.WithCheckOnly(ctx))
+			_, uerr := env.Update(sctx, engine.Ref{Store: h.Source, Table: sp.Table, ID: h.Row.ID}, map[string]value.Value{FieldArchivedAt: now})
+			engine.Discard(sctx)
+			if uerr != nil {
+				return Result{}, errs.Prefix(sp.Noun+" archive --where --dry-run: "+h.Row.ID.String()+" would fail (nothing written)", uerr)
+			}
+		}
 		out.Human = "would archive " + describe(sp.Noun, hits, 0, 0, true) + " (nothing written, --dry-run)\n"
 		return out, nil
 	}

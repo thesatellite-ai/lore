@@ -171,6 +171,13 @@ func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Re
 		}
 	}
 	if dryRun {
+		// D-928: the dry run runs the real delete (Run made ctx
+		// check-only), so a row the write refuses (role, policy, an actor
+		// row, a stale or purged row) is refused here with the same code,
+		// and nothing goes to the trash.
+		if derr := checkDelete(ctx, env, refs); derr != nil {
+			return Result{}, errs.Prefix(sp.Noun+" delete --where --dry-run: would fail (nothing written)", derr)
+		}
 		out.Human = "would delete " + describe(sp.Noun, hits, deps, len(tasks), true) + " (nothing written, --dry-run)\n"
 		return out, nil
 	}
@@ -217,6 +224,24 @@ func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Re
 		out.Human += "  fenced " + strconv.Itoa(fenced) + " claimed task(s): their holders' next write fails\n"
 	}
 	return out, nil
+}
+
+// checkDelete runs the delete of refs the way Run's write does (one
+// DeleteMany when env has it, else one Delete per row) for a dry run,
+// check-only (engine.WithCheckOnly; Run marks a preview so too), so every
+// check of the write runs and nothing is written. It runs confirmed, as
+// the write does once bulk.Ask has its yes: a dry run asks nothing.
+func checkDelete(ctx context.Context, env Env, refs []engine.Ref) error {
+	ctx = engine.WithConfirmed(engine.WithCheckOnly(ctx))
+	if md, ok := upgrade.As[ManyDeleter](env); ok {
+		return md.DeleteMany(ctx, refs)
+	}
+	for _, ref := range refs {
+		if _, err := env.Delete(ctx, ref); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // describe is the question / dry-run text: the count, the dependents and
