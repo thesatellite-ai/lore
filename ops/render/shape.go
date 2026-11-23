@@ -38,6 +38,7 @@ type Report struct {
 	MustWithoutSummary int        `json:"must_without_summary,omitempty"`
 	SupersededRules    int        `json:"superseded_rules,omitempty"`
 	SupersededHotfixes int        `json:"superseded_hotfixes,omitempty"`
+	NearDuplicates     int        `json:"near_duplicates,omitempty" desc:"--report: pinned rows left out because a newer live row says the same thing (lore lint --code near_duplicate lists each pair)"`
 	ManualRules        int        `json:"manual_rules,omitempty"`
 	PathScopedRules    int        `json:"path_scoped_rules,omitempty"`
 	LineForms          []LineForm `json:"line_forms,omitempty" desc:"--report: the entries written as one line, and why"`

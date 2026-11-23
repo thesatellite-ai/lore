@@ -57,6 +57,9 @@ const (
 	SameTitle Reason = "same title"
 	// SimilarBody: the bodies share at least Threshold of their words.
 	SimilarBody Reason = "similar body"
+	// RewriteOf: the newer row's source_ref names the older row's id and
+	// both are live (devco D-926: a rewrite that left the original live).
+	RewriteOf Reason = "rewrite of"
 )
 
 // Item is one row as the detector sees it: its table and id, and the
@@ -66,6 +69,9 @@ type Item struct {
 	ID    string
 	Title string
 	Body  string
+	// SourceRef is the row's provenance pointer (source_ref); when it
+	// names another live row's id the two are a RewriteOf pair (Within).
+	SourceRef string
 }
 
 // Match pairs an incoming row with the existing row it repeats. Percent
@@ -81,14 +87,20 @@ type Match struct {
 // in for a title (a "## Notes" heading names nothing).
 const MinHeadlineWords = 3
 
-// Headline is what a row is called: its title, else its one-line summary,
-// else the first line of its body when that line has MinHeadlineWords
-// words (a rule has no title: "Use portless for dev URLs." is its name).
+// MinSummaryWords is the fewest words a summary needs to name its row
+// (devco D-926: two rules summed up as "ok" are not one rule; "use
+// portless" names one).
+const MinSummaryWords = 2
+
+// Headline is what a row is called: its title, else its one-line summary
+// when it has MinSummaryWords words, else the first line of its body when
+// that line has MinHeadlineWords words (a rule has no title: "Use
+// portless for dev URLs." is its name).
 func Headline(title, summary, body string) string {
 	if strings.TrimSpace(title) != "" {
 		return title
 	}
-	if strings.TrimSpace(summary) != "" {
+	if len(words(summary)) >= MinSummaryWords {
 		return summary
 	}
 	first, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
@@ -223,5 +235,46 @@ func Find(incoming, existing []Item) []Match {
 			out = append(out, Match{New: in, Existing: existing[best], Why: SimilarBody, Percent: int(math.Floor(bestScore * 100))})
 		}
 	}
+	return out
+}
+
+// Within pairs the rows of one set that repeat each other (devco D-926:
+// an import and its rewrite a month later, both live, so every pinned
+// rule rendered twice). items must be in age order, oldest first: in each
+// Match, Existing is the older row (the one to archive) and New the
+// newer. A row whose SourceRef names another row of the set pairs with it
+// first (RewriteOf, any table); otherwise the rules of Find apply. Each
+// unordered pair is listed once, in the order of its newer row.
+func Within(items []Item) []Match {
+	at := make(map[string]int, len(items))
+	for i, it := range items {
+		at[it.ID] = i
+	}
+	type pair struct{ old, new int }
+	seen := map[pair]bool{}
+	var out []Match
+	add := func(m Match) {
+		a, b := at[m.Existing.ID], at[m.New.ID]
+		if a > b {
+			a, b = b, a
+		}
+		if a == b || seen[pair{a, b}] {
+			return
+		}
+		seen[pair{a, b}] = true
+		m.Existing, m.New = items[a], items[b]
+		out = append(out, m)
+	}
+	for _, it := range items {
+		if ref := strings.TrimSpace(it.SourceRef); ref != "" && ref != it.ID {
+			if j, ok := at[ref]; ok {
+				add(Match{New: it, Existing: items[j], Why: RewriteOf, Percent: 100})
+			}
+		}
+	}
+	for _, m := range Find(items, items) {
+		add(m)
+	}
+	slices.SortStableFunc(out, func(x, y Match) int { return cmp.Compare(at[x.New.ID], at[y.New.ID]) })
 	return out
 }

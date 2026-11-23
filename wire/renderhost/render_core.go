@@ -146,6 +146,9 @@ type pinnedHotfix struct {
 type pinSkips struct {
 	SupersededRules, SupersededHotfixes int
 	ManualRules                         int
+	// NearDuplicates counts pinned rows left out because a newer live row
+	// says the same thing (render_neardup.go, devco D-926).
+	NearDuplicates int
 	// PathScoped counts glob rules moved to path files (6.7).
 	PathScoped int
 	// IDs are the skipped rows with their reason, in load order; the
@@ -284,6 +287,7 @@ func (h *Host) loadPinnedRules(ctx context.Context, projectID string, skips *pin
 	}
 	var out []pinnedRule
 	mk := newRenderMetaKeys(h.app) // MQ13: metadata values on rendered rows
+	var cands []renderRow
 	for _, r := range rows {
 		if renderField(r.Row, renderFieldSeverity) != renderRuleSeverityMust {
 			continue
@@ -297,13 +301,20 @@ func (h *Host) loadPinnedRules(ctx context.Context, projectID string, skips *pin
 			skips.IDs = append(skips.IDs, reportEntry{ID: r.ID.String(), Reason: contextfit.ReasonSuperseded})
 			continue
 		}
-		act := renderField(r.Row, renderFieldActivation)
 		// 6.3: manual rules load only by lore show / lore context --topic.
-		if act == schema.RuleActivationManual {
+		if renderField(r.Row, renderFieldActivation) == schema.RuleActivationManual {
 			skips.ManualRules++
 			skips.IDs = append(skips.IDs, reportEntry{ID: r.ID.String(), Reason: contextfit.ReasonManual})
 			continue
 		}
+		cands = append(cands, r)
+	}
+	dups := skips.nearDups(cands) // D-926: the newer of two near-duplicates only
+	for _, r := range cands {
+		if dups[r.ID.String()] != "" {
+			continue
+		}
+		act := renderField(r.Row, renderFieldActivation)
 		out = append(out, pinnedRule{
 			ID: r.ID.String(), Severity: renderRuleSeverityMust,
 			TrustScore: renderTrust(r.Row), NeedsApproval: !trust.Approved(renderTrust(r.Row)), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),
@@ -362,6 +373,7 @@ func (h *Host) loadPinnedHotfixes(ctx context.Context, projectID string, skips *
 	}
 	var out []pinnedHotfix
 	mk := newRenderMetaKeys(h.app) // MQ13: metadata values on rendered rows
+	var cands []renderRow
 	for _, r := range rows {
 		sev := renderField(r.Row, renderFieldSeverity)
 		if sev != renderHotfixSeverityCritical && sev != renderHotfixSeverityHigh {
@@ -375,6 +387,14 @@ func (h *Host) loadPinnedHotfixes(ctx context.Context, projectID string, skips *
 			skips.IDs = append(skips.IDs, reportEntry{ID: r.ID.String(), Reason: contextfit.ReasonSuperseded})
 			continue
 		}
+		cands = append(cands, r)
+	}
+	dups := skips.nearDups(cands) // D-926: the newer of two near-duplicates only
+	for _, r := range cands {
+		if dups[r.ID.String()] != "" {
+			continue
+		}
+		sev := renderField(r.Row, renderFieldSeverity)
 		out = append(out, pinnedHotfix{
 			ID: r.ID.String(), Severity: sev,
 			Title: renderField(r.Row, renderFieldTitle), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),

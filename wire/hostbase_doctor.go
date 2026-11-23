@@ -34,6 +34,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -44,6 +45,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	opslint "github.com/thesatellite-ai/lore/ops/lint"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -111,6 +113,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	a.doctorPushModes(ctx, warn, note, waits)          // storepushops.go: each store's push mode
 	b.RepoAddresses = a.doctorRepoAddresses(ctx, warn, note)
 	a.doctorDuplicateImports(ctx, warn)
+	a.doctorNearDuplicates(ctx, warn) // devco D-926: an import and its rewrite, both live
 	a.doctorTaskTree(ctx, warn)
 	a.doctorMetaQuarantine(ctx, warn)
 	a.doctorSecretRulesOff(ctx, note)
@@ -189,6 +192,22 @@ func (a *App) doctorDuplicateImports(ctx context.Context, warn func(string)) {
 		warn("duplicate_import " + d.Source + " " + d.ExtID + ": " + strings.Join(d.IDs, ", ") +
 			"; keep the oldest: " + strings.Join(d.FixCommand(), "; "))
 	}
+}
+
+// doctorNearDuplicates counts the pairs of live rows that repeat each
+// other (devco D-926: an import and its rewrite a month later both stayed
+// live, so every pinned rule rendered twice) and names the lint command
+// that lists each pair with the command to archive one.
+func (a *App) doctorNearDuplicates(ctx context.Context, warn func(string)) {
+	found, err := opslint.FindNearDuplicates(ctx, a)
+	if err != nil {
+		warn(string(opslint.NearDuplicate) + ": the rows could not be read: " + err.Error())
+		return
+	}
+	if len(found) == 0 {
+		return
+	}
+	warn(string(opslint.NearDuplicate) + ": " + strconv.Itoa(len(found)) + " pair(s) of live rows say the same thing (an import and its rewrite, a copy in two folders), so both copies are rendered and found; each pair with the command that archives the older one: lore lint --code " + string(opslint.NearDuplicate))
 }
 
 // doctorTaskTree is the sub-task tree check (TASK 6.13): cycles, orphans,

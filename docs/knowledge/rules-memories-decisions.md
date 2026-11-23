@@ -119,6 +119,8 @@ created 2026-11-02T10:00:30Z by alice · updated 2026-11-02T10:01:05Z by alice
 
 When the meaning changes, add a new row and name the old one with `--supersedes <old id>`. This keeps the history: the old row stays readable and records which row replaced it (`superseded_by_id`, shown as `superseded-by` in `lore memory show`). A replaced decision also moves to `superseded`. `--supersedes` works on `rule add`, `memory add`, `decision add`, `hotfix add` and `pattern add`.
 
+A rewrite added without `--supersedes` leaves both rows live (an import, then the same notes rewritten a month later). Render and `lore context` then show only the newer of the two (the private render's block names the other id, `hides-duplicate="…"`, and render prints how many it left out), and `lore lint` lists each pair as `near_duplicate` on the older row with the command that archives it (`lore rule archive --id <id>` on the older row); `lore doctor` counts the pairs. A rewrite finds its original when its `--source-ref` names the original's id, or when the two share a title, a summary or first line, or most of their words. Archive the older row, or next time add the rewrite with `--supersedes <old id>`.
+
 <!-- example: knowledge#supersedes -->
 ```console
 # alice, in website

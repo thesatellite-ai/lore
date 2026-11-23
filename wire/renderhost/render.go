@@ -374,6 +374,9 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		if report.Set > 0 && report.Set != report.Budget {
 			fmt.Fprintf(f.out(), "  budget %d as set, clamped to %d: everything lore adds to a tool's instruction files stays under %d bytes\n", report.Set, report.Budget, policy.ContextCeiling)
 		}
+		if report.NearDup > 0 { // D-926
+			fmt.Fprintf(f.out(), "  %s\n", nearDupRenderLine(report.NearDup))
+		}
 		if n := len(report.PinnedOut); n > 0 {
 			fmt.Fprintf(f.out(), "  %s left out to stay within the budget (lore render --report names them; full text: `lore context --for-file <path>` / `lore show --id <id>`)\n", plural.Of(n, "pinned entry", "pinned entries"))
 		}

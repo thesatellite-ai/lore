@@ -10,13 +10,12 @@ package lint
 //	  ├─ entry_too_long      body over context.entry_max default (1,500 bytes)
 //	  ├─ path_no_globs       body names a code path, rule has no globs
 //	  ├─ untagged            pinned, no tag (not in any topic of the index)
-//	  ├─ near_duplicate      three-word shingle overlap over 0.5 between pinned entries
+//	  ├─ near_duplicate      pinned pairs: neardup.go (also three-word shingle overlap over 0.5)
 //	  ├─ high_hotfix_old, not_validated (context_age.go: need the clock)
 //	  └─ scope_missing, scope_conflict (context_scope.go: need the Env)
 
 import (
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/row"
@@ -97,7 +96,7 @@ func contextFindings(all map[row.Table][]sourced) []Finding {
 			if text(s.r, fSuperseded) != "" {
 				out = append(out, Finding{Code: SupersededPinned, ID: id, Store: string(s.src),
 					Message: "superseded by " + text(s.r, fSuperseded) + " but still pinned (render leaves it out of LORE.md)",
-					Fix:     "lore archive " + id})
+					Fix:     "lore " + t.noun + " archive --id " + id})
 				continue
 			}
 			pinned = append(pinned, pinnedRow{s: s, noun: t.noun})
@@ -134,29 +133,11 @@ func contextFindings(all map[row.Table][]sourced) []Finding {
 				Fix: "lore " + p.noun + " edit --id " + id + " --tag <tag> (create a new tag first: lore tag add --name <tag>)"})
 		}
 	}
-	return append(out, nearDuplicates(pinned)...)
-}
-
-// nearDuplicates pairs pinned entries whose word-shingle sets overlap by
-// more than nearDupOverlap (Jaccard), once per pair, in id order.
-func nearDuplicates(ps []pinnedRow) []Finding {
-	sort.Slice(ps, func(i, j int) bool { return ps[i].s.r.ID.String() < ps[j].s.r.ID.String() })
-	sh := make([]map[string]bool, len(ps))
-	for i, p := range ps {
-		sh[i] = shingles(text(p.s.r, fBody))
+	ps := make([]sourced, 0, len(pinned))
+	for _, p := range pinned {
+		ps = append(ps, p.s)
 	}
-	var out []Finding
-	for i := range ps {
-		for j := i + 1; j < len(ps); j++ {
-			if jaccard(sh[i], sh[j]) > nearDupOverlap {
-				a, b := ps[i].s.r.ID.String(), ps[j].s.r.ID.String()
-				out = append(out, Finding{Code: NearDuplicate, ID: a, Store: string(ps[i].s.src),
-					Message: "near duplicate of " + b + " (most of the wording is shared)",
-					Fix:     "keep one: lore archive " + b + " (or merge the text first)"})
-			}
-		}
-	}
-	return out
+	return append(out, nearDuplicates(ps, true)...)
 }
 
 // shingles is the set of three-word windows of s (lower case).

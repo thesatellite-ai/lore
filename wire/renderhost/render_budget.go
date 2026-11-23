@@ -417,13 +417,15 @@ type renderReport struct {
 	// HighOut are the high hotfixes left out to fit the budget, by id
 	// (devco:S-3: --report named the must rules it shortened but not one
 	// of the hotfixes it dropped).
-	HighOut      []string      `json:"high_hotfixes_left_out,omitempty"`
-	Topics       int           `json:"topics"`
-	IndexFolded  bool          `json:"index_collapsed"`
-	Over         bool          `json:"budget_exceeded"`
-	NoSummary    int           `json:"must_without_summary"`
-	SupersededR  int           `json:"superseded_rules"`
-	SupersededH  int           `json:"superseded_hotfixes"`
+	HighOut     []string `json:"high_hotfixes_left_out,omitempty"`
+	Topics      int      `json:"topics"`
+	IndexFolded bool     `json:"index_collapsed"`
+	Over        bool     `json:"budget_exceeded"`
+	NoSummary   int      `json:"must_without_summary"`
+	SupersededR int      `json:"superseded_rules"`
+	SupersededH int      `json:"superseded_hotfixes"`
+	// NearDup: pinned rows a newer near-duplicate replaced (devco D-926).
+	NearDup      int           `json:"near_duplicates,omitempty"`
 	Manual       int           `json:"manual_rules"`
 	PathScoped   int           `json:"path_scoped_rules"`
 	Lines        []reportEntry `json:"line_forms,omitempty"`
@@ -617,7 +619,7 @@ func buildBudgetedStep(canary string, in renderInput, st fitStep) (string, rende
 	b.WriteString(mustHead)
 	rep := renderReport{Profile: in.Settings.Profile, Budget: in.Settings.Budget, WarnPct: in.Settings.WarnPct,
 		Critical: len(crit), HighLine: shownHigh, HighOut: leftOut, Topics: len(in.Topics), IndexFolded: res.IndexCollapsed,
-		NoSummary: noSummary, SupersededR: in.Skips.SupersededRules, SupersededH: in.Skips.SupersededHotfixes,
+		NoSummary: noSummary, SupersededR: in.Skips.SupersededRules, SupersededH: in.Skips.SupersededHotfixes, NearDup: in.Skips.NearDuplicates,
 		Manual: in.Skips.ManualRules, PathScoped: in.Skips.PathScoped, Canary: canary, PinnedOut: pinnedOut, Set: in.Settings.Set}
 	// Full entries first, then lines, each group in rank order.
 	for i, e := range entries {
@@ -741,6 +743,9 @@ func (r renderReport) reportText() string {
 	fmt.Fprintf(&b, "  superseded rules     %4d  reason: superseded_by set\n", r.SupersededR)
 	fmt.Fprintf(&b, "  superseded hotfixes  %4d  reason: superseded_by set\n", r.SupersededH)
 	fmt.Fprintf(&b, "  manual rules         %4d  reason: activation manual\n", r.Manual)
+	if r.NearDup > 0 {
+		fmt.Fprintf(&b, "  near duplicates      %4d  reason: a newer live row says the same (lore lint --code near_duplicate)\n", r.NearDup)
+	}
 	if r.PathScoped > 0 {
 		fmt.Fprintf(&b, "  glob rules           %4d  reason: path-scoped (the tools' own path rule files)\n", r.PathScoped)
 	}

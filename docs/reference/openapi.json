@@ -29175,7 +29175,7 @@
     "/v1/lints/run": {
       "post": {
         "operationId": "lint.run",
-        "summary": "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, unknown metadata keys, stored secrets)",
+        "summary": "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets)",
         "tags": [
           "lint"
         ],
@@ -60023,6 +60023,10 @@
                         },
                         "must_without_summary": {
                           "type": "integer"
+                        },
+                        "near_duplicates": {
+                          "type": "integer",
+                          "description": "--report: pinned rows left out because a newer live row says the same thing (lore lint --code near_duplicate lists each pair)"
                         },
                         "over_warn_level": {
                           "type": "boolean"

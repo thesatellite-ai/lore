@@ -43,6 +43,9 @@ const (
 	ReasonSuperseded Reason = "superseded"
 	ReasonManual     Reason = "manual"
 	ReasonPinned     Reason = "line form: pinned"
+	// ReasonNearDuplicate: a newer live row says the same thing and is
+	// shown instead (devco D-926; lore lint --code near_duplicate).
+	ReasonNearDuplicate Reason = "near duplicate"
 )
 
 // Entry is one must rule a Plan may show in full or as a line.

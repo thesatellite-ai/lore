@@ -322,7 +322,8 @@ var contextKinds = []struct {
 }
 
 // loadKnowledge lists the live, not superseded rows of every context
-// table across the context sources (contextSources).
+// table across the context sources (contextSources), the older of two
+// near-duplicates left out.
 func (h *Host) loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
 	srcs, err := h.contextSources(ctx)
 	if err != nil {
@@ -340,6 +341,15 @@ func (h *Host) loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
 			}
 			out = append(out, knowledgeRow{kind: k.kind, r: r})
 		}
+	}
+	// devco D-926: of two live rows that say the same thing (an import and
+	// its rewrite) only the newer is a pick (render_neardup.go)
+	rs := make([]row.Row, len(out))
+	for i, k := range out {
+		rs[i] = k.r.Row
+	}
+	if dups := pinnedNearDups(rs); len(dups) > 0 {
+		out = slices.DeleteFunc(out, func(k knowledgeRow) bool { return dups[k.r.ID.String()] != "" })
 	}
 	return out, nil
 }

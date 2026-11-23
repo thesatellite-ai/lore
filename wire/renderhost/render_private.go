@@ -206,6 +206,7 @@ type privatePlan struct {
 	coreBytes int            // the store files' heads and pinned rows in full (the size with no budget)
 	pinForms  pinCounts      // pinned rows in full, as an index line, not listed
 	pins      []privatePin   // the pinned rows in rank order; shown is what the file prints for each
+	nearDups  int            // pinned rows left out for a newer near-duplicate or a successor (D-926)
 	fix       budgetFix      // where the raise goes and who may run each fix (devco D-636, D-637)
 }
 
@@ -358,6 +359,9 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 		}
 		if c := p.clampLine(); c != "" {
 			fmt.Fprintf(w, "  %s\n", c)
+		}
+		if p.nearDups > 0 {
+			fmt.Fprintf(w, "  %s\n", nearDupRenderLine(p.nearDups))
 		}
 	}
 	if changed && p.overCoreWarns() {
@@ -570,6 +574,7 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 	p.rows, p.leftOut, p.coreBytes, p.pinForms, p.pins = fit.shown, fit.leftOut, fit.coreBytes, fit.pins, fit.ranked
 	for _, b := range bodies {
 		p.pinned += b.pinned
+		p.nearDups += b.nearDups
 	}
 	for i, s := range internal {
 		// render_stamp.go: the file's rows and budget, stamped on line 2.
@@ -673,6 +678,9 @@ type privateBody struct {
 	// origins are the store, id and HLC of every row the file lists
 	// before the budget (render_stamp.go).
 	origins []string
+	// nearDups counts the pinned rows left out because a newer row says
+	// the same thing or replaced them (render_neardup.go, devco D-926).
+	nearDups int
 }
 
 // privateFit is what fitPrivate decided for every store file.
@@ -929,11 +937,43 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 			pinned[r.ID.String()] = true
 		}
 	}
+	// D-926: a superseded pinned row is replaced by its successor (as in
+	// the committed render, 6.12), and of two near-duplicates only the
+	// newer is pinned; the block of the one shown names the one left out.
+	// Both stay out of the "Other notes" list (pinned stays set).
+	var dropped int
+	rules, dropped = dropReplacedPins(rules)
+	hidden := dropped
+	hotfixes, dropped = dropReplacedPins(hotfixes)
+	hidden += dropped
+	hides := map[string][]string{} // shown id ─▶ the near-duplicates it hides
+	for _, rs := range [][]row.Row{rules, hotfixes} {
+		dups := pinnedNearDups(rs)
+		for _, old := range slices.Sorted(maps.Keys(dups)) {
+			hides[dups[old]] = append(hides[dups[old]], old)
+		}
+	}
+	gone := map[string]bool{}
+	for _, olds := range hides {
+		for _, o := range olds {
+			gone[o] = true
+		}
+	}
+	keep := func(rs []row.Row) []row.Row {
+		return slices.DeleteFunc(rs, func(r row.Row) bool {
+			if gone[r.ID.String()] {
+				hidden++
+				return true
+			}
+			return false
+		})
+	}
+	rules, hotfixes = keep(rules), keep(hotfixes)
 	// D-909: each pinned row carries its full block and its one-line index
 	// entry; fitPrivate decides which one the file prints
 	var pins []privatePin
 	for _, r := range rules {
-		block := fmt.Sprintf("<rule id=\"%s\" severity=\"%s\"%s%s>\n", r.ID, renderRuleSeverityMust, privateTrustAttr(r), reviewAttr(!trust.Approved(renderTrust(r)))) +
+		block := fmt.Sprintf("<rule id=\"%s\" severity=\"%s\"%s%s%s>\n", r.ID, renderRuleSeverityMust, privateTrustAttr(r), reviewAttr(!trust.Approved(renderTrust(r))), hidesAttr(hides[r.ID.String()])) +
 			mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true) + "\n</rule>\n"
 		act, globs := renderField(r, renderFieldActivation), renderField(r, renderFieldGlobs)
 		pins = append(pins, privatePin{id: r.ID.String(), kind: privatePinRule, text: block, src: srcOf[r.ID.String()],
@@ -943,7 +983,7 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 	}
 	for _, h := range hotfixes {
 		sev := renderField(h, renderFieldSeverity)
-		block := fmt.Sprintf("<hotfix id=\"%s\" severity=\"%s\">\n", h.ID, sev) +
+		block := fmt.Sprintf("<hotfix id=\"%s\" severity=\"%s\"%s>\n", h.ID, sev, hidesAttr(hides[h.ID.String()])) +
 			"**" + renderField(h, renderFieldTitle) + "**\n\n" +
 			mk.withMetaLine(ctx, renderField(h, renderFieldBody), h, true) + "\n</hotfix>\n"
 		pins = append(pins, privatePin{id: h.ID.String(), kind: privatePinHotfix, text: block, src: srcOf[h.ID.String()],
@@ -953,7 +993,7 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 	}
 	n += len(rules) + len(hotfixes)
 
-	out := privateBody{head: b.String(), pinned: n, pins: pins, origins: origins}
+	out := privateBody{head: b.String(), pinned: n, pins: pins, origins: origins, nearDups: hidden}
 	for _, t := range privateTables {
 		sec := privateSection{heading: t.heading}
 		for _, r := range byTable[t.table] {

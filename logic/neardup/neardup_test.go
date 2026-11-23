@@ -82,6 +82,7 @@ func TestHeadline(t *testing.T) {
 	cases := []struct{ title, summary, body, want string }{
 		{"A title", "a summary", "a body line here", "A title"},
 		{"", "use portless", "a body line here", "use portless"},
+		{"", "ok", "a body line here", "a body line here"}, // D-926: a one-word summary names nothing
 		{"", "", "Use portless for dev URLs.\nEvery server has a name.", "Use portless for dev URLs."},
 		{"", "", "## Notes\nsomething", ""},
 		{"", "", "", ""},
@@ -95,5 +96,30 @@ func TestHeadline(t *testing.T) {
 	b := Item{Table: "rules", ID: "rul_b", Title: Headline("", "", "use portless for dev urls\nso every server has a name"), Body: "use portless for dev urls\nso every server has a name"}
 	if m := Find([]Item{b}, []Item{a}); len(m) != 1 || m[0].Why != SameTitle {
 		t.Fatalf("two portless rules: %+v", m)
+	}
+}
+
+// TestWithinPairsRewritesOnce is devco D-926: an import and its rewrite a
+// month later, both live, pair once with the older row as Existing:
+// through source_ref (whatever the wording), the same title, or the same
+// text; an unrelated row and a source_ref naming no row of the set do not.
+func TestWithinPairsRewritesOnce(t *testing.T) {
+	items := []Item{ // oldest first
+		{Table: "rules", ID: "rul_a", Body: "Money amounts are stored as integer cents and never as floats in any service or table."},
+		{Table: "hotfixes", ID: "hfx_a", Title: "Staging deploy needs a cache flush", Body: "After a staging deploy run the flush job."},
+		{Table: "memories", ID: "mem_a", Body: "The invoice export runs at two at night and takes about forty minutes on the big accounts."},
+		{Table: "memories", ID: "mem_x", Body: "lunch is at noon on fridays for the whole team", SourceRef: "notes/import.md:12"},
+		{Table: "rules", ID: "rul_b", Body: "Store every money amount as integer cents in every service and table; never as floats.", SourceRef: "rul_a"},
+		{Table: "hotfixes", ID: "hfx_b", Title: "staging deploy needs a CACHE flush!", Body: "Flush the cache after each staging deploy, otherwise prices are stale."},
+		{Table: "memories", ID: "mem_b", Body: "The invoice export runs at two at night and takes about forty minutes for the big accounts."},
+		{Table: "rules", ID: "rul_c", Body: "Every endpoint checks the caller's role before it reads a row.", SourceRef: "rul_gone"},
+	}
+	var lines []string
+	for _, m := range Within(items) {
+		lines = append(lines, fmt.Sprintf("%s>%s %s", m.Existing.ID, m.New.ID, m.Why))
+	}
+	want := []string{"rul_a>rul_b rewrite of", "hfx_a>hfx_b same title", "mem_a>mem_b similar body"}
+	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("pairs:\n%s\nwant:\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
 	}
 }

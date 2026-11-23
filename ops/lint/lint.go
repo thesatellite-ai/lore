@@ -50,7 +50,7 @@ const (
 // Codes lists every finding code.
 func Codes() []Code {
 	return []Code{UnknownScheme, DanglingRef, VarOldName, VarShadowed, VarShareableDiffers,
-		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived}
+		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate}
 }
 
 // ManyTimeEntries is where lint warns that a task should be split (TQ4,
@@ -121,7 +121,7 @@ func (o RunOut) Text() string {
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	return []op.Entry{
-		op.Define(op.Spec{Name: OpRun, Summary: "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, unknown metadata keys, stored secrets)",
+		op.Define(op.Spec{Name: OpRun, Summary: "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: []errs.Code{errs.InvalidInput, errs.Internal},
 			Examples: []op.Example{{Title: "every finding as JSON", CLI: "lore lint --json", Want: `"findings"`},
 				{Title: "LORE.md clean-up suggestions", CLI: "lore lint --context", Want: "finding"}}}, o.run),
@@ -173,6 +173,8 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	out = append(out, varFindings(all[schema.TableVars])...)
 	out = append(out, taskFindings(all[schema.TableTasks])...)
 	out = append(out, metaFindings(all)...)
+	// devco D-926: rows that repeat each other, every archivable kind
+	out = append(out, nearDuplicates(nearDupRows(all), false)...)
 	// SECRETS 5.2: stale holder labels
 	out = append(out, holderFindings(all)...)
 	secrets, err := o.secretScan(ctx, all) // SQ12: re-scan with today's team rules
@@ -200,19 +202,28 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 
 // rows lists every live row of every built-in table in every store.
 func (o ops) rows(ctx context.Context) (map[row.Table][]sourced, error) {
+	tables := make([]row.Table, 0, len(schema.Builtin()))
+	for _, def := range schema.Builtin() {
+		tables = append(tables, def.Name)
+	}
+	return o.rowsOf(ctx, tables)
+}
+
+// rowsOf lists every live row of tables in every store.
+func (o ops) rowsOf(ctx context.Context, tables []row.Table) (map[row.Table][]sourced, error) {
 	out := map[row.Table][]sourced{}
 	// devco:R-14: reads mask a stored secret match; secret_found must see
 	// the stored text to report it.
 	ctx = engine.WithRawRead(ctx)
-	for _, def := range schema.Builtin() {
+	for _, t := range tables {
 		for _, src := range engine.ReadStoresOf(o.env) {
-			rs, err := o.env.List(ctx, src, def.Name)
+			rs, err := o.env.List(ctx, src, t)
 			if err != nil {
 				return nil, err
 			}
 			for _, r := range rs {
 				if !r.Deleted {
-					out[def.Name] = append(out[def.Name], sourced{src: src, r: r})
+					out[t] = append(out[t], sourced{src: src, r: r})
 				}
 			}
 		}
