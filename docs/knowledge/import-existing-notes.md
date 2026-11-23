@@ -29,7 +29,7 @@ The client pays invoices on the first Monday of the month.
 
 ## Step 2 — Turn each section into a row
 
-"Ask the client before changing any price" is a rule everyone must follow, so it becomes a rule. "The client pays invoices on the first Monday" is a plain fact, so it becomes a memory. A choice the team made, with its reason, would be a decision (`lore decision add`). When everything is in lore, delete the file; git shows the new rows and `.lore/LORE.md` and `.lore/LORE.full.md`, which each write brought up to date with them, ready to commit together:
+"Ask the client before changing any price" is a rule everyone must follow, so it becomes a rule. "The client pays invoices on the first Monday" is a plain fact, so it becomes a memory. A choice the team made, with its reason, would be a decision (`lore decision add`). When everything is in lore, delete the file; git shows the new rows, ready to commit. A committed `.lore/LORE.md` is not rewritten by the writes: lore's pre-commit hook refreshes it in the commit that carries the rows:
 
 <!-- example: knowledge#promote -->
 ```console
@@ -43,8 +43,6 @@ lore: wrote ~/work/website/.lore/data/memories/mem_2e0c…0b6d.json
 ✓ mem_2e0c…0b6d
   scope: [project]
 $ rm .ai/notes.md && git status --short
- M .lore/LORE.full.md
- M .lore/LORE.md
 ?? .lore/data/memories/mem_2e0c…0b6d.json
 ?? .lore/data/rules/rul_4bfb…19ce.json
 ```

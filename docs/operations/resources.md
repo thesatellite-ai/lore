@@ -376,10 +376,9 @@ ERROR: [E_RESOURCE_BATCH] resource import: host hub_mail: provider "linode" is n
   hint: lore resource kind show --id host
 (exit 23)
 $ lore resource import --file ~/hosts2.csv --kind host --upsert-by name --dry-run
-  update  host hub_db
-  error  host hub_mail  [E_RESOURCE_INVALID] host hub_mail: provider "linode" is not one of hetzner, aws
-nothing written (dry run)
-1 error (skipped)
+ERROR: [E_RESOURCE_BATCH] resource import --dry-run: 1 row refused: host hub_mail: provider "linode" is not one of hetzner, aws; nothing written (all or nothing; --skip-errors writes the valid rows)
+  hint: lore resource kind show --id host
+(exit 23)
 $ lore resource import --file ~/hosts2.csv --kind host --upsert-by name --skip-errors --yes
 lore: wrote ~/work/infra/.lore/data/resources/res_d191…45c2.json
   update  host hub_db

@@ -20,6 +20,9 @@ import (
 // dcMemID matches the memory id an add prints.
 var dcMemID = regexp.MustCompile(`\b(mem_[0-9a-f]{32})\b`)
 
+// dcTskID matches every task id a command prints.
+var dcTskID = regexp.MustCompile(`\btsk_[0-9a-f]{32}\b`)
+
 func TestJourneyDryRunChecksLikeTheWrite(t *testing.T) {
 	t.Parallel()
 	w := NewWorld(t)
@@ -97,5 +100,33 @@ func TestJourneyDryRunChecksLikeTheWrite(t *testing.T) {
 		lap.LoreIn(code, "task", "list").OK(t).Says(t, "Release").Never(t, "Hotfix")
 		lap.LoreIn(code, "mission", "apply", "--file", put("whole.yaml", plan+"    timebox: 30m\n"), "--yes").OK(t).Says(t, "Launch (created)", "Ship the page")
 		lap.LoreIn(code, "task", "list").OK(t).Says(t, "Write the page", "Ship the page")
+	})
+
+	// devco:D-943 (H-201): after D-932 a split's dry run printed an id for
+	// every sub-task, taken from the stage it discards: ids the write never
+	// gave, which no later command could find. The dry run names only the
+	// parent; every id the write prints is a task show finds.
+	w.Step("day4/a-split-dry-run-prints-no-id-the-write-will-not-give", func() {
+		par := dcTskID.FindString(lap.LoreIn(code, "task", "add", "--title", "Pick the photos", "--yes").OK(t).Out())
+		if par == "" {
+			t.Fatal("no task id")
+		}
+		dry := lap.LoreIn(code, "task", "split", "--id", par, "--title", "Shoot the shirts", "--title", "Edit the photos", "--dry-run").
+			OK(t).Says(t, "would add 2 sub-tasks", "Shoot the shirts", "nothing written").Out()
+		for _, id := range dcTskID.FindAllString(dry, -1) {
+			if id != par {
+				t.Errorf("split --dry-run printed %s, an id the write will not give:\n%s", id, dry)
+			}
+		}
+		kids := 0
+		for _, id := range dcTskID.FindAllString(lap.LoreIn(code, "task", "split", "--id", par, "--title", "Shoot the shirts", "--title", "Edit the photos").OK(t).Out(), -1) {
+			if id != par {
+				kids++
+				lap.LoreIn(code, "task", "show", "--id", id).OK(t)
+			}
+		}
+		if kids == 0 {
+			t.Error("split printed no sub-task id")
+		}
 	})
 }

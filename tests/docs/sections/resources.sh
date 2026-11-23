@@ -79,7 +79,7 @@ on alice $W "lore resource import --file ~/hosts.csv --kind host --yes"
 note "import refused"
 quiet alice $W "printf 'name,provider,ip\nhub_db,aws,203.0.113.30\nhub_mail,linode,203.0.113.40\n' > ~/hosts2.csv"
 on! alice $W "lore resource import --file ~/hosts2.csv --kind host --upsert-by name --yes"
-on alice $W "lore resource import --file ~/hosts2.csv --kind host --upsert-by name --dry-run"
+on! alice $W "lore resource import --file ~/hosts2.csv --kind host --upsert-by name --dry-run"
 on alice $W "lore resource import --file ~/hosts2.csv --kind host --upsert-by name --skip-errors --yes"
 
 note "export"

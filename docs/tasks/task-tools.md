@@ -153,7 +153,7 @@ $ lore task checklist list --id tsk_28f8…03df
 
 ## Step 3 — Split a task into sub-tasks
 
-`lore task split --id <id> --title <title> --title <title> --title …` adds one sub-task per title, in order, as one batch: one commit for all of them, and a sub-task lore refuses (a secret in its text, say) writes none of them. A flag before the first title applies to every sub-task; a flag after a title applies to that one only (here `--priority high` after "Shoot the mugs"). What a sub-task does not set it takes from the parent, and the output says what it inherited. A sub-task (from `task split` or `task add --parent`) is always in its parent's project and store folder, also when the parent was added into a store folder with `--to <org>/<folder>`. `--dry-run` shows the plan and writes nothing:
+`lore task split --id <id> --title <title> --title <title> --title …` adds one sub-task per title, in order, as one batch: one commit for all of them, and a sub-task lore refuses (a secret in its text, say) writes none of them. A flag before the first title applies to every sub-task; a flag after a title applies to that one only (here `--priority high` after "Shoot the mugs"). What a sub-task does not set it takes from the parent, and the output says what it inherited. A sub-task (from `task split` or `task add --parent`) is always in its parent's project and store folder, also when the parent was added into a store folder with `--to <org>/<folder>`. `--dry-run` shows the plan (each sub-task's title and flags, no ids: the write gives the ids) and writes nothing:
 
 <!-- example: task-tools#split -->
 ```console

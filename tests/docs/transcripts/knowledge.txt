@@ -400,8 +400,6 @@ lore: wrote ~/work/website/.lore/data/memories/mem_2e0cd393bb97706e9e7cc8959c630
 ✓ mem_2e0cd393bb97706e9e7cc8959c630b6d
   scope: [project]
 alice (work/website)$ rm .ai/notes.md && git status --short
- M .lore/LORE.full.md
- M .lore/LORE.md
 ?? .lore/data/memories/mem_2e0cd393bb97706e9e7cc8959c630b6d.json
 ?? .lore/data/rules/rul_4bfb87cc09d6de92e5bba3810c3d19ce.json
 

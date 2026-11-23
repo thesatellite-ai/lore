@@ -120,7 +120,12 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 		if aerr != nil {
 			return SplitOut{}, aerr
 		}
-		out.Added[i].ID = a.Data.ID
+		// devco:D-943: a dry run's ids come from the discarded stage and
+		// are never the ids the write gives, so it shows none (as before
+		// D-932 ran the real adds): a printed id a later command cannot find
+		if !in.DryRun {
+			out.Added[i].ID = a.Data.ID
+		}
 		out.Added[i].Rank = a.Data.Rank
 		if tasklist == "" && !a.existed {
 			tasklist = a.Data.TaskListID
