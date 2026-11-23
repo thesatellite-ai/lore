@@ -190,7 +190,7 @@ cost_hours	repo	number	1
 
 ## Step 7 — Declare a key with allowed values
 
-`lore meta add --name <name> --type <type>` declares a key before anyone uses it. `--values` gives a closed list and `--strict` turns a wrong value into a refusal (without `--strict` it is a warning). `--description` says what the key means, `--sensitive` hides its values from agents, render and lists, and `--internal` keeps it out of client repos.
+`lore meta add --name <name> --type <type>` declares a key before anyone uses it. `--values` gives a closed list and `--strict` turns a wrong value into a refusal (without `--strict` it is a warning). `--description` says what the key means, `--sensitive` hides its values from agents, render and lists, and `--internal` keeps it out of client repos. A key name is snake_case and not one of lore's own words: `id`, `meta`, a name starting with `_`, `mky` or `val`, a type word (`text`, `number`, `date`, …), a level word (`repo`, `project`, `org`) or a column of a lore table (`state`, `status`, `title`, …); the refusal (`E_META_RESERVED`) lists them all and names a name that passes (`item_state`). Allowed values are snake_case too (a-z, 0-9 and _, starting with a letter); a value such as `pylon-feeds` is refused with the corrected flag (`use --values prism_feeds,raw`). Registering a name that another place this repo reads already holds (the store's own registry and one of its folders) works, but warns and names both definitions: a row that sees both needs the definition named (`mky_<id>=value` or a scope form), or `meta set` answers `E_META_AMBIGUOUS`.
 
 <!-- example: meta#meta-add -->
 ```console
@@ -212,7 +212,7 @@ The refusal names the allowed values and the command that adds a new one (`lore 
 
 ## Step 8 — Set a field on many rows at once
 
-`--where key=value` picks every row whose metadata matches (repeat it to AND several). Run it with `--dry-run` first to see the rows; the real run is one batch you can undo with `lore batch undo`. `lore meta export` prints the values as CSV (or JSON lines with `--format json`), ready for a spreadsheet; `lore meta import --file <file>` reads the same shape back as one batch.
+`--where key=value` picks every row whose metadata matches (repeat it to AND several). Run it with `--dry-run` first to see the rows (on one row, `lore meta set --id <id> --pair key=value --dry-run` checks the row, its kind and every key name as the write does and writes nothing); the real run is one batch you can undo with `lore batch undo`. `lore meta export` prints the values as CSV (or JSON lines with `--format json`), ready for a spreadsheet; `lore meta import --file <file>` reads the same shape back as one batch.
 
 <!-- example: meta#meta-where -->
 ```console

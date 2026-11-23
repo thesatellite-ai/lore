@@ -234,14 +234,14 @@ ERROR: [E_HAS_DEPENDENTS] project delete: mem_28f8…03df (memories.project_id),
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
 | `E_META_KEY` | 20 | a key or allowed-value name is not snake_case ASCII, or is too long or too deep | rename it, for example `client_tier` |
-| `E_META_RESERVED` | 20 | a key name lore keeps for itself (a column, a type or level word, `id`, `meta`, or one starting with `_`, `mky` or `val`) | pick another name |
+| `E_META_RESERVED` | 20 | a key name lore keeps for itself (a column, a type or level word, `id`, `meta`, or one starting with `_`, `mky` or `val`); the message lists every reserved word | pick another name; the hint names one that passes (`item_state` for `state`) |
 | `E_META_TYPE` | 20 | a value does not read as the key's type | give a value of that type; `lore meta show --id <key>` says which |
 | `E_META_VALUE` | 20 | an empty value, or a value outside the key's allowed values | give one of the allowed values |
 | `E_META_SHAPE` | 20 | a list of objects, a list of lists, or a mixed list on a structured key | flatten the value |
 | `E_META_SIZE` | 20 | the row's metadata would pass `meta.max_bytes` | keep less metadata on the row |
 | `E_META_DEPTH` | 20 | a key has more dot-separated parts than `meta.max_depth` | use a flatter name |
 | `E_META_OP` | 20 | a mistake in a metadata flag or filter | read the message; it points at the part it could not read |
-| `E_META_TABLE` | 20 | this kind of row takes no metadata from the command line | set it on a row kind that takes metadata |
+| `E_META_TABLE` | 20 | this kind of row takes no metadata from the command line; the message lists the tables that do | set it on a row of one of those tables |
 | `E_META_REQUIRED` | 20 | a required metadata key is missing on add | add it with `--meta key=value` |
 | `E_META_UNKNOWN` | 20 | an unset of a key the row does not have, or an unknown key id | check the key with `lore meta get --id <id>` |
 | `E_META_AMBIGUOUS` | 21 | a bare key name matches definitions at two or more levels | name the level, as the message shows |

@@ -325,7 +325,7 @@ func (o ops) editValues(ctx context.Context, k located, in MetaEditIn) ([]string
 	var notes []string
 	if in.Values != "" {
 		want := splitList(in.Values)
-		if err := checkMetaValues(want); err != nil {
+		if err := checkMetaValues("--values", want); err != nil {
 			return nil, errs.New(errs.MetaKey, err.Error()).WithHint("allowed values are snake_case names; give display text with --value-label name=Text")
 		}
 		have, err := o.metaValues(ctx, k)

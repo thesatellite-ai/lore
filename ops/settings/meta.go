@@ -68,12 +68,12 @@ const (
 
 // MetaAddIn is the input of meta.add.
 type MetaAddIn struct {
-	Name        string `json:"name" arg:"0" desc:"the key (snake_case)"`
+	Name        string `json:"name" arg:"0" desc:"the key (snake_case, dotted for a field; not a reserved word: id, meta, _*, mky*, val*, a type word, repo, project, org or a column name such as state, status, title)"`
 	Type        string `json:"type" flag:"type" desc:"text | number | bool | date | datetime | list | json | …"`
 	To          string `json:"to,omitempty" flag:"to" desc:"where the key row is written (repo, <store>, <store>/<folder>; default repo)"`
 	Description string `json:"description,omitempty" flag:"description" desc:"what the key means (at most 300 characters)"`
 	Strict      bool   `json:"strict,omitempty" flag:"strict" desc:"refuse type mismatches"`
-	Values      string `json:"values,omitempty" flag:"values" desc:"allowed values, comma separated (a closed set, at most 100)"`
+	Values      string `json:"values,omitempty" flag:"values" desc:"allowed values, comma separated (a closed set, at most 100; each snake_case: a-z, 0-9 and _, starting with a letter)"`
 	Internal    bool   `json:"internal,omitempty" flag:"internal" desc:"never reaches a client repo"`
 	NoInternal  bool   `json:"no_internal,omitempty" flag:"no-internal" desc:"may reach client repos"`
 	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"hide the values from agents, render and lists"`
@@ -236,7 +236,7 @@ func mustAny(s string) ids.AnyID {
 func (o ops) metaOps() []op.Entry {
 	return append(append([]op.Entry{
 		op.Define(op.Spec{Name: OpMetaAdd, Summary: "Add a metadata key to a place's registry", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
+			Errors: append(slices.Clone(writeErrors), errs.MetaKey, errs.MetaReserved, errs.MetaType, errs.MetaSize, errs.MetaTaken), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
 			Examples: []op.Example{{Title: "a closed set", CLI: "lore meta add --name release_window --type text --strict --values spring,summer", Want: "mky_"}}}, o.metaAdd),
 		op.Define(op.Spec{Name: OpMetaEdit, Summary: "Edit a metadata key (strict, internal, allowed values, type)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.MetaKey, errs.MetaType, errs.MetaInUse, errs.MetaRetired, errs.MetaConflict, errs.MetaValue, errs.ReasonRequired), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "make a key strict", CLI: "lore meta edit --id team_owner --strict"}}}, o.metaEdit),
@@ -288,16 +288,36 @@ func valueNames(vs []located) []string {
 	return out
 }
 
-func checkMetaValues(vals []string) error {
+// snakeRule is the allowed-value rule, said in --help and in the refusal.
+const snakeRule = "snake_case: a-z, 0-9 and _, starting with a letter"
+
+// checkMetaValues refuses allowed values that are not snake_case (3.5).
+// flag is the flag that gave them (--values, --value, --new-value): the
+// refusal names the rule and the whole flag corrected, so the next run
+// works as printed (devco:D-922: "pylon-feeds" was refused with no rule
+// and no fix, one value at a time).
+func checkMetaValues(flag string, vals []string) error {
 	if len(vals) > maxMetaValues {
 		return errs.New(errs.InvalidInput, fmt.Sprintf("a key has at most %d allowed values", maxMetaValues))
 	}
+	var bad []string
+	fixed := make([]string, 0, len(vals))
 	for _, v := range vals {
-		if !snakeName.MatchString(v) {
-			return errs.New(errs.InvalidInput, "allowed value "+quote(v)+" is not snake_case")
+		if snakeName.MatchString(v) {
+			fixed = append(fixed, v)
+			continue
 		}
+		bad = append(bad, quote(v))
+		fixed = append(fixed, meta.ToSnake(v))
 	}
-	return nil
+	if len(bad) == 0 {
+		return nil
+	}
+	e := errs.New(errs.InvalidInput, "allowed value "+strings.Join(bad, ", ")+" is not "+snakeRule)
+	if !slices.Contains(fixed, "") {
+		e = e.WithHint("use " + flag + " " + strings.Join(fixed, ","))
+	}
+	return e
 }
 
 func (o ops) addValue(ctx context.Context, k located, name, label string) (engine.Written, error) {
@@ -333,7 +353,7 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 			WithHint("a secret goes in a text value as ${secret:manager://entry}; ref and secret_ref are resource field types")
 	}
 	vals := splitList(in.Values)
-	if err := checkMetaValues(vals); err != nil {
+	if err := checkMetaValues("--values", vals); err != nil {
 		return RowOut{}, err
 	}
 	target, herr := o.home(ctx, in.To)
@@ -341,6 +361,10 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 		return RowOut{}, herr
 	}
 	if err := o.checkRegistryCaps(ctx, target, in.Name); err != nil {
+		return RowOut{}, err
+	}
+	others, err := o.otherDefinitions(ctx, target, in.Name)
+	if err != nil {
 		return RowOut{}, err
 	}
 	// Default visibility: internal in a store registry, not in a repo.
@@ -383,7 +407,50 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 	if meta.TagLike(in.Name) {
 		human += tagLikeNote(in.Name)
 	}
+	human += others
 	return RowOut{ID: w.Row.ID.String(), Store: string(target), Human: human}, nil
+}
+
+// otherDefinitions is the warning of a key registered while a live key
+// of the same name is registered at another place a row can see together
+// with target: the store's own registry and one of its folders, or any
+// other place this repo reads. Such a pair is a supported state (meta move
+// and adopt fold it, a scope form or a mky_ id picks one), but it used to
+// be made silently and every later bare `meta set --pair name=…` on a row
+// that sees both failed E_META_AMBIGUOUS (devco:D-922, H-180), so the
+// registration now names both definitions and what that means.
+func (o ops) otherDefinitions(ctx context.Context, target store.Source, name string) (string, error) {
+	attached := engine.ReadStoresOf(o.env)
+	places := slices.Clone(attached)
+	root, _, inFolder := strings.Cut(string(target), folderSep)
+	if inFolder && !slices.Contains(places, store.Source(root)) {
+		places = append(places, store.Source(root))
+	}
+	var lines []string
+	for _, src := range places {
+		if src == target {
+			continue
+		}
+		rows, err := liveRows(ctx, o.env, []store.Source{src}, schema.TableMetaKeys)
+		if err != nil {
+			if !slices.Contains(attached, src) {
+				continue // the store's own registry is not attached here: nothing to compare
+			}
+			return "", err
+		}
+		for _, k := range rows {
+			if text(k.Row, mName) != name || text(k.Row, mMergedInto) != "" {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("  %s  %s  %s", o.place(k.Src), k.Row.ID, text(k.Row, mType)))
+		}
+	}
+	if len(lines) == 0 {
+		return "", nil
+	}
+	return fmt.Sprintf("warning: %q is also registered in:\n%s\n"+
+		"  a row that sees both definitions needs one named (mky_<id>=value, or a scope form such as repo:%s=…), or meta set answers E_META_AMBIGUOUS; lore meta keys --key %s lists them\n",
+		name, strings.Join(lines, "\n"), name, name), nil
 }
 
 // triStateBool applies a --x / --no-x pair to b.
@@ -500,7 +567,7 @@ func (o ops) metaDelete(ctx context.Context, in MetaDeleteIn) (RowOut, error) {
 }
 
 func (o ops) metaValueAdd(ctx context.Context, in MetaValueAddIn) (RowOut, error) {
-	if err := checkMetaValues([]string{in.Value}); err != nil {
+	if err := checkMetaValues("--value", []string{in.Value}); err != nil {
 		return RowOut{}, err
 	}
 	k, err := o.metaKey(ctx, in.Key)
@@ -524,7 +591,7 @@ func (o ops) metaValueAdd(ctx context.Context, in MetaValueAddIn) (RowOut, error
 }
 
 func (o ops) metaValueRename(ctx context.Context, in MetaValueRenameIn) (RowOut, error) {
-	if err := checkMetaValues([]string{in.New}); err != nil {
+	if err := checkMetaValues("--new-value", []string{in.New}); err != nil {
 		return RowOut{}, err
 	}
 	k, err := o.metaKey(ctx, in.Key)
@@ -609,12 +676,12 @@ type MetaSetIn struct {
 	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
 	// names is, so the write runs from any folder as reads take --store.
 	op.StoreFlag
-	ID   string `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, a key=value pair"`
+	ID   string `json:"id,omitempty" arg:"0" desc:"the row (any id: a memory, rule, task, resource, person or team…; see E_META_TABLE for the list); with --where, a key=value pair"`
 	Pair string `json:"pair,omitempty" arg:"1" desc:"key=value, key:type=value, project:key=value"`
 	// Where and DryRun are the bulk form (3.19): every row the filter
 	// names, one batch.
 	Where  []string `json:"where,omitempty" flag:"where" desc:"set on every row matching this filter (repeatable, ANDed; one batch)"`
-	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be removed (with --where: the rows); write nothing"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"check the row, its table and every key name as the write does, and say what would be set (with --where: the rows); write nothing"`
 	All    bool     `json:"all,omitempty" flag:"all" desc:"with --dry-run: list every row, not a sample"`
 	More   []string `json:"set,omitempty" flag:"set" desc:"more key=value pairs (repeatable)"`
 	JSON   []string `json:"json,omitempty" flag:"meta-json" desc:"a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)"`
@@ -822,11 +889,48 @@ func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	for _, t := range append(slices.Clone(mw.Set), mw.JSON...) {
 		names = append(names, t.Name())
 	}
+	if in.DryRun {
+		return o.metaSetDry(ctx, id, mw, names)
+	}
 	sens, err := o.sensitiveKeyIDs(ctx)
 	if err != nil {
 		return RowOut{}, err
 	}
 	return o.metaRowWrite(ctx, id, mw, func(r row.Row) string { return "set " + setEcho(r, names, sens) })
+}
+
+// metaSetDry is `meta set --id <id> --pair k=v --dry-run`: the one-row
+// form read --dry-run only with --where, so it ran the write it was told
+// to preview. It now refuses what the write refuses before any key is
+// resolved (the row is live, its table takes metadata: E_META_TABLE; each
+// key name: E_META_KEY, E_META_RESERVED) and writes nothing
+// (devco:D-922, H-180).
+func (o ops) metaSetDry(ctx context.Context, id ids.AnyID, mw engine.MetaWrite, names []string) (RowOut, error) {
+	src, r, err := o.env.Get(ctx, engine.Ref{ID: id})
+	if err != nil {
+		return RowOut{}, err
+	}
+	if r.Deleted {
+		return RowOut{}, errs.New(errs.InTrash, id.String()+" is in the trash").WithHint("lore trash restore --id " + id.String())
+	}
+	if !engine.AcceptsMeta(r.Table) {
+		return RowOut{}, errs.New(errs.MetaTable, "metadata cannot be set on "+string(r.Table)+" from the command line; "+engine.MetaTablesRule).
+			WithHint("put the value on a row of one of those tables (a memory, task, rule, resource, …) instead")
+	}
+	cols := builtinColumns()
+	for _, t := range append(slices.Clone(mw.Set), mw.JSON...) {
+		if !t.KeyID.IsZero() {
+			continue
+		}
+		if err := meta.CheckName(t.Key, meta.MaxDepth); err != nil {
+			return RowOut{}, err
+		}
+		if err := meta.Reserved(t.Key, cols); err != nil {
+			return RowOut{}, err
+		}
+	}
+	return RowOut{ID: id.String(), Store: string(src), DryRun: true, IDs: []string{id.String()},
+		Human: "would set " + strings.Join(names, ", ") + " on " + id.String() + "; nothing written (dry run)\n"}, nil
 }
 
 // unsetKeys are the keys a meta unset names: every --key (repeatable), and

@@ -35773,7 +35773,7 @@
                   },
                   "name": {
                     "type": "string",
-                    "description": "the key (snake_case)"
+                    "description": "the key (snake_case, dotted for a field; not a reserved word: id, meta, _*, mky*, val*, a type word, repo, project, org or a column name such as state, status, title)"
                   },
                   "no_internal": {
                     "type": "boolean",
@@ -35797,7 +35797,7 @@
                   },
                   "values": {
                     "type": "string",
-                    "description": "allowed values, comma separated (a closed set, at most 100)"
+                    "description": "allowed values, comma separated (a closed set, at most 100; each snake_case: a-z, 0-9 and _, starting with a letter)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -35849,7 +35849,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_META_KEY, E_META_RESERVED, E_META_SIZE, E_META_TYPE",
             "content": {
               "application/json": {
                 "schema": {
@@ -38667,11 +38667,11 @@
                   },
                   "dry_run": {
                     "type": "boolean",
-                    "description": "list what would be removed (with --where: the rows); write nothing"
+                    "description": "check the row, its table and every key name as the write does, and say what would be set (with --where: the rows); write nothing"
                   },
                   "id": {
                     "type": "string",
-                    "description": "the row (any id); with --where, a key=value pair"
+                    "description": "the row (any id: a memory, rule, task, resource, person or team…; see E_META_TABLE for the list); with --where, a key=value pair"
                   },
                   "json": {
                     "type": "array",
@@ -39665,10 +39665,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the row (any id); with --where, a key=value pair",
+            "description": "the row (any id: a memory, rule, task, resource, person or team…; see E_META_TABLE for the list); with --where, a key=value pair",
             "schema": {
               "type": "string",
-              "description": "the row (any id); with --where, a key=value pair"
+              "description": "the row (any id: a memory, rule, task, resource, person or team…; see E_META_TABLE for the list); with --where, a key=value pair"
             },
             "x-lore-field": "id"
           }
@@ -39686,7 +39686,7 @@
                   },
                   "dry_run": {
                     "type": "boolean",
-                    "description": "list what would be removed (with --where: the rows); write nothing"
+                    "description": "check the row, its table and every key name as the write does, and say what would be set (with --where: the rows); write nothing"
                   },
                   "json": {
                     "type": "array",

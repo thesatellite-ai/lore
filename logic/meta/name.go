@@ -2,6 +2,7 @@ package meta
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -222,6 +223,37 @@ func Reserved(name string, columns map[string]bool) error {
 	if why == "" {
 		return nil
 	}
-	return errs.New(errs.MetaReserved, fmt.Sprintf("meta: %q %s, so it cannot be a metadata key", top, why)).
-		WithHint("use another name")
+	// devco:D-922 (H-180): the refusal names every reserved word and a name
+	// that passes, so an import learns the rule from the first error
+	// instead of one refusal per key (the help of meta add says the same).
+	return errs.New(errs.MetaReserved, fmt.Sprintf("meta: %q %s, so it cannot be a metadata key; %s", top, why, ReservedRule)).
+		WithHint("use another name, e.g. --name " + suggestFor(top))
+}
+
+// ReservedRule says which key names lore keeps for itself (3.5), in one
+// line: the error of a reserved name and the --help of meta add print it,
+// so the rule is visible before a write is refused (devco:D-922).
+var ReservedRule = "reserved are: id, meta, names starting with _ , mky, val, mky_*, val_*, the type words (" +
+	strings.Join(sortedWords(typeWords, string(value.KindRef)), ", ") + "), the level words (" +
+	strings.Join(sortedWords(levelWords), ", ") + ") and every column name of a lore table (state, status, title, body, kind, …)"
+
+// sortedWords is the sorted keys of set plus extra.
+func sortedWords(set map[string]bool, extra ...string) []string {
+	out := append([]string{}, extra...)
+	for w := range set {
+		out = append(out, w)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// suggestFor is a name that is not reserved for a reserved top segment:
+// the word with a qualifier in front ("state" → "item_state"), which no
+// column, type or level word starts with.
+func suggestFor(top string) string {
+	w := strings.TrimLeft(top, "_")
+	if w == "" {
+		w = "key"
+	}
+	return "item_" + w
 }

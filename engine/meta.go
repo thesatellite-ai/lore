@@ -171,6 +171,18 @@ var metaTables = map[row.Table]bool{
 	schema.TableActors: true, schema.TableTeams: true,
 }
 
+// MetaTablesRule names every table that takes metadata (devco:D-922):
+// E_META_TABLE and the help of meta set print it, so nobody learns the
+// list one refusal at a time.
+var MetaTablesRule = func() string {
+	names := make([]string, 0, len(metaTables))
+	for t := range metaTables {
+		names = append(names, string(t))
+	}
+	slices.Sort(names)
+	return "metadata goes on rows of " + strings.Join(names, ", ")
+}()
+
 // AcceptsMeta reports whether rows of table take metadata from the CLI.
 func AcceptsMeta(table row.Table) bool { return metaTables[table] }
 
@@ -368,8 +380,8 @@ func (e *Engine) createMetaScreened(ctx context.Context, cl call, target store.S
 func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
 	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite, creating bool, sc *screened) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
 	if !metaTables[def.Name] {
-		return nil, nil, errs.New(errs.MetaTable, "metadata cannot be set on "+string(def.Name)+" from the command line; knowledge, work and resource rows, people and teams accept it").
-			WithHint("lore help meta")
+		return nil, nil, errs.New(errs.MetaTable, "metadata cannot be set on "+string(def.Name)+" from the command line; "+MetaTablesRule).
+			WithHint("put the value on a row of one of those tables (a memory, task, rule, resource, …) instead")
 	}
 	reg, err := e.metaRegistry(ctx)
 	if err != nil {
