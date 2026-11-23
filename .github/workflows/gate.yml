@@ -1,0 +1,42 @@
+name: Gate
+
+# The full gate (owner 2026-11-23): every step of `task check` (GATE_STEPS in Taskfile.lore.yml), one matrix job per
+# step, on every push to dev and on demand for any ref. Releases wait for this run on the exact release commit.
+# This first version runs the build and the lint steps only; the matrix of every GATE_STEP follows.
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit, branch or tag to test (default: the branch the run starts on)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-${{ github.event.inputs.ref || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          out=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$out" ]; then echo "::error::gofmt needs to be run on:"; echo "$out"; exit 1; fi
+      - name: go vet
+        run: go vet ./...
+      - name: go build
+        env:
+          CGO_ENABLED: "0"
+        run: go build -o "$RUNNER_TEMP/lore" ./cmd/lore
