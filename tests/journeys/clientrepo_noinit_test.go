@@ -55,11 +55,18 @@ func TestJourneyClientRepoNoInit(t *testing.T) {
 		lee.LoreIn(shop, "org", "link", tlOrg, "--project", cnFolder, "--yes").OK(t)
 		lee.LoreIn(shop, "memory", "add", "--body", "the shop deploys on fridays").OK(t).Says(t, cnFolder)
 		lee.LoreIn(shop, "where").OK(t).Says(t, shop.Dir).Never(t, "gone: moved or deleted")
-		// devco N-8: a write the repo itself would hold (policy set's default
-		// --to repo) was refused with a bare "store: attached read-only",
-		// naming no store, no cause and no next step.
-		lee.LoreIn(shop, "policy", "set", "--key", "context.targets", "--value", "codex", "--yes").
+		// devco N-8: a write the repo itself would hold (--to repo) was
+		// refused with a bare "store: attached read-only", naming no store,
+		// no cause and no next step.
+		lee.LoreIn(shop, "policy", "set", "--key", "context.targets", "--value", "codex", "--to", "repo", "--yes").
 			Fails(t, 23, "client repo", cnSlug, "--to "+tlOrg).Never(t, "store: attached read-only")
+		// Since #126 (devco D-912, 8a23b6fb) a linked client repo's settings
+		// live in the folder its link names, as an own linked repo's do
+		// (RepoHomeStore): policy set's default target writes there, and the
+		// repo itself still holds nothing (checked below). This step expected
+		// the default to be refused before; that refusal is now --to repo's.
+		lee.LoreIn(shop, "policy", "set", "--key", "context.targets", "--value", "codex", "--yes").OK(t).Says(t, cnFolder)
+		lee.LoreIn(shop, "policy", "show").OK(t).Says(t, "context.targets", "codex")
 		lee.LoreIn(shop, "policy", "set", "--key", "context.targets", "--value", "codex", "--to", tlOrg, "--yes").OK(t)
 		if st := shop.Git("status", "--porcelain", "--ignored"); st != "" {
 			t.Fatalf("the linked client repo must hold nothing of lore's:\n%s", st)

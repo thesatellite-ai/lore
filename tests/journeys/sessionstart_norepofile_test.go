@@ -60,10 +60,12 @@ func TestJourneySessionStartServesPinnedWithoutLoreMD(t *testing.T) {
 				t.Fatalf("sync SessionStart: %q appears %d times, want once:\n%s", s, n, r.Stdout)
 			}
 		}
-		// the private render's order: rules, then hotfixes; a should rule
-		// is not always-on
-		if strings.Index(r.Stdout, "Always run the migrations") > strings.Index(r.Stdout, "Restart the worker") {
-			t.Fatalf("sync SessionStart: the hotfix came before the rule:\n%s", r.Stdout)
+		// the private render's rank order (devco:D-909, 88bc32a1: the
+		// budget fit ranks every pinned row): a critical hotfix, then the
+		// must rules for every file; a should rule is not always-on. This
+		// step expected rules before hotfixes, the order before D-909.
+		if strings.Index(r.Stdout, "Restart the worker") > strings.Index(r.Stdout, "Always run the migrations") {
+			t.Fatalf("sync SessionStart: the must rule came before the critical hotfix:\n%s", r.Stdout)
 		}
 		r.Never(t, "Prefer short commit subjects.")
 

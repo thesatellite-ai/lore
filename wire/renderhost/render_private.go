@@ -664,9 +664,10 @@ type privateSection struct {
 type privateBody struct {
 	head   string
 	pinned int // pinned rows (pins)
-	// pins are the pinned rules then hotfixes, in id order (the
-	// SessionStart hook serves what the file shows of them where no LORE.md
-	// is: devco D-494)
+	// pins are the pinned rules and hotfixes in rank order (critical
+	// hotfixes, must rules for every file, high hotfixes, path-scoped must
+	// rules: devco D-909); the SessionStart hook serves what the file shows
+	// of them where no LORE.md is (devco D-494)
 	pins     []privatePin
 	sections []privateSection
 	// origins are the store, id and HLC of every row the file lists
