@@ -80,7 +80,9 @@ func TestStoryODocsImportDraftsUnverifiedNotes(t *testing.T) {
 		}
 		oCheck(t, "D-940/import-printed-ids", len(noted) == 3, "the import printed %d ids, want 3:\n%s", len(noted), r.Stdout)
 		ada.LoreIn(code, "memory", "list", "--meta", "fact_status=unverified", "--to", "kb/notes", "--json").OK(t).
-			Says(t, `"fact_evidence": "TECHNICAL.md:5, internal/queue/worker.go:4"`, `"source_kind": "imported"`, `"source_ref": "TECHNICAL.md:7"`)
+			// fact_evidence is a built-in list key since H-190 (D-941): the import's comma-joined evidence is stored as a list and
+			// lists print joined with " | " (meta.Show)
+			Says(t, `"fact_evidence": "TECHNICAL.md:5 | internal/queue/worker.go:4"`, `"source_kind": "imported"`, `"source_ref": "TECHNICAL.md:7"`)
 		ada.LoreIn(code, "decision", "list", "--meta", "fact_status=unverified", "--to", "kb/notes").OK(t).Says(t, "[proposed]", "Postgres advisory locks")
 	})
 
