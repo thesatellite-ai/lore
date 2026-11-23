@@ -55,7 +55,7 @@ lore: wrote ~/work/website/.lore/data/decisions/dec_76bd…3f10.json
 
 ## Step 3 — Search and delete comments
 
-`lore comment search --query <words>` searches the text of every comment. `lore comment delete --id <id> --yes` moves a comment to the trash; `lore trash restore --id <id>` brings it back.
+`lore comment search --query <words>` searches the text of every comment. A comment is history: `lore search` lists it directly under the row it is on (that row first when only the comment matches), its line naming that row and marked `[comment: history]`, and `lore ask` answers with the row and prints the comment under it as history ([Search](search.md)). `lore comment delete --id <id> --yes` moves a comment to the trash; `lore trash restore --id <id>` brings it back.
 
 <!-- example: knowledge#comment only=3,4 -->
 ```console

@@ -56,6 +56,10 @@ type textRow struct {
 	// times, ~5 ms of a warm served "where does X work now" (devco
 	// D-847).
 	words map[string]bool
+	// comments are the comments on the row, oldest first (comments.go,
+	// devco D-942): history, which can make the row answer, never answer
+	// in its place.
+	comments []rowComment
 }
 
 // tokens is the word set of r's title and body (tokensOf), built on the
@@ -113,6 +117,9 @@ type scored struct {
 	fused float64
 	// meaning says the row answers by meaning alone (textRow.meaning).
 	meaning bool
+	// comments are the row's comments holding a word of the question
+	// (devco D-942), printed under it as history.
+	comments []Comment
 }
 
 // staleNote says why row r is no longer the current answer as lore
@@ -311,8 +318,18 @@ func build(q question, d data, top, maxChars int) Out {
 	}
 	out.chunkLong()
 	out.cap(out.rank(q, identity, lead), maxChars)
+	comments := map[string][]Comment{}
+	for _, r := range out.Rows {
+		comments[r.ID] = r.Comments
+	}
 	for _, r := range out.Ranked {
 		out.Cited = append(out.Cited, r.ID)
+		if r.Kind == KindRow {
+			// D-942: a comment printed under its row is cited after it
+			for _, c := range comments[r.ID] {
+				out.Cited = append(out.Cited, c.ID)
+			}
+		}
 	}
 	return out
 }
@@ -631,6 +648,7 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	toks := r.tokens()
 	var first map[string]bool // the title and first line's words, built at the first topic hit
 	s := scored{row: r}
+	cmts := map[string]bool{} // the comments holding a word of q (D-942)
 	if len(ms) > 0 {
 		if !subjectOf(r, toks, ms) {
 			return s, false
@@ -659,8 +677,19 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 		if hasWord(toks, w) {
 			s.score += 3
 			s.matched = append(s.matched, w)
+			if len(r.comments) > 0 {
+				commentWord(r, w, cmts)
+			}
+			continue
+		}
+		if len(r.comments) > 0 && commentWord(r, w, cmts) {
+			// D-942: a word only a comment on the row holds makes the row
+			// answer, below a row that holds it itself
+			s.score++
+			s.matched = append(s.matched, w)
 		}
 	}
+	s.comments = commentsOf(r, cmts)
 	if s.score == 0 && r.meaning {
 		// nearest the question in meaning, sharing none of its words: the
 		// lowest band, after every row holding a word (corpus.go, devco
@@ -826,6 +855,7 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 	for _, s := range pick {
 		r := rowOf(s.row, s.matched)
 		r.History = s.history
+		r.Comments = s.comments
 		// a fact that changed: the newest row on the same thing says
 		// which of the rows shown with it it replaces (the newest of them)
 		var last *textRow
@@ -1388,6 +1418,7 @@ func (r Row) text(i int) string {
 	if r.FullChars > 0 {
 		fmt.Fprintf(&b, "   (%s; lore show --id %s prints it whole)\n", r.cutNote(), r.ID)
 	}
+	b.WriteString(r.commentLines())
 	return b.String()
 }
 

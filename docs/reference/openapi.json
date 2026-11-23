@@ -7042,6 +7042,29 @@
                           "body": {
                             "type": "string"
                           },
+                          "comments": {
+                            "type": "array",
+                            "description": "comments on this row holding a word of the question, oldest first; read them as history (what someone said about the row then), the row is the answer",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "at": {
+                                  "type": "string",
+                                  "description": "the day it was written"
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "body"
+                              ]
+                            }
+                          },
                           "full_chars": {
                             "type": "integer",
                             "description": "set when the row was cut to the part that answers the question: a markdown row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, best first, each after a line § \u003cheading path\u003e), and a row longer than --max-chars its best sections or else its best paragraph (… marking text left out); this is the whole body's length; lore show --id \u003cid\u003e prints it whole"
@@ -78756,6 +78779,33 @@
                                 "type": "string",
                                 "description": "short label of the row (title, name or cut body)"
                               },
+                              "comment_on": {
+                                "type": "object",
+                                "description": "set on a comment hit: the row it comments on; a comment is history and is listed directly under that row, never above it",
+                                "properties": {
+                                  "entity": {
+                                    "type": "string",
+                                    "description": "the kind of that row (decision, memory, …)"
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "description": "the id of that row"
+                                  },
+                                  "table": {
+                                    "type": "string",
+                                    "description": "the table of the row the comment is on (decisions, memories, …)"
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "description": "that row's title, or the start of its body; empty when the row could not be read"
+                                  }
+                                },
+                                "required": [
+                                  "table",
+                                  "entity",
+                                  "id"
+                                ]
+                              },
                               "entity": {
                                 "type": "string",
                                 "description": "singular noun (memory, rule, …)"
@@ -78810,6 +78860,10 @@
                               "title": {
                                 "type": "string",
                                 "description": "the row's title or name; empty for a kind without one"
+                              },
+                              "via_comment": {
+                                "type": "string",
+                                "description": "set on a row listed only because a comment on it matched: that comment's id, listed under it"
                               }
                             },
                             "required": [
@@ -78849,6 +78903,33 @@
                                 "type": "string",
                                 "description": "short label of the row (title, name or cut body)"
                               },
+                              "comment_on": {
+                                "type": "object",
+                                "description": "set on a comment hit: the row it comments on; a comment is history and is listed directly under that row, never above it",
+                                "properties": {
+                                  "entity": {
+                                    "type": "string",
+                                    "description": "the kind of that row (decision, memory, …)"
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "description": "the id of that row"
+                                  },
+                                  "table": {
+                                    "type": "string",
+                                    "description": "the table of the row the comment is on (decisions, memories, …)"
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "description": "that row's title, or the start of its body; empty when the row could not be read"
+                                  }
+                                },
+                                "required": [
+                                  "table",
+                                  "entity",
+                                  "id"
+                                ]
+                              },
                               "entity": {
                                 "type": "string",
                                 "description": "singular noun (memory, rule, …)"
@@ -78903,6 +78984,10 @@
                               "title": {
                                 "type": "string",
                                 "description": "the row's title or name; empty for a kind without one"
+                              },
+                              "via_comment": {
+                                "type": "string",
+                                "description": "set on a row listed only because a comment on it matched: that comment's id, listed under it"
                               }
                             },
                             "required": [

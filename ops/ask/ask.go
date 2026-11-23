@@ -210,6 +210,10 @@ type Row struct {
 	// FullChars is the whole body's length (lore show --id prints it).
 	FullChars int    `json:"full_chars,omitempty" desc:"set when the row was cut to the part that answers the question: a markdown row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, best first, each after a line § <heading path>), and a row longer than --max-chars its best sections or else its best paragraph (… marking text left out); this is the whole body's length; lore show --id <id> prints it whole"`
 	History   string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
+	// Comments are the comments on the row that hold a word of the
+	// question (devco D-942): history, printed under the row, never an
+	// answer of their own.
+	Comments []Comment `json:"comments,omitempty" desc:"comments on this row holding a word of the question, oldest first; read them as history (what someone said about the row then), the row is the answer"`
 	// readTitle and readBody are Title and Body as the text answer prints
 	// them: each ${res:…} naming a resource the ask read replaced by the
 	// resource's name (refs.Readable, devco D-822). --json keeps the
@@ -314,7 +318,7 @@ func cell(v value.Value) string {
 // "<table>_all" view): the lens is built with these alone (devco D-813),
 // so a call does not read and view the other tables of every cache.
 // TestLensTablesCoverTheStatements fails when a statement reads another.
-var LensTables = []string{"resources", "kinds", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents", "hotfixes"}
+var LensTables = []string{"resources", "kinds", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents", "hotfixes", "comments"}
 
 // typedSQL reads the resources (with kind name, fields and history), the
 // open tasks, their owed_by / owed_to metadata and their --ref pointers,
@@ -334,7 +338,7 @@ FROM knowledge_refs_all kr WHERE kr.src_table = 'tasks' AND kr.dst_table = 'reso
 // keeps typedSQL's answer, read by every question, across calls; devco:D-846
 // adds textSQL and daysSQL, which name no word or day of the question).
 func FileOnly(statement string) bool {
-	return statement == typedSQL || statement == textSQL || statement == daysSQL
+	return statement == typedSQL || statement == textSQL || statement == daysSQL || statement == commentsSQL
 }
 
 // loadTyped reads the resources and the open tasks.
@@ -685,6 +689,10 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	notes, err := loadComments(ctx, run) // D-942: comments make their row answer
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	refs := map[string][]string{}
 	for _, row := range res.Rows {
 		if len(row) < textCols || cell(row[colKind]) != "ref" || !f.ids[cell(row[colRefID])] {
@@ -697,6 +705,7 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 	// fill sets a row's day metadata for the question (metaDayOf, devco
 	// D-903): the rows picked here and the rows joining by meaning
 	fill = func(r *textRow) {
+		r.comments = notes[r.ID]
 		if f.win {
 			r.Day = metaDayOf(q, f.days[r.ID], r.stored, f.near)
 		}
@@ -705,7 +714,7 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 	for i := range pickLines(res.Rows) {
 		row := res.Rows[i]
 		id := cell(row[colID])
-		if f.answers(row, id) {
+		if f.answers(row, id) || f.byText && commentsHold(notes[id], f.pats) {
 			r := c.rows[c.at[id]]
 			r.Refs = refs[id]
 			fill(&r)

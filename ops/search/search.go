@@ -237,6 +237,13 @@ type Hit struct {
 	// its valid_until. Such hits are listed after every current hit and
 	// marked, so an agent never reads an old fact as the answer.
 	History string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id> or valid until <day>; such hits come after the current ones"`
+	// CommentOn is set on a comment hit (devco D-942): the row it is on.
+	// A comment is history, so it is listed directly under that row,
+	// never above it (GroupComments).
+	CommentOn CommentOn `json:"comment_on,omitzero" desc:"set on a comment hit: the row it comments on; a comment is history and is listed directly under that row, never above it"`
+	// ViaComment is set on a row listed only because a comment on it
+	// matched (devco D-942): the comment's id; the comment follows it.
+	ViaComment string `json:"via_comment,omitempty" desc:"set on a row listed only because a comment on it matched: that comment's id, listed under it"`
 	// Meta / MetaMasked are the hit row's metadata by name, sensitive
 	// values masked (MQ13 / METADATA 3.17: search hits carry it; absent
 	// when the row has none, so v0.1.17's hit bytes stay for such rows).
@@ -529,9 +536,8 @@ func (o RunOut) Text() string {
 	}
 	fmt.Fprintf(&b, "%s %d %s for %q across %d %s:\n\n", lead, n, plural(n, "hit", "hits"), o.Data.Query,
 		types, plural(types, "entity type", "entity types"))
-	if o.Data.Hits[0].Partial {
-		// D-435: hits are best first, so a partial first hit means no row
-		// holds every word
+	if !holdsEveryWord(o.Data.Hits) {
+		// D-435: no live hit holds every word
 		b.WriteString("No row holds every word; these hold some of them, most first.\n\n")
 	}
 	typeW, idW := 0, 0
@@ -556,6 +562,13 @@ func (o RunOut) Text() string {
 		if h.History != "" {
 			body += "  [" + h.History + "]"
 		}
+		if h.CommentOn.ID != "" {
+			// D-942: a comment says which row it is on and that it is history
+			body = commentLabel(h.CommentOn) + titleSep + strings.TrimPrefix(body, "  ") + "  " + commentNote
+		}
+		if h.ViaComment != "" {
+			body += "  (listed for its comment " + h.ViaComment + ")"
+		}
 		if body = strings.TrimPrefix(body, "  "); body != "" {
 			body += "  "
 		}
@@ -571,6 +584,24 @@ func (o RunOut) Text() string {
 		b.WriteString(morehits.Note(n, o.limit))
 	}
 	return b.String()
+}
+
+// holdsEveryWord reports whether a hit holds every word of the query.
+// The first hit decided it before D-942; a row listed above its comment
+// may hold fewer words than the comment under it.
+// Only live hits count: the trash tail is matched by every word, never
+// partial, and a list of trashed rows alone printed no such line.
+func holdsEveryWord(hits []Hit) bool {
+	live := false
+	for _, h := range hits {
+		if h.InTrash {
+			continue
+		}
+		if live = true; !h.Partial {
+			return true
+		}
+	}
+	return !live
 }
 
 // fullCapNote is the line a --full search ends with when hits past the

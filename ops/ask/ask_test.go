@@ -284,16 +284,26 @@ func TestCapKeepsReadingOrder(t *testing.T) {
 type fakeEnv struct {
 	stmts []string
 	keeps bool
+	// comments are the lines the comments statement answers (D-942)
+	comments [][]value.Value
+	// rows, when set, are the lines the text statement answers
+	rows [][]value.Value
 }
 
 func (f *fakeEnv) AskLens(_ context.Context, _ bool, fn func(q Query, keeps bool) error) error {
 	return fn(func(_ context.Context, s string) (opssql.Result, error) {
 		f.stmts = append(f.stmts, s)
 		txt := func(s string) value.Value { v, _ := value.TextOf(s); return v }
+		if strings.Contains(s, "comments_all") {
+			return opssql.Result{Rows: f.comments}, nil
+		}
 		if strings.Contains(s, "resources_all") {
 			return opssql.Result{Rows: [][]value.Value{
 				{txt("res"), txt("res_alice"), txt("me/work"), txt("person"), txt("alice-ng"), txt(`{"fld_1":{"name":"role","v":"engineer"}}`), txt(""), txt(""), txt(`["Ally"]`)},
 			}}, nil
+		}
+		if f.rows != nil {
+			return opssql.Result{Rows: f.rows}, nil
 		}
 		return opssql.Result{Rows: [][]value.Value{
 			{txt("row"), txt("memories"), txt("mem_1"), txt("me/work"), txt(""), txt("Met alice-ng about lumen."), txt("2026-11-01T00:00:00.000000000Z"), txt("0"), txt(""), txt(""), txt(" met alice-ng about lumen.")},
@@ -313,11 +323,11 @@ func TestRunOneLens(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(env.stmts) != 2 {
+		if len(env.stmts) != 3 {
 			t.Fatalf("keeps %v: statements: %q", keeps, env.stmts)
 		}
-		if !FileOnly(env.stmts[1]) {
-			t.Fatalf("keeps %v: rows statement %q", keeps, env.stmts[1])
+		if !FileOnly(env.stmts[1]) || !FileOnly(env.stmts[2]) {
+			t.Fatalf("keeps %v: rows and comments statements %q", keeps, env.stmts[1:])
 		}
 		if len(out.Resources) != 1 || out.Resources[0].Fields[0].Value != "engineer" || len(out.Rows) != 1 || strings.Join(out.Resources[0].Aliases, ",") != "Ally" {
 			t.Fatalf("keeps %v: out: %+v", keeps, out)

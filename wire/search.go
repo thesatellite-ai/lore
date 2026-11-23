@@ -219,6 +219,12 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		}
 		return res.Hits[i].Score > res.Hits[j].Score
 	})
+	// D-942: a comment is history, listed under the row it is on (that row
+	// listed first when only the comment matched), before the cut so a
+	// comment never takes the place of its row
+	res.Hits = opssearch.GroupComments(res.Hits, func(c opssearch.CommentOn) (opssearch.Hit, bool, bool) {
+		return a.commentParent(ctx, eng, r.Targets, sc, c)
+	})
 	if len(res.Hits) > r.Limit {
 		res.More, res.Hits = true, res.Hits[:r.Limit]
 	}
@@ -233,6 +239,48 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		res.Hits = append(res.Hits, trashed...)
 	}
 	return res, nil
+}
+
+// commentParent reads the row comment c is on as a hit of its kind
+// (opssearch.CommentParent, devco D-942). inScope is true only when the
+// row's kind is among targets (--tables) and the search's scope keeps it,
+// as searchCoreTable keeps a hit: a row the search would leave out is not
+// listed for its comment, its title only labels the comment.
+func (a *App) commentParent(ctx context.Context, eng *engine.Engine, targets []opssearch.Target, sc searchScope, c opssearch.CommentOn) (opssearch.Hit, bool, bool) {
+	id, err := ids.ParseAny(c.ID)
+	if err != nil || c.Table == "" {
+		return opssearch.Hit{}, false, false
+	}
+	t, searched := opssearch.Target{}, false
+	for _, x := range targets {
+		if x.Table.String() == c.Table && !x.Roster {
+			t, searched = x, true
+		}
+	}
+	if !searched {
+		for _, x := range opssearch.Targets() {
+			if x.Table.String() == c.Table && !x.Roster {
+				t = x
+			}
+		}
+	}
+	if t.Entity == "" {
+		return opssearch.Hit{}, false, false // a kind search does not list
+	}
+	src, r, err := eng.Get(ctx, engine.Ref{Table: t.Table, ID: id})
+	if err != nil || r.Deleted {
+		return opssearch.Hit{}, false, false
+	}
+	h := hitOf(t, id.String(), "", r, a.Now())
+	h.Text = "" // listed for its comment: --full prints the row's text only for a row that matched
+	kept := sc.fromStore(src)
+	if src == store.SourceRepo {
+		kept = kept && sc.keeps(t, r)
+	} else {
+		h.Source = a.DescribeSource(src)
+		kept = kept && sc.keepsStoreRow(t, r)
+	}
+	return h, true, searched && kept
 }
 
 // searchScope resolves the project (the repo's one project) and --repo
@@ -524,6 +572,11 @@ func hitOf(t opssearch.Target, id, snippet string, r row.Row, now time.Time) ops
 	}
 	if t.Entity == opssearch.EntityResource {
 		h.ResourceKind = searchField(r, searchFieldKind)
+	}
+	if t.Table == schema.TableComments {
+		// D-942: a comment names the row it is on (placeComments reads its
+		// kind and title)
+		h.CommentOn = opssearch.CommentOn{Table: searchField(r, schema.FieldEntityTable), ID: searchField(r, schema.FieldEntityID)}
 	}
 	h.Fallback = opssearch.TruncBody(strings.Join(strings.Fields(searchField(r, "body")), " "), opssearch.BodyMax)
 	// D-758: the whole text for --full (search.run drops it without

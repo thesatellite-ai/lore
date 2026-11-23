@@ -158,11 +158,11 @@ func (r Row) line(place, oneDay bool) string {
 			b.WriteString(strings.TrimRight("   "+l, " ") + "\n")
 		}
 		fmt.Fprintf(&b, "   (%s; lore show --id %s prints it whole)\n", r.cutNote(), r.ID)
-		return b.String()
+		return b.String() + r.commentLines()
 	}
 	b.WriteString(" " + oneLine(r))
 	r.historyMark(&b)
-	return b.String() + "\n"
+	return b.String() + "\n" + r.commentLines() // D-942: its comments, as history
 }
 
 // historyMark adds "  [<history>]" to b when r is no longer the current

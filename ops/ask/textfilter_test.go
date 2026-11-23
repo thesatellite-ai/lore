@@ -40,6 +40,9 @@ func textFixture(t *testing.T) Query {
 		`CREATE TABLE incidents_all (id TEXT, place TEXT, title TEXT, body TEXT, created_at TEXT)`,
 		`CREATE TABLE row_refs_all (entity_table TEXT, entity_id TEXT, ref_id TEXT)`,
 		`CREATE TABLE row_meta_all (entity_table TEXT, entity_id TEXT, key_name TEXT, item_idx INTEGER, value_text TEXT)`,
+		// D-942: comments make their row answer; none here, so the rows
+		// picked are the LIKE statement's
+		`CREATE TABLE comments_all (id TEXT, entity_table TEXT, entity_id TEXT, body TEXT, created_at TEXT)`,
 		`INSERT INTO memories_all VALUES
 			('mem_1', 'me/work', 'Met ALICE-NG about Lumen.', NULL, NULL, '2026-11-01T00:00:00.000000000Z', NULL, NULL, NULL),
 			('mem_2', 'me/work', 'Écoute: the Lumen budget is 50% done_now', '2026-11-12T09:00:00.000000000Z', '', '2026-11-02T00:00:00.000000000Z', 'imported', 'mem_9', NULL),
