@@ -755,7 +755,7 @@ func (l *rowLookup) answer(to string) error {
 		for i, h := range l.live {
 			places[i] = h.place
 		}
-		return engine.AmbiguousIDErr(l.id, places)
+		return engine.AmbiguousIDErr(l.id, places, "") // no HLC read here: both directions
 	case l == nil || to != "" || l.livePath != "":
 		return nil
 	case l.gone != nil:

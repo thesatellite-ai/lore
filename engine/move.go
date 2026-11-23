@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"time"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -178,6 +180,9 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		}
 		return Written{}, errs.New(errs.Unsupported, ""+cur.ID.String()+" was in store "+string(to)+" before and left it; a row never returns to a place it left").
 			WithHint("keep it in " + string(src))
+	}
+	if err = refuseOlderTarget(src, to, cur, there); err != nil {
+		return Written{}, err
 	}
 	var moved row.Row
 	var dropped []Warning
@@ -413,6 +418,37 @@ func (e *Engine) internalMeta(ctx context.Context, r row.Row, drop bool) (map[id
 		ws = append(ws, Warning{Code: WarnMetaDropped, Field: n, Message: "kept back: internal metadata " + n + " was removed (--drop-internal)"})
 	}
 	return out, ws, nil
+}
+
+// refuseOlderTarget refuses a move whose target already holds a live copy
+// of the row that is OLDER than the source's copy (nil when there is no
+// live copy there, or it is as new or newer).
+//
+// Why (devco:D-934, bug hunt H-195): a move into a store that already
+// holds the row keeps that copy and only tombstones the source (the
+// interrupted-move rule: a rerun after the copy was written). After `lore
+// store adopt` copied a repo's rows into a store folder, an edit reached
+// the repo copy only; `lore row move --id X --to <folder>` then kept the
+// folder's old text and tombstoned the edited copy: the edit was lost
+// without a word. A move's own copy is always newer than its source (the
+// copy's HLC is ticked past it), so an interrupted move still finishes;
+// only a target copy the source has outgrown is refused, naming the move
+// that keeps the newer copy (the one every list read shows).
+func refuseOlderTarget(src, to store.Source, cur row.Row, there store.Row) error {
+	if there.ID.IsZero() || there.Deleted {
+		return nil
+	}
+	old, err := there.Decode()
+	if err != nil {
+		return err
+	}
+	if cur.HLC.Compare(old.HLC) <= 0 {
+		return nil
+	}
+	id := cur.ID.String()
+	when := func(r row.Row) string { return r.HLC.Wall.UTC().Format(time.RFC3339) }
+	return errs.New(errs.Refused, id+" is in "+string(to)+" already, and the copy in "+string(src)+" is newer ("+when(cur)+", the one in "+string(to)+" "+when(old)+"): the move would keep the older copy in "+string(to)+" and lose the newer text; nothing moved").
+		WithHint("keep the newer copy: lore row move --from " + string(to) + " --where id=" + id + " --to " + string(src) + " --yes (a tombstone replaces the older copy in " + string(to) + "; list, search and ask already show the newer one; lore show --id " + id + " --store " + string(to) + " shows the older text first)")
 }
 
 // locateExcept finds ref's row in ref.Store, or in every attached store

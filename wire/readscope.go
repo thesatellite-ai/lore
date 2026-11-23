@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/op"
 	opsask "github.com/thesatellite-ai/lore/ops/ask"
+	opslint "github.com/thesatellite-ai/lore/ops/lint"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 )
 
@@ -33,13 +34,16 @@ import (
 var listReadSuffixes = []string{".list", ".search"}
 
 // listRead reports whether spec lists or searches rows: a row read named
-// <kind>.list or <kind>.search, or the cross-kind search (search.run).
+// <kind>.list or <kind>.search, the cross-kind search (search.run), ask,
+// or lint (which checks the rows those reads show).
 // Those read the folders of a store attached whole (readScopeFolders).
 func listRead(spec op.Spec) bool {
 	if !spec.OnlyReads() || !rowRead(spec.Name) {
 		return false
 	}
-	if spec.Name == opssearch.OpRun || spec.Name == opsask.OpRun {
+	// devco:D-934: lint compares the rows lists show (copied_id needs
+	// every copy of a row the repo's lists read)
+	if spec.Name == opssearch.OpRun || spec.Name == opsask.OpRun || spec.Name == opslint.OpRun {
 		return true
 	}
 	for _, s := range listReadSuffixes {

@@ -68,7 +68,7 @@ func copiedIDs(all map[row.Table][]sourced) []Finding {
 				id := s.r.ID.String()
 				out = append(out, Finding{Code: CopiedID, ID: id, Store: string(s.src),
 					Message: id + " is live in " + string(kept.src) + " and " + string(s.src) + ": two copies of one row (lore store adopt and a copied row file keep ids); list, search and ask show the newest copy, in " + string(kept.src) + ", and an edit reaches one copy only; compare them with lore show --id " + id + " --store " + string(kept.src) + " and lore show --id " + id + " --store " + string(s.src),
-					Fix:     "keep the copy in " + string(kept.src) + ": lore row move --from " + string(s.src) + " --where id=" + id + " --to " + string(kept.src) + " --yes (a tombstone replaces the copy in " + string(s.src) + "; to keep that copy instead, swap --from and --to)"})
+					Fix:     "keep the copy in " + string(kept.src) + ": lore row move --from " + string(s.src) + " --where id=" + id + " --to " + string(kept.src) + " --yes (a tombstone replaces the copy in " + string(s.src) + "; lore show --id " + id + " --store " + string(s.src) + " shows its text first)"})
 			}
 		}
 	}

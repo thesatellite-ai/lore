@@ -216,7 +216,19 @@ func (a *App) doctorNearDuplicates(ctx context.Context, warn func(string)) {
 // search kept finding the other's old text) and names the lint command
 // that lists each with the command that keeps one copy.
 func (a *App) doctorCopiedIDs(ctx context.Context, warn func(string)) {
-	found, err := opslint.FindCopiedIDs(ctx, a)
+	// devco:D-934: over the folders lists read too (a store attached
+	// whole: lensFolders), where lore store adopt puts the copies
+	var found []opslint.Finding
+	err := a.withExtra(a.lensFolders(ctx), func() error {
+		// open with the folders first: the store list FindCopiedIDs walks
+		// (ReadStores) is empty until a read opens the state
+		if _, eerr := a.Engine(ctx); eerr != nil {
+			return eerr
+		}
+		var ferr error
+		found, ferr = opslint.FindCopiedIDs(ctx, a)
+		return ferr
+	})
 	if err != nil {
 		warn(string(opslint.CopiedID) + ": the rows could not be read: " + err.Error())
 		return

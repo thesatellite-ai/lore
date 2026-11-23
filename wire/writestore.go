@@ -155,7 +155,10 @@ func (a *App) narrowToStore(ctx context.Context, e op.Entry, d op.Decoder, eng *
 	if e.Spec().Access != op.AccessWrite {
 		name = strings.TrimSpace(scopeOf(in).store)
 	}
-	if name == "" || name == string(store.SourceRepo) {
+	// devco:D-934: --store repo narrows as any attached store does:
+	// `lore show --id X --store repo`, the read E_AMBIGUOUS_ID prints,
+	// answered E_AMBIGUOUS_ID itself when a store held a copy of X
+	if name == "" {
 		return ctx
 	}
 	a.mu.Lock()

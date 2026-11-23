@@ -132,7 +132,13 @@ func (a *App) attachFolderOfRow(ctx context.Context, id string) (*idSearch, erro
 				return &idSearch{id: id, gone: attachedGone}, nil // purged ids never move
 			}
 		}
-	} else if gerr == nil || !errs.Has(gerr, errs.NotFound) {
+	} else if gerr == nil {
+		// devco:D-934: found live here; a copy in a folder of a store
+		// attached whole (what lists read) is attached too, so the
+		// lookup sees both copies (idcopies.go)
+		a.attachCopiesBeside(ctx, id)
+		return nil, nil
+	} else if !errs.Has(gerr, errs.NotFound) {
 		return nil, nil
 	}
 	search := &idSearch{id: id}

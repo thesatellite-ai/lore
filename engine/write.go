@@ -1042,7 +1042,23 @@ func (e *Engine) pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	if e.repoFormatOld && slices.Contains(parts, string(store.SourceRepo)) {
 		return copyHit{}, ambiguousOldFormatErr(id.String(), parts)
 	}
-	return copyHit{}, AmbiguousIDErr(id.String(), parts)
+	// devco:D-934: the hint keeps the newest copy (the one every list
+	// read shows, staleCopyOf's rule), never just the last place named;
+	// copies at one version (a fresh lore store adopt) lose nothing either
+	// way, so the hint offers each place
+	return copyHit{}, AmbiguousIDErr(id.String(), parts, newestPlace(live))
+}
+
+// newestPlace is the place of the one newest copy of live (highest HLC),
+// "" when two or more copies share that HLC (one version: any can stay).
+func newestPlace(live []copyHit) string {
+	best := newestCopy(live)
+	for _, h := range live {
+		if h.src != best.src && h.row.HLC.Compare(best.row.HLC) == 0 {
+			return ""
+		}
+	}
+	return string(best.src)
 }
 
 // AmbiguousIDErr is the E_AMBIGUOUS_ID refusal of an id held live in two
@@ -1051,12 +1067,18 @@ func (e *Engine) pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 // that settles copies of one row. One wording for every lookup by id: the
 // engine's (pickCopy) and the outside-a-repo folder scan (wire), which
 // before devco D-689 answered the first folder holding the id.
-func AmbiguousIDErr(id string, places []string) error {
-	// B1-5: the old hint ("name the store with --to") named a flag show,
-	// edit and migrate run do not take. row move does, and settles it: a
-	// move into a store that already holds the row only leaves a tombstone
-	// where the other copy was (Move, interrupted-move rule).
-	keep := places[len(places)-1]
+//
+// keep is the place of the newest copy (highest HLC, the copy list reads
+// show), "" when no one copy is newest (copies at one version) or the
+// caller cannot tell (wire's folder scan reads no HLC). Why (devco:D-934, bug hunt H-195): the hint used to say `lore row
+// move --id X --to <last place>` keeps the copy in <last place>, which
+// kept the stale copy and tombstoned the edited one when the edit was in
+// the other place, and in a repo attaching both places that move was
+// itself refused E_AMBIGUOUS_ID. The hint now names the bulk move of the
+// one row (the copied_id lint fix, verified to keep the --to copy) from
+// every other place into keep; with keep unknown it names both
+// directions so the person picks after reading each copy.
+func AmbiguousIDErr(id string, places []string, keep string) error {
 	// devco D-689: an id that repeats across folders (a natural id an older
 	// lore derived without the folder) is two rows, not two copies; the
 	// hint first says how to read each one, by its place
@@ -1065,7 +1087,36 @@ func AmbiguousIDErr(id string, places []string) error {
 		reads[i] = "`lore show --id " + id + " --store " + p + "`"
 	}
 	return errs.New(errs.AmbiguousID, id+" is in "+strings.Join(places, " and ")+": two live rows with one id").
-		WithHint("read each with " + strings.Join(reads, " or ") + "; if they are copies of one row, `lore row move --id " + id + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
+		WithHint("read each with " + strings.Join(reads, " or ") + "; " + keepCopyHint(id, places, keep) + "; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
+}
+
+// keepCopyHint is the part of AmbiguousIDErr's hint that settles copies of
+// one row: the move that keeps the copy in keep (the newest) and leaves a
+// tombstone in every other place; with keep "" (unknown) or not among
+// places, the move keeping each place's copy, for the person to choose
+// (a move that would keep an older copy over a newer one is refused with
+// the right one: refuseOlderTarget).
+func keepCopyHint(id string, places []string, keep string) string {
+	if keep == "" || !slices.Contains(places, keep) {
+		var picks []string
+		for _, k := range places {
+			picks = append(picks, "to keep the copy in "+k+": "+keepMoves(id, places, k))
+		}
+		return "if they are copies of one row, " + strings.Join(picks, "; ") + " (each leaves a tombstone in the other places)"
+	}
+	return "if they are copies of one row, " + keepMoves(id, places, keep) + " keeps the newest copy, in " + keep + " (the one list, search and ask show), and leaves a tombstone in the other places"
+}
+
+// keepMoves is the bulk move of row id from every place but keep into
+// keep, one command per place, joined with "then".
+func keepMoves(id string, places []string, keep string) string {
+	var cmds []string
+	for _, p := range places {
+		if p != keep {
+			cmds = append(cmds, "`lore row move --from "+p+" --where id="+id+" --to "+keep+" --yes`")
+		}
+	}
+	return strings.Join(cmds, " then ")
 }
 
 // ambiguousOldFormatErr is AmbiguousIDErr in a repo still on the lore

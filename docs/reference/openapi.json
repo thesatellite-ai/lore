@@ -73164,7 +73164,7 @@
             }
           },
           "409": {
-            "description": "E_IN_TRASH, E_META_QUARANTINED, E_NOT_IMPLEMENTED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_IN_TRASH, E_META_QUARANTINED, E_NOT_IMPLEMENTED, E_REFUSED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -74305,7 +74305,7 @@
             }
           },
           "409": {
-            "description": "E_IN_TRASH, E_META_QUARANTINED, E_NOT_IMPLEMENTED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_IN_TRASH, E_META_QUARANTINED, E_NOT_IMPLEMENTED, E_REFUSED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {

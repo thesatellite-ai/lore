@@ -372,7 +372,7 @@ func Ops(env Env) []op.Entry {
 			// commands its own refusal printed.
 			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{Always: true, MayAsk: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.InTrash, errs.MetaInternal, errs.MetaQuarantined, errs.LeakBlocked,
-				errs.StoreReadOnly, errs.Stale, errs.Unsupported, errs.NotImplemented, errs.Internal}, Examples: []op.Example{{Title: "move a row to your personal store", CLI: "lore row move --id mem_0c3a --to me"},
+				errs.StoreReadOnly, errs.Stale, errs.Unsupported, errs.NotImplemented, errs.Internal, errs.Refused, errs.AmbiguousID}, Examples: []op.Example{{Title: "move a row to your personal store", CLI: "lore row move --id mem_0c3a --to me"},
 				{Title: "move every row of a folder to another store, one commit per store (list first)", CLI: "lore move --from notes/old --to notes/new --dry-run"}}}, o.move).Asks(o.moveQuestion),
 	}
 }
