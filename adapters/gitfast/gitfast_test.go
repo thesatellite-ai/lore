@@ -252,7 +252,7 @@ func TestFallsBack(t *testing.T) {
 		{"rev-parse", "--git-path", "hooks"},   // relative form
 		{"rev-parse", "--verify", "refs/none"}, // git prints the reason
 		{"status", "--porcelain"},
-		{"ls-files", "--error-unmatch", "--", "nope"}, // git words the miss
+		{"ls-files", "--error-unmatch", "--", "nope/"}, // a directory form: git matches it more strictly
 		{"log", "-1"},
 		{"ls-tree", "HEAD", "--", "org"},
 		{"-c", "user.name=x", "rev-parse", "HEAD"},
@@ -558,5 +558,55 @@ func TestRevListRangeMergeFallsBack(t *testing.T) {
 	}
 	if out, code := realGit(t, work, args, nil); !bytes.Equal(rep.Out, out) || rep.Code != code {
 		t.Errorf("git %v\n gitfast: exit %d %q\n git:     exit %d %q", args, rep.Code, rep.Out, code, out)
+	}
+}
+
+// TestLsFilesUnmatchedMatchesGit: `ls-files --error-unmatch` about a file
+// the index does not hold (a project whose _meta.json is not committed
+// yet, asked on every write's render refresh) is answered in-process with
+// git's stdout, exit status and stderr; it started a git process before
+// (devco:D-945, bug hunt H-203).
+func TestLsFilesUnmatchedMatchesGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	work, _, _ := fixture(t)
+	if err := os.WriteFile(filepath.Join(work, "untracked.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		dir  string
+		args []string
+	}{
+		{work, []string{"ls-files", "--error-unmatch", "--", "untracked.json"}},
+		{work, []string{"ls-files", "--error-unmatch", "--", "nope"}},
+		{work, []string{"ls-files", "--error-unmatch", "--", "top.txt", "nope", "org/none"}},
+		{work, []string{"ls-files", "-z", "--error-unmatch", "--", "nope", "top.txt"}},
+		{filepath.Join(work, "org"), []string{"ls-files", "--error-unmatch", "--", "tasks", "nope"}},
+		{filepath.Join(work, "org"), []string{"ls-files", "--full-name", "--error-unmatch", "--", "nope"}},
+	}
+	for _, c := range cases {
+		s := New()
+		rep, ok := s.Answer(context.Background(), c.dir, c.args, nil, nil)
+		s.Close()
+		if !ok {
+			t.Errorf("not answered in-process (want it answered): git %v", c.args)
+			continue
+		}
+		cmd := exec.Command("git", c.args...)
+		cmd.Dir = c.dir
+		cmd.Env = append(os.Environ(), "LC_ALL=C", "GIT_CONFIG_NOSYSTEM=1", "HOME="+t.TempDir())
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		code := 0
+		var ee *exec.ExitError
+		if err := cmd.Run(); errors.As(err, &ee) {
+			code = ee.ExitCode()
+		} else if err != nil {
+			t.Fatalf("git %v: %v", c.args, err)
+		}
+		if !bytes.Equal(rep.Out, stdout.Bytes()) || rep.Code != code || rep.Stderr != strings.TrimSpace(stderr.String()) {
+			t.Errorf("git %v\n gitfast: exit %d %q stderr %q\n git:     exit %d %q stderr %q", c.args, rep.Code, rep.Out, rep.Stderr, code, stdout.Bytes(), strings.TrimSpace(stderr.String()))
+		}
 	}
 }

@@ -230,8 +230,12 @@ func (r *repo) indexLookup(expr string) resolved {
 
 // lsFilesPlain answers `ls-files [-z] [--full-name] [--error-unmatch] [--]
 // [paths]`: the index's paths under dir (relative to dir unless
-// --full-name). A pathspec that matches nothing under --error-unmatch,
-// an unmerged entry or a name git would quote is left to git.
+// --full-name). An unmerged entry or a name git would quote is left to
+// git. A pathspec that matches nothing under --error-unmatch is answered
+// as git answers it (exit 1, git's words on stderr, unmatchedReply): "is
+// this file tracked?" about a file that is not was the one form of the
+// question that still started git, once per render of a project whose
+// _meta.json is not committed yet (devco:D-945, bug hunt H-203).
 func lsFilesPlain(r *repo, inv invocation) (Reply, bool) {
 	z, fullName, errorUnmatch := false, false, false
 	var paths []string
@@ -310,11 +314,35 @@ func lsFilesPlain(r *repo, inv invocation) (Reply, bool) {
 		}
 	}
 	if errorUnmatch {
-		for _, m := range matched {
+		var missed []string
+		for i, m := range matched {
 			if !m {
-				return Reply{}, false // git names the pathspec on stderr
+				missed = append(missed, paths[i])
 			}
+		}
+		if len(missed) > 0 {
+			return unmatchedReply(out.Bytes(), missed)
 		}
 	}
 	return Reply{Out: out.Bytes()}, true
+}
+
+// unmatchedReply is ls-files --error-unmatch's answer when the pathspecs
+// missed match no index entry: what matched on stdout, exit 1, and one
+// "did not match" line per miss on stderr, as git prints them (git
+// matches a pathspec by case even under core.ignorecase). A miss that is
+// a directory form ("dir/") or "." is left to git: lsFilesPlain matches
+// those more loosely than git does.
+func unmatchedReply(out []byte, missed []string) (Reply, bool) {
+	for _, p := range missed {
+		if p == "." || strings.HasSuffix(p, "/") {
+			return Reply{}, false
+		}
+	}
+	var stderr strings.Builder // a Builder never fails a write
+	for _, p := range missed {
+		stderr.WriteString("error: pathspec '" + p + "' did not match any file(s) known to git\n")
+	}
+	stderr.WriteString("Did you forget to 'git add'?")
+	return Reply{Out: out, Code: 1, Stderr: stderr.String()}, true
 }

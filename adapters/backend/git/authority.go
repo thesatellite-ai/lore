@@ -760,6 +760,9 @@ func (b *Backend) replayFromDisk(ctx context.Context, head, orgHead string) (*au
 // lists every commit of from's history first). ok is false otherwise (a
 // merge, a rewrite, from not under to, a git failure).
 func (b *Backend) linearCommitsAfter(ctx context.Context, from, to string) ([]replayCommit, bool) {
+	if commits, ok := ownCommitsAfter(b.work, from, to); ok {
+		return commits, true // this process made them and listed each (noteCommitted)
+	}
 	commits, err := b.replayCommits(ctx, from+".."+to)
 	if err != nil || len(commits) == 0 || commits[len(commits)-1].id != to {
 		return nil, false
@@ -777,12 +780,12 @@ func (b *Backend) linearCommitsAfter(ctx context.Context, from, to string) ([]re
 // commitMark starts each commit's record in replayCommits' log output.
 const commitMark = "\x01"
 
-// replayCommits lists the commits of rev (head, or a from..to range)
-// oldest first with their parents and the files each changed (blob ids
-// on both sides).
-func (b *Backend) replayCommits(ctx context.Context, rev string) ([]replayCommit, error) {
-	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"log", "--reverse", "--topo-order", "-c", "--no-renames",
-		"--raw", "--no-abbrev", "-z", "--format=" + "%x01%H%x00%P%x00%ae%x00", rev, "--"}})
+// replayCommits lists the commits of revs (head, a from..to range, or
+// "-1 HEAD": the last commit alone) oldest first with their parents and
+// the files each changed (blob ids on both sides).
+func (b *Backend) replayCommits(ctx context.Context, revs ...string) ([]replayCommit, error) {
+	args := []string{"log", "--reverse", "--topo-order", "-c", "--no-renames", "--raw", "--no-abbrev", "-z", "--format=" + "%x01%H%x00%P%x00%ae%x00"}
+	out, err := b.git.run(ctx, call{dir: b.work, args: append(append(args, revs...), "--")})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "git: read the store's history for the roster check", err)
 	}

@@ -893,15 +893,27 @@ func (b *Backend) commitBatch(ctx context.Context, batch Batch, changes []store.
 // (store.NoteCommitted, devco D-691): a row rewritten unchanged is not in
 // it, a folder's new _meta.json is. A failed listing reports nothing (the
 // commit stands; only the write lines fall back to the rows written).
+//
+// The listing is the roster replay's own (replayCommits of HEAD alone, one
+// git process as the diff-tree before it was), and the commit is kept for
+// the replay (noteOwnCommit): the read after the write, such as the
+// write's render refresh, carries the replay over it in-process instead of
+// asking git for the same commit again (devco:D-945, bug hunt H-203).
 func (b *Backend) noteCommitted(ctx context.Context) {
 	if !store.WantsCommitted(ctx) {
 		return
 	}
-	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"diff-tree", "--root", "--no-commit-id", "--name-only", "--no-renames", "-r", "-z", "HEAD"}})
-	if err != nil {
+	commits, err := b.replayCommits(ctx, "--root", "-1", "HEAD") // --root: a first commit lists its files whatever log.showRoot says
+	if err != nil || len(commits) != 1 {
 		return
 	}
-	store.NoteCommitted(ctx, b.work, splitZ(out))
+	c := commits[0]
+	noteOwnCommit(b.work, c)
+	paths := make([]string, 0, len(c.changes))
+	for _, ch := range c.changes {
+		paths = append(paths, ch.path)
+	}
+	store.NoteCommitted(ctx, b.work, paths)
 }
 
 // commitIDPattern is a full sha-1 or sha-256 commit id: the only cursor

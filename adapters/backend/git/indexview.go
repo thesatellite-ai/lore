@@ -154,9 +154,9 @@ var viewMemos = struct {
 	by map[string]*viewMemo
 }{by: map[string]*viewMemo{}}
 
-// wholeIndexView is indexView(ctx, "") remembered while no row file was
-// written, the index file did not change and the command (ReadScope) is
-// the same.
+// wholeIndexView is indexView(ctx, "") remembered while the index file
+// did not change and the command (ReadScope) is the same, carried over the
+// row files this process wrote since (rowfs.CarryView).
 func (b *Backend) wholeIndexView(ctx context.Context) (rowfs.IndexView, bool) {
 	viewMemos.mu.Lock()
 	m, ok := viewMemos.by[b.work]
@@ -170,8 +170,18 @@ func (b *Backend) wholeIndexView(ctx context.Context) (rowfs.IndexView, bool) {
 	idx := b.indexFileStat(ctx)
 	gen := rowfs.WriteGeneration()
 	scope := store.ReadScopeOf(ctx)
-	if m.ok && scope != nil && m.scope == scope && m.gen == gen && m.index == idx && idx != (indexStat{}) {
-		return m.view, true
+	if m.ok && scope != nil && m.scope == scope && m.index == idx && idx != (indexStat{}) {
+		if m.gen == gen {
+			return m.view, true
+		}
+		// only lore's own row files changed since (the index file did
+		// not): the view carried over them answers without a second git
+		// status, e.g. a write's render refresh (devco:D-945, bug hunt H-203)
+		dataDir := filepath.Join(b.work, filepath.FromSlash(b.folder.DataPath()))
+		if view, now, ok := rowfs.CarryView(m.view, m.gen, dataDir); ok {
+			m.view, m.gen = view, now
+			return view, true
+		}
 	}
 	view, vok := b.indexView(ctx, "")
 	m.ok, m.gen, m.scope, m.index, m.view = vok, gen, scope, b.indexFileStat(ctx), view // the index as status left it

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -194,9 +195,51 @@ func TestIndexViewRememberedPerCommand(t *testing.T) {
 	if asked != 1 {
 		t.Fatalf("one command asked git %d times", asked)
 	}
-	apply(t, f, store.Change{Row: g.row(newID(t), "w", hlc.HLC{})})
-	if _, _, err := f.Read(cmd, ""); err != nil || asked != 2 {
-		t.Fatalf("a write did not make the command ask again: asked=%d %v", asked, err)
+	// the command's own write is carried into the view it holds (the
+	// written file is read from disk) instead of asking git again
+	// (devco:D-945, bug hunt H-203: each write's render refresh asked git
+	// for the data folder's status a second time)
+	w := g.row(newID(t), "w", hlc.HLC{})
+	apply(t, f, store.Change{Row: w})
+	rows, _, err := f.Read(cmd, "")
+	if err != nil || asked != 1 {
+		t.Fatalf("the command's own write made it ask git again: asked=%d %v", asked, err)
+	}
+	if !slices.ContainsFunc(rows, func(r store.Row) bool { return r.ID == w.ID }) {
+		t.Fatalf("the read after the command's own write misses the row it wrote: %d rows", len(rows))
+	}
+	if _, _, err := f.Read(store.WithReadScope(ctx), ""); err != nil || asked != 2 {
+		t.Fatalf("the next command did not ask git: asked=%d %v", asked, err)
+	}
+}
+
+// TestCarryViewMovesWrittenFilesToCheck: a view carried over the files
+// this process wrote lists each written file of the folder to be read from
+// disk (out of Clean, into Check once), leaves the others as git said, and
+// ignores writes outside the folder; the view passed in is not changed
+// (devco:D-945).
+func TestCarryViewMovesWrittenFilesToCheck(t *testing.T) {
+	dir := t.TempDir()
+	data := filepath.Join(dir, ".lore", "data")
+	view := IndexView{Clean: map[string]string{"memories/a.json": "blob-a", "memories/b.json": "blob-b"}, Check: []string{"memories/c.json"}}
+	gen := WriteGeneration()
+	noteWritten(filepath.Join(data, "memories", "a.json"))
+	noteWritten(filepath.Join(data, "memories", "c.json"))
+	noteWritten(filepath.Join(data, "memories", "new.json"))
+	noteWritten(filepath.Join(dir, "elsewhere", "memories", "b.json"))
+	got, now, ok := CarryView(view, gen, data)
+	if !ok || now < gen+4 {
+		t.Fatalf("CarryView = ok %v at %d (from %d)", ok, now, gen)
+	}
+	if _, clean := got.Clean["memories/a.json"]; clean || got.Clean["memories/b.json"] != "blob-b" {
+		t.Errorf("Clean after the writes = %v, want only the unwritten b", got.Clean)
+	}
+	slices.Sort(got.Check)
+	if want := []string{"memories/a.json", "memories/c.json", "memories/new.json"}; !slices.Equal(got.Check, want) {
+		t.Errorf("Check after the writes = %v, want %v", got.Check, want)
+	}
+	if view.Clean["memories/a.json"] != "blob-a" || len(view.Check) != 1 {
+		t.Error("CarryView changed the view passed in")
 	}
 }
 

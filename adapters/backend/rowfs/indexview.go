@@ -81,6 +81,9 @@ func (f *Folder) indexView(ctx context.Context) (IndexView, bool) {
 	if f.viewFresh(scope) {
 		return f.view, true
 	}
+	if f.carryView(scope) {
+		return f.view, true
+	}
 	gen := writeGen.Load()
 	view, ok := f.index(ctx, "")
 	f.view, f.viewOK, f.viewScope, f.viewGen = view, ok, scope, gen
@@ -93,6 +96,21 @@ func (f *Folder) viewFresh(scope *store.ReadScope) bool {
 	return f.viewOK && scope != nil && f.viewScope == scope && f.viewGen == writeGen.Load()
 }
 
+// carryView brings the remembered whole-folder view of this command over
+// the files this process wrote since it was taken (CarryView, devco:D-945)
+// and reports whether it now holds; the caller holds viewMu.
+func (f *Folder) carryView(scope *store.ReadScope) bool {
+	if !f.viewOK || scope == nil || f.viewScope != scope {
+		return false
+	}
+	view, now, ok := CarryView(f.view, f.viewGen, f.dataDir)
+	if !ok {
+		return false
+	}
+	f.view, f.viewGen = view, now
+	return true
+}
+
 // tableView is the IndexView of table's folder alone: cut from the
 // remembered whole-folder view while it holds (same command, nothing
 // written), else asked of git for that
@@ -102,7 +120,9 @@ func (f *Folder) tableView(ctx context.Context, table row.Table) (IndexView, boo
 		return IndexView{}, false
 	}
 	f.viewMu.Lock()
-	src, fresh, whole := f.index, f.viewFresh(store.ReadScopeOf(ctx)), f.view
+	scope := store.ReadScopeOf(ctx)
+	fresh := f.viewFresh(scope) || f.carryView(scope)
+	src, whole := f.index, f.view
 	f.viewMu.Unlock()
 	if src == nil {
 		return IndexView{}, false

@@ -21,6 +21,11 @@ import (
 // the World's PATH shim; hooks git runs inside are not counted). The
 // owner's targets are a read at most 5 and a write at most 10; each budget
 // is the measured count plus one, so any new git call on these paths fails.
+// Every write also refreshes the renders it staled (devco:D-921); that
+// refresh reuses what the write already knows and starts no git process
+// of its own (devco:D-945, bug hunt H-203: memory add once started 4, a
+// write to a team store one more): the rule, hotfix and decision adds
+// re-render .lore/LORE.md and still start only what a memory add does.
 var gitBudget = []struct {
 	name string
 	args []string
@@ -32,6 +37,9 @@ var gitBudget = []struct {
 	{"render", []string{"render"}, 4},
 	{"task add", []string{"task", "add", "Second budget task", "--commitment", "accepted"}, 8},
 	{"memory add", []string{"memory", "add", "--body", "budget memory"}, 2},
+	{"rule add", []string{"rule", "add", "--body", "Budget rule: never log tokens", "--severity", "must"}, 3},
+	{"hotfix add", []string{"hotfix", "add", "--title", "Budget hotfix", "--body", "Rerun the job once", "--severity", "high"}, 3},
+	{"decision add", []string{"decision", "add", "--title", "Budget decision", "--body", "Local first; no server."}, 3},
 	{"doctor", []string{"doctor"}, 8},
 }
 
@@ -74,7 +82,7 @@ func TestJourneyGitExecBudget(t *testing.T) {
 // gitBudgetTeam is gitBudget for a repo whose org has a team store and a
 // personal store (each command also reads both store clones).
 var gitBudgetTeam = map[string]int{
-	"task list": 3, "task show": 4, "search": 3, "render": 3, "task add": 5, "memory add": 7, "doctor": 30,
+	"task list": 3, "task show": 4, "search": 3, "render": 3, "task add": 5, "memory add": 7, "rule add": 7, "hotfix add": 7, "decision add": 7, "doctor": 30,
 }
 
 func TestJourneyGitExecBudgetTeam(t *testing.T) {

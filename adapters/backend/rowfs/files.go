@@ -113,7 +113,7 @@ func writeAtomic(full string, b []byte, m fileModes) error {
 // folder for a batch (Apply), which is what makes the rename itself
 // durable. It returns the folder of full.
 func writeRenamed(full string, b []byte, m fileModes) (dir string, err error) {
-	writeGen.Add(1) // any remembered IndexView is out of date (indexview.go)
+	noteWritten(full) // a remembered IndexView is carried over this file (writelog.go)
 	if info, lerr := os.Lstat(full); lerr == nil && info.Mode()&fs.ModeSymlink != 0 {
 		return "", refuseSymlink(filepath.Base(full))
 	}
@@ -157,7 +157,7 @@ func writeRenamed(full string, b []byte, m fileModes) (dir string, err error) {
 
 // removeIfExists removes path; a path already gone is not an error.
 func removeIfExists(path string) error {
-	writeGen.Add(1) // any remembered IndexView is out of date (indexview.go)
+	noteWritten(path) // a remembered IndexView is carried over this file (writelog.go)
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
