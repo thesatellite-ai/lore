@@ -144,6 +144,8 @@ func (h *Host) contextSessionStart(ctx context.Context) (contextResult, error) {
 	// never starts on an edited rule's old text.
 	if wd, werr := os.Getwd(); werr == nil {
 		h.rerenderUntrackedQuiet(ctx, wd) // LORE.md only when untracked: a committed one is the commit's to refresh (devco:D-936)
+		// the over-budget warning is left out: the hook's output is the
+		// session's context, and the write that changed the rows warned
 		if _, rerr := h.RefreshPrivateStaleIn(ctx, wd); rerr != nil {
 			h.logHookError(rerr)
 		}

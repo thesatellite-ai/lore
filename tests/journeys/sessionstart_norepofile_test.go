@@ -83,14 +83,25 @@ func TestJourneySessionStartServesPinnedWithoutLoreMD(t *testing.T) {
 	w.Step("day1/sync-refreshes-the-private-file", func() {
 		mira.LoreIn(sync, "render", "--yes").OK(t)
 		mira.LoreIn(shop, "render", "--yes").OK(t)
-		mira.LoreIn(sync, "rule", "add", "--body", "Tag every release by hand.", "--severity", "must", "--to", lgOrg+"/sync").OK(t)
-		mira.LoreIn(shop, "rule", "add", "--body", "Mask the client's emails in logs.", "--severity", "must", "--to", lgOrg+"/shop").OK(t)
+		// H-196: a write in a checkout refreshes that checkout's private
+		// file at once (H-179), so the rule the sync must bring in is added
+		// from another checkout (the org's tools repo)
+		mira.LoreIn(tools, "rule", "add", "--body", "Tag every release by hand.", "--severity", "must", "--to", lgOrg+"/sync").OK(t)
 		if privateRendersSay(t, mira.LorePath("render"), "Tag every release by hand.") {
 			t.Fatal("the private file already holds the new rule before the sync: the step proves nothing")
 		}
 		mira.LoreIn(sync, "sync").OK(t)
 		if !privateRendersSay(t, mira.LorePath("render"), "Tag every release by hand.") {
 			t.Fatal("lore sync in the linked own repo left its private file stale")
+		}
+		// in the client repo the write itself refreshes the private file
+		// (H-179), outside the checkout: nothing lands in the client's repo
+		mira.LoreIn(shop, "rule", "add", "--body", "Mask the client's emails in logs.", "--severity", "must", "--to", lgOrg+"/shop").OK(t)
+		if !privateRendersSay(t, mira.LorePath("render"), "Mask the client's emails in logs.") {
+			t.Fatal("a rule added in the client repo left its private file stale")
+		}
+		if st := shop.Git("status", "--porcelain", "--ignored"); st != "" {
+			t.Fatalf("the write put files into the client repo:\n%s", st)
 		}
 		mira.LoreIn(shop, "sync").OK(t)
 		if !privateRendersSay(t, mira.LorePath("render"), "Mask the client's emails in logs.") {

@@ -85,8 +85,11 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 	company := wubRuleIn(t, m, wc.Dir, wOrg+"/org")
 
 	s.Step("D-636/admin-fix-works-where-printed", func() {
-		m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "the web app ships behind a flag", "--yes").OK(t)
-		r := m.Lore(wc.Dir, "sync").OK(t)
+		// H-196 (devco:D-935): the write that changes the private render
+		// (H-179 refreshes it) is the one that warns, as render and sync
+		// warn only when they change the file (D-573)
+		r := m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "the web app ships behind a flag", "--yes").OK(t)
+		m.Lore(wc.Dir, "sync").OK(t)
 		raise := wubPrinted(t, r.Out(), "raise the budget with `")
 		if !strings.Contains(raise, "--to "+inWeb) {
 			t.Fatalf("devco:D-636: the raise names no linked folder: %s\n%s", raise, r)
@@ -105,10 +108,14 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		// sync warned every member. The admin of the folder gets it once
 		// per sync, with commands that run as printed.
 		m.Lore(wc.Dir, "policy", "set", "--key", wubKey, "--value", "1000", "--to", inWeb, "--yes").OK(t)
-		m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web errors carry a request id", "--yes").OK(t)
-		aout := m.Lore(wc.Dir, "sync").OK(t).Out()
+		// H-196: the admin's rule add warns (it changed the private
+		// render); the sync after it changes nothing and repeats nothing
+		aout := m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web errors carry a request id", "--yes").OK(t).Out()
+		if sout := m.Lore(wc.Dir, "sync").OK(t).Out(); strings.Contains(sout, wubWarn) {
+			t.Fatalf("devco:D-573: the sync after the warning write repeats it:\n%s", sout)
+		}
 		if n := strings.Count(aout, wubWarn); n != 1 {
-			t.Fatalf("devco:D-725: the admin's sync warns %d times, want once:\n%s", n, aout)
+			t.Fatalf("devco:D-725: the admin's write warns %d times, want once:\n%s", n, aout)
 		}
 		raise := wubPrinted(t, aout, "raise the budget with `")
 		out := mo.Lore(mc.Dir, "sync").OK(t).Out()
@@ -188,7 +195,9 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		mo.Lore(mc.Dir, "pin", "unset", "--id", company).Refused(t, "E_REFUSED", "only an admin of the org", "lore pin unset --id "+company)
 		m.Lore(wc.Dir, "pin", "unset", "--id", company).OK(t)
 		// devco D-681: a project folder's must rule is company ground too
-		own := wubRuleID.FindString(mo.Lore(mc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web forms validate on the server", "--yes").OK(t).Out())
+		// H-196: the member's write refreshes the private render over the
+		// budget, and the warning is still only an admin's (D-725)
+		own := wubRuleID.FindString(mo.Lore(mc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web forms validate on the server", "--yes").OK(t).Never(t, wubWarn).Out())
 		mo.Lore(mc.Dir, "pin", "set", "--id", own, "--context", "line").Refused(t, "E_REFUSED", "only an admin of the org", "lore pin set --id "+own+" --context line")
 	})
 

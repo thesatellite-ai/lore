@@ -7,9 +7,11 @@ package app
 // tool's private import (CLAUDE.local.md) loads at once, not at the next
 // `lore render`: an agent read an archived rule and an edited rule's old
 // text after an import of a few hundred writes. Only files a render
-// already wrote are refreshed and nothing is printed (the write's own
-// output, --json included, stays as it was); a failure is one stderr
-// warning, never a failed write. `lore render` and `lore sync` keep their
+// already wrote are refreshed and nothing goes to stdout (the write's own
+// output, --json included, stays as it was); a refresh that leaves the
+// pinned part over its budget prints the over-budget warning on stderr,
+// as render and sync do when they change the file (H-196, devco:D-935);
+// a failure is one stderr warning, never a failed write. `lore render` and `lore sync` keep their
 // own refresh; a dry run or --read-only writes nothing.
 
 import (
@@ -45,8 +47,14 @@ func writeRenderHook(rend *lateRender, wd string) hosthooks.Hook {
 		// commit that carries the row files, so the commit a write prints
 		// leaves the work tree clean
 		rend.h.RerenderUntrackedQuiet(ctx, wd)
-		if _, rerr := rend.h.RefreshPrivateStaleIn(ctx, wd); rerr != nil {
+		fresh, rerr := rend.h.RefreshPrivateStaleIn(ctx, wd)
+		if rerr != nil {
 			_, _ = os.Stderr.WriteString(writeRenderWarnPrefix + rerr.Error() + "\n") // a write never fails over its render
+		}
+		if fresh.OverBudget != "" {
+			// render and sync warn only when they change the file (D-573):
+			// this write changed it, so it is the one to warn (H-196)
+			_, _ = os.Stderr.WriteString(fresh.OverBudget + "\n")
 		}
 		return res, nil
 	}}

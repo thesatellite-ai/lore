@@ -48,9 +48,17 @@ var whcDir = regexp.MustCompile(`private context → (\S+)`)
 // whcIDs finds the pinned row ids of a text.
 var whcIDs = regexp.MustCompile(`\b(?:rul|hfx)_[0-9a-f]{32}\b`)
 
-// whcBody is a long must rule body (about 400 bytes).
+// whcBody is a long must rule body (about 400 bytes). Each body carries
+// eight words of its own (svc<i>a … svc<i>h): since D-926 (8f1ab7987)
+// render pins one row of two whose bodies share 80% of their words, and
+// bodies that differed only in their number were near-duplicates (H-196).
 func whcBody(i int) string {
-	return "Rule " + strconv.Itoa(i) + ": every service of the company keeps its request ids, logs in UTC and wraps errors with context. " +
+	n := strconv.Itoa(i)
+	var own strings.Builder
+	for _, c := range "abcdefgh" {
+		own.WriteString(" svc" + n + string(c))
+	}
+	return "Rule " + n + ": every service of the company keeps its request ids, logs in UTC and wraps errors with context; it owns" + own.String() + ". " +
 		strings.Repeat("Never print a secret value, never log a token, keep the audit trail. ", 4)
 }
 
@@ -98,7 +106,7 @@ func TestStoryWUH167ContextCeiling(t *testing.T) {
 	}
 	for i := range whcHotfixes {
 		m.Lore(c.Dir, "hotfix", "add", "--to", whcStore, "--severity", "critical", "--title", "Hotfix "+strconv.Itoa(i)+": the deploy job breaks on a cold cache",
-			"--body", whcBody(i)+" Fix: warm the cache, then rerun the job.", "--yes").OK(t)
+			"--body", whcBody(whcRules+i)+" Fix: warm the cache, then rerun the job.", "--yes").OK(t)
 	}
 	var render teamharness.Result
 	var private string

@@ -394,10 +394,11 @@ func TestReposKinds(t *testing.T) {
 		for _, args := range [][]string{{"init"}, {"render"}, {"sync", "status"}, {"memory", "add", "first-note"}, {"memory", "list"}} {
 			loreOK(t, m.Lore(t, empty, args...))
 		}
-		// the memory added after the render made LORE.md stale: the doctor
-		// says so with its fix, and a render clears it (SOURCE_OF_TRUTH row 10)
-		if r := m.Lore(t, empty, "doctor"); !strings.Contains(r.Stdout, "rendered_copy: .lore/LORE.md is stale") || !strings.Contains(r.Stdout, "fix: lore render") {
-			t.Errorf("doctor after a memory added since the render does not flag LORE.md stale: %s", r)
+		// the memory added after the render re-rendered LORE.md (H-179: a
+		// write keeps the render current; H-196), so the doctor names no
+		// stale copy; TestSotRender proves a stale one is named with its fix
+		if r := m.Lore(t, empty, "doctor"); strings.Contains(r.Stdout, "rendered_copy: .lore/LORE.md") {
+			t.Errorf("doctor after a memory add in a repo with no commit names LORE.md: %s", r)
 		}
 		loreOK(t, m.Lore(t, empty, "render"))
 		// an upgraded machine: the old top-level identity: is a leftover

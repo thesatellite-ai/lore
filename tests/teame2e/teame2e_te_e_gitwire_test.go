@@ -282,7 +282,9 @@ func TestTeE_LoreMDRerenderedAfterPull(t *testing.T) {
 	cc := carol.Clone(bc.Remote, "tool")
 	teEWire(t, cc)
 
-	bc.MustLore("rule", "add", "--body", "must rule from bob", "--severity", "must")
+	// H-196: a write at the project root re-renders LORE.md (H-179); one
+	// in a subfolder leaves it to the commit hook this test is about
+	bc.In("src").MustLore("rule", "add", "--body", "must rule from bob", "--severity", "must")
 	if md, _ := bc.ReadFile(".lore/LORE.md"); strings.Contains(md, "must rule from bob") {
 		t.Fatal("setup: the rule is not rendered before the commit")
 	}

@@ -64,7 +64,14 @@ func sotrLoreMD(t *testing.T) {
 	}
 	sotrLacks(t, "doctor right after render", sotrDoctor(t, m, a), "rendered_copy")
 
-	sotOK(t, m, a, "rule", "add", "--body", "sotr rule two", "--severity", "must")
+	// H-196: a write at the project root re-renders LORE.md (H-179); one
+	// run in a subfolder leaves it to the next render or commit, as a sync
+	// there does: the stale copy every check below must name
+	sub := filepath.Join(a, "src")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sotOK(t, m, sub, "rule", "add", "--body", "sotr rule two", "--severity", "must")
 	code, out := sotrCheck(t, m, a)
 	if code == 0 {
 		t.Fatalf("render --check after rule add passed:\n%s", out)
@@ -177,7 +184,10 @@ func sotrPrivate(t *testing.T) {
 		t.Fatalf("render --check after render: exit %d\n%s", code, out)
 	}
 
-	sotOK(t, m, a, "rule", "add", "--to", "me", "--body", "sotr private rule", "--severity", "must")
+	// H-196: a write in the checkout refreshes its private file (H-179);
+	// one made outside any checkout leaves it stale until the next render,
+	// sync or session start
+	sotOK(t, m, m.Home, "rule", "add", "--to", "me", "--body", "sotr private rule", "--severity", "must")
 	// D-9: render --check judges the committed files only (the CI gate);
 	// the private render under ~/.lore/render is never in a clone, so a
 	// stale one is named as a note with its fix and never fails the check.

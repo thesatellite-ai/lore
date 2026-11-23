@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -44,8 +45,8 @@ func TestRefreshPrivateStaleFollowsPinnedRows(t *testing.T) {
 	home := t.TempDir()
 	h := New(Options{App: a, Home: home})
 	// never rendered: a write leaves the home without a private file
-	if wrote, rerr := h.refreshPrivateStale(ctx, repo); rerr != nil || len(wrote) != 0 {
-		t.Fatalf("refresh before any render wrote %v (%v), want nothing", wrote, rerr)
+	if res, rerr := h.refreshPrivateStale(ctx, repo); rerr != nil || len(res.Wrote) != 0 {
+		t.Fatalf("refresh before any render wrote %v (%v), want nothing", res.Wrote, rerr)
 	}
 	if _, serr := os.Stat(filepath.Join(home, renderDirName)); !os.IsNotExist(serr) {
 		t.Fatalf("refresh before any render made %s", filepath.Join(home, renderDirName))
@@ -69,9 +70,12 @@ func TestRefreshPrivateStaleFollowsPinnedRows(t *testing.T) {
 	update(gone, "archived_at", archived)
 	update(lower, "severity", text(t, "low"))
 
-	wrote, err := h.refreshPrivateStale(ctx, repo)
-	if err != nil || len(wrote) != 1 || wrote[0] != file {
-		t.Fatalf("refresh wrote %v (%v), want only %s", wrote, err, file)
+	res, err := h.refreshPrivateStale(ctx, repo)
+	if err != nil || len(res.Wrote) != 1 || res.Wrote[0] != file {
+		t.Fatalf("refresh wrote %v (%v), want only %s", res.Wrote, err, file)
+	}
+	if res.OverBudget != "" {
+		t.Fatalf("a refresh within the budget warns: %s", res.OverBudget)
 	}
 	body := readFile(t, file)
 	for _, want := range []string{"New rule text: gofmt everywhere."} {
@@ -93,8 +97,8 @@ func TestRefreshPrivateStaleFollowsPinnedRows(t *testing.T) {
 	if err = os.WriteFile(file, []byte(hand), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if wrote, err = h.refreshPrivateStale(ctx, repo); err != nil || len(wrote) != 0 || readFile(t, file) != hand {
-		t.Fatalf("refresh rewrote a hand-edited, current file: wrote %v (%v)", wrote, err)
+	if res, err = h.refreshPrivateStale(ctx, repo); err != nil || len(res.Wrote) != 0 || readFile(t, file) != hand {
+		t.Fatalf("refresh rewrote a hand-edited, current file: wrote %v (%v)", res.Wrote, err)
 	}
 }
 
@@ -160,5 +164,54 @@ func TestSessionStartRefreshesStalePrivateRender(t *testing.T) {
 	}
 	if body := readFile(t, file); !strings.Contains(body, "New start text.") || strings.Contains(body, "Old start text.") {
 		t.Fatalf("SessionStart left the private render stale:\n%s", body)
+	}
+}
+
+// TestRefreshPrivateStaleCarriesTheBudgetWarning pins H-196 (devco:D-935):
+// render and sync print the over-budget warning only when they change a
+// private file (D-573), so a write whose refresh changed it silently took
+// the warning from every later sync. The refresh that rewrote a file over
+// the budget returns the warning; one with nothing to rewrite returns none.
+func TestRefreshPrivateStaleCarriesTheBudgetWarning(t *testing.T) {
+	ctx := context.Background()
+	a, repo := privApp(t)
+	projects, err := a.List(ctx, "inner", schema.TableProjects)
+	if err != nil || len(projects) == 0 {
+		t.Fatalf("inner project: %v", err)
+	}
+	addRule := func(i int) {
+		// eight words of its own per body: rows that differ only in a
+		// number are near-duplicates and render pins one (D-926)
+		var own strings.Builder
+		for _, c := range "abcdefgh" {
+			own.WriteString(" svc" + strconv.Itoa(i) + string(c))
+		}
+		body := "Rule " + strconv.Itoa(i) + ": every service keeps its request ids and owns" + own.String() + ". " +
+			strings.Repeat("Never print a secret value, never log a token, keep the audit trail. ", 4)
+		if _, cerr := a.Create(ctx, "inner", schema.TableRules, map[string]value.Value{"source_kind": text(t, "manual"),
+			"project_id": text(t, projects[0].ID.String()), "body": text(t, body), "severity": text(t, "must"),
+			"activation": text(t, schema.RuleActivationAlways)}); cerr != nil {
+			t.Fatal(cerr)
+		}
+	}
+	const rules = 100 // about 40000 bytes of pinned text, over the default budget
+	for i := range rules {
+		addRule(i)
+	}
+	h := New(Options{App: a, Home: t.TempDir()})
+	var out strings.Builder
+	if err = h.renderPrivate(ctx, &out, repo, false, true); err != nil {
+		t.Fatal(err)
+	}
+	if res, rerr := h.refreshPrivateStale(ctx, repo); rerr != nil || len(res.Wrote) != 0 || res.OverBudget != "" {
+		t.Fatalf("refresh of a current render: wrote %v, warning %q (%v), want neither", res.Wrote, res.OverBudget, rerr)
+	}
+	addRule(rules)
+	res, err := h.refreshPrivateStale(ctx, repo)
+	if err != nil || len(res.Wrote) == 0 {
+		t.Fatalf("refresh after a new must rule wrote %v (%v)", res.Wrote, err)
+	}
+	if !strings.Contains(res.OverBudget, "over context.budget.internal") || !strings.Contains(res.OverBudget, "fix: ") {
+		t.Fatalf("devco:D-935: a refresh that rewrote an over-budget private file carries no warning: %q", res.OverBudget)
 	}
 }

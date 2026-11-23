@@ -22,6 +22,12 @@ package renderhost
 // never rendered gets no new file and no import line from a plain write
 // (that stays `lore render`'s job, with its report), and a file edited by
 // hand is left for `lore doctor` to name, as the sync refresh does.
+//
+// The over-budget warning travels with the refresh (H-196, devco:D-935):
+// render and sync warn only when they change a private file (D-573), so a
+// write that refreshed the file silently took the warning away from every
+// later sync. A refresh that rewrote a file returns the warning (to whoever
+// may fix it, D-725) and the write prints it once on stderr.
 
 import (
 	"context"
@@ -37,32 +43,45 @@ import (
 	"github.com/thesatellite-ai/lore/wire"
 )
 
+// PrivateRefresh is what a refresh of the private render did.
+type PrivateRefresh struct {
+	// Wrote lists the private files rewritten.
+	Wrote []string
+	// OverBudget is the over-budget warning of the private context (one
+	// decorated WARN line and its fix) when a file was rewritten and the
+	// pinned part is over context.budget.internal in a way this person may
+	// fix, else "". Render and sync warn only when they change a file
+	// (D-573), so a write that refreshed it must say it (H-196).
+	OverBudget string
+}
+
 // RefreshPrivateStale rewrites each private render file of the checkout at
 // root that is on disk and whose rows changed since it was rendered
 // (devco:D-921). It prints nothing (it runs after a write's own output and
-// inside the SessionStart hook, whose stdout is the hook's JSON) and
-// returns the files it rewrote; an error leaves the files as they were.
-func (h *Host) RefreshPrivateStale(ctx context.Context, root string) ([]string, error) {
+// inside the SessionStart hook, whose stdout is the hook's JSON): the
+// caller prints the returned over-budget warning where it may. An error
+// leaves the files as they were.
+func (h *Host) RefreshPrivateStale(ctx context.Context, root string) (PrivateRefresh, error) {
 	return h.refreshPrivateStale(ctx, root)
 }
 
 // refreshPrivateStale is RefreshPrivateStale.
-func (h *Host) refreshPrivateStale(ctx context.Context, root string) ([]string, error) {
+func (h *Host) refreshPrivateStale(ctx context.Context, root string) (PrivateRefresh, error) {
+	var res PrivateRefresh
 	if h.app == nil || root == "" || !h.privateRenderedHere() {
-		return nil, nil
+		return res, nil
 	}
 	if wire.RefuseWriteInReadOnlyHome(h.opts.Home) != nil {
-		return nil, nil // a read-only home keeps what it has, as render --yes refuses there
+		return res, nil // a read-only home keeps what it has, as render --yes refuses there
 	}
 	ctx = engine.WithAccess(ctx, op.AccessRead)
 	p, err := h.planPrivate(ctx, root)
 	if err != nil {
-		return nil, err
+		return res, err
 	}
 	if len(p.stores) == 0 {
-		return nil, nil
+		return res, nil
 	}
-	var wrote []string
 	for _, f := range p.files {
 		stampIn := privateStampIn
 		if filepath.Base(f.path) == privateIndexFile {
@@ -70,23 +89,26 @@ func (h *Host) refreshPrivateStale(ctx context.Context, root string) ([]string, 
 		}
 		kind, verr := copyVerdict(f.path, f.body, stampIn)
 		if verr != nil {
-			return wrote, verr
+			return res, verr
 		}
 		if kind != opsrender.CopyStale {
 			continue // current, edited by hand (doctor names it) or never rendered
 		}
 		if werr := atomicWriteFile(f.path, []byte(f.body), renderFileMode); werr != nil {
-			return wrote, errs.FileIOOr("refresh the private render", f.path, werr)
+			return res, errs.FileIOOr("refresh the private render", f.path, werr)
 		}
-		wrote = append(wrote, f.path)
+		res.Wrote = append(res.Wrote, f.path)
 	}
-	return wrote, nil
+	if len(res.Wrote) > 0 && p.overCoreWarns() {
+		res.OverBudget = h.decor.warn(privateOverCoreWarn(p)) // as render and sync warn when they change a file
+	}
+	return res, nil
 }
 
 // RefreshPrivateStaleIn is RefreshPrivateStale for the checkout that holds
 // dir (the project folder with .lore/ above it, else the git work tree top:
 // a linked client repo has no .lore/); outside a checkout it does nothing.
-func (h *Host) RefreshPrivateStaleIn(ctx context.Context, dir string) ([]string, error) {
+func (h *Host) RefreshPrivateStaleIn(ctx context.Context, dir string) (PrivateRefresh, error) {
 	return h.refreshPrivateStale(ctx, h.checkoutRootOf(ctx, dir))
 }
 
