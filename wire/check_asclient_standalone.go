@@ -205,7 +205,7 @@ func (a *App) asClientIndex(ctx context.Context, res *OrgResolution) (*leakcheck
 			names = append(names, si.Name)
 		}
 		var rerr error
-		rows, rerr = a.leakRows(ctx, true, names, nil)
+		rows, rerr = a.leakRows(ctx, true, names, nil, nil)
 		return rerr
 	})
 	if err != nil {

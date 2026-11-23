@@ -110,11 +110,25 @@ func leakActorNames(ctx context.Context, a leakReader, src store.Source) map[str
 // allows this passage of this note in this file, run where it is printed.
 // A PR body or a live write has no repo file, so its allow names none.
 func textAllowFix(f leakcheck.Finding, where string) string {
+	return "if that passage is approved public text the note quotes: " + leakAllowCmd(f, where)
+}
+
+// metaAllowFix is the second way out of an exact-token or key-pair
+// finding (#138): when the metadata value of that row is public, the
+// command that allows it in this file; the finding's hash is the hash of
+// the value's (or the pair's) words, so the allow covers that value only.
+func metaAllowFix(f leakcheck.Finding, where string) string {
+	return "if that metadata value of " + f.RowID + " is public: " + leakAllowCmd(f, where)
+}
+
+// leakAllowCmd is the `lore leaks allow` line for f: its row, the file
+// when the action has one, its hash and a reason to fill in.
+func leakAllowCmd(f leakcheck.Finding, where string) string {
 	cmd := "lore leaks allow --note " + f.RowID
 	if f.Path != "" && (where == LeakWhereCommit || where == LeakWherePush) {
 		cmd += " --file " + pathArg(f.Path)
 	}
-	return "if that passage is approved public text the note quotes: " + cmd + " --match-hash " + strconv.FormatUint(uint64(f.Hash), 10) + " --reason \"<why it is public>\""
+	return cmd + " --match-hash " + strconv.FormatUint(uint64(f.Hash), 10) + " --reason \"<why it is public>\""
 }
 
 // textAllowedLines are the lines `lore check leaks` prints for findings a

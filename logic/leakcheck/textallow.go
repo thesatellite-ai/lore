@@ -63,7 +63,12 @@ func matchTextAllow(allows []TextAllow, row string, h uint32, path string) (Text
 // note, the run, and which allow let it through, with its reason and
 // author, so the passage that ships is always accounted for.
 func AllowedDetail(rowID string, words int, a TextAllow) string {
-	d := fmt.Sprintf("matches internal note %s (%d words in a row), allowed by %s", rowID, words, a.ID)
+	return fmt.Sprintf("matches internal note %s (%d words in a row), allowed by %s", rowID, words, a.ID) + allowedWhy(a)
+}
+
+// allowedWhy is " (<reason>; by <author>)" of an allow, "" when it has
+// neither.
+func allowedWhy(a TextAllow) string {
 	var why []string
 	if a.Reason != "" {
 		why = append(why, a.Reason)
@@ -71,8 +76,8 @@ func AllowedDetail(rowID string, words int, a TextAllow) string {
 	if a.By != "" {
 		why = append(why, "by "+a.By)
 	}
-	if len(why) > 0 {
-		d += " (" + strings.Join(why, "; ") + ")"
+	if len(why) == 0 {
+		return ""
 	}
-	return d
+	return " (" + strings.Join(why, "; ") + ")"
 }

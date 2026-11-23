@@ -11,16 +11,21 @@
 //   - key-name: an internal key's whole snake_case name appears;
 //   - key-pair: an internal or sensitive key's "name value" pair appears
 //     (any value length, words normalised like the text rule);
-//   - exact-token: an internal or sensitive value of at least
-//     MinTokenLen characters appears as a whole token (RX4), compared
-//     case-insensitively in NFC (the stored value is already canonical,
-//     OQ18: lowercased dns/url host/email domain);
+//   - exact-token: an internal or sensitive value that is distinctive
+//     (DistinctiveToken: a row id, host, IP, email, URL, a value mixing
+//     letters and digits or a long one, never a date, number, flag,
+//     version or status word, #138) appears as a whole token (RX4),
+//     compared case-insensitively in NFC (the stored value is already
+//     canonical, OQ18: lowercased dns/url host/email domain);
 //   - foreign-key: in a client repo, a row file's meta entry whose key id
 //     is not one of the repo's own key rows, or whose scope label is not
 //     the repo's (E_META_FOREIGN_KEY's hook side, 3.11 item 1).
 //
-// Findings never print the value (3.15 step 7): they name the key, the
-// rule and the value type only.
+// Findings never print the value (3.15 step 7): they name the row, the
+// key, the rule and the value type only. An exact-token or key-pair
+// finding carries the hash of the value (or pair) words, so `lore leaks
+// allow --note <row> --match-hash <n>` clears it like a text finding
+// (#138).
 
 package leakcheck
 
@@ -91,6 +96,9 @@ type rowToken struct {
 	rowID string
 	lower string   // NFC, lowercased, trimmed value
 	pair  []string // Words(key) + Words(value)
+	// exact: the value is distinctive (DistinctiveToken), so the
+	// exact-token rule matches it alone; otherwise only its pair counts.
+	exact bool
 }
 
 // addMeta records r's metadata parts in m (called by NewIndex).
@@ -100,7 +108,8 @@ func (m *metaIndex) addMeta(r IndexRow) {
 		if v == "" {
 			continue
 		}
-		m.tokens = append(m.tokens, rowToken{Token: t, rowID: r.ID, lower: v, pair: append(Words(t.Key), Words(t.Value)...)})
+		m.tokens = append(m.tokens, rowToken{Token: t, rowID: r.ID, lower: v, pair: append(Words(t.Key), Words(t.Value)...),
+			exact: DistinctiveToken(v, t.Type)})
 	}
 	for _, n := range r.KeyNames {
 		if utf8.RuneCountInString(n) >= MinKeyNameLen {
@@ -110,8 +119,10 @@ func (m *metaIndex) addMeta(r IndexRow) {
 }
 
 // metaHits runs the key-name, key-pair and exact-token rules over one
-// item. Rows in allowed (a deliberate transfer) are skipped.
-func metaHits(it Item, content string, idx *Index, allowed map[string]bool) []Finding {
+// item. Rows in allowed (a deliberate transfer) are skipped; an
+// exact-token or key-pair finding a text allow covers (its row and the
+// hash of the value or pair words, #138) is reported as Warn.
+func metaHits(it Item, content string, idx *Index, allowed map[string]bool, allows []TextAllow) []Finding {
 	m := idx.meta
 	if len(m.tokens) == 0 && len(m.keyNames) == 0 {
 		return nil
@@ -148,19 +159,33 @@ func metaHits(it Item, content string, idx *Index, allowed map[string]bool) []Fi
 		if allowed[t.rowID] {
 			continue
 		}
-		if utf8.RuneCountInString(t.lower) >= MinTokenLen {
+		if t.exact {
 			if at := tokenAt(lc, t.lower); at >= 0 {
-				add(Finding{Rule: RuleExactToken, Where: it.Where, Line: lineOf(content, at), RowID: t.rowID, Label: idx.IDs[t.rowID],
-					Detail: "holds an internal or sensitive metadata value of a store row (exact match, " + typeOr(t.Type) + ", key " + t.Key + ")"})
+				add(metaAllowed(Finding{Rule: RuleExactToken, Where: it.Where, Path: it.Path, Line: lineOf(content, at), RowID: t.rowID, Label: idx.IDs[t.rowID],
+					Hash:   PassageHash(Words(t.Value)),
+					Detail: "holds an internal or sensitive metadata value of row " + t.rowID + " (exact match, " + typeOr(t.Type) + ", key " + t.Key + ")"}, allows))
 				continue
 			}
 		}
 		if len(t.pair) > len(Words(t.Key)) && strings.Contains(words, " "+strings.Join(t.pair, " ")+" ") {
-			add(Finding{Rule: RuleKeyPair, Where: it.Where, RowID: t.rowID, Label: idx.IDs[t.rowID],
-				Detail: "holds an internal or sensitive metadata pair of a store row (key " + t.Key + " with its value)"})
+			add(metaAllowed(Finding{Rule: RuleKeyPair, Where: it.Where, Path: it.Path, RowID: t.rowID, Label: idx.IDs[t.rowID],
+				Hash:   PassageHash(t.pair),
+				Detail: "holds an internal or sensitive metadata pair of row " + t.rowID + " (key " + t.Key + " with its value)"}, allows))
 		}
 	}
 	return out
+}
+
+// metaAllowed is f marked Warn when a text allow names its row and hash
+// (#138: `lore leaks allow --note <row> --match-hash <n>` clears a
+// metadata finding the way it clears a text one), its detail then naming
+// the allow, its reason and its author.
+func metaAllowed(f Finding, allows []TextAllow) Finding {
+	if a, ok := matchTextAllow(allows, f.RowID, f.Hash, f.Path); ok {
+		f.Warn, f.Allowed = true, a
+		f.Detail = "holds a metadata value of row " + f.RowID + " (" + string(f.Rule) + " rule), allowed by " + a.ID + allowedWhy(a)
+	}
+	return f
 }
 
 // typeOr is the value type a finding names ("text" when unknown).

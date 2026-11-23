@@ -28255,7 +28255,7 @@
     "/v1/leaks/allow": {
       "post": {
         "operationId": "leaks.allow",
-        "summary": "Allow one public passage an internal note quotes verbatim (a text-rule finding)",
+        "summary": "Allow one public passage an internal note quotes verbatim, or one public metadata value of a row (a text, exact-token or key-pair finding)",
         "tags": [
           "leaks"
         ],
@@ -28276,7 +28276,7 @@
                   },
                   "note": {
                     "type": "string",
-                    "description": "the internal note the passage is quoted from (the id the refusal names)"
+                    "description": "the internal note the passage is quoted from, or the row whose metadata value it is (the id the refusal names)"
                   },
                   "phrase": {
                     "type": "string",

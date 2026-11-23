@@ -157,7 +157,7 @@ func (a *App) leakCheckDocsAllowed(ctx context.Context, res *OrgResolution, wher
 	var allows []leakcheck.TextAllow
 	err = a.withExtra(scope.Extra, func() error {
 		var rerr error
-		rows, rerr = a.leakRows(ctx, client, names, scope.Shared)
+		rows, rerr = a.leakRows(ctx, client, names, scope.Shared, scope.NoMeta)
 		if rerr != nil {
 			return rerr
 		}
@@ -295,6 +295,9 @@ func leakBlocked(where string, fs []leakcheck.Finding, explain bool) error {
 		}
 		if f.Rule == leakcheck.RuleText && where != leakWhereMove {
 			h += "; " + textAllowFix(f, where) // #129: approved public text the note quotes
+		}
+		if (f.Rule == leakcheck.RuleExactToken || f.Rule == leakcheck.RuleKeyPair) && where != leakWhereMove {
+			h += "; " + metaAllowFix(f, where) // #138: a metadata value that is public
 		}
 		if !seen[h] {
 			seen[h] = true
@@ -444,14 +447,16 @@ var _ leakReader = (*App)(nil)
 // leakRows is the index rows of every attached store internal to this repo
 // (see the file comment); expected stores must be attached. shared names
 // the attached stores shared with a client repo's team (leakScope.Shared):
-// never indexed, whatever their class (#133).
-func (a *App) leakRows(ctx context.Context, client bool, expected []store.Source, shared map[store.Source]bool) ([]leakcheck.IndexRow, error) {
-	return leakRowsFrom(ctx, a, client, expected, shared)
+// never indexed, whatever their class (#133); noMeta names the attached
+// org stores the repo is not linked to (leakScope.NoMeta): indexed without
+// their metadata values (#138).
+func (a *App) leakRows(ctx context.Context, client bool, expected []store.Source, shared, noMeta map[store.Source]bool) ([]leakcheck.IndexRow, error) {
+	return leakRowsFrom(ctx, a, client, expected, shared, noMeta)
 }
 
 // leakRowsFrom is leakRows over any leakReader; a read that fails refuses
 // (E_LEAK_BLOCKED "cannot check"), never counts as empty.
-func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []store.Source, shared map[store.Source]bool) ([]leakcheck.IndexRow, error) {
+func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []store.Source, shared, noMeta map[store.Source]bool) ([]leakcheck.IndexRow, error) {
 	idents, err := a.StoreIdentities(ctx)
 	if err != nil {
 		return nil, leakCannotCheckErr("", err)
@@ -483,12 +488,13 @@ func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []sto
 			return nil, leakCannotCheckErr("store "+string(si.Name), err)
 		}
 		keys := leakKeysOf(keyRows)
+		withMeta := !noMeta[si.Name] // #138: no metadata values of a store the repo is not linked to
 		for _, t := range CoreTables() {
 			rows, err := a.List(ctx, si.Name, t)
 			if err != nil {
 				return nil, leakCannotCheckErr("store "+string(si.Name), err)
 			}
-			out = append(out, leakIndexRows(rows, t, si.Name, label, keys)...)
+			out = append(out, leakIndexRows(rows, t, si.Name, label, keys, withMeta)...)
 		}
 		if !client {
 			// the roster's ids and emails are internal details for a linked
@@ -611,8 +617,11 @@ func fieldBool(r row.Row, f string) bool {
 // leakIndexRows turns live rows of one table into index rows: prose
 // fields and metadata as text, internal or sensitive metadata values as
 // tokens (an unknown key counts as internal), an internal key row's name.
-// Tombstones carry no text and are skipped.
-func leakIndexRows(rows []row.Row, t row.Table, src store.Source, label string, keys map[string]leakKey) []leakcheck.IndexRow {
+// Tombstones carry no text and are skipped. Without withMeta (an org
+// store the repo is not linked to, #138) the rows' metadata values are
+// left out: neither text nor tokens nor internal key names, so only ids
+// and prose are indexed.
+func leakIndexRows(rows []row.Row, t row.Table, src store.Source, label string, keys map[string]leakKey, withMeta bool) []leakcheck.IndexRow {
 	out := make([]leakcheck.IndexRow, 0, len(rows))
 	for _, r := range rows {
 		if r.Deleted {
@@ -629,6 +638,9 @@ func leakIndexRows(rows []row.Row, t row.Table, src store.Source, label string, 
 		}
 		var tokens []leakcheck.Token
 		for kid, j := range r.Meta {
+			if !withMeta {
+				break
+			}
 			en, err := meta.DecodeEntry(j)
 			if err != nil {
 				continue // lint reports an entry that does not decode
@@ -648,7 +660,7 @@ func leakIndexRows(rows []row.Row, t row.Table, src store.Source, label string, 
 		sort.Strings(texts)
 		slices.SortFunc(tokens, func(a, b leakcheck.Token) int { return strings.Compare(a.Key+"\x00"+a.Value, b.Key+"\x00"+b.Value) })
 		ir := leakcheck.IndexRow{ID: r.ID.String(), Table: t.String(), Label: label, Source: string(src), Texts: texts, Tokens: tokens}
-		if t == schema.TableMetaKeys && fieldBool(r, leakKeyInternal) {
+		if withMeta && t == schema.TableMetaKeys && fieldBool(r, leakKeyInternal) {
 			ir.KeyNames = []string{fieldText(r, leakKeyName)}
 		}
 		out = append(out, ir)

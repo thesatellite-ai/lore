@@ -603,7 +603,7 @@ func checkItem(it Item, idx *Index, o Options, secrets SecretScan, projected map
 	if idx != nil {
 		allowed := allowedRows(it, idx)
 		out = append(out, textHits(it, content, idx, allowed, o.TextAllows)...)
-		out = append(out, metaHits(it, content, idx, allowed)...) // METADATA 3.15 steps 1, 6
+		out = append(out, metaHits(it, content, idx, allowed, o.TextAllows)...) // METADATA 3.15 steps 1, 6
 	}
 	out = append(out, sessionHits(it, content, o.SessionIDs)...)
 	if secrets != nil {

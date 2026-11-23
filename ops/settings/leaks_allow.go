@@ -32,7 +32,7 @@ const OpLeaksAllow = "leaks.allow"
 
 // LeaksAllowIn is the input of leaks.allow.
 type LeaksAllowIn struct {
-	Note string `json:"note" flag:"note" desc:"the internal note the passage is quoted from (the id the refusal names)"`
+	Note string `json:"note" flag:"note" desc:"the internal note the passage is quoted from, or the row whose metadata value it is (the id the refusal names)"`
 	// Phrase or MatchHash names the one passage: the exact text, or the
 	// hash a refused commit prints. Only the hash is stored.
 	Phrase    string `json:"phrase,omitempty" flag:"phrase" desc:"the exact public passage (only its hash is stored)"`
@@ -43,7 +43,7 @@ type LeaksAllowIn struct {
 
 func (o ops) leaksOps() []op.Entry {
 	return []op.Entry{
-		op.Define(op.Spec{Name: OpLeaksAllow, Summary: "Allow one public passage an internal note quotes verbatim (a text-rule finding)", Permission: op.PermWrite,
+		op.Define(op.Spec{Name: OpLeaksAllow, Summary: "Allow one public passage an internal note quotes verbatim, or one public metadata value of a row (a text, exact-token or key-pair finding)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: writeErrors, Examples: []op.Example{{Title: "ship approved banner wording a decision quotes",
 				CLI: `lore leaks allow --note dec_0c3a --file copy.txt --phrase "Your order has been received and a support agent will contact you soon." --reason "approved public copy"`}}}, o.leaksAllow),
 	}

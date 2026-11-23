@@ -90,7 +90,7 @@ func TestLeakIndexRows(t *testing.T) {
 		leakTestRow(t, "rul_01a1a67a33b7777587cca0cfc9e5d8aa", nil), // no prose: id only
 		dead,
 	}
-	got := leakIndexRows(rows, schema.TableMemories, "agency", leakStoreLabelPrefix+"agency", nil)
+	got := leakIndexRows(rows, schema.TableMemories, "agency", leakStoreLabelPrefix+"agency", nil, true)
 	if len(got) != 3 {
 		t.Fatalf("want 3 live rows, got %d: %+v", len(got), got)
 	}
@@ -187,7 +187,7 @@ func TestLeakRowsStoreChoice(t *testing.T) {
 	}
 	for _, tc := range cases {
 		a := leakWorld(t, tc.client)
-		got, err := a.leakRows(background(), tc.client, nil, nil)
+		got, err := a.leakRows(background(), tc.client, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("client=%v: %v", tc.client, err)
 		}
@@ -229,7 +229,7 @@ func TestLeakRowsFailsClosed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			a := leakWorld(t, tc.client)
-			got, err := a.leakRows(background(), tc.client, tc.expected, nil)
+			got, err := a.leakRows(background(), tc.client, tc.expected, nil, nil)
 			if !tc.refused {
 				if err != nil {
 					t.Fatalf("want no refusal, got %v", err)
@@ -307,7 +307,7 @@ func TestLeakRowsFailsClosedOnReadFailures(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := tc.fault
 			f.App = leakWorld(t, tc.client)
-			got, err := leakRowsFrom(background(), f, tc.client, nil, nil)
+			got, err := leakRowsFrom(background(), f, tc.client, nil, nil, nil)
 			if !tc.refused {
 				if err != nil {
 					t.Fatalf("want no refusal, got %v", err)
@@ -337,7 +337,7 @@ func TestLeakRowsNamesANeverReadStore(t *testing.T) {
 		return
 	}
 	f := faultyLeakReader{App: leakWorld(t, true)}
-	_, err := leakRowsFrom(background(), f, true, []store.Source{"client-store"}, nil)
+	_, err := leakRowsFrom(background(), f, true, []store.Source{"client-store"}, nil, nil)
 	var coded *errs.Error
 	if !errors.As(err, &coded) || coded.Code != errs.LeakBlocked {
 		t.Fatalf("want E_LEAK_BLOCKED, got %v", err)
@@ -362,7 +362,7 @@ func TestLeakRowsRosterOnlyForClientRepos(t *testing.T) {
 	if _, err := a.Create(background(), "me", schema.TableActors, leakActorFields(t)); err != nil {
 		t.Fatalf("actor in me: %v", err)
 	}
-	got, err := a.leakRows(background(), false, nil, nil)
+	got, err := a.leakRows(background(), false, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,15 +400,15 @@ func TestLeakIndexSkipsCommitLinkMessage(t *testing.T) {
 		subj   = "Show the order received banner after the customer submits the checkout form"
 		note   = "the client keeps the order received banner hidden for the whole spring launch"
 	)
-	links := leakIndexRows([]row.Row{leakTestRow(t, linkID, map[string]string{"message": subj, "author": "Ann Example"})}, schema.TableCommitLinks, "agency", leakStoreLabelPrefix+"agency", nil)
+	links := leakIndexRows([]row.Row{leakTestRow(t, linkID, map[string]string{"message": subj, "author": "Ann Example"})}, schema.TableCommitLinks, "agency", leakStoreLabelPrefix+"agency", nil, true)
 	if len(links) != 1 || len(links[0].Texts) != 0 {
 		t.Fatalf("a commit link's copied message must not be indexed text: %+v", links)
 	}
-	rems := leakIndexRows([]row.Row{leakTestRow(t, remID, map[string]string{"message": note})}, schema.TableReminders, "agency", leakStoreLabelPrefix+"agency", nil)
+	rems := leakIndexRows([]row.Row{leakTestRow(t, remID, map[string]string{"message": note})}, schema.TableReminders, "agency", leakStoreLabelPrefix+"agency", nil, true)
 	if len(rems) != 1 || len(rems[0].Texts) != 1 {
 		t.Fatalf("a reminder's message is a person's prose and stays indexed: %+v", rems)
 	}
-	mems := leakIndexRows([]row.Row{leakTestRow(t, memID, map[string]string{"body": subj})}, schema.TableMemories, "agency", leakStoreLabelPrefix+"agency", nil)
+	mems := leakIndexRows([]row.Row{leakTestRow(t, memID, map[string]string{"body": subj})}, schema.TableMemories, "agency", leakStoreLabelPrefix+"agency", nil, true)
 	idx := leakcheck.NewIndex(slices.Concat(links, rems), nil)
 	msg := []leakcheck.Item{{Where: "message of commit 1a2b3c4", Content: []byte(subj + "\n")}}
 	if fs := leakcheck.Blocking(leakcheck.Check(msg, idx, leakcheck.Options{ClientRepo: true})); len(fs) != 0 {

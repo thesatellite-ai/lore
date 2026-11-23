@@ -175,7 +175,7 @@ func TestLeakRowsSkipsSharedStores(t *testing.T) {
 	}
 	a := leakWorld(t, true)
 	sources := func(shared map[store.Source]bool) map[string]bool {
-		rows, err := a.leakRows(background(), true, nil, shared)
+		rows, err := a.leakRows(background(), true, nil, shared, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

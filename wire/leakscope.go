@@ -49,6 +49,11 @@ import (
 type leakScope struct {
 	Extra  []attach.Store
 	Shared map[store.Source]bool
+	// NoMeta are the org-store sources (attached or Extra) the repo is not
+	// linked to: their ids and 8-word text are indexed, their metadata
+	// values are not (#138: a fact_verified_at date of a row in a store
+	// the repo never links to blocked a commit naming that date).
+	NoMeta map[store.Source]bool
 }
 
 // primaryLink is the link of entry org a repo reads by default: its
@@ -119,7 +124,35 @@ func (a *App) leakScopeOf(s *orgcfg.Situation, client bool, attached []attach.St
 	if !client || s.Result.Org == nil {
 		return leakScope{Shared: map[store.Source]bool{}}
 	}
-	return a.leakScopeFor(s.Result.Org, leakClientAudience(s.Result.Org, leakLinks(s)), attached)
+	links := leakLinks(s)
+	sc := a.leakScopeFor(s.Result.Org, leakClientAudience(s.Result.Org, links), attached)
+	sc.NoMeta = leakUnlinked(s.Result.Org, links, append(slices.Clone(attached), sc.Extra...))
+	return sc
+}
+
+// leakUnlinked names the sources of stores that are org stores of org and
+// whose folder is not one a link of this repo points at (#138): the guard
+// reads their ids and text, not their metadata values. A personal store
+// is not an org store and keeps its values indexed.
+func leakUnlinked(org *orgconf.Org, links []orgresolve.Link, stores []attach.Store) map[store.Source]bool {
+	out := map[store.Source]bool{}
+	for _, at := range stores {
+		st := orgStoreOf(org, at.URL)
+		if st == nil {
+			continue
+		}
+		linked := false
+		for _, l := range links {
+			if org.StoreFor(l.StoreURL) == st && strings.Trim(l.Folder, "/") == strings.Trim(at.Folder, "/") {
+				linked = true
+				break
+			}
+		}
+		if !linked {
+			out[at.Name] = true
+		}
+	}
+	return out
 }
 
 // leakScopeFor is the leak scope over org's stores for the client's team
