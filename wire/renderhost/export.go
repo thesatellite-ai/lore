@@ -143,6 +143,13 @@ func (h *Host) RerenderStaleQuiet(ctx context.Context, root string) {
 	h.rerenderStaleQuiet(ctx, root)
 }
 
+// RerenderUntrackedQuiet re-renders a stale LORE.md after a write only
+// when git does not track it; a committed render is refreshed by the
+// commit that carries the row files (render_stamp.go, devco:D-936).
+func (h *Host) RerenderUntrackedQuiet(ctx context.Context, root string) {
+	h.rerenderUntrackedQuiet(ctx, root)
+}
+
 // HeldStaleNotice is the one line a sync prints when it left a committed
 // .lore/LORE.md behind its rows ("" when the render is current, not
 // held, or cannot be checked). Why (devco:D-231): the sync may not

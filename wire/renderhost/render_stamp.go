@@ -476,6 +476,23 @@ func (h *Host) rerenderStaleQuiet(ctx context.Context, root string) {
 	}
 }
 
+// rerenderUntrackedQuiet is rerenderStaleQuiet for a write and a session
+// start (devco:D-936, bug hunt H-197): only a render git does not track is
+// rewritten. A write always leaves uncommitted row files, so the sync's
+// hold (a clean committed render) never applied and every write rewrote a
+// committed .lore/LORE.md and created a LORE.full.md the repo never had:
+// `lore migrate run`'s one printed commit (git add .lore/data && git
+// commit) then left both behind. A committed render is the commit's to
+// refresh: lore's pre-commit hook re-renders it into the commit that
+// carries the row files (CommitRender, D-759), so nothing outside what the
+// write names changes in the work tree.
+func (h *Host) rerenderUntrackedQuiet(ctx context.Context, root string) {
+	if renderTracked(ctx, root) {
+		return
+	}
+	h.rerenderStaleQuiet(ctx, root)
+}
+
 // heldStaleNotice is HeldStaleNotice. It runs after rerenderStaleQuiet:
 // a render that sync could rewrite was rewritten, so a stale render here
 // is one rerenderStaleQuiet kept (held, clean row files, not a client

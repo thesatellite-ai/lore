@@ -40,10 +40,11 @@ func writeRenderHook(rend *lateRender, wd string) hosthooks.Hook {
 		if err != nil || run.WritesNothing() || run.OldRows || spec.Access != op.AccessWrite || writeRenderSkips[spec.Name] || rend.h == nil {
 			return res, err
 		}
-		// .lore/LORE.md as a sync refreshes it: only a stale stamp, and a
-		// committed render only while this clone has uncommitted row files
-		// (render_auto.go; the pre-commit hook carries it into the commit)
-		rend.h.RerenderStaleQuiet(ctx, wd)
+		// .lore/LORE.md only when git does not track it (devco:D-936): a
+		// committed render is refreshed by the pre-commit hook in the
+		// commit that carries the row files, so the commit a write prints
+		// leaves the work tree clean
+		rend.h.RerenderUntrackedQuiet(ctx, wd)
 		if _, rerr := rend.h.RefreshPrivateStaleIn(ctx, wd); rerr != nil {
 			_, _ = os.Stderr.WriteString(writeRenderWarnPrefix + rerr.Error() + "\n") // a write never fails over its render
 		}

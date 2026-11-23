@@ -149,3 +149,52 @@ func TestRerenderStaleQuietHoldsDuringGitOp(t *testing.T) {
 		}
 	}
 }
+
+// TestRerenderUntrackedQuietLeavesCommittedRender is devco:D-936 (bug hunt
+// H-197): after a write (row files uncommitted, as every write leaves
+// them) the write hook and the SessionStart hook never rewrite a committed
+// .lore/LORE.md: the pre-commit hook refreshes it in the commit that
+// carries the row files, so `lore migrate run`'s printed commit leaves the
+// tree clean. An untracked LORE.md is still brought up to date.
+func TestRerenderUntrackedQuietLeavesCommittedRender(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root, "-c", "user.name=T", "-c", "user.email=t@example.test"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("init", "-q")
+	write(LoreMDRel, "rules\n")
+	write(rowsDirRel+"/rules/r1.json", "{}\n")
+	git("add", "-A")
+	git("commit", "-q", "-m", "render")
+	write(rowsDirRel+"/rules/r2.json", "{}\n") // the write that just ran
+	t.Chdir(root)
+	asked := 0
+	h := New(Options{
+		ProjectID:    func(context.Context) (string, error) { asked++; return "", os.ErrNotExist },
+		RepoIsClient: func(context.Context) (bool, error) { return false, nil },
+	})
+	h.RerenderUntrackedQuiet(ctx, root)
+	if asked != 0 {
+		t.Fatal("committed LORE.md after a write: the write hook went on to render it, want it left for the commit")
+	}
+	git("rm", "-q", "--cached", LoreMDRel)
+	h.RerenderUntrackedQuiet(ctx, root)
+	if asked != 1 {
+		t.Fatalf("untracked LORE.md after a write: render checks = %d, want 1", asked)
+	}
+}

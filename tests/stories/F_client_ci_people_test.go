@@ -197,7 +197,12 @@ func TestStoryFCI(t *testing.T) {
 				r := ci.LoreIn(c, args...).OK(t).Never(t, "E_READ_ONLY_FS", "E_REFUSED")
 				s.NamedFlags(t, r)
 			}
-			ci.LoreIn(c, "doctor").Never(t, "DEGRADED", "E_READ_ONLY_FS")
+			// bug hunt H-197: the 0.1.17 fixture writes every body from one
+			// 16-word vocabulary, so doctor's near_duplicate check (devco
+			// D-926) rightly finds pairs and says DEGRADED; any other
+			// warning or error in a CI clone still fails here.
+			ci.LoreIn(c, "doctor").Never(t, "E_READ_ONLY_FS")
+			fDoctorOnlyNearDuplicates(t, ci.LoreIn(c, "doctor", "--json").Never(t, "E_READ_ONLY_FS"))
 			s.Untouched(t, c.Dir, before, "CI reads")
 			if got := c.Git("status", "--porcelain", "--ignored"); got != status {
 				t.Errorf("CI reads changed git status (e.g. .lore/lore.db-wal):\nbefore:\n%s\nafter:\n%s", status, got)
@@ -208,6 +213,31 @@ func TestStoryFCI(t *testing.T) {
 		}
 		s.NoPushSince(t, app, refs, "CI reads")
 	})
+}
+
+// fNearDuplicateWarning starts doctor's near_duplicate warning (ops/lint
+// NearDuplicate), the one the 0.1.17 fixture's repeated words cause.
+const fNearDuplicateWarning = "near_duplicate:"
+
+// fDoctorOnlyNearDuplicates fails on any doctor --json warning other than
+// near_duplicate, and on any error (bug hunt H-197).
+func fDoctorOnlyNearDuplicates(t *testing.T, r teamharness.Result) {
+	t.Helper()
+	var rep struct {
+		Warnings []string `json:"warnings"`
+		Errors   []string `json:"errors"`
+	}
+	if err := json.Unmarshal([]byte(r.Stdout), &rep); err != nil {
+		t.Fatalf("lore doctor --json: %v\n%s", err, r)
+	}
+	for _, w := range rep.Warnings {
+		if !strings.HasPrefix(w, fNearDuplicateWarning) {
+			t.Errorf("lore doctor warns in a CI clone: %s", w)
+		}
+	}
+	for _, e := range rep.Errors {
+		t.Errorf("lore doctor errors in a CI clone: %s", e)
+	}
 }
 
 // TestStoryFPeople: a newhire joins, a leaver leaves with open tasks and

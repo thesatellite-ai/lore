@@ -143,7 +143,7 @@ func (h *Host) contextSessionStart(ctx context.Context) (contextResult, error) {
 	// write outside this checkout, or by an older lore), so the session
 	// never starts on an edited rule's old text.
 	if wd, werr := os.Getwd(); werr == nil {
-		h.rerenderStaleQuiet(ctx, wd) // LORE.md, under the sync's rules (a clean committed render is held)
+		h.rerenderUntrackedQuiet(ctx, wd) // LORE.md only when untracked: a committed one is the commit's to refresh (devco:D-936)
 		if _, rerr := h.RefreshPrivateStaleIn(ctx, wd); rerr != nil {
 			h.logHookError(rerr)
 		}
