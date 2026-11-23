@@ -41,6 +41,9 @@ type textRow struct {
 	ValidUntil time.Time
 	// Day is the row's day metadata (YYYY-MM-DD), "" when none.
 	Day string
+	// Stale says the row's fact evidence changed after it was verified
+	// (markStale, devco:D-941), "" when fresh or unchecked.
+	Stale string
 	// stored is the row's date as the lens stores it (metaDayOf reads
 	// it), "" for a row not read from the lens.
 	stored string
@@ -76,6 +79,9 @@ type data struct {
 	resources []resourceRow
 	tasks     []taskRow
 	rows      []textRow
+	// facts is every row's fact keys (loadFacts, devco:D-941), nil when
+	// the ask read no rows.
+	facts map[string]factItems
 	// view is the question's view of every live row the call read
 	// (corpus.go); nil builds it from rows (a test's data).
 	view *meaningView
@@ -729,6 +735,18 @@ func namesResource(w string, ms []match) bool {
 	return false
 }
 
+// staleOrder puts a fresh row before a stale one (devco:D-941); 0 when
+// both are fresh or both stale.
+func staleOrder(a, b scored) int {
+	switch sa, sb := a.row.Stale != "", b.row.Stale != ""; {
+	case sa == sb:
+		return 0
+	case sa:
+		return 1
+	}
+	return -1
+}
+
 // firstLine is the first line of s.
 func firstLine(s string) string {
 	l, _, _ := strings.Cut(s, "\n")
@@ -759,6 +777,9 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 	slices.SortStableFunc(all, func(a, b scored) int {
 		if c := cmp.Compare(b.score, a.score); c != 0 {
 			return c
+		}
+		if c := staleOrder(a, b); c != 0 {
+			return c // devco:D-941: a fresh row before a stale one with the same match
 		}
 		if c := cmp.Compare(b.fused, a.fused); c != 0 {
 			return c
@@ -833,6 +854,9 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 	}
 	byScoreThenNewest := func(a, b scored) int {
 		if c := cmp.Compare(b.score, a.score); c != 0 {
+			return c
+		}
+		if c := staleOrder(a, b); c != 0 {
 			return c
 		}
 		if c := cmp.Compare(b.fused, a.fused); c != 0 {
@@ -963,7 +987,7 @@ func rowDay(r *textRow) string {
 
 // rowOf is row r as the answer prints it.
 func rowOf(r *textRow, matched []string) Row {
-	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched}
+	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale}
 	if r.Day != "" {
 		out.At = r.Day
 	} else if !r.At.IsZero() {
@@ -1407,6 +1431,9 @@ func (r Row) text(i int) string {
 	if r.History != "" {
 		b.WriteString("  [" + r.History + "]")
 	}
+	if r.Stale != "" {
+		b.WriteString("  [" + r.Stale + "]")
+	}
 	b.WriteString("\n")
 	title, body := r.readable()
 	if title != "" && title != body {
@@ -1520,6 +1547,9 @@ func (r Row) facts() string {
 	}
 	if r.History != "" {
 		line += "  [" + r.History + "]"
+	}
+	if r.Stale != "" {
+		line += "  [" + r.Stale + "]"
 	}
 	if r.FullChars > 0 {
 		line += "  (" + r.cutNote() + ")"

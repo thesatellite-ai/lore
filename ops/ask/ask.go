@@ -214,6 +214,10 @@ type Row struct {
 	// question (devco D-942): history, printed under the row, never an
 	// answer of their own.
 	Comments []Comment `json:"comments,omitempty" desc:"comments on this row holding a word of the question, oldest first; read them as history (what someone said about the row then), the row is the answer"`
+	// Stale is set on a row stating a fact about code whose evidence
+	// changed in git after it was verified (devco:D-941): it ranks below a
+	// fresh row with the same match.
+	Stale string `json:"stale,omitempty" desc:"set when the row states a fact whose evidence files (fact_evidence) changed in git after it was verified (fact_verified_at): stale: evidence changed since <day> (<files>); check it before relying on it, it ranks below a fresh row with the same match"`
 	// readTitle and readBody are Title and Body as the text answer prints
 	// them: each ${res:…} naming a resource the ask read replaced by the
 	// resource's name (refs.Readable, devco D-822). --json keeps the
@@ -273,11 +277,15 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 			d.view = viewOf(q, c, vf)
 			d.rows = withMeaning(q, ms, d.rows, c, d.view, fill)
 		}
+		if _, checks := env.(FactEnv); lerr == nil && checks && len(d.rows) > 0 {
+			d.facts, lerr = loadFacts(ctx, run) // devco:D-941: only an env that can check them
+		}
 		return lerr
 	})
 	if err != nil {
 		return Out{}, err
 	}
+	markStale(ctx, env, d.rows, d.facts)
 	maxChars := in.MaxChars
 	if maxChars <= 0 {
 		maxChars = DefaultMaxChars
@@ -338,7 +346,7 @@ FROM knowledge_refs_all kr WHERE kr.src_table = 'tasks' AND kr.dst_table = 'reso
 // keeps typedSQL's answer, read by every question, across calls; devco:D-846
 // adds textSQL and daysSQL, which name no word or day of the question).
 func FileOnly(statement string) bool {
-	return statement == typedSQL || statement == textSQL || statement == daysSQL || statement == commentsSQL
+	return statement == typedSQL || statement == textSQL || statement == daysSQL || statement == commentsSQL || statement == factSQL
 }
 
 // loadTyped reads the resources and the open tasks.

@@ -41,6 +41,8 @@ There is no importer in 0.1.18 (`learn-from` and `learn` are dropped). Read CLAU
 ```bash
 # add
 lore memory add --body "Tailwind v4 only" [--repo web] [--kind procedural] [--tag frontend] [--yes]
+# a fact about code with its evidence: lint (stale_fact), doctor, search and ask flag it once the file changes in git
+lore memory add --body "Refunds are capped at the order total" --meta fact_evidence=billing/refund.go:42 --meta fact_verified_at=2026-11-02
 
 # search (FTS5 BM25; LIKE fallback)
 lore memory search --query "tailwind" [--limit 10] [--all-repos|--master-only|--no-inherit] [--include-archived] [--json]

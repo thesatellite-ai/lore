@@ -50,7 +50,7 @@ const (
 // Codes lists every finding code.
 func Codes() []Code {
 	return []Code{UnknownScheme, DanglingRef, VarOldName, VarShadowed, VarShareableDiffers,
-		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate, CopiedID}
+		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate, CopiedID, StaleFact}
 }
 
 // ManyTimeEntries is where lint warns that a task should be split (TQ4,
@@ -121,7 +121,7 @@ func (o RunOut) Text() string {
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	return []op.Entry{
-		op.Define(op.Spec{Name: OpRun, Summary: "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets)",
+		op.Define(op.Spec{Name: OpRun, Summary: "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets, facts whose evidence changed after they were verified)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: []errs.Code{errs.InvalidInput, errs.Internal},
 			Examples: []op.Example{{Title: "every finding as JSON", CLI: "lore lint --json", Want: `"findings"`},
 				{Title: "LORE.md clean-up suggestions", CLI: "lore lint --context", Want: "finding"}}}, o.run),
@@ -177,6 +177,8 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	out = append(out, nearDuplicates(nearDupRows(all), false)...)
 	// devco D-929: one row live in two stores (store adopt keeps ids)
 	out = append(out, copiedIDs(all)...)
+	// devco:D-941: a fact whose evidence changed after it was verified
+	out = append(out, o.staleFactsOf(ctx, all)...)
 	// SECRETS 5.2: stale holder labels
 	out = append(out, holderFindings(all)...)
 	secrets, err := o.secretScan(ctx, all) // SQ12: re-scan with today's team rules

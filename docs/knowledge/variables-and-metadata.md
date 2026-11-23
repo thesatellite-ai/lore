@@ -149,7 +149,7 @@ references:
 
 ## Step 6 — Put metadata on a row
 
-`lore meta set --id <id> --pair key=value` sets one field. Add a type with `key:type=value` (here `cost_hours:number=3`); without one a new key is `text`. The first use of a key adds it to the repo's registry and the output says so. `lore meta get --id <id>` lists a row's fields. Commands that add rows take `--meta key=value` too (`lore task add --title 'Fix it' --meta client=acme`).
+`lore meta set --id <id> --pair key=value` sets one field. Add a type with `key:type=value` (here `cost_hours:number=3`); without one a new key is `text`, except the two keys lore reads itself: `fact_evidence` starts as a list and `fact_verified_at` as a date ([facts about code that go stale](rules-memories-decisions.md)). The first use of a key adds it to the repo's registry and the output says so. `lore meta get --id <id>` lists a row's fields. Commands that add rows take `--meta key=value` too (`lore task add --title 'Fix it' --meta client=acme`).
 
 <!-- example: meta#meta-set -->
 ```console

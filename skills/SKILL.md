@@ -324,6 +324,7 @@ The first form looks helpful but persists nothing — the user is left to wonder
 | User says | Run |
 |---|---|
 | "remember this", "don't forget", "save this" | `lore memory add --body "<the fact>"` |
+| a fact about how the code works, checked in a file | `lore memory add --body "<the fact>" --meta fact_evidence=<path>:<line> --meta fact_verified_at=<today>` (a `[stale: …]` mark in `lore search` / `lore ask` means the file changed since: read the code again, then `lore meta set --id <id> --pair fact_verified_at=<today>` or fix the row) |
 | "we always X", "we must X" | `lore rule add --severity must --body "<X>"` |
 | "we should X" (soft) | `lore rule add --severity should --body "<X>"` |
 | "we never X", "don't X" | `lore rule add --severity must --body "Do not <X>"` |

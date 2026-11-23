@@ -166,10 +166,15 @@ func (r Row) line(place, oneDay bool) string {
 }
 
 // historyMark adds "  [<history>]" to b when r is no longer the current
-// answer, so an agent reads it as what used to be true.
+// answer, so an agent reads it as what used to be true, and
+// "  [stale: …]" when its fact evidence changed after it was verified
+// (devco:D-941), so an agent checks it before relying on it.
 func (r Row) historyMark(b *strings.Builder) {
 	if r.History != "" {
 		b.WriteString("  [" + r.History + "]")
+	}
+	if r.Stale != "" {
+		b.WriteString("  [" + r.Stale + "]")
 	}
 }
 

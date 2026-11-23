@@ -99,3 +99,36 @@ func TestCommentHitText(t *testing.T) {
 		t.Fatalf("the comment holds every word:\n%s", text)
 	}
 }
+
+// TestGroupCommentsKeepStaleBelowFresh (devco:D-941 with D-942): a stale
+// fact raised to its comment's place still ranks below a fresh row with
+// the same match, and its comment stays directly under it; a fresh row
+// raised by its comment keeps that place. Both rules hold together.
+func TestGroupCommentsKeepStaleBelowFresh(t *testing.T) {
+	t.Parallel()
+	stale := "stale: evidence changed since 2026-11-02 (billing/refund.go)"
+	rows := map[string]Hit{
+		"mem_s": {Entity: "memory", ID: "mem_s", Title: "Refunds retry three times", Stale: stale},
+		"dec_f": {Entity: "decision", ID: "dec_f", Title: "Payments use the gateway"},
+	}
+	hits := []Hit{
+		comment("cmt_s", "mem_s", 3), // the stale row's comment, best match
+		{Entity: "memory", ID: "mem_f", Score: 3},
+		comment("cmt_f", "dec_f", 2.5), // a fresh row only its comment matched
+		{Entity: "memory", ID: "mem_s", Score: 1, Stale: stale},
+		{Entity: "memory", ID: "mem_w", Score: 1},
+	}
+	got := GroupComments(hits, parentsOf(rows))
+	if want := "mem_s cmt_s mem_f dec_f cmt_f mem_w"; ids(got) == want {
+		t.Fatalf("a stale row raised by its comment stands above a fresh row with the same match: %s", ids(got))
+	}
+	if want := "mem_f mem_s cmt_s dec_f cmt_f mem_w"; ids(got) != want {
+		t.Fatalf("order:\n got %s\nwant %s", ids(got), want)
+	}
+	// the stale cut: 3*0.9 = 2.7 still above the fresh row raised to 2.5
+	for i, h := range got {
+		if h.CommentOn.ID != "" && (i == 0 || got[i-1].ID != h.CommentOn.ID) {
+			t.Fatalf("comment %s is not directly under its row: %s", h.ID, ids(got))
+		}
+	}
+}

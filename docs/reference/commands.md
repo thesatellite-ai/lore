@@ -386,8 +386,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore lint` … | Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets) | [sync/conflicts-and-duplicates › Try it — check the notes after a merge with lore lint](../../docs/sync/conflicts-and-duplicates.md#try-it--check-the-notes-after-a-merge-with-lore-lint) |
-| `lore lint run` | Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets) | [sync/conflicts-and-duplicates › Try it — check the notes after a merge with lore lint](../../docs/sync/conflicts-and-duplicates.md#try-it--check-the-notes-after-a-merge-with-lore-lint) |
+| `lore lint` … | Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets, facts whose evidence changed after they were verified) | [sync/conflicts-and-duplicates › Try it — check the notes after a merge with lore lint](../../docs/sync/conflicts-and-duplicates.md#try-it--check-the-notes-after-a-merge-with-lore-lint) |
+| `lore lint run` | Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets, facts whose evidence changed after they were verified) | [sync/conflicts-and-duplicates › Try it — check the notes after a merge with lore lint](../../docs/sync/conflicts-and-duplicates.md#try-it--check-the-notes-after-a-merge-with-lore-lint) |
 
 ### lore live
 

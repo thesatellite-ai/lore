@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/logic/dates"
+	"github.com/thesatellite-ai/lore/logic/factstale"
 	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -249,6 +250,14 @@ type Hit struct {
 	// when the row has none, so v0.1.17's hit bytes stay for such rows).
 	Meta       map[string]string `json:"meta,omitempty"`
 	MetaMasked []string          `json:"meta_masked,omitempty"`
+	// Stale is set on a row stating a fact about code whose evidence
+	// (fact_evidence) changed in git after it was verified
+	// (fact_verified_at, devco:D-941): it may no longer hold, so it ranks
+	// below a fresh hit with the same match.
+	Stale string `json:"stale,omitempty" desc:"set when the row states a fact whose evidence files (fact_evidence) changed in git after it was verified (fact_verified_at): stale: evidence changed since <day> (<files>); check it before relying on it, it ranks below a fresh row with the same match"`
+	// Fact is the hit row's evidence claim (nil when it names none), read
+	// by the wire layer to set Stale; never in --json.
+	Fact *factstale.Claim `json:"-"`
 	// Text is the row's whole text (its body, else its longest searched
 	// field other than the title), set only with --full (devco D-758,
 	// owner P-8): the snippet stops after a few words, and reading a note
@@ -257,6 +266,20 @@ type Hit struct {
 	// Fallback is the terminal text when neither Snippet nor Body is set;
 	// never in --json, so the v0.1.17 envelope is unchanged.
 	Fallback string `json:"-"`
+}
+
+// staleRank is the share of its score a stale hit ranks with
+// (devco:D-941): below a fresh hit with the same match, above a much
+// weaker one.
+const staleRank = 0.9
+
+// RankScore is the score a hit is ordered by: its score, cut for a stale
+// fact (Hit.Stale). The printed score stays the match's own.
+func RankScore(h Hit) float64 {
+	if h.Stale != "" {
+		return h.Score * staleRank
+	}
+	return h.Score
 }
 
 // Result is what Env.GlobalSearch found: the merged, cut hits (trash tail
@@ -561,6 +584,9 @@ func (o RunOut) Text() string {
 		}
 		if h.History != "" {
 			body += "  [" + h.History + "]"
+		}
+		if h.Stale != "" {
+			body += "  [" + h.Stale + "]"
 		}
 		if h.CommentOn.ID != "" {
 			// D-942: a comment says which row it is on and that it is history

@@ -7090,6 +7090,10 @@
                           "place": {
                             "type": "string"
                           },
+                          "stale": {
+                            "type": "string",
+                            "description": "set when the row states a fact whose evidence files (fact_evidence) changed in git after it was verified (fact_verified_at): stale: evidence changed since \u003cday\u003e (\u003cfiles\u003e); check it before relying on it, it ranks below a fresh row with the same match"
+                          },
                           "table": {
                             "type": "string"
                           },
@@ -31802,7 +31806,7 @@
     "/v1/lints/run": {
       "post": {
         "operationId": "lint.run",
-        "summary": "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets)",
+        "summary": "Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, near-duplicate rows, unknown metadata keys, stored secrets, facts whose evidence changed after they were verified)",
         "tags": [
           "lint"
         ],
@@ -79060,6 +79064,10 @@
                                 "type": "string",
                                 "description": "the matched excerpt, matches in \u003cb\u003e…\u003c/b\u003e"
                               },
+                              "stale": {
+                                "type": "string",
+                                "description": "set when the row states a fact whose evidence files (fact_evidence) changed in git after it was verified (fact_verified_at): stale: evidence changed since \u003cday\u003e (\u003cfiles\u003e); check it before relying on it, it ranks below a fresh row with the same match"
+                              },
                               "text": {
                                 "type": "string",
                                 "description": "the row's whole text (body), only with --full"
@@ -79183,6 +79191,10 @@
                               "snippet": {
                                 "type": "string",
                                 "description": "the matched excerpt, matches in \u003cb\u003e…\u003c/b\u003e"
+                              },
+                              "stale": {
+                                "type": "string",
+                                "description": "set when the row states a fact whose evidence files (fact_evidence) changed in git after it was verified (fact_verified_at): stale: evidence changed since \u003cday\u003e (\u003cfiles\u003e); check it before relying on it, it ranks below a fresh row with the same match"
                               },
                               "text": {
                                 "type": "string",

@@ -518,6 +518,11 @@ func (p *metaPlan) set(ctx context.Context, t meta.Term, isJSON bool) error {
 	if len(fields) > 0 || d == nil {
 		vt = t.Type
 	}
+	if bt, ok := meta.BuiltinType(name); ok && vt.IsZero() && d == nil && len(fields) == 0 {
+		// devco:D-941: a key lore reads (fact_verified_at, fact_evidence)
+		// registers with its own type, not as text from its first value
+		vt = bt
+	}
 	if vt.IsZero() && isJSON {
 		if vt, err = meta.InferType([]byte(t.Value)); err != nil {
 			return err

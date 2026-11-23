@@ -115,6 +115,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	a.doctorDuplicateImports(ctx, warn)
 	a.doctorNearDuplicates(ctx, warn) // devco D-926: an import and its rewrite, both live
 	a.doctorCopiedIDs(ctx, warn)      // devco D-929: one row live in two stores
+	a.doctorStaleFacts(ctx, warn)     // devco:D-941: a fact whose evidence changed since it was verified
 	a.doctorTaskTree(ctx, warn)
 	a.doctorMetaQuarantine(ctx, warn)
 	a.doctorSecretRulesOff(ctx, note)
@@ -237,6 +238,22 @@ func (a *App) doctorCopiedIDs(ctx context.Context, warn func(string)) {
 		return
 	}
 	warn(string(opslint.CopiedID) + ": " + strconv.Itoa(len(found)) + " row(s) live in two stores (lore store adopt and a copied row file keep ids), so an edit reaches one copy only; list, search and ask show the newest; each with the command that keeps one copy: lore lint --code " + string(opslint.CopiedID))
+}
+
+// doctorStaleFacts counts the rows stating a fact about code whose
+// evidence files changed in git after the fact was verified (devco:D-941,
+// bug hunt H-190) and names the lint command that lists each with the
+// changed files and the command that re-verifies it.
+func (a *App) doctorStaleFacts(ctx context.Context, warn func(string)) {
+	found, err := opslint.FindStaleFacts(ctx, a)
+	if err != nil {
+		warn(string(opslint.StaleFact) + ": the rows could not be read: " + err.Error())
+		return
+	}
+	if len(found) == 0 {
+		return
+	}
+	warn(string(opslint.StaleFact) + ": " + strconv.Itoa(len(found)) + " row(s) state a fact whose evidence (fact_evidence) changed in git after it was verified (fact_verified_at), so it may no longer hold; each with the changed files and the command that re-verifies it: lore lint --code " + string(opslint.StaleFact))
 }
 
 // doctorTaskTree is the sub-task tree check (TASK 6.13): cycles, orphans,

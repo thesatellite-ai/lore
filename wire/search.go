@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/dates"
+	"github.com/thesatellite-ai/lore/logic/factstale"
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/logic/querywords"
@@ -213,17 +214,27 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	// table order (deterministic output). A hit that is history (superseded,
 	// past valid_until) comes after every current one (devco D-820): the
 	// first hit is what an agent takes as the answer.
+	// devco:D-941: a stale fact ranks below a fresh hit with the same match
+	a.markStaleHits(ctx, res.Hits)
 	sort.SliceStable(res.Hits, func(i, j int) bool {
 		if hi, hj := res.Hits[i].History != "", res.Hits[j].History != ""; hi != hj {
 			return hj
 		}
-		return res.Hits[i].Score > res.Hits[j].Score
+		return opssearch.RankScore(res.Hits[i]) > opssearch.RankScore(res.Hits[j])
 	})
 	// D-942: a comment is history, listed under the row it is on (that row
 	// listed first when only the comment matched), before the cut so a
 	// comment never takes the place of its row
 	res.Hits = opssearch.GroupComments(res.Hits, func(c opssearch.CommentOn) (opssearch.Hit, bool, bool) {
-		return a.commentParent(ctx, eng, r.Targets, sc, c)
+		h, found, inScope := a.commentParent(ctx, eng, r.Targets, sc, c)
+		if found {
+			// devco:D-941: a row listed for its comment is marked (and
+			// ranked) stale like a row that matched itself
+			one := []opssearch.Hit{h}
+			a.markStaleHits(ctx, one)
+			h = one[0]
+		}
+		return h, found, inScope
 	})
 	if len(res.Hits) > r.Limit {
 		res.More, res.Hits = true, res.Hits[:r.Limit]
@@ -577,6 +588,9 @@ func hitOf(t opssearch.Target, id, snippet string, r row.Row, now time.Time) ops
 		// D-942: a comment names the row it is on (placeComments reads its
 		// kind and title)
 		h.CommentOn = opssearch.CommentOn{Table: searchField(r, schema.FieldEntityTable), ID: searchField(r, schema.FieldEntityID)}
+	}
+	if cl, ok := factstale.ClaimOf(r); ok && cl.Checkable() {
+		h.Fact = &cl // devco:D-941: GlobalSearch checks it against git
 	}
 	h.Fallback = opssearch.TruncBody(strings.Join(strings.Fields(searchField(r, "body")), " "), opssearch.BodyMax)
 	// D-758: the whole text for --full (search.run drops it without

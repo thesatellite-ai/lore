@@ -13,7 +13,11 @@ package search
 //	                                       the comment under it
 //	  a comment whose row is gone or out of scope ─▶ keeps its place, labelled
 
-import "strings"
+import (
+	"cmp"
+	"slices"
+	"strings"
+)
 
 // CommentOn names the row a comment hit comments on: its table, kind,
 // id and title (or the start of its body). Title is "" when the row could
@@ -39,8 +43,9 @@ type CommentParent func(c CommentOn) (h Hit, found, inScope bool)
 // that is history keeps its own place after the current hits). When only
 // the comment matched, the row it is on is listed in the comment's place
 // (ViaComment set, the comment's score) with the comment under it. hits
-// are best first; the order of everything else is kept. parent is asked
-// once per commented row.
+// are best first; the order of everything else is kept, except that a
+// stale row raised by its comment ranks as stale (devco:D-941). parent
+// is asked once per commented row.
 func GroupComments(hits []Hit, parent CommentParent) []Hit {
 	rows := map[string]Hit{} // the rows listed, by id
 	for _, h := range hits {
@@ -78,13 +83,12 @@ func GroupComments(hits []Hit, parent CommentParent) []Hit {
 			under[h.CommentOn.ID] = append(under[h.CommentOn.ID], h)
 		}
 	}
-	out := make([]Hit, 0, len(hits)+len(rows))
+	var groups []hitGroup
 	done := map[string]bool{}
 	emit := func(id string) {
 		if !done[id] {
 			done[id] = true
-			out = append(out, rows[id])
-			out = append(out, under[id]...)
+			groups = append(groups, groupOf(rows[id], under[id]))
 		}
 	}
 	for _, h := range hits {
@@ -92,13 +96,60 @@ func GroupComments(hits []Hit, parent CommentParent) []Hit {
 		case h.CommentOn.ID == "":
 			emit(h.ID)
 		case !listed:
-			out = append(out, h) // its row is gone or out of scope: labelled, in place
+			groups = append(groups, groupOf(h, nil)) // its row is gone or out of scope: labelled, in place
 		case r.History == "" || r.ViaComment != "":
 			emit(h.CommentOn.ID) // the row comes up to its comment's place
 		}
 		// else: a row that is history keeps its own place; its comments follow it there
 	}
+	// devco:D-941 with D-942: a row raised to its comment's place still
+	// ranks as a stale fact when it is one, so a stale row never stands
+	// above a fresh row with the same match because a comment on it
+	// matched. Without a stale row this keeps the order above (each group
+	// already stands at its best member's place).
+	slices.SortStableFunc(groups, func(a, b hitGroup) int {
+		if a.history != b.history {
+			if b.history {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(b.rank, a.rank)
+	})
+	out := make([]Hit, 0, len(hits)+len(rows))
+	for _, g := range groups {
+		out = append(out, g.hits...)
+	}
 	return out
+}
+
+// hitGroup is a row and the comments listed under it (or one comment
+// whose row is not listed), placed together.
+type hitGroup struct {
+	hits    []Hit
+	history bool    // the group stands after the current hits
+	rank    float64 // the group's place among groups of its kind, best first
+}
+
+// groupOf ranks head and its comments as one: a row that is history
+// (not listed for its comment) keeps its own score after the current
+// hits; otherwise the group takes its best match (the row rises to its
+// best comment), cut by staleRank when head is a stale fact (RankScore).
+func groupOf(head Hit, comments []Hit) hitGroup {
+	g := hitGroup{hits: append([]Hit{head}, comments...)}
+	if head.History != "" && head.ViaComment == "" {
+		g.history, g.rank = true, RankScore(head)
+		return g
+	}
+	best := head.Score
+	for _, c := range comments {
+		best = max(best, c.Score)
+	}
+	g.rank = best
+	if head.Stale != "" {
+		g.rank = best * staleRank
+	}
+	return g
 }
 
 // parentTitle is what names a commented row on its comment's line: its
