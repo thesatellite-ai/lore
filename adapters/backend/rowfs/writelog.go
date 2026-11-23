@@ -113,9 +113,7 @@ func CarryView(view IndexView, gen uint64, dataDir string) (IndexView, uint64, b
 	for _, rel := range out.Check {
 		delete(rels, rel) // already looked at
 	}
-	for _, rel := range slices.Sorted(maps.Keys(rels)) {
-		out.Check = append(out.Check, rel)
-	}
+	out.Check = append(out.Check, slices.Sorted(maps.Keys(rels))...)
 	return out, now, true
 }
 
