@@ -12,6 +12,8 @@ import (
 // spec is v0.1.17's suggestion facts (read from its real output, 2026-11-04).
 var spec = contenttest.Spec{
 	Noun: "suggestion", Table: schema.TableSuggestions, Prefix: "sug",
+	// devco D-924: archive / unarchive like every searchable row kind
+	Archive:  true,
 	KindList: "suggestion.list", KindShow: "suggestion.show", KindSearch: "suggestion.search",
 	Empty: "(no suggestions)\n", Badge: "SU", TitleKey: "title",
 	ListLine: contenttest.TitleLine("SU", "title"),

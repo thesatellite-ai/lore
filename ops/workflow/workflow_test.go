@@ -11,6 +11,8 @@ import (
 // spec is v0.1.17's workflow facts (read from its real output, 2026-11-04).
 var spec = contenttest.Spec{
 	Noun: "workflow", Table: schema.TableWorkflows, Prefix: "wfl",
+	// devco D-924: archive / unarchive like every searchable row kind
+	Archive:  true,
 	KindList: "workflow.list", KindShow: "workflow.show", KindSearch: "workflow.search",
 	Empty: "(no workflows)\n", Badge: "WO", TitleKey: "name",
 	Add: func(title, body string) string {

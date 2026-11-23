@@ -1,5 +1,5 @@
 // Package incident defines the `incident` noun's operations on the 0.1.18
-// core: add, edit (new, CLI_REFERENCE F2), list, show, delete and search, with v0.1.17's flag spellings, --json envelopes and human
+// core: add, edit (new, CLI_REFERENCE F2), list, show, archive, unarchive (devco D-924), delete and search, with v0.1.17's flag spellings, --json envelopes and human
 // lines (saas/cmd/cli/generated_commands.go, edit_commands.go,
 // archive_commands.go and search_entities.go at 4e6ed1c). Delete asks
 // first and takes --yes (v0.1.17 --confirm is refused by the CLI mount
@@ -33,13 +33,15 @@ func refErrors() []errs.Code { return append(content.WriteErrors(), errs.Resourc
 
 // Operation names (incident.add → `lore incident add`, POST /v1/incidents).
 const (
-	Noun     = "incident"
-	OpAdd    = "incident.add"
-	OpList   = "incident.list"
-	OpShow   = "incident.show"
-	OpEdit   = "incident.edit"
-	OpDelete = "incident.delete"
-	OpSearch = "incident.search"
+	Noun        = "incident"
+	OpAdd       = "incident.add"
+	OpList      = "incident.list"
+	OpShow      = "incident.show"
+	OpEdit      = "incident.edit"
+	OpArchive   = "incident.archive"
+	OpUnarchive = "incident.unarchive"
+	OpDelete    = "incident.delete"
+	OpSearch    = "incident.search"
 )
 
 // Incident fields (schema/builtin_content2.go).
@@ -80,6 +82,20 @@ func Ops(env content.Env) []op.Entry {
 			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore incident show --id inc_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
+		op.Define(op.Spec{
+			// devco D-924: every searchable row kind archives (hidden from list and search, kept) as rules and playbooks do
+			Name: OpArchive, Summary: "Archive an incident (hidden from list and search; kept; unarchive brings it back)",
+			Examples: []op.Example{{Title: "archive one", CLI: "lore incident archive --id inc_<id>", Want: "archived"},
+				{Title: "archive many as one batch (check first with --dry-run)", CLI: "lore incident archive --where 'created_at<2026-01-01' --dry-run", Want: "would archive"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+		}, func(ctx context.Context, in ArchiveIn) (content.WriteOut, error) {
+			return o.c.ArchiveMany(ctx, in.ID, in.ArchiveFlags)
+		}),
+		op.Define(op.Spec{
+			Name: OpUnarchive, Summary: "Bring an archived incident back",
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore incident unarchive --id inc_<id>", Want: "unarchived"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Unarchive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a incident (it goes to the trash; lore trash restore brings it back)",
 			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore incident delete --id inc_<id> --yes", Want: "inc_"}},
@@ -259,7 +275,8 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 // recordOf is the v0.1.17 --json form of a incident row.
 func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 	return Record{
-		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
+		ArchivedAt: content.Time(r, content.FieldArchivedAt),
+		ID:         r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 		ProjectID:        content.Field(r, content.FieldProject),
 		Title:            content.Field(r, fieldTitle),
 		Body:             content.Field(r, content.FieldBody),

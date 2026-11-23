@@ -11,6 +11,8 @@ import (
 // spec is v0.1.17's behaviour facts (read from its real output, 2026-11-04).
 var spec = contenttest.Spec{
 	Noun: "behaviour", Table: schema.TableBehaviours, Prefix: "bhv",
+	// devco D-924: archive / unarchive like every searchable row kind
+	Archive:  true,
 	KindList: "behaviour.list", KindShow: "behaviour.show", KindSearch: "behaviour.search",
 	Empty: "(no behaviours)\n", Badge: "BE", TitleKey: "name",
 	ListLine: contenttest.TitleLine("BE", "name"),

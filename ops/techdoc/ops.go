@@ -1,5 +1,5 @@
 // Package techdoc defines the `techdoc` noun's operations on the 0.1.18
-// core: add, list, show, delete and search of registered external
+// core: add, list, show, edit, archive, unarchive, delete and search of registered external
 // documentation, with v0.1.17's flag spellings, --json envelopes and human
 // lines (saas/cmd/cli/entity_commands.go and search_entities.go at
 // 4e6ed1c). The fetched pages (tech_doc_pages) are machine-local in v0.1.17
@@ -8,6 +8,9 @@ package techdoc
 
 import (
 	"context"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -23,12 +26,15 @@ import (
 
 // Operation names (techdoc.add → `lore techdoc add`, POST /v1/techdocs).
 const (
-	Noun     = "techdoc"
-	OpAdd    = "techdoc.add"
-	OpList   = "techdoc.list"
-	OpShow   = "techdoc.show"
-	OpDelete = "techdoc.delete"
-	OpSearch = "techdoc.search"
+	Noun        = "techdoc"
+	OpAdd       = "techdoc.add"
+	OpList      = "techdoc.list"
+	OpShow      = "techdoc.show"
+	OpEdit      = "techdoc.edit"
+	OpArchive   = "techdoc.archive"
+	OpUnarchive = "techdoc.unarchive"
+	OpDelete    = "techdoc.delete"
+	OpSearch    = "techdoc.search"
 )
 
 // Techdoc fields (schema/builtin_content2.go).
@@ -62,6 +68,27 @@ func Ops(env content.Env) []op.Entry {
 			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore techdoc show --id tdc_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
+		op.Define(op.Spec{
+			// devco D-924: every searchable row kind edits in place; a techdoc took delete and add again
+			Name: OpEdit, Summary: "Edit techdoc fields (name, base URL, description)",
+			Examples:   []op.Example{{Title: "change the base URL", CLI: "lore techdoc edit --id tdc_<id> --base-url https://docs.example.com/v2", Want: "tdc_"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+			Confirm: op.ConfirmRule{MayAsk: true},
+		}, o.edit),
+		op.Define(op.Spec{
+			// devco D-924: every searchable row kind archives (hidden from list and search, kept) as rules and playbooks do
+			Name: OpArchive, Summary: "Archive a techdoc (hidden from list and search; kept; unarchive brings it back)",
+			Examples: []op.Example{{Title: "archive one", CLI: "lore techdoc archive --id tdc_<id>", Want: "archived"},
+				{Title: "archive many as one batch (check first with --dry-run)", CLI: "lore techdoc archive --where 'created_at<2026-01-01' --dry-run", Want: "would archive"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+		}, func(ctx context.Context, in ArchiveIn) (content.WriteOut, error) {
+			return o.c.ArchiveMany(ctx, in.ID, in.ArchiveFlags)
+		}),
+		op.Define(op.Spec{
+			Name: OpUnarchive, Summary: "Bring an archived techdoc back",
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore techdoc unarchive --id tdc_<id>", Want: "unarchived"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Unarchive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a techdoc (it goes to the trash; lore trash restore brings it back)",
 			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore techdoc delete --id tdc_<id> --yes", Want: "tdc_"}},
@@ -103,6 +130,19 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	}
 	out.Human = content.Mark + " " + out.ID + " " + in.Name + "\n"
 	return out, nil
+}
+
+// edit patches the fields whose flags were given ("✓ techdoc <id> updated").
+func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
+	patch, err := content.Texts(Noun, map[string]string{content.FieldName: in.Name, fieldBaseURL: in.BaseURL, fieldDescription: in.Description})
+	if err != nil {
+		return content.WriteOut{}, err
+	}
+	if len(patch) == 0 && !engine.MetaBound(ctx) {
+		return content.WriteOut{}, errs.New(errs.InvalidInput, "techdoc edit: nothing to change").
+			WithHint("give at least one of --name, --base-url, --description")
+	}
+	return o.c.Patch(ctx, in.ID, patch, func(id string) string { return content.Mark + " techdoc " + id + " updated\n" })
 }
 
 // list returns the live techdocs, every project unless --project.
@@ -172,7 +212,8 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 // recordOf is the v0.1.17 --json form of a techdoc row.
 func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 	return Record{
-		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
+		ArchivedAt: content.Time(r, content.FieldArchivedAt),
+		ID:         r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 		ProjectID: content.Field(r, content.FieldProject), Name: content.Field(r, content.FieldName),
 		BaseURL: content.Field(r, fieldBaseURL), Description: content.Field(r, fieldDescription),
 		TagIDs: content.TagIDs(r), Store: content.SourceOf(lab, src), Label: content.Label(lab, src),

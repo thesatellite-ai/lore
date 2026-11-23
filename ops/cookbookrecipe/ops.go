@@ -1,5 +1,5 @@
 // Package cookbookrecipe defines the `cookbookrecipe` noun's operations on the 0.1.18
-// core: add, list, show, edit, delete and search, with v0.1.17's flag spellings, --json envelopes and human
+// core: add, list, show, edit, archive, unarchive (devco D-924), delete and search, with v0.1.17's flag spellings, --json envelopes and human
 // lines (saas/cmd/cli/generated_commands.go, edit_commands.go,
 // archive_commands.go and search_entities.go at 4e6ed1c). Delete asks
 // first and takes --yes (v0.1.17 --confirm is refused by the CLI mount
@@ -27,13 +27,15 @@ import (
 
 // Operation names (cookbookrecipe.add → `lore cookbookrecipe add`, POST /v1/cookbookrecipes).
 const (
-	Noun     = "cookbookrecipe"
-	OpAdd    = "cookbookrecipe.add"
-	OpList   = "cookbookrecipe.list"
-	OpShow   = "cookbookrecipe.show"
-	OpEdit   = "cookbookrecipe.edit"
-	OpDelete = "cookbookrecipe.delete"
-	OpSearch = "cookbookrecipe.search"
+	Noun        = "cookbookrecipe"
+	OpAdd       = "cookbookrecipe.add"
+	OpList      = "cookbookrecipe.list"
+	OpShow      = "cookbookrecipe.show"
+	OpEdit      = "cookbookrecipe.edit"
+	OpArchive   = "cookbookrecipe.archive"
+	OpUnarchive = "cookbookrecipe.unarchive"
+	OpDelete    = "cookbookrecipe.delete"
+	OpSearch    = "cookbookrecipe.search"
 )
 
 // Cookbook recipe fields (schema/builtin_content2.go).
@@ -73,6 +75,20 @@ func Ops(env content.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
+		op.Define(op.Spec{
+			// devco D-924: every searchable row kind archives (hidden from list and search, kept) as rules and playbooks do
+			Name: OpArchive, Summary: "Archive a cookbook recipe (hidden from list and search; kept; unarchive brings it back)",
+			Examples: []op.Example{{Title: "archive one", CLI: "lore cookbookrecipe archive --id cbr_<id>", Want: "archived"},
+				{Title: "archive many as one batch (check first with --dry-run)", CLI: "lore cookbookrecipe archive --where 'created_at<2026-01-01' --dry-run", Want: "would archive"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+		}, func(ctx context.Context, in ArchiveIn) (content.WriteOut, error) {
+			return o.c.ArchiveMany(ctx, in.ID, in.ArchiveFlags)
+		}),
+		op.Define(op.Spec{
+			Name: OpUnarchive, Summary: "Bring an archived cookbook recipe back",
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore cookbookrecipe unarchive --id cbr_<id>", Want: "unarchived"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Unarchive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a cookbookrecipe (it goes to the trash; lore trash restore brings it back)",
 			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore cookbookrecipe delete --id cbr_<id> --yes", Want: "cbr_"}},
@@ -201,7 +217,8 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 // recordOf is the v0.1.17 --json form of a cookbook recipe row.
 func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 	return Record{
-		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
+		ArchivedAt: content.Time(r, content.FieldArchivedAt),
+		ID:         r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 		ProjectID:        content.Field(r, content.FieldProject),
 		Title:            content.Field(r, fieldTitle),
 		Body:             content.Field(r, content.FieldBody),

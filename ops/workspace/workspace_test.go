@@ -11,6 +11,8 @@ import (
 // spec is v0.1.17's workspace facts (read from its real output, 2026-11-04).
 var spec = contenttest.Spec{
 	Noun: "workspace", Table: schema.TableWorkspaces, Prefix: "wsp",
+	// devco D-924: archive / unarchive like every searchable row kind
+	Archive:  true,
 	KindList: "workspace.list", KindShow: "workspace.show", KindSearch: "workspace.search",
 	Empty: "(no workspaces)\n", Badge: "WO", TitleKey: "name",
 	Add: func(title, body string) string {

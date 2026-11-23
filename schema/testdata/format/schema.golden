@@ -37,6 +37,7 @@ actors.status_note text
 actors.tag_ids list[ref]
 actors.timezone text
 actors.title text
+architecture_notes.archived_at datetime
 architecture_notes.body text required
 architecture_notes.created_by_actor_id ref
 architecture_notes.project_id ref required
@@ -44,6 +45,7 @@ architecture_notes.repo_id ref
 architecture_notes.scope_id ref
 architecture_notes.tag_ids list[ref]
 architecture_notes.title text required
+behaviours.archived_at datetime
 behaviours.body text required
 behaviours.created_by_actor_id ref
 behaviours.name text required
@@ -69,6 +71,7 @@ contact_types.label text
 contact_types.name text required
 contact_types.retired bool
 contact_types.url_template text
+cookbook_recipes.archived_at datetime
 cookbook_recipes.body text required
 cookbook_recipes.created_by_actor_id ref
 cookbook_recipes.language text
@@ -123,6 +126,7 @@ hotfixes.superseded_by_id ref
 hotfixes.tag_ids list[ref]
 hotfixes.title text required
 hotfixes.trust_score number
+incidents.archived_at datetime
 incidents.body text required
 incidents.created_by_actor_id ref
 incidents.project_id ref required
@@ -442,6 +446,7 @@ snapshots.tag_ids list[ref]
 snapshots.taken_at datetime required
 snapshots.title text required
 snapshots.trust_score number
+suggestions.archived_at datetime
 suggestions.body text required
 suggestions.created_by_actor_id ref
 suggestions.project_id ref required
@@ -512,6 +517,7 @@ tasks.timebox_seconds number
 tasks.title text required
 tasks.watchers list[text]
 tasks.work_branch text
+taste_prefs.archived_at datetime
 taste_prefs.body text required
 taste_prefs.created_by_actor_id ref
 taste_prefs.project_id ref required
@@ -536,6 +542,7 @@ tech_doc_pages.project_id text required
 tech_doc_pages.tech_doc_id text required
 tech_doc_pages.title text
 tech_doc_pages.url text required
+tech_docs.archived_at datetime
 tech_docs.base_url text
 tech_docs.description text
 tech_docs.name text required
@@ -547,11 +554,13 @@ vars.name text required
 vars.shareable bool
 vars.type text required
 vars.value json required
+workflows.archived_at datetime
 workflows.body text required
 workflows.created_by_actor_id ref
 workflows.name text required
 workflows.project_id ref required
 workflows.tag_ids list[ref]
+workspaces.archived_at datetime
 workspaces.body text
 workspaces.created_by_actor_id ref
 workspaces.name text required

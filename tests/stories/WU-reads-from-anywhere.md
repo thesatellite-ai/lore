@@ -25,6 +25,7 @@
 13. (`TestStoryWUClaimPushOnlyWhenAsked`, D-669) `lore hold claim --name ci-suite` with no `--push`; then the claim's refusal, and the command it printed, run exactly as printed.
 14. (`TestStoryWUOpsFolderGround`, D-681) Ada also runs the ops setup `acmeops` (store `github.com/acme-co/lore-ops`, under the company's own pattern) with folder `infra`; Mo is a member of both rosters. In the ops store clone's `infra` folder Mo is refused a demotion and a pin of an `acmeops/infra` must rule, naming the `acmeops/org` roster; Ada may. Then one cell per (org folder, project folder, ops folder) × (pin set, policy set, rule edit --severity, rule delete --where): Mo is refused with "ask an admin of <org> (Ada Admin)", and Ada runs the printed line as printed.
 15. (`TestStoryWUOpsFolderGround`, D-681) Ada links the ops tools repo to `acmeops/infra`, adds a long must rule there and sets its budget to 1000. Mo's sync in the tools repo warns that the pinned part is over budget and sends Mo to `an admin of acmeops (Ada Admin)` for the rule and the budget; the commands show only as what the admin would run, and Mo running the rule edit is refused. Ada's sync gives her the commands and she runs the printed rule edit where it was printed. A bulk delete of the folder's must rules that Mo restores from the trash: Mo's `lore batch undo` of that batch takes nothing out, and the rules stay.
+16. (`TestStoryWUH182ArchiveEveryKind`, D-924) Ada links `platform` to `acme/recipes` with `--own`, adds a cookbook recipe, archives it, reads `lore cookbookrecipe list` (with and without `--archived`), `lore cookbookrecipe search`, `lore search` (with and without `--include-archived`) and `show --json`, then unarchives it; runs `lore <kind> archive --where 'created_at<2000-01-01' --dry-run` for every content kind; adds a tech doc and changes its base URL with `lore techdoc edit`.
 
 ## What must hold
 
@@ -43,6 +44,7 @@
 - The budget warning's raise names `--to acme/web` in the linked repo and works there; a company row's fix is a command for an admin only, and a member is told `ask an admin of acme (<names>) to …`; a member's demotion of a company must rule or policy write to `acme/org` is refused with E_REFUSED and nothing changes; a rule of `acme/web` stays the member's to change.
 - `task release` with no pushed claim leaves the store remote unchanged, and its help says it needs no `--push` and why.
 - A claim or hold refused for want of `--push` prints the exact command that pushes it (`lore task claim --id <the task's id> --push`, `lore hold claim --name ci-suite --push`), which works as printed; only the claim names `lore task start --id <the task's id>`; no printed command carries `<store>`, `<folder>`, `<org>`, `<id>` or `<setup>` where the value is known.
+- Every searchable row kind archives and unarchives: an archived row leaves the kind's list, its search and `lore search`, shows with `--archived` / `--include-archived`, and comes back with `unarchive`; a tech doc edits in place.
 
 ## Findings it guards
 
@@ -54,3 +56,4 @@
 - `devco:D-669`, `devco:D-670` (REGRESSIONS.md).
 - `devco:D-681` (REGRESSIONS.md).
 - `devco:D-694` (REGRESSIONS.md, `TestStoryWUBudgetWarn` step D-694/branch-choice-is-the-admins, `TestStoryWUOpsFolderGround`): a member's `branch share` / `branch isolate`, their `--undo` and every `branches.*` policy in a company folder are refused with the ask-an-admin hint (the owner reversed the D-681 exemption), the admin's work; Mo is on team `@web`, so his adds in `acme/web` stay his; a member's `trash restore` of a deleted company must rule is refused and the admin restores it.
+- `devco:D-924` (REGRESSIONS.md, `TestStoryWUH182ArchiveEveryKind`): `lore cookbookrecipe archive` (and archive on eight other kinds, `techdoc edit`) did not exist.

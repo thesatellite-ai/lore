@@ -235,7 +235,7 @@ created 2026-11-02T10:03:35Z by alice · updated 2026-11-02T10:04:40Z by alice
 
 ## Step 5 — Archive and bring back
 
-Hotfixes, patterns, playbooks, prompts and snapshots can be archived: the row stays, but `list` and render skip it. `unarchive` brings it back.
+Every kind on this page except handoffs can be archived: hotfixes, patterns, playbooks, prompts, snapshots, behaviours, architecture notes, cookbook recipes, incidents, suggestions, taste preferences, workflows, workspaces and tech docs. The row stays, but `list`, `search` and render skip it (`list --archived` and `search --include-archived` show it); `unarchive` brings it back. `--where` archives many at once as one batch; check first with `--dry-run`, for example `lore cookbookrecipe archive --where 'created_at<2026-01-01' --dry-run`. Handoffs are closed with `lore handoff ack` instead.
 
 <!-- example: knowledge#other-kinds-archive -->
 ```console
@@ -267,7 +267,7 @@ tdc_376c…8e1a Payments docs https://docs.example.com/payments
 
 - **Some lists show only the id.** `lore incident list` and `lore tastepref list` print a two-letter tag and the id, not the text. Use `lore <kind> show --id <id>` or `lore search` to read them.
 - **`hotfix list` shows the body, not the title.** Keep the first words of the body clear.
-- **Not every kind has `edit` or `archive`.** Snapshots and tech docs have no `edit`; only rules, memories, decisions, hotfixes, patterns, playbooks, prompts and snapshots have `archive`. Run `lore <kind> --help` to see the verbs.
+- **Every kind has the same verbs, with two on purpose left out.** Each kind here has `add`, `list`, `show`, `edit`, `search`, `delete`, `archive` and `unarchive`, except: snapshots have no `edit` (a snapshot records what was true when it was taken; add a new one), and handoffs have no `edit` or `archive` (a handoff is a sent message, closed with `lore handoff ack`). Run `lore <kind> --help` to see the verbs.
 - **`<kind> show` is short on purpose.** For patterns, playbooks, prompts, behaviours, architecture notes, cookbook recipes, suggestions, taste preferences, workflows and workspaces it prints the tag and the id only (the 0.1.17 shape scripts depend on). Use `lore show --id <id>` or `--json` to read the title and body.
 - **Only rules and hotfixes are pinned.** The other kinds reach the coding tool through `lore search`, not through the rendered file. See [Render](render-and-agent-files.md).
 

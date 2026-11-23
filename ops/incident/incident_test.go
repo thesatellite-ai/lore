@@ -11,6 +11,8 @@ import (
 // spec is v0.1.17's incident facts (read from its real output, 2026-11-04).
 var spec = contenttest.Spec{
 	Noun: "incident", Table: schema.TableIncidents, Prefix: "inc",
+	// devco D-924: archive / unarchive like every searchable row kind
+	Archive:  true,
 	KindList: "incident.list", KindShow: "incident.show", KindSearch: "incident.search",
 	Empty: "(no incidents)\n", Badge: "IN", TitleKey: "title",
 	ListLine: contenttest.TitleLine("IN", "title"),

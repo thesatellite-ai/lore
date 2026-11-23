@@ -17,6 +17,8 @@ import (
 // spec is v0.1.17's architecturenote facts (read from its real output, 2026-11-04).
 var spec = contenttest.Spec{
 	Noun: "architecturenote", Table: schema.TableArchitectureNotes, Prefix: "anr",
+	// devco D-924: archive / unarchive like every searchable row kind
+	Archive:  true,
 	KindList: "architectureNote.list", KindShow: "architectureNote.show", KindSearch: "architecturenote.search",
 	Empty: "(no architecturenotes)\n", Badge: "AR", TitleKey: "title",
 	ListLine: contenttest.TitleLine("AR", "title"),

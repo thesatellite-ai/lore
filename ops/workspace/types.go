@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
 	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/store"
@@ -91,9 +92,11 @@ type Record struct {
 	ID        string    `json:"id,omitempty"`
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	ProjectID string    `json:"project_id,omitempty"`
-	Name      string    `json:"name,omitempty"`
-	Body      string    `json:"body,omitempty"`
+	// ArchivedAt is set while the row is archived (devco D-924: `lore workspace archive`).
+	ArchivedAt time.Time `json:"archived_at,omitempty,omitzero"`
+	ProjectID  string    `json:"project_id,omitempty"`
+	Name       string    `json:"name,omitempty"`
+	Body       string    `json:"body,omitempty"`
 	// CreatedByActorID is the creator (INTEG-AUDIT-1, as workflows'
 	// INTEG-WF-1): the row's created_by_actor_id, else the envelope created_by.
 	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
@@ -115,6 +118,13 @@ type Record struct {
 // IDIn is the input of the operations that take one workspace id.
 type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the workspace id (wsp_…)"`
+}
+
+// ArchiveIn is the input of workspace.archive: one id, or --where for many as
+// one batch (devco D-924, as playbook archive).
+type ArchiveIn struct {
+	ID string `json:"id,omitempty" arg:"0" desc:"the workspace id (wsp_…); leave out with --where"`
+	wheredel.ArchiveFlags
 }
 
 // DeleteIn is the input of workspace.delete.

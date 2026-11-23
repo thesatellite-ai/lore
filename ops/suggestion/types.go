@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
 	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/store"
@@ -82,9 +83,11 @@ func (o ListOut) rowsText() string {
 // TagIDs (O11) and Store (`_source`, a row of a store other than repo) are
 // 0.1.18 additions, absent on a v0.1.17-shaped row.
 type Record struct {
-	ID               string          `json:"id,omitempty"`
-	CreatedAt        time.Time       `json:"created_at,omitempty"`
-	UpdatedAt        time.Time       `json:"updated_at,omitempty"`
+	ID        string    `json:"id,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// ArchivedAt is set while the row is archived (devco D-924: `lore suggestion archive`).
+	ArchivedAt       time.Time       `json:"archived_at,omitempty,omitzero"`
 	ProjectID        string          `json:"project_id,omitempty"`
 	Title            string          `json:"title,omitempty"`
 	Body             string          `json:"body,omitempty"`
@@ -108,6 +111,13 @@ type Record struct {
 // IDIn is the input of the operations that take one suggestion id.
 type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the suggestion id (sug_…)"`
+}
+
+// ArchiveIn is the input of suggestion.archive: one id, or --where for many as
+// one batch (devco D-924, as playbook archive).
+type ArchiveIn struct {
+	ID string `json:"id,omitempty" arg:"0" desc:"the suggestion id (sug_…); leave out with --where"`
+	wheredel.ArchiveFlags
 }
 
 // DeleteIn is the input of suggestion.delete.

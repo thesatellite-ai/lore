@@ -12,6 +12,8 @@ import (
 // spec is v0.1.17's cookbookrecipe facts (read from its real output, 2026-11-04).
 var spec = contenttest.Spec{
 	Noun: "cookbookrecipe", Table: schema.TableCookbookRecipes, Prefix: "cbr",
+	// devco D-924: archive / unarchive like every searchable row kind
+	Archive:  true,
 	KindList: "cookbookRecipe.list", KindShow: "cookbookRecipe.show", KindSearch: "cookbookrecipe.search",
 	Empty: "(no cookbookrecipes)\n", Badge: "CO", TitleKey: "title",
 	ListLine: contenttest.TitleLine("CO", "title"),

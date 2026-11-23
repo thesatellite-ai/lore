@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
 	"github.com/thesatellite-ai/lore/ops/internal/morehits"
 	"github.com/thesatellite-ai/lore/store"
@@ -79,9 +80,11 @@ func (o ListOut) rowsText() string {
 // its order, with its always-empty `edges` object (the pages edge is never
 // loaded). TagIDs (O11) and Store (`_source`) are 0.1.18 additions.
 type Record struct {
-	ID          string          `json:"id,omitempty"`
-	CreatedAt   time.Time       `json:"created_at,omitempty"`
-	UpdatedAt   time.Time       `json:"updated_at,omitempty"`
+	ID        string    `json:"id,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// ArchivedAt is set while the row is archived (devco D-924: `lore techdoc archive`).
+	ArchivedAt  time.Time       `json:"archived_at,omitempty,omitzero"`
 	ProjectID   string          `json:"project_id,omitempty"`
 	Name        string          `json:"name,omitempty"`
 	BaseURL     string          `json:"base_url,omitempty"`
@@ -108,6 +111,25 @@ type Edges struct{}
 // IDIn is the input of the operations that take one techdoc id.
 type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the techdoc id (tdc_…)"`
+}
+
+// EditIn is the input of techdoc.edit: only the flags given change
+// (devco D-924).
+type EditIn struct {
+	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
+	engine.MetaFlags
+
+	ID          string `json:"id" arg:"0" desc:"the techdoc id (tdc_…)"`
+	Name        string `json:"name,omitempty" flag:"name" desc:"new doc name"`
+	BaseURL     string `json:"base_url,omitempty" flag:"base-url" desc:"new base URL"`
+	Description string `json:"description,omitempty" flag:"description" desc:"new description"`
+}
+
+// ArchiveIn is the input of techdoc.archive: one id, or --where for many as
+// one batch (devco D-924, as playbook archive).
+type ArchiveIn struct {
+	ID string `json:"id,omitempty" arg:"0" desc:"the techdoc id (tdc_…); leave out with --where"`
+	wheredel.ArchiveFlags
 }
 
 // DeleteIn is the input of techdoc.delete.

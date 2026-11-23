@@ -56,6 +56,7 @@ func content2Defs() []TableDef {
 			Ref(contentCreatedBy, TableActors),
 			IndexOn(contentProjectID, "repo_id"),
 			BelongsToRel("scope", FieldScope, TableScopes, SetNull),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinArchitectureNoteTags, true),
 		),
 		Table(TableBehaviours, ids.PrefixBehaviour, Synced(), FTS(fieldName, contentBody), Description("how the agent should behave in a situation"),
@@ -63,6 +64,7 @@ func content2Defs() []TableDef {
 			Text(fieldName, Required()),
 			Text(contentBody, Required(), WithWidget(WidgetMarkdown)),
 			Ref(contentCreatedBy, TableActors),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinBehaviourTags, true),
 		),
 		Table(TableCookbookRecipes, ids.PrefixCookbookRecipe, Synced(), FTS("title", contentBody, "language"), Description("a worked recipe for a recurring task"),
@@ -71,6 +73,7 @@ func content2Defs() []TableDef {
 			Text(contentBody, Required(), WithWidget(WidgetMarkdown)),
 			Text("language"),
 			Ref(contentCreatedBy, TableActors),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinCookbookRecipeTags, true),
 		),
 		Table(TableIncidents, ids.PrefixIncident, Synced(), FTS("title", contentBody), Description("something that went wrong and what was learned"),
@@ -80,6 +83,7 @@ func content2Defs() []TableDef {
 			Text("severity_str"),
 			DateTime("resolved_at"),
 			Ref(contentCreatedBy, TableActors),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinIncidentTags, true),
 		),
 		Table(TableSuggestions, ids.PrefixSuggestion, Synced(), FTS("title", contentBody, "status_str"), Description("a pending proposal the team reviews"),
@@ -89,6 +93,7 @@ func content2Defs() []TableDef {
 			// status_str is free-form in v0.1.17 ("active" on add).
 			Text("status_str", Required()),
 			Ref(contentCreatedBy, TableActors),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinSuggestionTags, true),
 		),
 		Table(TableTastePrefs, ids.PrefixTastePref, Synced(), FTS(contentBody, "scope"), Description("a subjective preference (\"I prefer X\")"),
@@ -96,6 +101,7 @@ func content2Defs() []TableDef {
 			Text(contentBody, Required(), WithWidget(WidgetMarkdown)),
 			Text("scope"),
 			Ref(contentCreatedBy, TableActors),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinTastePrefTags, true),
 		),
 		Table(TableWorkflows, ids.PrefixWorkflow, Synced(), FTS(fieldName, contentBody), Description("a named sequence of steps"),
@@ -107,6 +113,7 @@ func content2Defs() []TableDef {
 			// rows read the envelope created_by (auditfill backfills
 			// "unknown" for rows written before 0.1.18).
 			Ref(contentCreatedBy, TableActors),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinWorkflowTags, true),
 		),
 		Table(TableWorkspaces, ids.PrefixWorkspace, Synced(), FTS(fieldName, contentBody), Description("a named working context"),
@@ -118,6 +125,7 @@ func content2Defs() []TableDef {
 			// creator column of the other knowledge rows; unset rows read the
 			// envelope created_by (auditfill backfills "unknown" for old rows).
 			Ref(contentCreatedBy, TableActors),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinWorkspaceTags, true),
 		),
 		Table(TableHandoffs, ids.PrefixHandoff, Synced(), FTS(contentBody, "status_str"), Description("work handed to another actor (shows in their inbox)"),
@@ -157,6 +165,7 @@ func content2Defs() []TableDef {
 			Text(fieldName, Required()),
 			Text("base_url"),
 			Text("description"),
+			DateTime(contentArchivedAt), // devco D-924: `lore <kind> archive` (optional: rows written before stay valid)
 			content2Common(JoinTechDocTags, false),
 		),
 		Table(TableExternalSources, ids.PrefixExternalSource, Synced(), Description("a registered source learn-from reads (disabled until enabled)"),

@@ -13,6 +13,8 @@ import (
 // spec is v0.1.17's tastepref facts (read from its real output, 2026-11-04).
 var spec = contenttest.Spec{
 	Noun: "tastepref", Table: schema.TableTastePrefs, Prefix: "tst",
+	// devco D-924: archive / unarchive like every searchable row kind
+	Archive:  true,
 	KindList: "tastePref.list", KindShow: "tastePref.show", KindSearch: "tastepref.search",
 	Empty: "(no tasteprefs)\n", Badge: "TA", TitleKey: "",
 	ListLine: contenttest.TitleLine("TA", "body"),

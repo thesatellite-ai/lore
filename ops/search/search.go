@@ -111,14 +111,14 @@ const EntityResource = "resource"
 // order, which also orders ties). A fresh slice each call.
 func Targets() []Target {
 	return []Target{
-		{Entity: "architecturenote", Table: schema.TableArchitectureNotes, Label: Label{Field: "title"}, HasProject: true, HasRepo: true},
-		{Entity: "behaviour", Table: schema.TableBehaviours, Label: Label{Field: "name"}, HasProject: true},
+		{Entity: "architecturenote", Table: schema.TableArchitectureNotes, Label: Label{Field: "title"}, HasProject: true, HasRepo: true, HasArchived: true},
+		{Entity: "behaviour", Table: schema.TableBehaviours, Label: Label{Field: "name"}, HasProject: true, HasArchived: true},
 		{Entity: "comment", Table: schema.TableComments, Label: Label{Field: "body", Trunc: true}},
-		{Entity: "cookbookrecipe", Table: schema.TableCookbookRecipes, Label: Label{Field: "title"}, HasProject: true},
+		{Entity: "cookbookrecipe", Table: schema.TableCookbookRecipes, Label: Label{Field: "title"}, HasProject: true, HasArchived: true},
 		{Entity: "decision", Table: schema.TableDecisions, Label: Label{Field: "title"}, HasProject: true, HasRepo: true, HasArchived: true},
 		{Entity: "handoff", Table: schema.TableHandoffs, Label: Label{Field: "body", Trunc: true}, HasProject: true},
 		{Entity: "hotfix", Table: schema.TableHotfixes, Label: Label{Field: "title"}, HasProject: true, HasRepo: true, HasArchived: true},
-		{Entity: "incident", Table: schema.TableIncidents, Label: Label{Field: "title"}, HasProject: true},
+		{Entity: "incident", Table: schema.TableIncidents, Label: Label{Field: "title"}, HasProject: true, HasArchived: true},
 		{Entity: "memory", Table: schema.TableMemories, HasProject: true, HasRepo: true, HasArchived: true},
 		// the org's people (name, handle, email) and teams (handle, name), D-489
 		{Entity: EntityMember, Table: schema.TableActors, Label: Label{Field: "display_name"}, Roster: true},
@@ -131,14 +131,14 @@ func Targets() []Target {
 		{Entity: EntityResource, Table: schema.TableResources, Label: Label{Field: "name"}, HasArchived: true},
 		{Entity: "rule", Table: schema.TableRules, Label: Label{Field: "body", Trunc: true}, HasProject: true, HasRepo: true, HasArchived: true},
 		{Entity: "snapshot", Table: schema.TableSnapshots, Label: Label{Field: "title"}, HasProject: true, HasArchived: true},
-		{Entity: "suggestion", Table: schema.TableSuggestions, Label: Label{Field: "title"}, HasProject: true},
+		{Entity: "suggestion", Table: schema.TableSuggestions, Label: Label{Field: "title"}, HasProject: true, HasArchived: true},
 		{Entity: "task", Table: schema.TableTasks, Label: Label{Field: "title"}, HasProject: true, HasRepo: true},
 		{Entity: "tasklist", Table: schema.TableTasklists, Label: Label{Field: "title"}, HasProject: true},
-		{Entity: "tastepref", Table: schema.TableTastePrefs, Label: Label{Field: "body", Trunc: true}, HasProject: true},
+		{Entity: "tastepref", Table: schema.TableTastePrefs, Label: Label{Field: "body", Trunc: true}, HasProject: true, HasArchived: true},
 		{Entity: EntityTeam, Table: schema.TableTeams, Label: Label{Field: "display_name"}, Roster: true},
-		{Entity: "techdoc", Table: schema.TableTechDocs, Label: Label{Field: "name"}, HasProject: true},
-		{Entity: "workflow", Table: schema.TableWorkflows, Label: Label{Field: "name"}, HasProject: true},
-		{Entity: "workspace", Table: schema.TableWorkspaces, Label: Label{Field: "name"}, HasProject: true},
+		{Entity: "techdoc", Table: schema.TableTechDocs, Label: Label{Field: "name"}, HasProject: true, HasArchived: true},
+		{Entity: "workflow", Table: schema.TableWorkflows, Label: Label{Field: "name"}, HasProject: true, HasArchived: true},
+		{Entity: "workspace", Table: schema.TableWorkspaces, Label: Label{Field: "name"}, HasProject: true, HasArchived: true},
 	}
 }
 

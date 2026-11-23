@@ -1,5 +1,5 @@
 // Package workspace defines the `workspace` noun's operations on the 0.1.18
-// core: add, list, show, edit, delete and search, with v0.1.17's flag spellings, --json envelopes and human
+// core: add, list, show, edit, archive, unarchive (devco D-924), delete and search, with v0.1.17's flag spellings, --json envelopes and human
 // lines (saas/cmd/cli/generated_commands.go, edit_commands.go,
 // archive_commands.go and search_entities.go at 4e6ed1c). Delete asks
 // first and takes --yes (v0.1.17 --confirm is refused by the CLI mount
@@ -26,13 +26,15 @@ import (
 
 // Operation names (workspace.add → `lore workspace add`, POST /v1/workspaces).
 const (
-	Noun     = "workspace"
-	OpAdd    = "workspace.add"
-	OpList   = "workspace.list"
-	OpShow   = "workspace.show"
-	OpEdit   = "workspace.edit"
-	OpDelete = "workspace.delete"
-	OpSearch = "workspace.search"
+	Noun        = "workspace"
+	OpAdd       = "workspace.add"
+	OpList      = "workspace.list"
+	OpShow      = "workspace.show"
+	OpEdit      = "workspace.edit"
+	OpArchive   = "workspace.archive"
+	OpUnarchive = "workspace.unarchive"
+	OpDelete    = "workspace.delete"
+	OpSearch    = "workspace.search"
 )
 
 // Workspace fields (schema/builtin_content2.go).
@@ -71,6 +73,20 @@ func Ops(env content.Env) []op.Entry {
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "rename a workspace", CLI: `lore workspace edit --id wsp_01jd9a00c001 --title "Site redesign"`, Want: "wsp_"}},
 		}, o.edit),
+		op.Define(op.Spec{
+			// devco D-924: every searchable row kind archives (hidden from list and search, kept) as rules and playbooks do
+			Name: OpArchive, Summary: "Archive a workspace (hidden from list and search; kept; unarchive brings it back)",
+			Examples: []op.Example{{Title: "archive one", CLI: "lore workspace archive --id wsp_<id>", Want: "archived"},
+				{Title: "archive many as one batch (check first with --dry-run)", CLI: "lore workspace archive --where 'created_at<2026-01-01' --dry-run", Want: "would archive"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+		}, func(ctx context.Context, in ArchiveIn) (content.WriteOut, error) {
+			return o.c.ArchiveMany(ctx, in.ID, in.ArchiveFlags)
+		}),
+		op.Define(op.Spec{
+			Name: OpUnarchive, Summary: "Bring an archived workspace back",
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore workspace unarchive --id wsp_<id>", Want: "unarchived"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Unarchive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a workspace (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
@@ -199,7 +215,8 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 // recordOf is the v0.1.17 --json form of a workspace row.
 func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 	return Record{
-		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
+		ArchivedAt: content.Time(r, content.FieldArchivedAt),
+		ID:         r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 		ProjectID: content.Field(r, content.FieldProject),
 		Name:      content.Field(r, fieldTitle),
 		Body:      content.Field(r, content.FieldBody),
