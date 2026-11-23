@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -23,8 +25,12 @@ import (
 // So an operation that runs its real write path under --dry-run fails
 // exactly as the write would and writes nothing, and one that forgets its
 // dry run cannot write. Rows written earlier in the same check-only run
-// are not visible to its later reads (nothing reached the store), as in a
-// stage (FB-RES-1).
+// are not visible to its later reads (nothing reached the store), unless
+// the run writes into a stage (Staging, then Discard): in a check-only
+// stage the rows the stage holds are what a later read or write of them
+// sees (stagedView), so an operation whose later step reads its own
+// earlier write (a template's sub-task reads its parent, an add is
+// followed by its checklist) checks every step in its dry run.
 
 // checkOnlyKey is the context key of a check-only run.
 type checkOnlyKey struct{}
@@ -58,4 +64,32 @@ func checkChanges(ctx context.Context, st Attached, changes []store.Change) erro
 		}
 	}
 	return nil
+}
+
+// stagedView is the row ctx's open stage holds for (name, table, id), a
+// live row or a deletion, when ctx is check-only (devco:D-932): a dry
+// run's stage is never committed, so its later reads (getRow) and Expect
+// checks (staleNow) see its own earlier writes, as the write's would see
+// them in the store. Outside a check-only stage: false (a real stage's
+// rows are not read back, FB-RES-1).
+func stagedView(ctx context.Context, name store.Source, table row.Table, id ids.AnyID) (store.Row, bool) {
+	if !CheckOnly(ctx) {
+		return store.Row{}, false
+	}
+	s := stageOf(ctx)
+	if s == nil {
+		return store.Row{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.bySrc[name]
+	if !ok {
+		return store.Row{}, false
+	}
+	for i := len(p.changes) - 1; i >= 0; i-- {
+		if r := p.changes[i].Row; r.Table == table && r.ID == id {
+			return r, true
+		}
+	}
+	return store.Row{}, false
 }

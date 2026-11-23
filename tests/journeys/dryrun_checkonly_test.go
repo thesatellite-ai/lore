@@ -11,6 +11,8 @@ package journeys
 // nothing.
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 )
@@ -51,5 +53,29 @@ func TestJourneyDryRunChecksLikeTheWrite(t *testing.T) {
 		lap.LoreIn(code, "meta", "get", "--id", mem).OK(t).Never(t, "release_note")
 		lap.LoreIn(code, "memory", "archive", "--where", "body~=Feeds", "--dry-run").OK(t).Says(t, "would archive")
 		lap.LoreIn(code, "memory", "list").OK(t).Says(t, "Feeds refresh")
+	})
+
+	// devco:D-932 (H-193): the writes whose dry run only listed what it
+	// would add (a template, a mission plan) passed a bad value the write
+	// refused; their dry run now runs the write in a stage it discards
+	dir := t.TempDir()
+	put := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	w.Step("day2/a-plan-and-a-template-dry-run-refuse-what-the-write-refuses", func() {
+		bad := put("bad.yaml", "mission:\n  title: Launch\ntasks:\n  - key: a\n    title: Write the page\n    timebox: soon\n")
+		lap.LoreIn(code, "mission", "apply", "--file", bad, "--dry-run").
+			Refused(t, "E_INVALID_INPUT", "would fail (nothing written)", "timebox soon")
+		lap.LoreIn(code, "mission", "list").OK(t).Never(t, "Launch")
+		tpl := put("rel.yaml", "args:\n  p:\n    required: true\ntask: {title: Release, priority: \"${arg:p}\", children: [{title: Tag the build}]}\n")
+		lap.LoreIn(code, "task", "template", "add", "--name", "rel", "--from-file", tpl, "--yes").OK(t)
+		lap.LoreIn(code, "task", "add", "--template", "rel", "--arg", "p=bogus", "--dry-run").
+			Refused(t, "E_INVALID_INPUT", "would fail (nothing written)", "bad --priority bogus")
+		lap.LoreIn(code, "task", "add", "--template", "rel", "--arg", "p=high", "--dry-run").OK(t).Says(t, "would add 2 tasks", "Tag the build")
+		lap.LoreIn(code, "task", "list").OK(t).Never(t, "Release", "Tag the build")
 	})
 }

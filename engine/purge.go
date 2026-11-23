@@ -237,6 +237,9 @@ func hidePurged(sr store.Row, set map[string]bool) (out store.Row, resurrected b
 // getRow is Backend.Get of store name with purged rows hidden
 // (hidePurged). Every engine read of one row goes through it.
 func (e *Engine) getRow(ctx context.Context, name store.Source, table row.Table, id ids.AnyID) (store.Row, bool, error) {
+	if sr, ok := stagedView(ctx, name, table, id); ok {
+		return sr, false, nil // D-932: a dry run reads its own earlier writes
+	}
 	st := e.stores[name]
 	sr, err := st.Backend.Get(ctx, table, id)
 	if err != nil || sr.Deleted {

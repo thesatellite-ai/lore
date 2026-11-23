@@ -1151,7 +1151,7 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 		if err := staleNow(ctx, st, sr, expect); err != nil {
 			return stored{}, err
 		}
-		kept, err := s.addWrite(e, st, changes, evs)
+		kept, err := s.addWrite(e, st, changes, evs, CheckOnly(ctx))
 		if err != nil {
 			return stored{}, err
 		}
@@ -1173,6 +1173,9 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 // Commit as before (addWrite).
 func staleNow(ctx context.Context, st Attached, sr store.Row, expect hlc.HLC) error {
 	cur, err := st.Backend.Get(ctx, sr.Table, sr.ID)
+	if staged, ok := stagedView(ctx, st.Name, sr.Table, sr.ID); ok {
+		cur, err = staged, nil // D-932: a dry run's own earlier write
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		if expect.IsZero() {

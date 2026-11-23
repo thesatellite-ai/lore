@@ -230,6 +230,20 @@ func (b *bulkWrite) total() int {
 	return n
 }
 
+// failedDryErr is failedErr for a check-only run (a --dry-run, devco:D-932):
+// the same code and rows, worded as what the write would do.
+func (b *bulkWrite) failedDryErr(verb, rerun string) error {
+	if len(b.failed) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, len(b.failed))
+	for _, f := range b.failed {
+		lines = append(lines, "  "+f.line())
+	}
+	return errs.New(errs.Refused, verb+": would fail (nothing written): "+plural(len(b.failed), "row")+" could not be written:\n"+strings.Join(lines, "\n")).
+		WithHint("fix each row as its line says, then run `" + rerun + "`: it writes only what is left")
+}
+
 // failedErr is the error a bulk write ends with when rows were left: every
 // row with its reason and fix, and that a rerun continues (exit non-zero).
 // nil when every row was written.

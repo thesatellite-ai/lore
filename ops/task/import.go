@@ -406,8 +406,23 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	if err != nil {
 		return ImportOut{}, err
 	}
-	if in.DryRun || len(recs) == out.existing() {
+	if len(recs) == out.existing() {
 		return out, nil
+	}
+	if in.DryRun {
+		// devco:D-932: the dry run runs the real import into ONE
+		// check-only stage it discards: every task, checklist, note and
+		// status edit is checked as the write checks it (a sub-task reads
+		// its parent from the stage, engine.stagedView), nothing is
+		// written, and the preview keeps no id of a task not written
+		preview := out
+		preview.Rows = slices.Clone(out.Rows)
+		dctx := engine.Staging(engine.WithCheckOnly(ctx))
+		defer engine.Discard(dctx)
+		if _, err = o.importWrite(dctx, in, from, target, recs, dropped, plan, planned, out, true); err != nil {
+			return ImportOut{}, errs.Prefix("task import --dry-run: would fail (nothing written)", err)
+		}
+		return preview, nil
 	}
 	if err = bulk.Preview(ctx, o.env, target, "task import", items); err != nil {
 		return ImportOut{}, err
@@ -417,6 +432,15 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		return ImportOut{}, err
 	}
 	out.Batch = bid.String()
+	return o.importWrite(bctx, in, from, target, recs, dropped, plan, planned, out, false)
+}
+
+// importWrite writes the import's new records (import, after its checks
+// and the person's yes). dry is the dry run: bctx is then one check-only
+// stage, and every write joins it (no flush, a tree record too), so a
+// later record reads the earlier ones from it.
+func (o ops) importWrite(bctx context.Context, in ImportIn, from string, target store.Source, recs []importRecord, dropped map[int][]droppedRef, plan engine.SecretPlan, planned []ids.AnyID, out ImportOut, dry bool) (ImportOut, error) {
+	var err error
 	project, err := work.Project(bctx, o.env, Noun, "")
 	if err != nil {
 		return ImportOut{}, err
@@ -440,6 +464,9 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		_, ferr := engine.Commit(sctx)
 		sctx = engine.Staging(store.WithCommitTitle(bctx, "task import"))
 		return ferr
+	}
+	if dry { // one check-only stage for every write (bctx's)
+		sctx, flush = bctx, func() error { return nil }
 	}
 	// The default list is created (if needed) outside the import slot: it
 	// is not an imported row and must not carry _o.import.

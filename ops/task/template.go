@@ -787,7 +787,19 @@ func (o ops) addTemplate(ctx context.Context, in AddIn) (AddOut, error) {
 	tree := expand(t.file.Task, vals)
 	var plan []TemplateAdded
 	walkTemplate(tree, 0, func(n TemplateTask, depth int) { plan = append(plan, TemplateAdded{Title: n.Title, Depth: depth}) })
+	base := in
+	base.Template, base.Args, base.DryRun = "", nil, false
 	if in.DryRun {
+		// devco:D-932: the dry run runs the real apply into a check-only
+		// stage it discards: every task's add, checklist and gate is
+		// checked as the write checks it (a sub-task reads its parent from
+		// the stage, engine.stagedView), and nothing is written
+		sctx := engine.Staging(engine.WithCheckOnly(ctx))
+		_, werr := o.applyTemplate(sctx, base, tree, t.Name)
+		engine.Discard(sctx)
+		if werr != nil {
+			return AddOut{}, errs.Prefix("task add --template "+t.Name+" --dry-run: would fail (nothing written)", werr)
+		}
 		var b strings.Builder
 		b.WriteString("would add " + strconv.Itoa(len(plan)) + " tasks (template " + t.Name + "):\n")
 		for _, p := range plan {
@@ -799,21 +811,25 @@ func (o ops) addTemplate(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	base := in
-	base.Template, base.Args, base.DryRun = "", nil, false
+	return o.applyTemplate(ctx, base, tree, t.Name)
+}
+
+// applyTemplate adds the expanded template tree: the root (with --key, so
+// a re-apply is a no-op), then its sub-tasks in order.
+func (o ops) applyTemplate(ctx context.Context, base AddIn, tree TemplateTask, name string) (AddOut, error) {
 	root, existed, err := o.applyNode(ctx, base, tree, "")
 	if err != nil {
 		return AddOut{}, err
 	}
 	if existed {
-		root.Human = strings.TrimSuffix(root.Human, "\n") + "\n  template " + t.Name + ": nothing added\n"
+		root.Human = strings.TrimSuffix(root.Human, "\n") + "\n  template " + name + ": nothing added\n"
 		return root, nil
 	}
 	n, err := o.applyChildren(ctx, base, tree, root.Data.ID)
 	if err != nil {
 		return AddOut{}, err
 	}
-	root.Human += "  template " + t.Name + ": added 1 task and " + strconv.Itoa(n) + " sub-tasks\n"
+	root.Human += "  template " + name + ": added 1 task and " + strconv.Itoa(n) + " sub-tasks\n"
 	return root, nil
 }
 

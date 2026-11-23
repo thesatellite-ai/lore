@@ -28,6 +28,17 @@ import (
 // check-only: invalid input fails with the write's own code, valid input
 // writes nothing. dryRunCases proves the ones it names.
 var dryRunChecked = map[string]string{
+	"actor.merge":              "runs every re-point and the merged mark check-only (wire MergeActor)",
+	"member.add":               "runs every roster write into a check-only stage it discards",
+	"mission.apply":            "runs the real apply into a check-only stage it discards (tasks read the mission and earlier tasks from it)",
+	"repo.merge_ids":           "runs every row's origin rewrite check-only",
+	"row.move":                 "--from: the real MoveMany planned (D-761) plus the store write's --store and stale checks",
+	"sync.fix_projects":        "engine.MergeRows: the re-points and the delete in a check-only stage it discards",
+	"task.add":                 "--template: the real apply into a check-only stage it discards (a sub-task reads its parent from it)",
+	"task.import":              "the real import into one check-only stage it discards (tree records read their parent from it)",
+	"task.split":               "every piece's real add into the split's stage, check-only, discarded",
+	"task.stale":               "--close: every task's real cancel, check-only",
+	"trash.add":                "the real DeleteMany, check-only",
 	"batch.apply":              "runs every line's real op in a stage it discards, check-only (ops/batch tests prove it)",
 	"meta.set":                 "the one-row form (metaSetDry) runs the real write check-only after its own checks",
 	"meta.unset":               "the one-row form (metaUnsetDry) runs the real write check-only after its own checks",
@@ -62,6 +73,8 @@ var dryRunChecked = map[string]string{
 // store's history): the engine's check-only mode does not reach them, so
 // each keeps its own preview.
 var dryRunNotRows = map[string]string{
+	"sync.promote":          "commits row files onto a git branch (git), not a row write",
+	"task.next":             "a --claim writes the signals ref (git); --dry-run is the read-only ranking",
 	"branch.adopt":          "moves a code branch's layer rows by git ref",
 	"branch.drop":           "drops a code branch's layer (git ref)",
 	"branch.install_action": "writes a CI workflow file",
@@ -81,15 +94,11 @@ var dryRunNotRows = map[string]string{
 // its dry run runs the write check-only. The engine already guarantees
 // none of them writes in a dry run (Run's check-only context).
 var dryRunLeftToConvert = map[string]string{
-	"actor.merge":           "counts rows naming <from>",
-	"member.add":            "lists who would be added",
 	"meta.adopt":            "lists keys to re-file",
 	"meta.edit":             "--type: reports what converts",
 	"meta.import":           "lists what would be written",
 	"meta.rebuild":          "lists what would change",
 	"meta.rehome":           "lists keys and rows to rewrite",
-	"mission.apply":         "lists the tasks it would write",
-	"repo.merge_ids":        "plans the id merge",
 	"resource.check":        "checks values, writes nothing",
 	"resource.delete":       "bulk: lists what would change",
 	"resource.edit":         "bulk: lists what would change",
@@ -98,15 +107,6 @@ var dryRunLeftToConvert = map[string]string{
 	"resource.import":       "lists what would be written",
 	"resource.merge":        "plans the merge",
 	"resource.repoint":      "lists what would change",
-	"row.move":              "--from: lists what would move",
-	"sync.fix_projects":     "lists project rows to fix",
-	"sync.promote":          "lists what would be promoted",
-	"task.add":              "--template: lists the tasks",
-	"task.import":           "lists what would be created (after the secret scan)",
-	"task.next":             "ranks without claiming",
-	"task.split":            "lists the split",
-	"task.stale":            "--close: lists what would be cancelled",
-	"trash.add":             "lists what would be trashed",
 }
 
 // TestEveryWriteDryRunIsListed walks the operation registry: every write
@@ -165,6 +165,51 @@ var dryRunCases = []dryRunCase{
 	{op: "meta.unset", seed: seedChannel, good: `{"id":"{{id}}","key":"channel"}`},
 	{op: "memory.archive", seed: seedMemory, good: `{"where":["body~=feeds"]}`},
 	{op: "memory.delete", seed: seedMemory, good: `{"where":["body~=feeds"]}`},
+	// devco:D-932 (H-193): a plan's bad timebox and a template's bad
+	// priority argument passed the old dry runs, which only listed the tasks
+	{op: "mission.apply", seed: seedPlanFiles, bad: `{"file":"{{id}}/bad.yaml"}`, good: `{"file":"{{id}}/good.yaml"}`},
+	{op: "task.add", seed: seedTemplate, bad: `{"template":"rel","args":["p=bogus"]}`, good: `{"template":"rel","args":["p=high"]}`},
+	{op: "task.split", seed: seedTaskID, bad: `{"id":"{{id}}","children":[{"title":"a","priority":"bogus"}]}`, good: `{"id":"{{id}}","titles":["Draft","Review"]}`},
+	{op: "task.import", seed: seedPlanFiles, good: `{"file":"{{id}}/tasks.csv"}`},
+}
+
+// seedTaskID is a task; its id is the case's {{id}}.
+func seedTaskID(t *testing.T, a *App) string {
+	t.Helper()
+	return idOfTask(t, a, "Ship the feed")
+}
+
+// seedPlanFiles writes a mission plan whose task has a timebox the write
+// refuses (bad.yaml), a good plan of three tasks, the last after the
+// first (good.yaml), and a task import file (tasks.csv); {{id}} is their
+// folder.
+func seedPlanFiles(t *testing.T, _ *App) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"bad.yaml":  "mission:\n  title: Launch\ntasks:\n  - key: a\n    title: Write the page\n    timebox: soon\n",
+		"good.yaml": "mission:\n  title: Launch\n  key: launch\ntasks:\n  - key: a\n    title: Write the page\n    timebox: 2h\n  - key: b\n    title: Review the page\n  - key: c\n    title: Ship the page\n    after: [a]\n",
+		"tasks.csv": "title,priority\nWrite the page,high\nReview the page,low\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// seedTemplate is the task template "rel": a root whose priority is the
+// argument p, and one sub-task (which reads its parent back).
+func seedTemplate(t *testing.T, a *App) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "rel.yaml")
+	if err := os.WriteFile(p, []byte("args:\n  p:\n    required: true\ntask: {title: Release, priority: \"${arg:p}\", checklist: [notes], children: [{title: Tag the build}]}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(t, a, "task.template.add", `{"name":"rel","from_file":"`+p+`"}`, true); err != nil {
+		t.Fatal(err)
+	}
+	return ""
 }
 
 func seedTask(t *testing.T, a *App) string {

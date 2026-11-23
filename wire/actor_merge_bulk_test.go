@@ -72,6 +72,15 @@ func TestActorMergeBulk(t *testing.T) {
 	a = newTestApp(t, repo)
 
 	in := `{"from":"` + mergeFrom + `","into":"` + mergeInto + `"}`
+	// devco:D-932: the dry run runs the edits check-only: the row the
+	// write leaves fails it with the write's code, and nothing is written
+	if _, derr := run(t, a, opsinfra.OpActorMerge, `{"from":"`+mergeFrom+`","into":"`+mergeInto+`","dry_run":true}`, false); !errs.Has(derr, errs.Refused) ||
+		!strings.Contains(derr.Error(), "would fail (nothing written)") || !strings.Contains(derr.Error(), "tasks "+bad) {
+		t.Fatalf("merge --dry-run with one bad row = %v; want E_REFUSED naming the row, nothing written", derr)
+	}
+	if one, perr := ids.ParseAny(fmt.Sprintf("%s%012x", bulkTaskStem, 1)); perr != nil || assignee(t, a, one) != mergeFrom {
+		t.Fatalf("merge --dry-run wrote (assignee %q)", assignee(t, a, one))
+	}
 	start := time.Now()
 	_, err = run(t, a, opsinfra.OpActorMerge, in, true)
 	took := time.Since(start)

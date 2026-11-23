@@ -568,15 +568,20 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 	if err != nil {
 		return StaffAddOut{}, err
 	}
-	if in.DryRun || len(plans) == 0 {
+	if len(plans) == 0 {
 		return out, nil
 	}
-	if !op.Confirmed(ctx) && !engine.Confirmed(ctx) {
+	if !in.DryRun && !op.Confirmed(ctx) && !engine.Confirmed(ctx) {
 		q := fmt.Sprintf("add %d people to the roster of %s as members (%s)?", len(plans), r.Label(), staffEmails(plans))
 		return StaffAddOut{}, errs.New(errs.NeedsConfirm, "member add: "+q).WithQuestion(q).WithHint("ask the person, then rerun with --yes")
 	}
-	// every row of the run in ONE store commit (engine stage), one push
-	sctx := engine.Staging(store.WithCommitTitle(ctx, "member add: "+staffEmails(plans)))
+	// every row of the run in ONE store commit (engine stage), one push;
+	// a dry run's stage is check-only and discarded (devco:D-932)
+	wctx := ctx
+	if in.DryRun {
+		wctx = engine.WithCheckOnly(ctx)
+	}
+	sctx := engine.Staging(store.WithCommitTitle(wctx, "member add: "+staffEmails(plans)))
 	rows := 0
 	teamAdds := map[string][]string{}
 	for _, p := range plans {
@@ -596,6 +601,14 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		return StaffAddOut{}, errs.Prefix("member add (nothing written)", err)
 	}
 	rows += n
+	if in.DryRun {
+		// devco:D-932: the dry run ran every person's real roster write
+		// into the stage (Run made ctx check-only too), so a person the
+		// write refuses failed above with the write's code; discarding
+		// the stage writes nothing and pushes nothing
+		engine.Discard(sctx)
+		return out, nil
+	}
 	if _, err := engine.Commit(sctx); err != nil {
 		return StaffAddOut{}, errs.Prefix("member add: the roster write (nothing written)", err)
 	}

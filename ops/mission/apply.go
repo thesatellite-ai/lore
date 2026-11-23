@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -155,8 +156,24 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 	// attached at that folder (BUG-T8, client repos)
 	to := op.TargetAlias(ctx, strings.TrimSpace(p.Mission.To))
 	if in.DryRun {
+		// devco:D-932: the dry run runs the real apply into a stage it
+		// discards (Run made ctx check-only too): every row's checks run,
+		// a task's references to the mission, the list and earlier tasks
+		// resolve in the stage, and nothing is written; a plan the write
+		// refuses fails here with the write's code
+		sctx := engine.Staging(engine.WithCheckOnly(ctx))
+		_, werr := o.applyWrite(sctx, to, project, p)
+		engine.Discard(sctx)
+		if werr != nil {
+			return ApplyOut{}, errs.Prefix("mission apply --dry-run: would fail (nothing written)", werr)
+		}
 		return o.applyDry(ctx, to, project, p)
 	}
+	return o.applyWrite(ctx, to, project, p)
+}
+
+// applyWrite writes what the plan p is missing (apply, after its checks).
+func (o ops) applyWrite(ctx context.Context, to string, project ids.ID[ids.Project], p File) (ApplyOut, error) {
 	m, created, src, err := o.planMission(ctx, to, project, p)
 	if err != nil {
 		return ApplyOut{}, err

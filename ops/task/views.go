@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/filter"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/sortspec"
@@ -365,6 +366,15 @@ func (o ops) stale(ctx context.Context, in StaleIn) (StaleOut, error) {
 		return out, nil
 	}
 	if in.DryRun {
+		// devco:D-932: the dry run runs every task's real cancel,
+		// check-only (Run marks a preview engine.WithCheckOnly), so a task
+		// the write refuses is refused here with the same code
+		cctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
+		for _, s := range hits {
+			if _, err = o.cancel(cctx, CancelIn{ID: s.Row.ID.String(), Reason: schema.TaskCloseStale}); err != nil {
+				return StaleOut{}, errs.Prefix("task stale --close --dry-run: "+s.Row.ID.String()+" would fail (nothing written)", err)
+			}
+		}
 		out.Human = h.String() + "would cancel them with close_reason stale (nothing written, --dry-run)\n"
 		return out, nil
 	}

@@ -140,7 +140,22 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		}
 	}
 	out.Count = len(hits)
-	if len(hits) == 0 || in.DryRun {
+	if len(hits) == 0 {
+		return out, nil
+	}
+	refs := make([]engine.Ref, 0, len(hits))
+	for _, h := range hits {
+		refs = append(refs, engine.Ref{Store: h.src, Table: h.r.Table, ID: h.r.ID})
+	}
+	if in.DryRun {
+		// devco:D-932: the dry run runs the real DeleteMany check-only
+		// (Run marks a preview engine.WithCheckOnly), confirmed as the
+		// write is once bulk.Ask has its yes, so a row the write refuses
+		// (role, policy, a stale or purged row) fails here with the same
+		// code and nothing goes to the trash.
+		if err := env.DeleteMany(engine.WithConfirmed(engine.WithCheckOnly(ctx)), refs); err != nil {
+			return AddOut{}, errs.Prefix("trash add --born-branch "+branch+" --dry-run: would fail (nothing written)", err)
+		}
 		return out, nil
 	}
 	// The question names the counts per kind and ids only, never a title
@@ -153,10 +168,6 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, err
 	}
 	out.Batch = batch.String()
-	refs := make([]engine.Ref, 0, len(hits))
-	for _, h := range hits {
-		refs = append(refs, engine.Ref{Store: h.src, Table: h.r.Table, ID: h.r.ID})
-	}
 	if err := env.DeleteMany(bctx, refs); err != nil {
 		return AddOut{}, errs.Prefix("trash add --born-branch "+branch+": the "+strconv.Itoa(len(refs))+" rows could not go to the trash (batch "+out.Batch+"; `lore trash restore --id "+out.Batch+"` brings back any that did)", err)
 	}

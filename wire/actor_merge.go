@@ -192,25 +192,44 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 		out.Tables = append(out.Tables, opsinfra.ActorMergeTable{Table: tb, Rows: perTable[tb]})
 	}
 	out.Written = mergeStoreCounts(perStore, labels)
-	if in.DryRun {
-		return out, nil
-	}
 	// every row of a store in ONE store commit and one push (owner report
 	// 2026-11-12: one commit and push per row took 10 s a row); a row that
 	// cannot be edited is listed with its reason, the rest are written
 	title := actorMergeVerb + " " + from.String() + " into " + into.String()
-	b := a.bulk(ctx, title, func(r engine.Ref) string {
-		return "`lore show --id " + r.ID.String() + "` shows the row; edit what the reason names, then rerun"
-	})
-	edited := map[store.Source]int{}
-	for _, e := range edits {
-		if b.update(e.ref, e.patch) {
-			edited[e.ref.Store]++
+	rerun := "lore actor merge --from " + from.String() + " --into " + into.String() + " --yes"
+	write := func(ctx context.Context) (*bulkWrite, map[store.Source]int, int, error) {
+		b := a.bulk(ctx, title, func(r engine.Ref) string {
+			return "`lore show --id " + r.ID.String() + "` shows the row; edit what the reason names, then rerun"
+		})
+		edited := map[store.Source]int{}
+		for _, e := range edits {
+			if b.update(e.ref, e.patch) {
+				edited[e.ref.Store]++
+			}
 		}
+		marked := a.markMerged(ctx, st, b, fromCopies, into)
+		marked += a.rosterTombstone(ctx, st, b, fromCopies, into)
+		return b, edited, marked, b.commit()
 	}
-	marked := a.markMerged(ctx, st, b, fromCopies, into)
-	marked += a.rosterTombstone(ctx, st, b, fromCopies, into)
-	cerr := b.commit()
+	if in.DryRun {
+		if !engine.CheckOnly(ctx) {
+			return out, nil // the count the op's question names before a real merge
+		}
+		// devco:D-932: a --dry-run (Run made ctx check-only) runs the
+		// real edits check-only: every check, nothing written, so a row
+		// the write would leave fails the dry run with the write's code
+		// (E_REFUSED naming the row and its fix) instead of a count that
+		// promises the whole merge
+		b, _, _, cerr := write(engine.WithConfirmed(ctx))
+		if ferr := b.failedDryErr(actorMergeVerb+" "+from.String()+" "+into.String()+" --dry-run", rerun); ferr != nil {
+			return opsinfra.ActorMergeOut{}, ferr
+		}
+		if cerr != nil {
+			return opsinfra.ActorMergeOut{}, errs.Prefix(actorMergeVerb+" --dry-run: would fail (nothing written)", cerr)
+		}
+		return out, nil
+	}
+	b, edited, marked, cerr := write(ctx)
 	out.Rows = 0
 	for src, n := range edited {
 		edited[src] = min(n, b.written[src]) // a store whose commit failed wrote none
@@ -218,7 +237,7 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	}
 	out.Marked = min(marked, b.total()-out.Rows)
 	out.Written = mergeStoreCounts(edited, labels)
-	if ferr := b.failedErr(actorMergeVerb+" "+from.String()+" "+into.String(), "lore actor merge --from "+from.String()+" --into "+into.String()+" --yes"); ferr != nil {
+	if ferr := b.failedErr(actorMergeVerb+" "+from.String()+" "+into.String(), rerun); ferr != nil {
 		return out, ferr
 	}
 	return out, cerr

@@ -246,6 +246,15 @@ func (e *Engine) MergeRows(ctx context.Context, w RowWriter, table row.Table, ke
 		}
 	}
 	if dryRun {
+		// devco:D-932: the dry run runs the real re-points and delete in
+		// a check-only stage it discards: each write's checks run, the
+		// delete sees the re-pointed referrers as the write would
+		// (stagedView), and nothing is written
+		sctx := Staging(WithConfirmed(WithCheckOnly(ctx)))
+		defer Discard(sctx)
+		if err := e.mergeWrites(sctx, w, table, keep, drop, refs); err != nil {
+			return res, errs.Prefix("merge --dry-run: would fail (nothing written)", err)
+		}
 		return res, nil
 	}
 	b, ok := BatchOf(ctx)
@@ -262,26 +271,30 @@ func (e *Engine) MergeRows(ctx context.Context, w RowWriter, table row.Table, ke
 		ctx = WithBatch(ctx, b)
 	}
 	res.Batch = b.ID
+	return res, e.mergeWrites(ctx, w, table, keep, drop, refs)
+}
+
+// mergeWrites re-points every referrer of drop at keep through w, then
+// soft-deletes drop (MergeRows' writes; check-only in its dry run).
+func (e *Engine) mergeWrites(ctx context.Context, w RowWriter, table row.Table, keep, drop ids.AnyID, refs []Referrer) error {
 	for _, r := range refs {
 		_, cur, gerr := e.locate(ctx, Ref{Store: r.Store, Table: r.Table, ID: r.ID})
 		if gerr != nil {
-			return res, gerr
+			return gerr
 		}
 		patch, perr := RefPatch(cur, drop, keep, r.ID == keep)
 		if perr != nil {
-			return res, perr
+			return perr
 		}
 		if len(patch) == 0 {
 			continue
 		}
 		if _, uerr := w.Update(withRefRepoint(ctx), Ref{Store: r.Store, Table: r.Table, ID: r.ID}, patch); uerr != nil {
-			return res, errs.Prefix("merge: re-point "+string(r.Table)+" "+r.ID.String()+" from "+drop.String()+" to "+keep.String(), uerr)
+			return errs.Prefix("merge: re-point "+string(r.Table)+" "+r.ID.String()+" from "+drop.String()+" to "+keep.String(), uerr)
 		}
 	}
-	if _, derr := w.Delete(WithDeleteReason(ctx, MergedIntoReason+keep.String()), Ref{Table: table, ID: drop}); derr != nil {
-		return res, derr
-	}
-	return res, nil
+	_, derr := w.Delete(WithDeleteReason(ctx, MergedIntoReason+keep.String()), Ref{Table: table, ID: drop})
+	return derr
 }
 
 // liveRowOf checks that id is a live row of table: a row in the trash is

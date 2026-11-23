@@ -127,3 +127,39 @@ func TestDryRunIsACheckOnlyWrite(t *testing.T) {
 		t.Errorf("dry runs recorded %d audit events", n-audited)
 	}
 }
+
+// TestCheckOnlyStageReadsItsOwnWrites (devco:D-932, H-193): a dry run
+// that writes into a check-only stage reads its own earlier writes, as the
+// write would read them from the store: a template's sub-task reads its
+// parent, an add is followed by an edit of the same row. Before, a staged
+// row was not found by a later Get, and a second write of it was
+// store.ErrBatch, so such an operation's dry run could not run its write
+// path. Discarding the stage still writes nothing.
+func TestCheckOnlyStageReadsItsOwnWrites(t *testing.T) {
+	t.Parallel()
+	f := setup(t)
+	bg := context.Background()
+	ctx := Staging(WithCheckOnly(bg))
+	w, err := f.eng.Create(ctx, store.SourceRepo, schema.TableKinds, map[string]value.Value{"name": txt("draft")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := Ref{Table: schema.TableKinds, ID: w.Row.ID}
+	if _, _, err = f.eng.Get(ctx, ref); err != nil {
+		t.Fatalf("a later read of the dry run's own create: %v", err)
+	}
+	if _, err = f.eng.Update(ctx, ref, map[string]value.Value{"name": txt("final")}); err != nil {
+		t.Fatalf("an edit of the dry run's own create: %v", err)
+	}
+	_, r, err := f.eng.Get(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := r.Fields["name"].(value.Text); !ok || got.String() != "final" {
+		t.Errorf("the staged read shows name %v; want the edit's final", r.Fields["name"])
+	}
+	Discard(ctx)
+	if _, r, gerr := f.eng.Get(bg, ref); gerr == nil && !r.Deleted {
+		t.Errorf("the discarded dry run stored %s", w.Row.ID)
+	}
+}

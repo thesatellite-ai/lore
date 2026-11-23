@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/store"
@@ -90,16 +91,14 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 		out.Added = append(out.Added, SplitAdded{Title: p.Title, Rank: rank, Priority: p.Priority, Commitment: p.Commitment, Assign: p.Assign, Due: p.Due})
 		rank = tasktree.After(rank)
 	}
-	if in.DryRun {
-		out.Human = "would add " + strconv.Itoa(len(pieces)) + " sub-tasks under " + id.String() + " " + par.title + ":\n" +
-			splitList(out.Added) + inheritedLine(par) + "nothing written (--dry-run)\n"
-		return out, nil
+	bctx := engine.WithCheckOnly(ctx) // the dry run's stage reads its own rows (engine.stagedView)
+	if !in.DryRun {
+		var batch ids.ID[ids.Batch]
+		if bctx, batch, err = bulk.Begin(ctx, bulk.KindTask); err != nil {
+			return SplitOut{}, err
+		}
+		out.Batch = batch.String()
 	}
-	bctx, batch, err := bulk.Begin(ctx, bulk.KindTask)
-	if err != nil {
-		return SplitOut{}, err
-	}
-	out.Batch = batch.String()
 	// run:plat:split-perf: every child (and the default list, the caller's
 	// actor row) is staged and written as ONE store commit, not one per
 	// child; a refused child writes nothing at all. Staged rows are not
@@ -126,6 +125,16 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 		if tasklist == "" && !a.existed {
 			tasklist = a.Data.TaskListID
 		}
+	}
+	if in.DryRun {
+		// devco:D-932: the dry run ran every piece's real add into the
+		// stage (Run made ctx check-only too); discarding it writes
+		// nothing, so a piece the write refuses failed above with the
+		// write's code
+		engine.Discard(sctx)
+		out.Human = "would add " + strconv.Itoa(len(pieces)) + " sub-tasks under " + id.String() + " " + par.title + ":\n" +
+			splitList(out.Added) + inheritedLine(par) + "nothing written (--dry-run)\n"
+		return out, nil
 	}
 	if _, err = engine.Commit(sctx); err != nil {
 		return SplitOut{}, err

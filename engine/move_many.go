@@ -107,8 +107,10 @@ func (e *Engine) MoveMany(ctx context.Context, refs []Ref, to store.Source, opt 
 			return MovedMany{}, err
 		}
 	}
-	if opt.Plan { // D-761: the dry run stops here, every check passed
-		return out, nil
+	if opt.Plan || CheckOnly(ctx) { // D-761: the dry run stops here, every check passed
+		// devco:D-932: after the checks the write's sinks make (--store,
+		// stale rows), so a dry run fails where the write would
+		return out, e.checkMoveSinks(ctx, dst, copies.changes, order, tombs)
 	}
 	srcNames := make([]string, len(order))
 	for i, n := range order {
@@ -267,4 +269,28 @@ func (e *Engine) PlanMoveSecrets(ctx context.Context, refs []Ref, to store.Sourc
 		rows = append(rows, cur)
 	}
 	return e.PlanSecrets(ctx, "bulk move", rerun, to, rows)
+}
+
+// checkMoveSinks runs, for a bulk move's dry run, the checks writeChanges
+// makes before it writes (devco:D-932): the --store narrowing and every
+// change's Expect, for the copies at dst and each source's tombstones.
+func (e *Engine) checkMoveSinks(ctx context.Context, dst Attached, copies []store.Change, order []store.Source, tombs *stage) error {
+	if len(copies) > 0 {
+		if err := refuseNarrowedWrite(ctx, dst, copies); err != nil {
+			return err
+		}
+		if err := checkChanges(ctx, dst, copies); err != nil {
+			return err
+		}
+	}
+	for _, name := range order {
+		p := tombs.bySrc[name]
+		if err := refuseNarrowedWrite(ctx, p.st, p.changes); err != nil {
+			return err
+		}
+		if err := checkChanges(ctx, p.st, p.changes); err != nil {
+			return err
+		}
+	}
+	return nil
 }

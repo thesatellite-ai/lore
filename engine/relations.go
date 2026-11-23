@@ -231,6 +231,35 @@ type dependent struct {
 // the empty cursor): correct on every backend, O(rows); a cache-backed
 // referrer index can replace it once the cache port offers one.
 func (e *Engine) dependents(ctx context.Context, table row.Table, id ids.AnyID) ([]dependent, error) {
+	out, err := e.storedDependents(ctx, table, id)
+	if err != nil || !CheckOnly(ctx) || !InStage(ctx) {
+		return out, err
+	}
+	// devco:D-932: in a dry run's check-only stage a dependent the run
+	// already re-pointed or deleted (a merge's referrers, before it
+	// deletes the merged row) no longer holds id, as after the write
+	kept := out[:0]
+	for _, d := range out {
+		if sr, ok := stagedView(ctx, d.source, d.row.Table, d.row.ID); ok {
+			if sr.Deleted {
+				continue
+			}
+			r, derr := sr.Decode()
+			if derr != nil {
+				return nil, derr
+			}
+			if !points(r, d.rule, table, id) {
+				continue
+			}
+			d.row = r
+		}
+		kept = append(kept, d)
+	}
+	return kept, nil
+}
+
+// storedDependents is dependents as the stores hold them.
+func (e *Engine) storedDependents(ctx context.Context, table row.Table, id ids.AnyID) ([]dependent, error) {
 	rules := e.dependentRules(table)
 	if len(rules) == 0 {
 		return nil, nil

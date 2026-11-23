@@ -1634,7 +1634,17 @@ func repoMergeIDs(ctx context.Context, env Env, files RepoFiles, rw OriginRewrit
 			}
 		}
 	}
+	winner := canon.String(out.RepoID)
 	if in.DryRun {
+		// devco:D-932: the dry run runs every row's real rewrite,
+		// check-only (engine.WithCheckOnly: every check, nothing written),
+		// so a row the write refuses fails here with the write's code
+		cctx := engine.WithCheckOnly(ctx)
+		for _, m := range out.Rows {
+			if err := rewriteMergedOrigin(cctx, rw, m, alias, winner); err != nil {
+				return RepoMergeIDsOut{}, errs.Prefix("repo merge-ids --dry-run: "+m.ID+" would fail (nothing written)", err)
+			}
+		}
 		out.human = mergeIDsText(out, "would rewrite")
 		return out, nil
 	}
@@ -1642,7 +1652,6 @@ func repoMergeIDs(ctx context.Context, env Env, files RepoFiles, rw OriginRewrit
 		return RepoMergeIDsOut{}, errs.New(errs.NeedsConfirm, mergeIDsQuestion(out)).
 			WithHint("check the rows (lore repo merge-ids --dry-run), then rerun with --yes")
 	}
-	winner := canon.String(out.RepoID)
 	// MERGEIDS-SCOPE (PROV 11.9): every rewrite of this run is one bat_
 	// batch (audit events and commit trailers carry it).
 	bid, berr := ids.New[ids.Batch]()
@@ -1652,15 +1661,8 @@ func repoMergeIDs(ctx context.Context, env Env, files RepoFiles, rw OriginRewrit
 	ctx = engine.WithBatch(ctx, engine.Batch{ID: bid, Kind: engine.OpRepoMergeIDs})
 	out.Batch = bid.String()
 	for _, m := range out.Rows {
-		rid, perr := ids.ParseAny(m.ID)
-		if perr != nil {
-			return RepoMergeIDsOut{}, errs.Wrap(errs.Internal, "infra: a listed row id does not parse", perr)
-		}
-		ref := engine.Ref{Store: store.Source(m.Store), Table: row.Table(m.Table), ID: rid}
-		if _, werr := rw.RewriteOrigin(ctx, ref, func(o value.JSON) (value.JSON, bool, error) {
-			return replaceOriginRepo(o, alias, winner)
-		}); werr != nil {
-			return RepoMergeIDsOut{}, werr
+		if err := rewriteMergedOrigin(ctx, rw, m, alias, winner); err != nil {
+			return RepoMergeIDsOut{}, err
 		}
 	}
 	meta := id.Meta
@@ -1670,6 +1672,20 @@ func repoMergeIDs(ctx context.Context, env Env, files RepoFiles, rw OriginRewrit
 	}
 	out.human = mergeIDsText(out, "rewrote")
 	return out, nil
+}
+
+// rewriteMergedOrigin points row m's _o.repo from an alias id at winner
+// (repo merge-ids; check-only in its dry run).
+func rewriteMergedOrigin(ctx context.Context, rw OriginRewriter, m MergedRow, alias map[string]bool, winner []byte) error {
+	rid, err := ids.ParseAny(m.ID)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "infra: a listed row id does not parse", err)
+	}
+	ref := engine.Ref{Store: store.Source(m.Store), Table: row.Table(m.Table), ID: rid}
+	_, err = rw.RewriteOrigin(ctx, ref, func(o value.JSON) (value.JSON, bool, error) {
+		return replaceOriginRepo(o, alias, winner)
+	})
+	return err
 }
 
 // originRepo is `_o.repo` of a row ("" when absent).

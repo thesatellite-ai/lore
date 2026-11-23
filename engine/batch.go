@@ -129,7 +129,7 @@ func Interactive(ctx context.Context) bool {
 //	error / no Commit → nothing was written
 //
 // Staged rows are NOT visible to reads made with the staging ctx (List,
-// Get read the backend): the caller resolves references between its own
+// Get read the backend; a check-only stage is the exception, stagedView): the caller resolves references between its own
 // rows itself (the import pins ids). A stage that spans two stores is
 // refused at Commit before any write, because no backend batch covers two
 // stores.
@@ -378,21 +378,24 @@ func (s *stage) part(e *Engine, st Attached) *stagedStore {
 // ensure) is dropped: the first one stands. Any other second write of a
 // staged row is ErrBatch: the stage cannot read its own rows back, so it
 // cannot check that write against the staged version.
-func (s *stage) addWrite(e *Engine, st Attached, changes []store.Change, evs []Event) (bool, error) {
+func (s *stage) addWrite(e *Engine, st Attached, changes []store.Change, evs []Event, over bool) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	main := changes[0].Row.Key()
-	if s.written[main] {
-		if changes[0].Expect.IsZero() {
-			return false, nil
-		}
-		return false, errs.Wrap(errs.InvalidInput, "staged batch writes "+main.ID.String()+" twice", store.ErrBatch)
+	if s.written[main] && changes[0].Expect.IsZero() {
+		return false, nil
 	}
 	p := s.part(e, st)
 	for _, c := range changes {
 		k := c.Row.Key()
 		if s.written[k] {
-			return false, errs.Wrap(errs.InvalidInput, "staged batch writes "+k.ID.String()+" twice", store.ErrBatch)
+			if !over {
+				return false, errs.Wrap(errs.InvalidInput, "staged batch writes "+k.ID.String()+" twice", store.ErrBatch)
+			}
+			// devco:D-932: a check-only stage is never committed, so a
+			// later write of a row it holds (an add, then its checklist)
+			// replaces the staged copy the later reads see (stagedView)
+			p.changes = slices.DeleteFunc(p.changes, func(x store.Change) bool { return x.Row.Key() == k })
 		}
 		s.written[k] = true
 	}
