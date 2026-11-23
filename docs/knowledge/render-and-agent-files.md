@@ -262,7 +262,7 @@ Only `must` rules and `critical`/`high` hotfixes can be pinned; other notes are 
 
 ## Rules for one folder
 
-A rule added with `--scope dir:<path>` applies only to files under that folder. `lore scope list` shows every folder scope of the repo with its counts (every live rule and hotfix of any severity, and its memories and decisions) and the file that serves it, and `lore scope show --path <path>` prints the chain for one file: project, repo, then the folder (later wins on a conflict). A folder gets its own rendered file only once it has enough entries (the `context.dir_min_entries` policy, 3 by default); until then its rules go to the parent file, each marked with its folder (`<rule … scope="dir:src/checkout">` in full, `(only in src/checkout/)` on a one-line entry), and `lore rule list` counts them under "scoped to a folder (dir:src/checkout)" in its hidden-rows line.
+A rule added with `--scope dir:<path>` applies only to files under that folder. `lore scope list` shows every folder scope of the repo with its counts (every live rule and hotfix of any severity, and its memories and decisions) and the file that serves it, and `lore scope show --path <path>` prints the chain for one file: project, repo, then the folder (later wins on a conflict). A folder gets its own rendered file only once it has enough entries (the `context.dir_min_entries` policy, 3 by default); until then its rules go to the parent file, each marked with its folder (`<rule … scope="dir:src/checkout">` in full, `(only in src/checkout/)` on a one-line entry), and `lore rule list` counts them under "scoped to a folder (dir:src/checkout)" in its hidden-rows line. The `rule add` already brought `.lore/LORE.md` up to date, so the `lore render` after it finds the file unchanged.
 
 <!-- example: render#scope -->
 ```console
@@ -282,8 +282,7 @@ scope chain for src/checkout/pay.ts (general first; later wins on conflict)
   dir      src/checkout                 1 rule  (no file: lore render writes it when the folder has enough entries)
   glob     (none match this path)
 $ lore render
-✓ .lore/LORE.md (3638 bytes, budget 32000 claude_code; 3 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
-✓ .lore/LORE.full.md (792 bytes, every pinned entry in full; not imported)
+· .lore/LORE.md (unchanged)
 · AGENTS.md carries lore's pointer but context.targets does not name it, so render leaves it as is; list it with: lore policy set --key context.targets --value "<profiles incl. codex>" --yes
 = ~/work/website/CLAUDE.md (pointer present)
 ```

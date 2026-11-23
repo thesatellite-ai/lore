@@ -184,8 +184,7 @@ scope chain for src/checkout/pay.ts (general first; later wins on conflict)
   dir      src/checkout                 1 rule  (no file: lore render writes it when the folder has enough entries)
   glob     (none match this path)
 alice (work/website)$ lore render
-✓ .lore/LORE.md (3638 bytes, budget 32000 claude_code; 3 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
-✓ .lore/LORE.full.md (792 bytes, every pinned entry in full; not imported)
+· .lore/LORE.md (unchanged)
 · AGENTS.md carries lore's pointer but context.targets does not name it, so render leaves it as is; list it with: lore policy set --key context.targets --value "<profiles incl. codex>" --yes
 = ~/work/website/CLAUDE.md (pointer present)
 

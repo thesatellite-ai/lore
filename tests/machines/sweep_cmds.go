@@ -68,24 +68,24 @@ type knowledgeKind struct {
 const sampleWord = "sweepsample"
 
 var knowledgeKinds = []knowledgeKind{
-	{Kind: "architecturenote", Add: tb("Layering"), Edit: []string{"--title", "Layers"}},
-	{Kind: "behaviour", Add: tb("Careful"), Edit: []string{"--body", sampleWord + " edited"}},
-	{Kind: "cookbookrecipe", Add: tb("Retry"), Edit: []string{"--title", "Retry twice"}},
+	{Kind: "architecturenote", Add: tb("Layering"), Edit: []string{"--title", "Layers"}, Archive: true},
+	{Kind: "behaviour", Add: tb("Careful"), Edit: []string{"--body", sampleWord + " edited"}, Archive: true},
+	{Kind: "cookbookrecipe", Add: tb("Retry"), Edit: []string{"--title", "Retry twice"}, Archive: true},
 	{Kind: "decision", Add: tb("Use files"), Edit: []string{"--title", "Use row files"}, Archive: true},
 	{Kind: "hotfix", Add: tb("Flaky CI", "--severity", "high"), Edit: []string{"--summary", "rerun once"}, Archive: true},
-	{Kind: "incident", Add: tb("Outage"), Edit: []string{"--title", "Short outage"}},
+	{Kind: "incident", Add: tb("Outage"), Edit: []string{"--title", "Short outage"}, Archive: true},
 	{Kind: "memory", Add: []string{"--body", sampleWord + " memory"}, Edit: []string{"--body", sampleWord + " memory edited"}, Archive: true},
 	{Kind: "pattern", Add: tb("Retry wrapper"), Edit: []string{"--title", "Retry helper"}, Archive: true},
 	{Kind: "playbook", Add: tb("Release"), Edit: []string{"--body", sampleWord + " 1. tag 2. push"}, Archive: true},
 	{Kind: "prompt", Add: tb("Review"), Edit: []string{"--body", sampleWord + " review this"}, Archive: true},
 	{Kind: "rule", Add: []string{"--body", sampleWord + " never log tokens", "--severity", "must"}, Edit: []string{"--summary", "no tokens in logs"}, Archive: true},
 	{Kind: "snapshot", Add: tb("Release 1"), Edit: nil, NoEdit: true, Archive: true},
-	{Kind: "suggestion", Add: tb("Cache"), Edit: []string{"--title", "Cache more"}},
+	{Kind: "suggestion", Add: tb("Cache"), Edit: []string{"--title", "Cache more"}, Archive: true},
 	{Kind: "tasklist", Add: tb("Sprint 4"), Edit: []string{"--title", "Sprint 5"}},
-	{Kind: "tastepref", Add: []string{"--body", sampleWord + " short names"}, Edit: []string{"--body", sampleWord + " shorter names"}},
-	{Kind: "techdoc", Add: []string{"--name", sampleWord + " stdlib", "--base-url", "https://docs.example.test/std"}, NoEdit: true},
-	{Kind: "workflow", Add: tb("Ship"), Edit: []string{"--body", sampleWord + " ship it"}},
-	{Kind: "workspace", Add: tb("Main desk"), Edit: []string{"--name", "Desk"}},
+	{Kind: "tastepref", Add: []string{"--body", sampleWord + " short names"}, Edit: []string{"--body", sampleWord + " shorter names"}, Archive: true},
+	{Kind: "techdoc", Add: []string{"--name", sampleWord + " stdlib", "--base-url", "https://docs.example.test/std"}, Edit: []string{"--description", sampleWord + " the standard library"}, Archive: true}, // H-182: techdoc edit, archive, unarchive
+	{Kind: "workflow", Add: tb("Ship"), Edit: []string{"--body", sampleWord + " ship it"}, Archive: true},
+	{Kind: "workspace", Add: tb("Main desk"), Edit: []string{"--name", "Desk"}, Archive: true},
 	{Kind: "plan", Add: tb("Invite flow"), Edit: []string{"--title", "Invite flow v2"}},
 	{Kind: "mission", Add: []string{sampleWord + " ship the invite flow", "--target", "2027-12-31"}, Edit: []string{"--target", "2028-01-31"}},
 	{Kind: "task", Add: []string{sampleWord + " fix the login redirect", "--priority", "high"}, Edit: []string{"--priority", "urgent"}},
@@ -398,6 +398,8 @@ var rowChains = []sweepChain{
 	}},
 	{Name: "tools", Steps: []sweepStep{
 		{Cmd: "skill install", Args: []string{"--all"}, In: inHome}, {Cmd: "skill status", In: inBoth},
+		// H-185: refresh re-installs a skill older than this lore (none here: just installed)
+		{Cmd: "skill refresh", Args: []string{"--dry-run"}, In: inBoth}, {Cmd: "skill refresh", Args: []string{"--yes"}, In: inHome},
 		{Cmd: "directive install", In: inRepo}, {Cmd: "directive show", In: inRepo},
 	}},
 	{Name: "store-reads", Steps: []sweepStep{

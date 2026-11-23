@@ -238,12 +238,17 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 	s.Step("D-725/budget-warning-is-the-admins", func() {
 		// the over-budget warning is a cell too (devco D-725): a member can
 		// change neither the folder's pinned rows nor its budget, so only
-		// the admin is warned, once per sync
+		// the admin is warned, once per change. Since H-179 the admin's write
+		// refreshes the private file, so that write warns and the sync after
+		// it, finding the file current, repeats nothing (devco:D-937, D-573)
 		admin("policy", "set", "--key", wubKey, "--value", "300", "--to", inWeb, "--yes")
-		admin("rule", "add", "--to", inWeb, "--severity", "must", "--body", "role cell budget warns the admin", "--yes")
+		wout := m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "role cell budget warns the admin", "--yes").OK(t).Out()
+		if n := strings.Count(wout, wubWarn); n != 1 {
+			t.Errorf("devco:D-937 cell budget warning: the admin's rule add over the budget warns %d times, want once:\n%s", n, wout)
+		}
 		aout := m.Lore(wc.Dir, "sync").OK(t).Out()
-		if n := strings.Count(aout, wubWarn); n != 1 {
-			t.Errorf("devco:D-725 cell budget warning: the admin's sync warns %d times, want once:\n%s", n, aout)
+		if n := strings.Count(aout, wubWarn); n != 0 {
+			t.Errorf("devco:D-725 cell budget warning: the admin's sync after the warned write warns again (%d times), want none:\n%s", n, aout)
 		}
 		mo.Lore(mc.Dir, "sync").OK(t).Never(t, wubWarn, "lore policy set --key "+wubKey)
 		admin("policy", "unset", "--key", wubKey, "--to", inWeb, "--yes")

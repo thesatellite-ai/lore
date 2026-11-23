@@ -120,12 +120,12 @@ func TestMigrateLiveRepo(t *testing.T) {
 	newerBefore := rowFile(t, memPath(repo, newer))
 
 	writeLiveRef(t, repo, liveRefLocal, map[string]string{
-		livePath(liveOnlyMem):    liveMemory(liveOnlyMem, project, "live only", liveNewer),
-		livePath(older):          liveMemory(older, project, "live wins", liveNewer),
-		livePath(newer):          liveMemory(newer, project, "stale live", liveOld),
-		livePath(gone):           liveMemory(gone, project, "back from the dead", liveNewest),
-		livePath(liveTrackedMem): liveMemory(liveTrackedMem, project, "local copy", liveNewer),
-		"_live/meta.json":        `{"not":"a row"}`,
+		livePath(liveOnlyMem):                       liveMemory(liveOnlyMem, project, "live only", liveNewer),
+		livePath(older):                             liveMemory(older, project, "live wins", liveNewer),
+		livePath(newer):                             liveMemory(newer, project, "stale live", liveOld),
+		livePath(gone):                              liveMemory(gone, project, "back from the dead", liveNewest),
+		livePath(liveTrackedMem):                    liveMemory(liveTrackedMem, project, "local copy", liveNewer),
+		"_live/meta.json":                           `{"not":"a row"}`,
 		liveRootFolder + "/not_a_core_table/x.json": `{"_table":"not_a_core_table","_v":1,"id":"x"}`,
 	})
 	writeLiveRef(t, repo, liveRefTracking, map[string]string{
