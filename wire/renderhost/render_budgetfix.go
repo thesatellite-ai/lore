@@ -108,18 +108,6 @@ func (f budgetFix) raiseCmd(coreBytes int) string {
 	return c + " --yes"
 }
 
-// raiseText is the left-out line's way to raise the budget: the command
-// for whoever may run it, else the admin to ask.
-func (f budgetFix) raiseText(coreBytes int) string {
-	if f.unplaced {
-		return "to raise it, " + f.unplacedText(coreBytes)
-	}
-	if f.mayRaise() {
-		return "to raise it: `" + f.raiseCmd(coreBytes) + "`"
-	}
-	return "to raise it, ask " + f.admins.Who() + "; the admin would run `" + f.raiseCmd(coreBytes) + "`"
-}
-
 // planBudgetFix reads where the budget is set and which pinned rows are on
 // company ground, each judged by the roster of its own store's org
 // (profilestore.Judge: the answer the role check of each printed write

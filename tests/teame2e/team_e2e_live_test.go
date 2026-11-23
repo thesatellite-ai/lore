@@ -428,7 +428,18 @@ func TestSideEffect28_RewrittenRemoteLiveStopsWrites(t *testing.T) {
 			if len(strings.TrimSpace(rt.c2.Git("for-each-ref", refBackupLive))) == 0 {
 				t.Fatal("the local live ref must be backed up under " + refBackupLive)
 			}
-			rt.c2.MustLore("live", "restore")
+			restore := []string{"live", "restore"}
+			if variant == "deleted" {
+				// no live ref on the remote any more: a plain restore
+				// refuses and pushes nothing, --publish is the explicit
+				// yes (H-171 #136, D-914)
+				rt.c2.Lore(restore...).Refused(t, "--publish", "nothing was pushed")
+				if rt.app.Has(refLive) {
+					t.Fatal("a plain restore on a remote with no live ref pushes nothing")
+				}
+				restore = append(restore, "--publish")
+			}
+			rt.c2.MustLore(restore...)
 			if _, ok := rt.liveTask(t, id); !ok {
 				t.Fatalf("restore must put the rows back: %v", rt.app.Files(refLive))
 			}
@@ -1093,7 +1104,9 @@ func TestSideEffect23_RestoreSkipsLandedAndPurgedRows(t *testing.T) {
 	rt.c1.MustLore("sync")
 	rt.app.DeleteRef(refLive)
 	rt.c1.Lore("task", "list")
-	rt.c1.MustLore("live", "restore")
+	// a remote with no live ref gets the old rows only with --publish
+	// (H-171 #136, D-914)
+	rt.c1.MustLore("live", "restore", "--publish")
 	if _, ok := rt.liveTask(t, keep); !ok {
 		t.Fatal("restore must bring the open row back")
 	}

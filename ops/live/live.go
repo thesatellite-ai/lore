@@ -566,7 +566,7 @@ func restore(ctx context.Context, env Env, in RestoreIn) (RestoreOut, error) {
 	if err != nil {
 		return RestoreOut{}, err
 	}
-	return RestoreOut{Rows: res.Rows, LeftOut: res.LeftOut, Fresh: res.Fresh, Backup: res.Backup}, nil
+	return RestoreOut(res), nil
 }
 
 // compact plans (--dry-run) or runs the compaction (F8). A compaction

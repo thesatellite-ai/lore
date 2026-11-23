@@ -252,9 +252,17 @@ func TestSyncLive_CompactPurgeRestore(t *testing.T) {
 	a.MustLore("live", "restore").Says(t, "restored refs/lore/live")
 	b.MustLore("task", "list").Says(t, one, three, four).Never(t, two)
 
+	// a real delete on the same remote: lore cannot tell it from a new
+	// repository at that url, so live writes stop, both ways out are
+	// named, and a plain restore refuses and pushes nothing; --publish is
+	// the explicit yes (H-171 #136, D-914)
 	st.app.DeleteRef(syncRefLive)
-	a.Lore("task", "add", "after the delete", "--tasklist", st.tasklist).Fails(t, th.ExitRefused, "E_READ_ONLY", "remote live ref was deleted or rewritten", "lore live restore")
-	a.MustLore("live", "restore").Says(t, "restored refs/lore/live", "left out")
+	a.Lore("task", "add", "after the delete", "--tasklist", st.tasklist).Fails(t, th.ExitRefused, "E_READ_ONLY", "has no live ref any more", "or the ref was deleted there", "lore live restore --fresh", "lore live restore --publish")
+	a.Lore("live", "restore").Fails(t, th.ExitRefused, "E_REFUSED", "runs only with --publish", "nothing was pushed")
+	if st.app.Has(syncRefLive) {
+		t.Fatal("a plain restore on a remote with no live ref pushes nothing")
+	}
+	a.MustLore("live", "restore", "--publish").Says(t, "restored refs/lore/live", "left out")
 	if !st.app.Has(syncRefLive) || len(st.app.Refs("refs/lore-backup/")) != 0 {
 		t.Fatal("restore pushes the live ref back, never the backups")
 	}

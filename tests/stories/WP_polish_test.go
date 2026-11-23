@@ -75,13 +75,16 @@ func TestStoryWPPolish(t *testing.T) {
 
 	s.Step("D-603/policy-set-question-names-place-values-reach-command", func() {
 		key := "context.budget.internal"
-		// a linked repo holds no rows: the default --to repo is refused
-		// before anything is asked, never a question whose --yes fails
+		// a linked repo holds no rows: with no --to the policy goes to the
+		// linked store folder (the repo's home store since 7bebc9bdc, as
+		// every settings write), so the question names that folder and its
+		// --yes command runs as printed, never a refused write to the repo
+		cmd := "lore policy set --key " + key + " --value 22000 --yes"
 		m.Lore(wc.Dir, "policy", "set", "--key", key, "--value", "22000").
-			Refused(t, "E_STORE_READ_ONLY", "--to "+wOrg).Never(t, "E_NEEDS_CONFIRM")
-		cmd := "lore policy set --key " + key + " --value 22000 --to " + wOrg + " --yes"
+			Refused(t, "E_NEEDS_CONFIRM", "in store "+inWeb+":", "(default) -> 22000", "every repo linked to "+inWeb, cmd).Never(t, "E_STORE_READ_ONLY")
+		// --to the same folder asks the same question with --to in the command
 		m.Lore(wc.Dir, "policy", "set", "--key", key, "--value", "22000", "--to", wOrg).
-			Refused(t, "E_NEEDS_CONFIRM", "in store "+inWeb+":", "(default) -> 22000", "every repo linked to "+inWeb, cmd)
+			Refused(t, "E_NEEDS_CONFIRM", "in store "+inWeb+":", "--to "+wOrg+" --yes")
 		m.Lore(wc.Dir, strings.Fields(strings.TrimPrefix(cmd, "lore "))...).OK(t).Says(t, key+" = 22000")
 	})
 

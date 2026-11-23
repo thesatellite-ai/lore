@@ -104,25 +104,33 @@ func orgEntryAttach(s attach.Store) bool {
 // withExtra runs fn with extra attached (unrecorded) and puts the App's
 // attachments back afterwards, so a long-lived App (`lore api`) reads the
 // usual stores again after the one query.
+//
+// The state open before the call is set aside, never closed: fn runs on a
+// state of its own (opened with extra by the first read in fn) and only
+// that one is closed, then the earlier state comes back as it was. A
+// caller in the middle of a write holds the earlier state's engine, and
+// the leak guard of a client repo runs withExtra from inside that write
+// (Create → createFrame → guard → LeakCheckDocs): closing the earlier
+// state there closed the repo's git backend under the write, so `lore
+// rule add --to repo` in such a repo failed E_INTERNAL "git: closed"
+// (H-176, devco:D-918).
 func (a *App) withExtra(extra []attach.Store, fn func() error) error {
 	if len(extra) == 0 {
 		return fn()
 	}
 	a.mu.Lock()
 	before := slices.Clone(a.extra)
+	held, heldOpened, heldErr := a.st, a.opened, a.err
+	a.st, a.opened, a.err = nil, false, nil
+	a.extra = append(a.extra, extra...)
 	a.mu.Unlock()
-	for _, x := range extra {
-		a.attachExtra(x)
-	}
 	err := fn()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.extra = before
 	if a.st != nil {
-		_ = a.st.close() // reopened by the next command with the usual stores
-		a.st, a.opened, a.err = nil, false, nil
-	} else if a.opened {
-		a.opened, a.err = false, nil
+		_ = a.st.close() // fn's own state: the held one comes back below
 	}
+	a.st, a.opened, a.err = held, heldOpened, heldErr
 	return err
 }
