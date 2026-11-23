@@ -33,11 +33,40 @@ func (e *Engine) Refresh(ctx context.Context, source store.Source) (int, error) 
 		return 0, nil // nothing changed: the cache is current, not rewritten (B1-16)
 	}
 	// devco:R-14: search and sql read the cache, so they see the same
-	// masked text show does (readmask.go).
+	// masked text show does (readmask.go). The rows are the backend's
+	// current state: one older than the cache's copy replaces it when the
+	// backend still holds it (stillCurrent, devco D-920).
+	ctx = store.WithCurrentCheck(ctx, func(ctx context.Context, r store.Row) bool { return stillCurrent(ctx, a.Backend, r) })
 	if err := e.cache.Apply(ctx, source, e.maskStoreRows(ctx, source, rows), next); err != nil {
 		return 0, err
 	}
 	return len(rows), nil
+}
+
+// CurrentRows is every row source's backend holds now, as a refresh from
+// the start would hand them to the cache (purged and trashed rows as
+// tombstones, readRows), through ctx's read snapshot when it has one. Why
+// (devco D-920): `lore doctor` compares them with the versions the cache
+// holds to find a stale search index.
+func (e *Engine) CurrentRows(ctx context.Context, source store.Source) ([]store.Row, error) {
+	if _, err := e.attached(source); err != nil {
+		return nil, err
+	}
+	rows, _, err := e.readRows(ctx, source, "")
+	return rows, err
+}
+
+// stillCurrent reports whether b holds r's version of its row now: the
+// store.CurrentCheck a refresh hands the cache. A row b no longer has
+// (gone, unreadable) is not current; a tombstone is current while b
+// holds that tombstone or the row it hid (purged and trashed rows reach
+// the cache as tombstones with the row's hlc, purge.go and trash.go).
+func stillCurrent(ctx context.Context, b store.Backend, r store.Row) bool {
+	got, err := b.Get(ctx, r.Table, r.ID)
+	if err != nil {
+		return false
+	}
+	return got.HLC.Compare(r.HLC) == 0
 }
 
 // dropLostCursor empties source's cache when its backend says cur no

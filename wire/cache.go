@@ -266,13 +266,53 @@ func (c *caches) Mirror(source store.Source) store.RowMirror {
 	return f.Mirror(source)
 }
 
-// Rebuild implements store.Cache.
+// Rebuild implements store.Cache. Rows the same file holds under a name
+// no attachment of this open uses for it (the folder was attached under
+// another name before) go too: they were searched with the rest and no
+// edit or rebuild reached them (devco D-920, public issue #142).
 func (c *caches) Rebuild(ctx context.Context, source store.Source) error {
 	f, err := c.of(source)
 	if err != nil {
 		return err
 	}
-	return f.Rebuild(ctx, source)
+	if err := f.Rebuild(ctx, source); err != nil {
+		return err
+	}
+	for _, old := range c.leftoverSources(ctx, f) {
+		if err := f.Rebuild(ctx, old); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// leftoverSources lists the sources f holds rows of that no attachment of
+// this open maps to f; none for the combined file, whose sources are the
+// attached stores past the per-store limit and change with them.
+func (c *caches) leftoverSources(ctx context.Context, f *sqlite.Cache) []store.Source {
+	c.mu.Lock()
+	if f == c.combined {
+		c.mu.Unlock()
+		return nil
+	}
+	mine := map[store.Source]bool{}
+	for s, g := range c.by {
+		if g == f {
+			mine[s] = true
+		}
+	}
+	c.mu.Unlock()
+	all, err := f.Sources(ctx)
+	if err != nil {
+		return nil
+	}
+	var out []store.Source
+	for _, s := range all {
+		if !mine[s] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // Close implements store.Cache: every file is closed, every error kept.

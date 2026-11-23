@@ -30,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/querywords"
 	"github.com/thesatellite-ai/lore/logic/searchrank"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -343,7 +344,7 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		if h.Source == store.SourceRepo {
 			if sc.keeps(t, r) {
-				out = append(out, rankedHit{hit: hitOf(t, h.ID.String(), h.Snippet, r, a.Now()), matched: held(h.ID, r), at: schema.RowDate(r)})
+				out = append(out, rankedHit{hit: hitOf(t, h.ID.String(), h.Snippet, r, a.Now()), matched: held(h.ID, r), at: schema.RowDate(r), id: h.ID, src: h.Source, hlc: r.HLC})
 			}
 			continue
 		}
@@ -354,9 +355,9 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		hit := hitOf(t, h.ID.String(), h.Snippet, r, a.Now())
 		hit.Source = a.DescribeSource(h.Source)
-		out = append(out, rankedHit{hit: hit, matched: held(h.ID, r), at: schema.RowDate(r)})
+		out = append(out, rankedHit{hit: hit, matched: held(h.ID, r), at: schema.RowDate(r), id: h.ID, src: h.Source, hlc: r.HLC})
 	}
-	return rankTable(out, w, perTable), nil
+	return rankTable(oneCopyPerID(ctx, eng, t.Table, out), w, perTable), nil
 }
 
 // hitLabel is what names a hit for ranking (searchrank.Label): its title,
@@ -377,6 +378,65 @@ type rankedHit struct {
 	hit     opssearch.Hit
 	matched int
 	at      time.Time
+	// id and src are the row and the store the hit came from (zero for a
+	// roster hit): oneCopyPerID keeps one store's copy of an id.
+	id  ids.AnyID
+	src store.Source
+	hlc hlc.HLC
+}
+
+// oneCopyPerID keeps, of an id several stores hold (`lore store adopt`
+// copies rows keeping their ids; a copy a move left behind), only the copy
+// `lore show --id` and `lore <kind> edit --id` resolve to (Engine.Get).
+// Why (devco D-920, hunt H-178): search listed every store's copy, so after
+// an edit the copy the edit did not reach kept answering with the old text,
+// and `lore search rebuild` could not help (both copies are real files).
+// When the engine finds the id ambiguous (E_AMBIGUOUS_ID: two live copies,
+// neither a move leftover) the newest copy is listed: the one the last
+// edit wrote, so search never answers with the text an edit replaced.
+func oneCopyPerID(ctx context.Context, eng *engine.Engine, table row.Table, in []rankedHit) []rankedHit {
+	n := map[ids.AnyID]int{}
+	for _, h := range in {
+		if !h.id.IsZero() {
+			n[h.id]++
+		}
+	}
+	keep := map[ids.AnyID]store.Source{}
+	for id, c := range n {
+		if c < 2 {
+			continue
+		}
+		src, _, err := eng.Get(ctx, engine.Ref{Table: table, ID: id})
+		if errs.Has(err, errs.AmbiguousID) {
+			src = newestHitSource(in, id)
+		} else if err != nil {
+			continue
+		}
+		for _, h := range in {
+			if h.id == id && h.src == src {
+				keep[id] = src // the resolved copy is among the hits
+				break
+			}
+		}
+	}
+	if len(keep) == 0 {
+		return in
+	}
+	return slices.DeleteFunc(in, func(h rankedHit) bool {
+		src, one := keep[h.id]
+		return one && h.src != src
+	})
+}
+
+// newestHitSource is the store of the newest (hlc) hit of id in in.
+func newestHitSource(in []rankedHit, id ids.AnyID) store.Source {
+	var best rankedHit
+	for _, h := range in {
+		if h.id == id && (best.src == "" || h.hlc.Compare(best.hlc) > 0) {
+			best = h
+		}
+	}
+	return best.src
 }
 
 // rankTable orders one table's hits (searchrank.Words.Order), cut to

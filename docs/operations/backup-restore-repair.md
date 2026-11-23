@@ -51,7 +51,7 @@ The cache holds nothing of its own. What lore keeps on your machine only (the [a
 
 ## Step 3 — Rebuild the search index and check the result
 
-`lore search rebuild` rebuilds the search index of every attached store from its row files. Outside a repo, name the store: `lore search rebuild --store me/notes`. Then run `lore sync conflicts` to see whether anything was kept aside:
+`lore search rebuild` rebuilds the search index of every attached store from its row files. Outside a repo, name the store: `lore search rebuild --store me/notes`. When `lore search` or `lore ask` shows a text that `lore show --id` does not, `lore doctor` names the store (`search_index`) and `lore doctor --fix` rebuilds it. Then run `lore sync conflicts` to see whether anything was kept aside:
 
 <!-- example: ops#search-rebuild -->
 ```console

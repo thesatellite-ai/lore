@@ -551,7 +551,15 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 		}
 		switch c := r.HLC.Compare(h); {
 		case c < 0:
-			return false, nil
+			// An older copy than the held one: a refresh that read the row
+			// before a newer write was applied, so it is not put back,
+			// unless the backend holds exactly this copy now (the file went
+			// back to it: store.CurrentCheck, devco D-920). Then the files
+			// are the truth and the held copy, which no file has any more,
+			// goes.
+			if check := store.CurrentCheckOf(ctx); check == nil || !check(ctx, r) {
+				return false, nil
+			}
 		case c == 0 && (heldDel == 1) == r.Deleted && bytes.Equal(heldDoc, r.Doc):
 			// The same row again: a full re-read (the live ref moved, D-159)
 			// hands every row back, and re-projecting identical rows was a

@@ -21,7 +21,9 @@ const SourceRepo Source = "repo"
 type Cache interface {
 	// Apply upserts rows of one source (tombstones included: a tombstone
 	// removes the row from typed tables but is remembered so an older copy
-	// cannot come back) and records next as that source's cursor, in one
+	// cannot come back; an older copy replaces the held one only when ctx
+	// carries a CurrentCheck that says the backend holds it now) and
+	// records next as that source's cursor, in one
 	// transaction: the rows and the cursor are committed together or not at
 	// all, so a crash can never leave a cursor ahead of its rows.
 	Apply(ctx context.Context, source Source, rows []Row, next Cursor) error

@@ -50,6 +50,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckInternalOff, a.DoctorInternalOff},
 		{DoctorCheckResurrected, a.DoctorResurrected},
 		{DoctorCheckCache, a.DoctorCaches},
+		{DoctorCheckSearchIndex, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorSearchIndex(c, fix) }}, // doctor_searchindex.go (devco D-920)
 		{DoctorCheckRemovedEnv, a.DoctorRemovedEnv},
 		{DoctorCheckProjectMarker, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorProjectMarker(c, fix) }}, // doctor_projectmeta.go (H-3)
 		{DoctorCheckRowBOM, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorRowBOM(c, fix) }},               // doctor_projectmeta.go (I-15)
