@@ -36,6 +36,11 @@ import (
 // rowFileExt is a row file's extension.
 const rowFileExt = ".json"
 
+// showCommand is the read of any one row by id (`lore show`, the row.show
+// op's top-level name) that the notes of a row in an unattached folder
+// name with --store (devco:D-923).
+const showCommand = defaultCommandName + " show"
+
 // idArg is the row id an operation's first positional argument holds, ""
 // when it takes none or the value is no row id.
 func idArg(e op.Entry, d op.Decoder) string {
@@ -88,6 +93,17 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 		return nil, nil // the operation reports the open error itself
 	}
 	src, got, gerr := eng.Get(ctx, engine.Ref{ID: anyID})
+	// attachedGone is the tombstone an attached store holds for id. It is
+	// no answer yet (devco:D-923, bug hunt H-181): `lore row move --id X
+	// --to <store>/<other folder>` leaves a tombstone where the row was, so
+	// in a linked repo (or one attaching the folder the row left) every
+	// by-id command answered "X was deleted from <store>" although the row
+	// lives on, by the same id, in the folder it moved to. The folders are
+	// searched first; only when none holds the row live does the tombstone
+	// answer, as before.
+	var attachedGone *goneRow
+	goneLoc := "" // the tombstoning store's place: read already, never searched again
+	repoGone := false
 	if gerr == nil && got.Deleted {
 		// devco:D-590: an attached store holds the row's tombstone (Get
 		// returns tombstones); the read's not-found says where and when
@@ -96,18 +112,22 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 		// ref keeps its own purge list and dated answer (live_notfound.go
 		// whyMissingCode), which a purge before a sync only reaches there.
 		if src == store.SourceRepo {
-			return nil, nil
+			repoGone = true
+		} else {
+			day := ""
+			if !got.HLC.Wall.IsZero() {
+				day = got.HLC.Wall.UTC().Format(dayLayout)
+			}
+			// a purged id is gone for good: E_PURGED, never the trash list
+			// (an unreadable list counts as purged, as purgedInFolderOf)
+			purged, perr := eng.IsPurged(ctx, src, anyID)
+			attachedGone = &goneRow{id: id, place: string(src), day: day, purged: purged || perr != nil}
+			goneLoc = eng.LocationOf(src)
+			if attachedGone.purged {
+				return &idSearch{id: id, gone: attachedGone}, nil // purged ids never move
+			}
 		}
-		day := ""
-		if !got.HLC.Wall.IsZero() {
-			day = got.HLC.Wall.UTC().Format(dayLayout)
-		}
-		// a purged id is gone for good: E_PURGED, never the trash list
-		// (an unreadable list counts as purged, as purgedInFolderOf)
-		purged, perr := eng.IsPurged(ctx, src, anyID)
-		return &idSearch{id: id, gone: &goneRow{id: id, place: string(src), day: day, purged: purged || perr != nil}}, nil
-	}
-	if gerr == nil || !errs.Has(gerr, errs.NotFound) {
+	} else if gerr == nil || !errs.Has(gerr, errs.NotFound) {
 		return nil, nil
 	}
 	search := &idSearch{id: id}
@@ -124,6 +144,9 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 	// devco:D-755: a row in a folder of the personal store (me/<folder>)
 	// is found by id from any folder, as an org folder's row is
 	scan = a.withPersonalFolders(ctx, scan)
+	// devco:D-923: and the other folders of the stores .lore/stores.yaml
+	// attaches (a store outside any org reaches its folders only so)
+	scan = a.withAttachedStoreFolders(ctx, scan)
 	var gone *goneRow
 	for _, f := range scan.Folders {
 		name := f.Org
@@ -131,6 +154,12 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 			name = f.Label
 		}
 		target := name + targetSep + f.Folder
+		if goneLoc != "" && location(f.URL, f.Folder) == goneLoc {
+			// the folder whose store answered the tombstone: its clone's
+			// file may lag the store's own view (a trashed row reads live
+			// there), and the engine's answer for it stands
+			continue
+		}
 		search.folders = append(search.folders, target)
 		dir := f.Dir
 		if dir == "" {
@@ -158,8 +187,14 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 			_, _ = fmt.Fprintf(os.Stderr, "lore: %s is in %s (your personal store); found there for this command\n", id, target)
 			return nil, nil
 		}
-		_, _ = fmt.Fprintf(os.Stderr, "lore: %s is in %s, which is not attached here; read from there for this command (lore store add … --folder %s attaches it for good)\n", id, target, f.Folder)
+		_, _ = fmt.Fprintf(os.Stderr, "lore: %s is in %s, which is not attached here; read from there for this command (every command by id finds it so; lists here leave it out: %s --store %s --id %s reads it with that folder named)\n", id, target, showCommand, target, id)
 		return nil, nil
+	}
+	switch {
+	case repoGone:
+		return nil, nil // the repo's read answers its own tombstone
+	case attachedGone != nil:
+		return &idSearch{id: id, gone: attachedGone}, nil
 	}
 	if gone != nil {
 		return nil, gone.err()

@@ -443,6 +443,18 @@ func New(opts ...Option) (*Engine, error) {
 // Stores lists the attached store names in precedence order.
 func (e *Engine) Stores() []store.Source { return slices.Clone(e.order) }
 
+// LocationOf is where the attached store name's rows physically live
+// (Attached.Location); "" for an unknown name or a place of its own. The
+// by-id folder search (wire, devco:D-923) skips the folder of the store
+// whose tombstone it is looking past: that folder was read already.
+func (e *Engine) LocationOf(name store.Source) string {
+	at, err := e.attached(name)
+	if err != nil {
+		return ""
+	}
+	return at.Location
+}
+
 // AnswersRepo reports whether a store answers for the repo store (one
 // attached as repo, or the alias a store-only open names for it). A
 // store-only open run under a setup from a plain folder has neither

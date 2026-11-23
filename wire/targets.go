@@ -111,7 +111,21 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 		// mission apply names its target in the plan file (BUG-T8)
 		to, _ = in.NamedTarget()
 	}
-	return a.attachFolderPlace(ctx, to, c.Yes || createAsked(in), a.personalReadCommand(e, to))
+	return a.attachFolderPlace(ctx, to, c.Yes || createAsked(in), a.targetReadCommand(e, in, to))
+}
+
+// targetReadCommand is the read the unattached note of a `--to
+// <store>/<folder>` write names: for an op on one row by id (row move,
+// devco:D-923) the show of that row with the folder named, so the person
+// moving a row out of sight learns the exact read that still reaches it;
+// else the list or search of the folder (personalReadCommand).
+func (a *App) targetReadCommand(e op.Entry, in op.Input, to string) string {
+	if id := rowIDOf(in); id != "" {
+		if _, err := ids.ParseAny(id); err == nil && to != "" {
+			return showCommand + " --store " + to + " --id " + id
+		}
+	}
+	return a.personalReadCommand(e, to)
 }
 
 // personalReadCommand is the read the note of a `--to me/<folder>` write
@@ -415,6 +429,12 @@ func (a *App) targetsTop(ctx context.Context) (string, bool, error) {
 func unattachedNote(w io.Writer, base, to, folderName, readCmd string) {
 	if base == attach.ReservedMe {
 		fmt.Fprintf(w, "lore: %s is a folder of your personal store, which no repo attaches (its url is this machine's own and .lore/stores.yaml is shared), so lists here will not show its rows; read them from any folder with --store %s: %s\n", to, to, readCmd)
+		return
+	}
+	if strings.HasPrefix(readCmd, showCommand+" ") {
+		// devco:D-923: a row moved here is no longer in this repo's lists,
+		// but every command by id still finds it (idfolder.go)
+		fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; every command by id still finds a row there from here, and --store %s reads the folder: %s; to list it here: lore store add --name <name> --url <store-url> --folder %s --yes (this commits the org store's url to .lore/stores.yaml, visible to everyone who can read this repo)\n", to, to, readCmd, folderName)
 		return
 	}
 	fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; to see them: lore store add --name <name> --url <store-url> --folder %s --yes (this commits the org store's url to .lore/stores.yaml, visible to everyone who can read this repo)\n", to, folderName)
