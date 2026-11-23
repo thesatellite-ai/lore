@@ -86586,6 +86586,157 @@
         }
       }
     },
+    "/v1/skill/refresh": {
+      "post": {
+        "operationId": "skill.refresh",
+        "summary": "Re-install every installed lore skill that is older than this lore (a link into a source checkout gets the git pull to run)",
+        "tags": [
+          "skill"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "show which skills would be refreshed; write nothing"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "binary_version": {
+                      "type": "string"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "left": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          },
+                          "dir": {
+                            "type": "string"
+                          },
+                          "fix": {
+                            "type": "string"
+                          },
+                          "tool": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tool",
+                          "dir",
+                          "detail",
+                          "fix"
+                        ]
+                      }
+                    },
+                    "refreshed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "backup": {
+                            "type": "array",
+                            "description": "copies of hand-edited files kept before overwriting",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "dir": {
+                            "type": "string"
+                          },
+                          "from": {
+                            "type": "string",
+                            "description": "the lore_version the old skill carried (empty: no version line)"
+                          },
+                          "to": {
+                            "type": "string",
+                            "description": "the lore_version stamped now"
+                          },
+                          "tool": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tool",
+                          "dir",
+                          "to"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "binary_version",
+                    "refreshed",
+                    "left"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_SYMLINK_LOOP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/skill/status": {
       "post": {
         "operationId": "skill.status",
@@ -86629,11 +86780,19 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "checkout": {
+                            "type": "string",
+                            "description": "the lore source checkout the skill folder links into"
+                          },
                           "detail": {
                             "type": "string"
                           },
                           "dir": {
                             "type": "string"
+                          },
+                          "fix": {
+                            "type": "string",
+                            "description": "the command that makes a stale skill current"
                           },
                           "installed": {
                             "type": "boolean"
@@ -86653,6 +86812,10 @@
                           "same": {
                             "type": "boolean",
                             "description": "the installed files equal this binary's bundle (the version line aside)"
+                          },
+                          "stale": {
+                            "type": "boolean",
+                            "description": "older than this lore release: agents reading it miss newer commands; fix names the command"
                           },
                           "status": {
                             "type": "string",

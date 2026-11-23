@@ -264,7 +264,7 @@ A real upgrade is not shown on this page: the release address is built into lore
 - **Only `1` silences the notice.** `LORE_NO_UPGRADE_NOTICE=true` is ignored.
 - **A pin below `min_lore_version` makes doctor BROKEN.** Raise the pin when the team raises the floor; doctor names both versions.
 - **Downgrades are allowed, writes may not be.** An older 0.1.18 build reads a newer project but refuses to write until you upgrade again; that is why the downgrade asks first. lore 0.1.17 reads nothing of a project on the 0.1.18 format (format 2): go back to it only in a project that is still on its format.
-- **After an upgrade, update the agent skill.** If a coding agent's lore skill is older than the new program, lore prints a hint to run `lore skill install --all` ([Install the agent skill](../knowledge/skill-install.md)).
+- **The agent skill follows the upgrade.** `lore upgrade` ends with the new program's `lore skill refresh`, and after `brew upgrade lore` the first lore command does the same: each coding agent's lore skill older than the new program is re-installed, and a skill linked from a lore source checkout gets the `git -C <checkout> pull` to run ([Keep the lore skill current](../knowledge/skill-install.md#keeping-it-current)).
 
 ## Related
 

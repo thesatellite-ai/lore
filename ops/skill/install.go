@@ -209,7 +209,7 @@ func (o InstallOut) Text() string {
 	return b.String()
 }
 
-// InstallOps returns skill.install and skill.status bound to env, for
+// InstallOps returns skill.install, skill.status and skill.refresh bound to env, for
 // op.NewRegistry (registered beside Ops by the composition root).
 func InstallOps(env InstallEnv) []op.Entry {
 	return []op.Entry{
@@ -239,6 +239,7 @@ func InstallOps(env InstallEnv) []op.Entry {
 			}
 			return ins.Status(ctx, in)
 		}),
+		refreshOp(env), // refresh.go (H-185)
 	}
 }
 

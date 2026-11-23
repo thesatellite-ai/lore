@@ -1,12 +1,12 @@
-# Keep the lore skill current: `lore skill install` and `lore skill status`
+# Keep the lore skill current: `lore skill install`, `lore skill status` and `lore skill refresh`
 
-**In short:** the lore skill is the set of instructions a coding tool loads to use lore well. `lore skill install` copies the skill that is built into your lore binary into each tool's skill folder and stamps it with the binary's version. `lore skill status` tells you, per tool, whether the skill is there, which lore version it came from, and whether someone edited it by hand.
+**In short:** the lore skill is the set of instructions a coding tool loads to use lore well. `lore skill install` copies the skill that is built into your lore binary into each tool's skill folder and stamps it with the binary's version. `lore skill status` tells you, per tool, whether the skill is there, which lore version it came from, and whether someone edited it by hand. After that, lore keeps it current by itself: any lore command re-installs a skill that is older than the binary (see [Keeping it current](#keeping-it-current)).
 
 > **Status: in development.** These commands are being built for lore 0.1.18 and are not in a released lore yet. The output below comes from real runs of a development build in a throwaway home folder (a development build reports its version as `dev`).
 
 ## What it is and when you want it
 
-A coding tool that loads the lore skill knows lore's commands, its row kinds and when to search before it answers. The skill ships inside the lore binary, so a copy in a tool's folder is only as current as the lore that wrote it. Install it once per machine, and again after each `lore upgrade` (lore prints a hint when the installed copy is older than the binary).
+A coding tool that loads the lore skill knows lore's commands, its row kinds and when to search before it answers. The skill ships inside the lore binary, so a copy in a tool's folder is only as current as the lore that wrote it. Install it once per machine; after an upgrade (`lore upgrade`, `brew upgrade lore`, a new archive) lore refreshes it by itself ([Keeping it current](#keeping-it-current)).
 
 | Tool profile | Skill folder |
 |---|---|
@@ -123,6 +123,17 @@ claude_code: installed lore dev skill in ~/.claude/skills/lore
 ```
 <!-- /example -->
 
+## Keeping it current
+
+A package manager replaces the binary and never touches the skill folders, so a skill installed once falls behind: an agent reading a skill from an older lore does not know commands the binary has (`lore search rebuild`, `lore ask`) and may tell you lore has none. lore therefore checks the installed skills itself:
+
+- **Every lore command, once a day.** After its output, a lore command looks at `~/.lore/state/skill-check`. When that file names this binary's version and is less than a day old, nothing else happens (one file stat and one small read). Otherwise lore checks every tool's skill folder: a skill older than this release in a folder lore owns is re-installed, and one line on stderr says so (`lore: refreshed the lore skill for codex to lore 0.1.40 (it was older; agents now see this lore's commands)`). A new binary writes another version, so the first command after an upgrade checks at once. A development build compares nothing and skips the check, and so do `--dry-run`, help, completion and the `lore skill` commands.
+- **A link is never written through.** A skill folder linked into a lore source checkout gets one line a day naming the pull: `lore: the codex skill is stale: the source checkout ~/src/lore holds a skill that differs from lore 0.1.40's (the checkout is behind this release); run git -C ~/src/lore pull`. Any other linked folder (a shared-skills layout) names `lore skill install --tool <tool> --link replace` (or use `--link update` to write into the shared target).
+- **`lore skill refresh`** runs the same check now, whatever the day: it re-installs every stale skill lore owns and lists each linked one with its fix. `--dry-run` lists what it would do; with nothing stale it prints `every installed lore skill is current (lore <version>)`.
+- **`lore upgrade`** ends by running the new binary's `lore skill refresh` and prints its lines; **`lore doctor`** reports a stale skill (`skill_copy`, with its fix), and **`lore doctor --fix`** refreshes it.
+
+A stale skill is one whose `lore_version` is an older release (even when its files did not change: the refresh then only restamps it), one with no version line whose files differ from this binary's skill, or a source checkout's skill (`lore_version: dev`) that differs. A skill edited by hand at this binary's version, and a skill from a newer lore, are not stale and are never touched.
+
 ## The `lore_version` line
 
 Every installed `SKILL.md` carries one extra line in its front matter, the version of the lore binary that installed it:
@@ -141,20 +152,21 @@ lore compares that line with its own version. It is also how lore tells a hand e
 
 ## Status
 
-The first line is the binary's version; then one line per tool: its status (`ok`, `warn` or `skip`), the installed version, the folder, `(edited by hand)` when the skill differs from the binary's copy at the same version, and the reason. `--tool` limits the list; `--json` prints `{"binary_version":…,"tools":[{"tool":…,"dir":…,"installed":…,"version":…,"modified":…,"same":…,"status":…,"detail":…}]}`, where `same` says the files equal this binary's skill (the version line aside). `tools.skill_version` and `tools.skill_modified` both read that one compare, so they never contradict each other.
+The first line is the binary's version; then one line per tool: its status (`ok`, `warn`, `skip`, or `stale` when lore should refresh it, followed by `; run <fix>`), the installed version, the folder, `(edited by hand)` when the skill differs from the binary's copy at the same version, and the reason. `--tool` limits the list; `--json` prints `{"binary_version":…,"tools":[{"tool":…,"dir":…,"installed":…,"version":…,"modified":…,"same":…,"status":…,"detail":…,"stale":…,"checkout":…,"fix":…}]}`, where `stale` marks a skill older than this release (its `status` stays `warn` or `skip`), `checkout` is the lore source checkout a linked folder points into, `fix` the one command that makes it current, and `same` says the files equal this binary's skill (the version line aside). `tools.skill_version` and `tools.skill_modified` both read that one compare, so they never contradict each other.
 
 | Status and detail | Meaning | Fix |
 |---|---|---|
 | `ok` | the skill is from this lore release | nothing |
 | `warn` not installed | no `SKILL.md` in the tool's folder | `lore skill install --tool <tool>` |
-| `warn` skill from lore 0.1.17, binary 0.1.18 | the skill is older than the binary | `lore skill install --tool <tool>` |
+| `stale` skill from lore 0.1.17, binary 0.1.18 | the skill is older than the binary | `lore skill refresh` (any lore command does it once a day) |
 | `warn` skill is newer than the binary | the skill came from a newer lore | `lore upgrade`, or reinstall the skill |
 | `ok` current (same as lore 0.1.18's skill; no version line) | no version line, but the files are this binary's skill (for example a link into lore's source `skills/` folder; the detail then ends "linked to lore's source folder") | nothing |
-| `warn` no version line, and it differs from lore 0.1.18's skill (older, or edited by hand) | no version line and other files | `lore skill install --tool <tool>` |
-| `skip` skill is linked from a source checkout | the skill's `lore_version` is `dev` | nothing to compare |
+| `stale` no version line, and it differs from lore 0.1.18's skill (older, or edited by hand) | no version line and other files | `lore skill refresh` |
+| `stale` the source checkout … holds a skill that differs from lore 0.1.18's | a link into a lore source checkout that is behind this release | `git -C <checkout> pull` (lore never writes into it) |
+| `skip` skill is linked from a source checkout | the skill's `lore_version` is `dev` and the binary is a development build, or the checkout's skill equals this release's | nothing to compare |
 | `skip` binary is a development build | this lore is not a release | nothing to compare |
 
-`lore doctor --all` reports the same results as the `tools.skill_installed`, `tools.skill_version` and `tools.skill_modified` checks ([every check](../operations/doctor-all.md#every-check)). After `lore upgrade`, lore prints a hint when an installed skill is older than the new binary: `skills are older than lore 0.1.18: lore skill install --all`.
+`lore doctor --all` reports the same results as the `tools.skill_installed`, `tools.skill_version` and `tools.skill_modified` checks ([every check](../operations/doctor-all.md#every-check)). `lore doctor` reports a stale skill as `skill_copy` with its fix, and `lore doctor --fix` refreshes it. `lore upgrade` runs the new binary's `lore skill refresh`; only when that cannot run does it print the hint `skills are older than lore 0.1.18: lore skill install --all`.
 
 ## Pitfalls
 

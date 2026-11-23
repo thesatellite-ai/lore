@@ -215,7 +215,7 @@ The released `lore` binary (this core plus proprietary components such as the gu
 
 ## Homebrew tap
 
-Homebrew entries for all `thesatellite-ai` tools live in one shared tap repo: **`thesatellite-ai/homebrew-tap`**. The binary release writes the formula `Formula/lore.rb` there (goreleaser `brews`), pointing at the archives on this repository's Releases; users run `brew tap thesatellite-ai/tap` and `brew install lore` (or `brew install thesatellite-ai/tap/lore`), on macOS and Linux. The formula installs only the binary, so users add the agent skill with `lore skill install --all`. A formula install lives under `<prefix>/Cellar/lore/<version>/` (a cask install, should the tap move to one, under `<prefix>/Caskroom/lore/<version>/`); `lore upgrade` treats both as Homebrew installs and runs `brew upgrade`. Nothing in this repository writes to the tap.
+Homebrew entries for all `thesatellite-ai` tools live in one shared tap repo: **`thesatellite-ai/homebrew-tap`**. The binary release writes the formula `Formula/lore.rb` there (goreleaser `brews`), pointing at the archives on this repository's Releases; users run `brew tap thesatellite-ai/tap` and `brew install lore` (or `brew install thesatellite-ai/tap/lore`), on macOS and Linux. The formula installs only the binary, so users add the agent skill once with `lore skill install --all`; after a `brew upgrade` the first lore command refreshes it. A formula install lives under `<prefix>/Cellar/lore/<version>/` (a cask install, should the tap move to one, under `<prefix>/Caskroom/lore/<version>/`); `lore upgrade` treats both as Homebrew installs and runs `brew upgrade`. Nothing in this repository writes to the tap.
 
 ## Rebranding note
 

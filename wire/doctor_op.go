@@ -88,7 +88,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckEmptyRef, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorEmptyRefs(c, fix) }},            // doctor_emptyref.go
 		{DoctorCheckIdentitySource, a.DoctorIdentitySource},                                                                     // doctor_identitysource.go (SOURCE_OF_TRUTH row 1)
 		{DoctorCheckRenderedCopy, a.DoctorRenderedCopies},                                                                       // doctor_render.go (SOURCE_OF_TRUTH rows 10-12)
-		{DoctorCheckSkillCopy, a.DoctorSkillCopies},                                                                             // doctor_skillcopies.go (SOURCE_OF_TRUTH row 13)
+		{DoctorCheckSkillCopy, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorSkillCopies(c, fix) }},         // doctor_skillcopies.go (SOURCE_OF_TRUTH row 13)
 		{DoctorCheckStoreAccess, a.storeAccess(fix)},                                                                            // doctor_storeaccess.go (brief 3.7)
 		{DoctorCheckStoreAddress, a.DoctorStoreAddresses},                                                                       // storeaddr.go (SOURCE_OF_TRUTH row 7)
 		{DoctorCheckOrgSource, a.DoctorOrgSources},                                                                              // orgsource.go (SOURCE_OF_TRUTH row 9)

@@ -239,27 +239,3 @@ func dirWritable(dir string) bool {
 	_ = os.Remove(name) // probe only
 	return true
 }
-
-// skillDest is where install.sh puts the agent skill bundle.
-func skillDest(home string) string { return filepath.Join(home, ".claude", "skills", BinaryName) }
-
-// copySkills copies the archive's skills/ over dest when dest exists
-// (install.sh does the same; a machine without the bundle is left alone).
-func copySkills(dest string, files map[string][]byte) (bool, error) {
-	if len(files) == 0 {
-		return false, nil
-	}
-	if st, err := os.Stat(dest); err != nil || !st.IsDir() {
-		return false, nil
-	}
-	for rel, b := range files {
-		p := filepath.Join(dest, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), cliDirMode); err != nil {
-			return false, err
-		}
-		if err := os.WriteFile(p, b, cliFileMode); err != nil {
-			return false, err
-		}
-	}
-	return true, nil
-}

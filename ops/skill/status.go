@@ -54,6 +54,14 @@ type ToolStatus struct {
 	// Linked: Dir, or a bundle file in it, is a symbolic link, so a plain
 	// install refuses (E_SKILL_LINKED) and the fix names --link.
 	Linked bool `json:"linked,omitempty" desc:"the folder or a bundle file in it is a symbolic link; lore skill install needs --link replace|update to change it"`
+	// Stale: the skill is older than this release binary, so agents miss
+	// commands it has (H-185). Only a release binary can say so.
+	Stale bool `json:"stale,omitempty" desc:"older than this lore release: agents reading it miss newer commands; fix names the command"`
+	// Checkout is the lore source checkout the folder links into; a stale
+	// one is updated with git, never overwritten by lore.
+	Checkout string `json:"checkout,omitempty" desc:"the lore source checkout the skill folder links into"`
+	// Fix is the one command that makes a stale skill current.
+	Fix string `json:"fix,omitempty" desc:"the command that makes a stale skill current"`
 }
 
 // Where is the folder, with the end of its link when it is one.
@@ -75,7 +83,11 @@ func (o StatusOut) Text() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "lore %s\n", o.BinaryVersion)
 	for _, t := range o.Tools {
-		line := fmt.Sprintf("%-12s %-4s", t.Tool, t.Status)
+		status := string(t.Status)
+		if t.Stale {
+			status = statusStale
+		}
+		line := fmt.Sprintf("%-12s %-4s", t.Tool, status)
 		if t.Installed {
 			v := t.Version
 			if v == "" {
@@ -88,6 +100,9 @@ func (o StatusOut) Text() string {
 		}
 		if t.Detail != "" {
 			line += "  " + t.Detail
+		}
+		if t.Stale && t.Fix != "" {
+			line += "; run " + t.Fix
 		}
 		b.WriteString(line + "\n")
 	}
@@ -177,6 +192,7 @@ func (ins Installer) statusOne(p toolprofile.Profile) (ToolStatus, error) {
 	if !hasLine && ts.Same && pl.linked() && isLoreSource(pl.Real) {
 		ts.Detail += detailSourceSuffix
 	}
+	ins.markStale(&ts, pl, entry)
 	return ts, nil
 }
 

@@ -76,7 +76,7 @@ Each step builds on the one before, from your first rule in one repo to a team w
 - [Variables and metadata](knowledge/variables-and-metadata.md): `lore vars` and `lore meta`, one named value used in many notes, and extra fields on any row.
 - [Search](knowledge/search.md): one search over every kind of note, and keeping the index healthy.
 - [Render and agent files](knowledge/render-and-agent-files.md): `lore render`, other agent files, the directive block, what the tool read, and skill files.
-- [Keep the lore skill current](knowledge/skill-install.md): `lore skill install` and `lore skill status`, the `lore_version` line.
+- [Keep the lore skill current](knowledge/skill-install.md): `lore skill install`, `lore skill status` and `lore skill refresh`, the `lore_version` line, and how every lore command refreshes a stale skill once a day.
 - [Browse your notes in the terminal](knowledge/tui.md): `lore tui`.
 - [Edit a row in your editor](knowledge/editing-rows.md): `lore edit --id <id>` opens any row as Markdown in your editor; `lore path --id <id>` prints its file.
 

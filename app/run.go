@@ -358,6 +358,12 @@ func run(ctx context.Context, args []string) int {
 		app.FlushBatches(ctx)
 	}
 	_ = app.TouchKnownRepo(ctx) // ONB 6.1 / Q11: known_repos for doctor --all; best effort, throttled, only when the command opened the app
+	// Once a day and after every binary change, stale skill copies are
+	// re-installed (H-185: brew upgrade never refreshed them); a dry run
+	// writes nothing (wire.SkillAutoRefresh).
+	if !isDryRun(args) && !isHelpOrVersionCall(args) && !wire.SkillRefreshSkips(commandName(args)) {
+		app.SkillAutoRefresh(ctx, os.Stderr)
+	}
 	// Once-a-day new-release notice (or opt-in auto_upgrade) after the
 	// command's output, on stderr; quiet in CI, without a tty, for --json
 	// (FORMAT_EVOLUTION 8.6, 8.7; wire.UpgradeNotice).

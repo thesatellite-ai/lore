@@ -745,6 +745,17 @@ lore <cmd> --help                 # per-command help
 
 The `skill` group manages the SKILL.md bundle (the docs you're reading right now).
 
+### `lore skill status` / `lore skill refresh` — is this skill current?
+
+```bash
+lore skill status            # per tool: folder, lore_version, ok / warn / skip / stale, and the fix
+lore skill refresh           # re-install every installed skill older than this lore
+lore skill refresh --dry-run # list what it would refresh
+lore skill install --all     # install (or reinstall) for every tool with a skill folder
+```
+
+Any lore command refreshes a stale skill by itself once a day and right after lore was upgraded, printing one stderr line. A skill folder linked into a lore source checkout is never overwritten: the line names `git -C <checkout> pull`. If this skill lacks a command you expected, run `lore skill status`: it may be older than the lore you run.
+
 ### `lore skill compile` — model-compressed bundle (DRAFT GENERATOR — not ship-ready)
 
 > **⚠ Status: draft generator, not ship-ready.** Hand-tuned `SKILL-mini.md` has been better than compiled output so far. Treat compiler output as a starting draft for human review.

@@ -15,7 +15,7 @@
 //	  brew   ─▶ brew upgrade thesatellite-ai/tap/lore (no --version)
 //	  script ─▶ lock <home>/state/upgrade.lock ─▶ fetch archive + checksums.txt
 //	            ─▶ verifySHA ─▶ extract ─▶ temp file beside exe ─▶ `version --json` smoke
-//	            ─▶ swapBinary ─▶ copySkills
+//	            ─▶ swapBinary ─▶ new binary `skill refresh` (H-185)
 //	  inside a project ─▶ new binary `setup --schema-only` (8.11 part 2)
 package selfupdate
 
@@ -84,6 +84,9 @@ type Updater struct {
 	// new binary's smoke test, and the "already installed" check after
 	// waiting for the lock); nil means ProbeVersion. Tests fake it.
 	VersionProbe func(ctx context.Context, bin string) (string, error)
+	// SkillRefresh runs the new binary's `skill refresh` after the swap
+	// (H-185); nil means RunSkillRefresh. Tests fake it.
+	SkillRefresh SkillRefresher
 }
 
 // probe is the version probe this upgrade uses.
@@ -164,6 +167,17 @@ func (u Updater) Run(ctx context.Context, out io.Writer, f Flags) error {
 		}
 	default:
 		if err := u.upgradeByScript(ctx, out, rc, exe, have, target); err != nil {
+			return err
+		}
+	}
+	if u.UserHome != "" {
+		// H-185: the new binary (the script's swap, or brew's) refreshes
+		// every stale skill copy itself (`lore skill refresh`: the folders
+		// lore owns are re-installed with its bundle, a link is left with
+		// its fix). This binary's own copy would carry the old bundle and
+		// wrote through a link into a source checkout. When the new binary
+		// cannot run it, the old hint stays.
+		if err := u.refreshSkills(ctx, out, newBinary(exe), want); err != nil {
 			return err
 		}
 	}
@@ -332,31 +346,58 @@ func (u Updater) upgradeByScript(ctx context.Context, out io.Writer, rc releaseC
 			return werr
 		}
 	}
-	if u.UserHome != "" {
-		// ONB 4.7.1: the copied SKILL.md carries the new binary's version
-		// line, not the archive's `lore_version: dev`.
-		skillFiles := map[string][]byte{}
-		for rel, b := range files.skills {
-			if rel == skillEntryFile {
-				b = toolprofile.StampSkillVersion(b, normVersion(tag))
-			}
-			skillFiles[rel] = b
+	return nil
+}
+
+// skillRefreshTimeout bounds the new binary's skill refresh.
+const skillRefreshTimeout = 30 * time.Second
+
+// SkillRefresher runs `<bin> skill refresh` and returns its output; the
+// Updater's default runs the new binary, tests fake it.
+type SkillRefresher func(ctx context.Context, bin string) (string, error)
+
+// RunSkillRefresh is the default SkillRefresher.
+func RunSkillRefresh(ctx context.Context, bin string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, skillRefreshTimeout)
+	defer cancel()
+	b, err := exec.CommandContext(ctx, bin, "skill", "refresh").CombinedOutput()
+	return string(b), err
+}
+
+// newBinary is the upgraded binary: exe after the script's swap, else
+// (brew removed the old keg exe pointed into) the lore on PATH.
+func newBinary(exe string) string {
+	if _, err := os.Stat(exe); err == nil {
+		return exe
+	}
+	if p, err := exec.LookPath(BinaryName); err == nil {
+		return p
+	}
+	return exe
+}
+
+// refreshSkills prints the new binary's `skill refresh` lines, indented,
+// or the stale-skill hint when it could not run. Only a failed write to
+// out is returned.
+func (u Updater) refreshSkills(ctx context.Context, out io.Writer, exe, version string) error {
+	run := u.SkillRefresh
+	if run == nil {
+		run = RunSkillRefresh
+	}
+	text, err := run(ctx, exe)
+	if err != nil {
+		if hint := staleSkillHint(u.UserHome, version); hint != "" {
+			_, werr := fmt.Fprintln(out, "  "+hint)
+			return werr
 		}
-		if done, cerr := copySkills(skillDest(u.UserHome), skillFiles); cerr != nil {
-			if _, werr := fmt.Fprintf(out, "  agent skill bundle not updated: %v\n", cerr); werr != nil {
-				return werr
-			}
-		} else if done {
-			if _, werr := fmt.Fprintln(out, "  updated the agent skill bundle"); werr != nil {
-				return werr
-			}
+		return nil
+	}
+	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
 		}
-		// One hint line when any installed skill (another tool's folder, or a
-		// copy that failed) is older than the new binary (ONB 4.7.1).
-		if hint := staleSkillHint(u.UserHome, normVersion(tag)); hint != "" {
-			if _, werr := fmt.Fprintln(out, "  "+hint); werr != nil {
-				return werr
-			}
+		if _, werr := fmt.Fprintln(out, "  "+line); werr != nil {
+			return werr
 		}
 	}
 	return nil
