@@ -66,6 +66,20 @@ var dryRunChecked = map[string]string{
 	"techdoc.archive":          "wheredel.Archive (content): every row's archive, check-only",
 	"workflow.archive":         "wheredel.Archive (content): every row's archive, check-only",
 	"workspace.archive":        "wheredel.Archive (content): every row's archive, check-only",
+	// devco:D-931 (H-192)
+	"meta.adopt":            "plans the key rows' and values' moves as one bulk move (PlanMove)",
+	"meta.edit":             "--type: the retype and every conversion in a check-only stage (values checked against the staged key)",
+	"meta.import":           "every row's real metadata write, check-only",
+	"meta.rebuild":          "the key and value creates in a check-only stage (values' key ref resolves to the staged key)",
+	"meta.rehome":           "the new keys and every row's rewrite in a check-only stage (values checked against the staged keys)",
+	"resource.check":        "bulkRun: every row's real stamp, check-only",
+	"resource.delete":       "every row's real delete (--where and --with-dependents), check-only",
+	"resource.edit":         "bulkRun: every row's real edit, check-only",
+	"resource.field.rename": "the real rename (and --rewrite-rows' relabel), check-only",
+	"resource.field.retype": "every conversion and the field's retype, check-only",
+	"resource.import":       "the staged import, check-only (a refused record fails as the write does)",
+	"resource.merge":        "the fill and the repoint, check-only",
+	"resource.repoint":      "every ref rewrite and the archive, check-only",
 }
 
 // dryRunNotRows are writes whose dry run previews something other than a
@@ -93,21 +107,7 @@ var dryRunNotRows = map[string]string{
 // where the write fails. Each moves to dryRunChecked (with a case) when
 // its dry run runs the write check-only. The engine already guarantees
 // none of them writes in a dry run (Run's check-only context).
-var dryRunLeftToConvert = map[string]string{
-	"meta.adopt":            "lists keys to re-file",
-	"meta.edit":             "--type: reports what converts",
-	"meta.import":           "lists what would be written",
-	"meta.rebuild":          "lists what would change",
-	"meta.rehome":           "lists keys and rows to rewrite",
-	"resource.check":        "checks values, writes nothing",
-	"resource.delete":       "bulk: lists what would change",
-	"resource.edit":         "bulk: lists what would change",
-	"resource.field.rename": "lists what would change",
-	"resource.field.retype": "lists what would change",
-	"resource.import":       "lists what would be written",
-	"resource.merge":        "plans the merge",
-	"resource.repoint":      "lists what would change",
-}
+var dryRunLeftToConvert = map[string]string{}
 
 // TestEveryWriteDryRunIsListed walks the operation registry: every write
 // with a dry_run input is in exactly one list above, and every name in a
@@ -171,6 +171,17 @@ var dryRunCases = []dryRunCase{
 	{op: "task.add", seed: seedTemplate, bad: `{"template":"rel","args":["p=bogus"]}`, good: `{"template":"rel","args":["p=high"]}`},
 	{op: "task.split", seed: seedTaskID, bad: `{"id":"{{id}}","children":[{"title":"a","priority":"bogus"}]}`, good: `{"id":"{{id}}","titles":["Draft","Review"]}`},
 	{op: "task.import", seed: seedPlanFiles, good: `{"file":"{{id}}/tasks.csv"}`},
+	// devco:D-931 (H-192)
+	{op: "resource.edit", seed: seedHosts, bad: `{"kind":"host","where":["provider=x"],"set":["port=` + fakeAccessKey + `"]}`, good: `{"kind":"host","where":["provider=x"],"set":["port=80"]}`},
+	{op: "resource.check", seed: seedHosts, bad: `{"kind":"host","where":["provider=x"],"note":"key ` + fakeAccessKey + `"}`, good: `{"kind":"host","where":["provider=x"],"note":"looked"}`},
+	{op: "resource.delete", seed: seedHosts, good: `{"kind":"host","where":["provider=z"]}`},
+	{op: "resource.repoint", seed: seedHosts, good: `{"old":"h_one","new":"h_three"}`},
+	{op: "resource.merge", seed: seedHosts, good: `{"id":"h_three","into":"h_one"}`},
+	{op: "resource.field.rename", seed: seedHosts, bad: `{"kind":"host","field":"provider","new_name":"port"}`, good: `{"kind":"host","field":"provider","new_name":"vendor","rewrite_rows":true}`},
+	{op: "resource.field.retype", seed: seedHosts, bad: `{"kind":"host","field":"port","type":"bool"}`, good: `{"kind":"host","field":"port","type":"number"}`},
+	{op: "resource.import", seed: seedHostFiles, bad: `{"file":"{{id}}/bad.csv","kind":"host"}`, good: `{"file":"{{id}}/good.csv","kind":"host"}`},
+	{op: "meta.import", seed: seedMetaFiles, bad: `{"file":"{{id}}/bad.csv"}`, good: `{"file":"{{id}}/good.csv"}`},
+	{op: "meta.edit", seed: seedSizeKey, bad: `{"id":"size","type":"bool"}`, good: `{"id":"size","type":"number"}`},
 }
 
 // seedTaskID is a task; its id is the case's {{id}}.

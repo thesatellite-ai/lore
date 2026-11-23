@@ -517,6 +517,10 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 	// Check every record before the first write (all or nothing).
 	existing := map[string]string{} // ext id → res id (upsert)
 	var good []resRecord
+	// D-931: a dry run refuses what the write refuses (E_RESOURCE_BATCH
+	// without --skip-errors), naming every refused row, not only the first
+	var firstBad error
+	var badRows []string
 	for _, r := range recs {
 		line := ImportLine{Kind: r.kind, Name: r.name, Action: actCreate}
 		ex, found := o.existingIn(ctx, target, r)
@@ -549,10 +553,26 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 			if !in.SkipErrors && !in.DryRun {
 				return ResImportOut{}, batchRefusal(r.kind+" "+r.name, "nothing written (all or nothing; --skip-errors writes the valid rows)", cerr)
 			}
+			if !in.SkipErrors && firstBad == nil {
+				firstBad = cerr
+			}
+			msg, label := errs.EnvelopeOf(cerr).Error.Message, r.kind+" "+r.name
+			if !strings.HasPrefix(msg, label) { // most row errors name the row already
+				msg = label + ": " + msg
+			}
+			badRows = append(badRows, msg)
 		} else {
 			good = append(good, r)
 		}
 		out.Rows = append(out.Rows, line)
+	}
+	if firstBad != nil {
+		e := errs.Wrap(errs.ResourceBatch, "resource import --dry-run: "+plural.Count(len(badRows), "row")+" refused: "+strings.Join(badRows, "; ")+
+			"; nothing written (all or nothing; --skip-errors writes the valid rows)", firstBad)
+		if h := errs.EnvelopeOf(firstBad).Error.Hint; h != "" {
+			e = e.WithHint(h)
+		}
+		return ResImportOut{}, e
 	}
 	// PC-RES-1: plan both passes before anything is written, so a cycle
 	// that cannot be written is refused with nothing written (dry run too).
@@ -572,21 +592,26 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 	if err != nil {
 		return ResImportOut{}, err
 	}
-	if in.DryRun {
-		return out, nil
-	}
 	if len(good) == 0 {
 		return out, nil // nothing to write (all kept or skipped)
 	}
-	// 3.16: an import always asks, naming the rows and the place.
-	if err = bulk.Ask(ctx, "import "+plural.Count(len(good), "row")+" into "+string(target)+" as one batch?"); err != nil {
-		return ResImportOut{}, err
+	// D-931: a dry run runs the staged writes below check-only (Run marks
+	// a preview so too), without asking or opening a batch: every row's
+	// value, reference, secret, policy and role check runs as in the
+	// write, later rows see the earlier ones through the stage, and the
+	// Commit checks the batch and writes nothing.
+	bctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
+	if !in.DryRun {
+		// 3.16: an import always asks, naming the rows and the place.
+		if err = bulk.Ask(ctx, "import "+plural.Count(len(good), "row")+" into "+string(target)+" as one batch?"); err != nil {
+			return ResImportOut{}, err
+		}
+		var bid ids.ID[ids.Batch]
+		if bctx, bid, err = bulk.Begin(ctx, bulk.KindImport); err != nil {
+			return ResImportOut{}, err
+		}
+		out.Batch = bid.String()
 	}
-	bctx, bid, err := bulk.Begin(ctx, bulk.KindImport)
-	if err != nil {
-		return ResImportOut{}, err
-	}
-	out.Batch = bid.String()
 	// FB-RES-1 (PC-RES-1 "both or neither"): every new row has its res_ id
 	// (pend, pinned above), so a ref to another row of the file (forward,
 	// a cycle, itself) resolves to that id at once and each row is written
@@ -619,8 +644,14 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 			got, werr = o.resAdd(rctx, ResAddIn{Kind: p.kind, Name: p.name, Set: sets, To: in.To})
 			out.Created++
 		}
+		if in.DryRun {
+			out.Updated, out.Created = 0, 0 // as before: a dry run's counts stay 0, its rows say what would happen
+		}
 		if werr != nil {
 			return ResImportOut{}, stopped(werr, p.extID)
+		}
+		if in.DryRun {
+			continue // the rows list what would happen; no id was written
 		}
 		for j := range out.Rows {
 			if out.Rows[j].Kind == p.kind && out.Rows[j].Name == p.name {
@@ -936,24 +967,29 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 	for _, l := range out.Rows {
 		b.WriteString("  " + l + "\n")
 	}
-	if in.DryRun {
-		out.Human = b.String() + "then archive " + text(oldR.Row, rName) + "; nothing written (dry run)\n"
-		return out, nil
+	// D-931: a dry run runs every write below check-only (Run marks a
+	// preview so too) without asking or opening a batch: a value, role or
+	// stale row the write refuses is refused here with the write's code.
+	bctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
+	if !in.DryRun {
+		if err = bulk.Ask(ctx, "repoint "+plural.Count(len(changes), "row")+" from "+text(oldR.Row, rName)+" to "+text(newR.Row, rName)+" and archive "+text(oldR.Row, rName)+"?"); err != nil {
+			return ResRepointOut{}, err
+		}
+		var bid ids.ID[ids.Batch]
+		if bctx, bid, err = bulk.Begin(ctx, bulk.KindResource); err != nil {
+			return ResRepointOut{}, err
+		}
+		out.Batch = bid.String()
 	}
-	if err = bulk.Ask(ctx, "repoint "+plural.Count(len(changes), "row")+" from "+text(oldR.Row, rName)+" to "+text(newR.Row, rName)+" and archive "+text(oldR.Row, rName)+"?"); err != nil {
-		return ResRepointOut{}, err
-	}
-	bctx, bid, err := bulk.Begin(ctx, bulk.KindResource)
-	if err != nil {
-		return ResRepointOut{}, err
-	}
-	out.Batch = bid.String()
 	for _, c := range changes {
 		patch, perr := o.valuesPatch(ctx, c.d, c.store.vals, c.store)
 		if perr != nil {
 			return ResRepointOut{}, perr
 		}
 		if perr = o.updateResource(bctx, c.d, c.r, patch); perr != nil {
+			if in.DryRun {
+				return ResRepointOut{}, errs.Prefix("resource repoint --dry-run: "+c.label+" would fail (nothing written)", perr)
+			}
 			return ResRepointOut{}, errors.Join(perr, errs.New(errs.ResourceInvalid, "resource repoint: stopped; the rows written are in batch "+out.Batch))
 		}
 	}
@@ -965,6 +1001,10 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 	}
 	if _, err = o.patchRow(bctx, oldR, map[string]value.Value{rArchivedAt: value.DateTimeFrom(opclock.Now(o.env)), rReplacedBy: succ}, "archived "+text(oldR.Row, rName)); err != nil {
 		return ResRepointOut{}, err
+	}
+	if in.DryRun {
+		out.Human = b.String() + "then archive " + text(oldR.Row, rName) + "; nothing written (dry run)\n"
+		return out, nil
 	}
 	out.Human = b.String() + "archived " + text(oldR.Row, rName) + " (replaced_by " + text(newR.Row, rName) + "); batch " + out.Batch + "\n"
 	return out, nil

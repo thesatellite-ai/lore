@@ -195,6 +195,11 @@ func (o ops) metaAdopt(ctx context.Context, in MetaAdoptIn) (MetaMoveOut, error)
 		return MetaMoveOut{}, err
 	}
 	if in.DryRun {
+		// D-931: the moves the write makes, planned as one bulk move
+		// (secret scan, reference, place and role checks; nothing written)
+		if err = o.planKeyMoves(ctx, keys, to); err != nil {
+			return MetaMoveOut{}, err
+		}
 		return MetaMoveOut{Keys: names, Values: nvals, Store: string(to), DryRun: true,
 			Human: fmt.Sprintf("would adopt %d metadata keys (%s) and %d allowed values from %s into %s; ids unchanged\ndry run: nothing written\n", len(keys), strings.Join(names, ", "), nvals, from, o.place(to))}, nil
 	}
@@ -208,6 +213,40 @@ func (o ops) metaAdopt(ctx context.Context, in MetaAdoptIn) (MetaMoveOut, error)
 	}
 	return MetaMoveOut{Keys: names, Values: nvals, Store: string(to),
 		Human: fmt.Sprintf("✓ adopted %d metadata keys (%s) and %d allowed values from %s into %s; ids unchanged\n", len(keys), strings.Join(names, ", "), nvals, from, o.place(to))}, nil
+}
+
+// movePlanner is the dry run of a bulk move (wire's PlanMove): every row
+// goes through the one-row move in one staged batch, so each check the
+// real move makes runs, and nothing is written.
+type movePlanner interface {
+	PlanMove(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) (engine.MovedMany, error)
+}
+
+// planKeyMoves is the dry run of moveKey for every key of keys
+// (devco:D-931, H-192): each key row and its allowed values move to to in
+// one planned bulk move, values after their key so their key_id resolves
+// to the staged key, as the write moves them one by one. The scope label
+// moveKey sets afterwards is lore's own value on the moved row, judged by
+// the same role check as the move. A surface without the planner keeps
+// the listed preview (it has no bulk move to plan with).
+func (o ops) planKeyMoves(ctx context.Context, keys []located, to store.Source) error {
+	pl, ok := upgrade.As[movePlanner](o.env)
+	if !ok {
+		return nil
+	}
+	var refs []engine.Ref
+	for _, k := range keys {
+		refs = append(refs, engine.Ref{Store: k.Src, Table: schema.TableMetaKeys, ID: k.Row.ID})
+		vs, err := o.metaValues(ctx, k)
+		if err != nil {
+			return err
+		}
+		for _, v := range vs {
+			refs = append(refs, engine.Ref{Store: v.Src, Table: schema.TableMetaValues, ID: v.Row.ID})
+		}
+	}
+	_, err := pl.PlanMove(engine.WithConfirmed(ctx), refs, to, engine.MoveOptions{})
+	return err
 }
 
 // refuseReturn refuses an adopt of key rows that left to before: the
@@ -464,11 +503,16 @@ func (o ops) rehomeRefile(ctx context.Context, in MetaRehomeIn, src store.Source
 		}
 		out.Plan = append(out.Plan, fmt.Sprintf("%s %s → a new %s key in %s", rf.name, old, rf.typ, o.place(to)))
 	}
+	// D-931: a dry run makes the same writes in a check-only stage (Run
+	// marks a preview check-only too), without asking or opening a batch:
+	// each row's values are checked against the key rows staged for them
+	// (engine/stageview.go), CommitEach runs the role and --store checks
+	// of every store, and nothing is written.
+	wctx := ctx
 	if in.DryRun {
-		out.DryRun = true
-		return out, nil
-	}
-	if err := bulk.Ask(ctx, fmt.Sprintf("re-file %d keys and rewrite %d values of %s?", len(order), len(out.Missing), o.place(src))); err != nil {
+		wctx = engine.Staging(engine.WithConfirmed(engine.WithCheckOnly(ctx)))
+		defer engine.Discard(wctx)
+	} else if err := bulk.Ask(ctx, fmt.Sprintf("re-file %d keys and rewrite %d values of %s?", len(order), len(out.Missing), o.place(src))); err != nil {
 		return MetaRehomeOut{}, err
 	}
 	for i, old := range order {
@@ -481,7 +525,7 @@ func (o ops) rehomeRefile(ctx context.Context, in MetaRehomeIn, src store.Source
 			rf.newID = nid
 			continue
 		}
-		if err := o.checkRegistryCaps(ctx, to, rf.name); err != nil {
+		if err := o.checkRegistryCaps(wctx, to, rf.name); err != nil {
 			return MetaRehomeOut{}, err
 		}
 		fields := map[string]value.Value{mStrict: value.BoolOf(false), mInternal: value.BoolOf(to != store.SourceRepo),
@@ -490,7 +534,7 @@ func (o ops) rehomeRefile(ctx context.Context, in MetaRehomeIn, src store.Source
 		if err := optTexts(fields, map[string]string{mName: rf.name, mScope: scopeOf(to), mType: rf.typ, mDescription: desc, mAddedBy: addedBy(ctx)}); err != nil {
 			return MetaRehomeOut{}, err
 		}
-		w, err := create(ctx, o.env, to, schema.TableMetaKeys, map[string]string{mName: rf.name, mScope: scopeOf(to)}, fields)
+		w, err := create(wctx, o.env, to, schema.TableMetaKeys, map[string]string{mName: rf.name, mScope: scopeOf(to)}, fields)
 		if err != nil {
 			return MetaRehomeOut{}, err
 		}
@@ -499,15 +543,21 @@ func (o ops) rehomeRefile(ctx context.Context, in MetaRehomeIn, src store.Source
 			return MetaRehomeOut{}, errs.Wrap(errs.ConfigInvalid, "meta key id", err)
 		}
 		rf.newID = nid
-		out.Plan[i] += " " + nid.String()
+		if !in.DryRun { // a dry run's new key id is never written: not shown
+			out.Plan[i] += " " + nid.String()
+		}
 	}
-	bctx, bid, err := bulk.Begin(ctx, bulk.KindMeta)
-	if err != nil {
-		return MetaRehomeOut{}, err
-	}
-	out.Batch = bid.String()
-	for i := range out.Missing {
-		out.Missing[i].To = plan[out.Missing[i].Key].newID.String()
+	bctx := wctx
+	var bid ids.ID[ids.Batch]
+	if !in.DryRun {
+		var err error
+		if bctx, bid, err = bulk.Begin(ctx, bulk.KindMeta); err != nil {
+			return MetaRehomeOut{}, err
+		}
+		out.Batch = bid.String()
+		for i := range out.Missing {
+			out.Missing[i].To = plan[out.Missing[i].Key].newID.String()
+		}
 	}
 	for _, r := range rows {
 		if r.Src != src {
@@ -533,9 +583,18 @@ func (o ops) rehomeRefile(ctx context.Context, in MetaRehomeIn, src store.Source
 			continue
 		}
 		if _, err := o.env.Update(engine.WithMeta(bctx, mw), engine.Ref{Store: r.Src, ID: r.Row.ID}, map[string]value.Value{}); err != nil {
+			if in.DryRun {
+				return MetaRehomeOut{}, errs.Prefix("meta rehome --dry-run: "+r.Row.ID.String()+" would fail (nothing written)", err)
+			}
 			return MetaRehomeOut{}, errs.Prefix(fmt.Sprintf("meta rehome: stopped after %d rows (batch %s; see: lore batch show --id %s)", out.Rewritten, bid, bid), err)
 		}
 		out.Rewritten++
+	}
+	if in.DryRun {
+		if _, _, err := engine.CommitEach(bctx); err != nil {
+			return MetaRehomeOut{}, err
+		}
+		out.DryRun, out.Rewritten = true, 0
 	}
 	return out, nil
 }

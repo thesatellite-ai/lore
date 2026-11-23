@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -125,6 +126,15 @@ func (o ops) bulkRun(ctx context.Context, d kindDef, hits []located, dry bool, w
 		return out, nil
 	}
 	if dry {
+		// D-931: every row's real write, check-only (Run marks a preview
+		// so too): a value, reference, secret or role the write refuses
+		// is refused here with the write's code, and nothing is written.
+		cctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
+		for _, r := range hits {
+			if err := one(cctx, r); err != nil {
+				return RowOut{}, errs.Prefix("resource "+what+" --dry-run: "+text(r.Row, rName)+" would fail (nothing written)", err)
+			}
+		}
 		out.Human = "would " + what + " " + strconv.Itoa(len(hits)) + " " + d.name() + " resources (dry run, nothing written):\n" + b.String()
 		return out, nil
 	}

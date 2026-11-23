@@ -908,6 +908,17 @@ func (o ops) fieldRename(ctx context.Context, in FieldRenameIn) (RowOut, error) 
 		return RowOut{}, err
 	}
 	if in.DryRun {
+		// D-931: the real rename (and --rewrite-rows' relabel of every row)
+		// runs check-only (Run marks a preview so too): a role or stale
+		// row the write refuses is refused here with the write's code
+		if _, err = o.patchRow(engine.WithCheckOnly(ctx), f, map[string]value.Value{kName: v}, ""); err != nil {
+			return RowOut{}, err
+		}
+		if in.RewriteRows {
+			if _, _, err = o.relabelFieldRows(engine.WithCheckOnly(ctx), k, f, true); err != nil {
+				return RowOut{}, err
+			}
+		}
 		using, uerr := o.resourcesUsing(ctx, k, f)
 		if uerr != nil {
 			return RowOut{}, uerr
@@ -920,7 +931,7 @@ func (o ops) fieldRename(ctx context.Context, in FieldRenameIn) (RowOut, error) 
 	if err != nil || !in.RewriteRows {
 		return out, err
 	}
-	n, batch, err := o.relabelFieldRows(ctx, k, f)
+	n, batch, err := o.relabelFieldRows(ctx, k, f, false)
 	if err != nil {
 		return out, err
 	}
@@ -930,7 +941,8 @@ func (o ops) fieldRename(ctx context.Context, in FieldRenameIn) (RowOut, error) 
 
 // relabelFieldRows writes field f's current name into the `fields` entry
 // of every live resource holding a value for it, one batch (--rewrite-rows).
-func (o ops) relabelFieldRows(ctx context.Context, k, f located) (int, string, error) {
+// dry runs every row's write check-only and writes nothing (D-931).
+func (o ops) relabelFieldRows(ctx context.Context, k, f located, dry bool) (int, string, error) {
 	using, err := o.resourcesUsing(ctx, k, f)
 	if err != nil || len(using) == 0 {
 		return 0, "", err
@@ -939,7 +951,7 @@ func (o ops) relabelFieldRows(ctx context.Context, k, f located) (int, string, e
 	if err != nil {
 		return 0, "", err
 	}
-	res, err := o.bulkRun(ctx, d, using, false, "relabel", func(located) string { return "stored field name → " + text(d.byID[f.Row.ID.String()].Row, kName) },
+	res, err := o.bulkRun(ctx, d, using, dry, "relabel", func(located) string { return "stored field name → " + text(d.byID[f.Row.ID.String()].Row, kName) },
 		func(c context.Context, r located) error {
 			stored, derr := d.decode(r)
 			if derr != nil {

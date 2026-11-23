@@ -1795,6 +1795,15 @@ func (o ops) resDeleteWhere(ctx context.Context, in ResDeleteIn) (ResDeleteOut, 
 		return out, nil
 	}
 	if in.DryRun {
+		// D-931: every row's real delete, check-only (Run marks a preview
+		// so too): a row the write refuses (role, policy, a stale row) is
+		// refused here with the write's code, and nothing is written.
+		cctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
+		for _, r := range hits {
+			if _, derr := o.env.Delete(cctx, engine.Ref{Store: r.Src, Table: schema.TableResources, ID: r.Row.ID}); derr != nil {
+				return ResDeleteOut{}, errs.Prefix("resource delete --dry-run: "+text(r.Row, rName)+" would fail (nothing written)", derr)
+			}
+		}
 		var b strings.Builder
 		b.WriteString("would delete " + plural.Count(len(hits), d.name()+" resource") + " (dry run, nothing written)\n")
 		for _, it := range items {

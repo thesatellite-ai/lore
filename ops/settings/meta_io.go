@@ -354,6 +354,15 @@ func (o ops) metaImport(ctx context.Context, in MetaImportIn) (RowOut, error) {
 		return RowOut{Human: "meta import: no records; nothing written\n"}, nil
 	}
 	if in.DryRun {
+		// D-931: every row's real metadata write, check-only (Run marks a
+		// preview so too): a key, value, strict value, secret, policy or
+		// role the write refuses is refused here with the write's code
+		cctx := engine.WithCheckOnly(ctx)
+		for _, id := range order {
+			if _, err := o.env.Update(engine.WithMeta(cctx, *writes[id]), engine.Ref{ID: id}, map[string]value.Value{}); err != nil {
+				return RowOut{}, errs.Prefix("meta import --dry-run: row "+id.String()+" would fail (nothing written)", err)
+			}
+		}
 		return RowOut{Human: fmt.Sprintf("would import %d values on %d rows from %s\ndry run: nothing written\n", len(recs), len(order), in.File)}, nil
 	}
 	items := make([]bulk.Item, 0, len(order))

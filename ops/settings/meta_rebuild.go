@@ -256,7 +256,40 @@ func (o ops) metaRebuild(ctx context.Context, in MetaRebuildIn) (MetaRebuildOut,
 		plans = append(plans, p)
 		out.Keys = append(out.Keys, p.report)
 	}
+	cr, ok := upgrade.As[idCreator](o.env)
+	if !ok {
+		return MetaRebuildOut{}, errs.New(errs.Unsupported, "meta rebuild needs the engine's pinned-id create")
+	}
+	// create writes every planned key row and its allowed values (ids kept)
+	create := func(ctx context.Context) error {
+		for _, p := range plans {
+			if _, err := cr.CreateWithID(ctx, src, schema.TableMetaKeys, p.id.Any(), p.fields); err != nil {
+				return err
+			}
+			for _, v := range p.values {
+				if _, err := cr.CreateWithID(ctx, src, schema.TableMetaValues, v.id, v.fields); err != nil {
+					return err
+				}
+			}
+			if !engine.CheckOnly(ctx) {
+				out.Written++
+			}
+		}
+		return nil
+	}
 	if in.DryRun {
+		// D-931: the same creates in a check-only stage (Run marks a
+		// preview check-only too): each allowed value's key ref resolves
+		// to the key row staged before it, every field, id, role and
+		// --store check runs, and CommitEach writes nothing
+		sctx := engine.Staging(engine.WithConfirmed(engine.WithCheckOnly(ctx)))
+		defer engine.Discard(sctx)
+		if err = create(sctx); err != nil {
+			return MetaRebuildOut{}, err
+		}
+		if _, _, err = engine.CommitEach(sctx); err != nil {
+			return MetaRebuildOut{}, err
+		}
 		return out, nil
 	}
 	if err = bulk.Ask(ctx, fmt.Sprintf("recreate %d metadata key rows in %s (ids kept)?", len(plans), o.place(src))); err != nil {
@@ -278,20 +311,8 @@ func (o ops) metaRebuild(ctx context.Context, in MetaRebuildIn) (MetaRebuildOut,
 	if _, err = o.probeClean(ctx, pr, src, mine, in.AllowShallow); err != nil {
 		return MetaRebuildOut{}, err
 	}
-	cr, ok := upgrade.As[idCreator](o.env)
-	if !ok {
-		return MetaRebuildOut{}, errs.New(errs.Unsupported, "meta rebuild needs the engine's pinned-id create")
-	}
-	for _, p := range plans {
-		if _, err = cr.CreateWithID(ctx, src, schema.TableMetaKeys, p.id.Any(), p.fields); err != nil {
-			return out, err
-		}
-		for _, v := range p.values {
-			if _, err = cr.CreateWithID(ctx, src, schema.TableMetaValues, v.id, v.fields); err != nil {
-				return out, err
-			}
-		}
-		out.Written++
+	if err = create(ctx); err != nil {
+		return out, err
 	}
 	return out, nil
 }

@@ -270,6 +270,9 @@ func (e *Engine) metaRegistry(ctx context.Context) ([]keyDef, error) {
 		if err != nil {
 			return nil, err
 		}
+		// D-931: a staged (dry) run's later writes check against the key
+		// rows it staged before (stageview.go)
+		keys = withStaged(ctx, src, schema.TableMetaKeys, keys)
 		if len(keys) == 0 {
 			continue
 		}
@@ -277,6 +280,7 @@ func (e *Engine) metaRegistry(ctx context.Context) ([]keyDef, error) {
 		if err != nil {
 			return nil, err
 		}
+		vals = withStaged(ctx, src, schema.TableMetaValues, vals)
 		for _, k := range keys {
 			mk, err := ids.Parse[ids.MetaKey](k.ID.String())
 			if err != nil {

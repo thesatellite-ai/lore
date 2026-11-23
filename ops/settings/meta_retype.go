@@ -130,16 +130,21 @@ func (o ops) metaRetype(ctx context.Context, k located, in MetaEditIn) (RowOut, 
 	for _, c := range convs {
 		rowIDs = append(rowIDs, c.r.Row.ID.String())
 	}
-	if in.DryRun {
-		b.WriteString("dry run: nothing written\n")
-		return RowOut{ID: k.Row.ID.String(), Store: string(k.Src), DryRun: true, IDs: rowIDs, Human: b.String()}, nil
-	}
-	if err = bulk.Ask(ctx, fmt.Sprintf("change the type of %s (%s) from %s to %s and convert %s?", name, short(k.Row.ID), old, nt, plural.Count(len(convs), "value"))); err != nil {
-		return RowOut{}, err
-	}
-	bctx, bid, err := bulk.Begin(ctx, bulk.KindMeta)
-	if err != nil {
-		return RowOut{}, err
+	// D-931: a dry run runs the same writes in a check-only stage (Run
+	// marks a preview check-only too), without asking or opening a batch:
+	// each converted value is checked against the key as retyped (the
+	// stage's key row, engine/stageview.go), and CommitEach runs the role
+	// and --store checks of every store and writes nothing.
+	var bid ids.ID[ids.Batch]
+	bctx := engine.Staging(engine.WithConfirmed(engine.WithCheckOnly(ctx)))
+	defer engine.Discard(bctx)
+	if !in.DryRun {
+		if err = bulk.Ask(ctx, fmt.Sprintf("change the type of %s (%s) from %s to %s and convert %s?", name, short(k.Row.ID), old, nt, plural.Count(len(convs), "value"))); err != nil {
+			return RowOut{}, err
+		}
+		if bctx, bid, err = bulk.Begin(ctx, bulk.KindMeta); err != nil {
+			return RowOut{}, err
+		}
 	}
 	hist, err := o.metaTypeHistory(ctx, k, old.String())
 	if err != nil {
@@ -155,9 +160,19 @@ func (o ops) metaRetype(ctx context.Context, k located, in MetaEditIn) (RowOut, 
 	for i, c := range convs {
 		mw := engine.MetaWrite{ID: c.r.Row.ID, JSON: []meta.Term{{KeyID: kid, Value: string(c.to)}}}
 		if _, err = o.env.Update(engine.WithMeta(bctx, mw), engine.Ref{ID: c.r.Row.ID}, map[string]value.Value{}); err != nil {
+			if in.DryRun {
+				return RowOut{}, errs.Prefix("meta edit --type --dry-run: "+c.r.Row.ID.String()+" would fail (nothing written)", err)
+			}
 			return RowOut{}, errs.Prefix("meta edit --type: the key is "+nt.String()+" now; stopped after "+strconv.Itoa(i)+" of "+strconv.Itoa(len(convs))+
 				" rows (batch "+bid.String()+"; see: lore batch show --id "+bid.String()+", or lore batch undo --id "+bid.String()+")", err)
 		}
+	}
+	if in.DryRun {
+		if _, _, err = engine.CommitEach(bctx); err != nil {
+			return RowOut{}, err
+		}
+		b.WriteString("dry run: nothing written\n")
+		return RowOut{ID: k.Row.ID.String(), Store: string(k.Src), DryRun: true, IDs: rowIDs, Human: b.String()}, nil
 	}
 	fmt.Fprintf(&b, "%s: %s converted in batch %s; id kept (see: lore batch show --id %s)\n", name, plural.Count(len(convs), "value"), bid, bid)
 	return RowOut{ID: k.Row.ID.String(), Store: string(k.Src), Batch: bid.String(), IDs: rowIDs, Human: b.String()}, nil

@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
@@ -261,9 +262,23 @@ func (o ops) resMerge(ctx context.Context, in ResMergeIn) (ResRepointOut, error)
 	slices.Sort(filled)
 	note := "values filled from " + text(dup.Row, rName) + ": " + noneIfEmpty(filled) + "\n"
 	if in.DryRun {
+		// D-931: the fill and the repoint run their real writes check-only
+		// (resRepoint's dry run does), so what the merge refuses is refused here
+		if len(filled) > 0 {
+			patch, perr := o.valuesPatch(ctx, d, kv.vals, kv)
+			if perr != nil {
+				return ResRepointOut{}, perr
+			}
+			if perr = o.updateResource(engine.WithCheckOnly(ctx), d, keep, patch); perr != nil {
+				return ResRepointOut{}, perr
+			}
+		}
 		out, rerr := o.resRepoint(ctx, ResRepointIn{Old: dup.Row.ID.String(), New: keep.Row.ID.String(), DryRun: true})
+		if rerr != nil {
+			return ResRepointOut{}, rerr
+		}
 		out.Human = "would merge " + text(dup.Row, rName) + " into " + text(keep.Row, rName) + "\n" + out.Human + note
-		return out, rerr
+		return out, nil
 	}
 	if err = bulk.Ask(ctx, "merge "+d.name()+" "+text(dup.Row, rName)+" into "+text(keep.Row, rName)+"? refs move and "+text(dup.Row, rName)+" is archived"); err != nil {
 		return ResRepointOut{}, err
@@ -554,15 +569,18 @@ func (o ops) fieldRetype(ctx context.Context, in FieldRetypeIn) (RowOut, error) 
 	if len(bad) > 0 {
 		kept = fmt.Sprintf("; %d kept as text and quarantined: %s", len(bad), strings.Join(bad, ", "))
 	}
-	if in.DryRun {
-		return RowOut{DryRun: true, Human: fmt.Sprintf("%s %s%s (dry run, nothing written)\n", plural.Of(len(convs), "value fits", "values fit"), in.Type, kept)}, nil
-	}
-	if err = bulk.Ask(ctx, "retype "+d.name()+"."+in.Field+" "+old+" → "+in.Type+" and convert "+plural.Count(len(convs), "value")+"?"); err != nil {
-		return RowOut{}, err
-	}
-	bctx, bid, err := bulk.Begin(ctx, bulk.KindResource)
-	if err != nil {
-		return RowOut{}, err
+	// D-931: a dry run runs every write below check-only (Run marks a
+	// preview so too) without asking or opening a batch, so a value, role
+	// or stale row the write refuses is refused here with the write's code.
+	bctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
+	var bid ids.ID[ids.Batch]
+	if !in.DryRun {
+		if err = bulk.Ask(ctx, "retype "+d.name()+"."+in.Field+" "+old+" → "+in.Type+" and convert "+plural.Count(len(convs), "value")+"?"); err != nil {
+			return RowOut{}, err
+		}
+		if bctx, bid, err = bulk.Begin(ctx, bulk.KindResource); err != nil {
+			return RowOut{}, err
+		}
 	}
 	for _, c := range convs {
 		patch, perr := o.valuesPatch(ctx, d, c.stored.vals, c.stored)
@@ -582,8 +600,14 @@ func (o ops) fieldRetype(ctx context.Context, in FieldRetypeIn) (RowOut, error) 
 		return RowOut{}, err
 	}
 	out, err := o.patchRow(bctx, f, map[string]value.Value{fType: tv, fTypeHistory: hist}, fmt.Sprintf("retyped %s.%s %s → %s; %s converted%s (batch %s)", d.name(), in.Field, old, in.Type, plural.Count(len(convs), "value"), kept, bid))
+	if err != nil {
+		return RowOut{}, err
+	}
+	if in.DryRun {
+		return RowOut{DryRun: true, Human: fmt.Sprintf("%s %s%s (dry run, nothing written)\n", plural.Of(len(convs), "value fits", "values fit"), in.Type, kept)}, nil
+	}
 	out.Batch = bid.String()
-	return out, err
+	return out, nil
 }
 
 // typeHistoryEntry is one element of kind_fields.type_history.
@@ -652,6 +676,13 @@ func (o ops) resDeleteWithDependents(ctx context.Context, in ResDeleteIn) (ResDe
 		out.IDs = append(out.IDs, t.Row.ID.String())
 	}
 	if in.DryRun {
+		// D-931: every target's real delete, check-only (Run marks a preview so too)
+		cctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
+		for _, t := range targets {
+			if _, err = o.env.Delete(cctx, engine.Ref{Store: t.Src, Table: schema.TableResources, ID: t.Row.ID}); err != nil {
+				return ResDeleteOut{}, errs.Prefix("resource delete --dry-run: "+text(t.Row, rName)+" would fail (nothing written)", err)
+			}
+		}
 		out.Human = "would delete " + plural.Count(len(targets), "resource") + ": " + strings.Join(labels, ", ") + " (dry run, nothing written)\n"
 		return out, nil
 	}
