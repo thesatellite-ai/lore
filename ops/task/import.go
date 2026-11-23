@@ -432,6 +432,20 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		return ImportOut{}, err
 	}
 	out.Batch = bid.String()
+	if slices.Contains(inTree(recs), true) {
+		// devco:D-938: a task tree is written row by row (a child reads its
+		// parent back), so the whole import first runs check-only, as its
+		// dry run does: a record the write would refuse stops the import
+		// before its first row lands, never part way through the file
+		check := out
+		check.Rows = slices.Clone(out.Rows)
+		if cerr := engine.CheckFirst(bctx, func(sctx context.Context) error {
+			_, err := o.importWrite(sctx, in, from, target, recs, dropped, plan, planned, check, true)
+			return err
+		}); cerr != nil {
+			return ImportOut{}, errs.Prefix("task import: nothing written", cerr)
+		}
+	}
 	return o.importWrite(bctx, in, from, target, recs, dropped, plan, planned, out, false)
 }
 

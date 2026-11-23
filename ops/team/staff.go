@@ -529,7 +529,15 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		return StaffAddOut{}, errs.New(errs.InvalidInput, "member add: --started-on goes with one <email>, not --from or --from-invites").
 			WithHint("lore member add --email <email> --started-on YYYY-MM-DD; for the others run lore actor period edit --period <apd_id> --started-on YYYY-MM-DD after the add")
 	}
-	r, done, err := o.env.Roster(ctx, !in.DryRun)
+	// devco:D-938: the dry run opens the roster as the write does (its
+	// refusals: no org store, a client repo's store, an agent the policy
+	// does not let manage people), check-only so an agent's actor row is
+	// not written; a read-only open passed where the write is refused
+	rctx := ctx
+	if in.DryRun {
+		rctx = engine.WithCheckOnly(ctx)
+	}
+	r, done, err := o.env.Roster(rctx, true)
 	defer done()
 	if err != nil {
 		return StaffAddOut{}, err

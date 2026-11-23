@@ -365,16 +365,24 @@ func (o ops) stale(ctx context.Context, in StaleIn) (StaleOut, error) {
 		out.Human = h.String()
 		return out, nil
 	}
+	// devco:D-932/D-938: the dry run AND the write first run every task's
+	// real cancel check-only (engine.CheckFirst), so a task the write
+	// refuses is refused with the same code before any task is cancelled,
+	// never part way through the list
+	verb := "task stale --close"
 	if in.DryRun {
-		// devco:D-932: the dry run runs every task's real cancel,
-		// check-only (Run marks a preview engine.WithCheckOnly), so a task
-		// the write refuses is refused here with the same code
-		cctx := engine.WithConfirmed(engine.WithCheckOnly(ctx))
-		for _, s := range hits {
-			if _, err = o.cancel(cctx, CancelIn{ID: s.Row.ID.String(), Reason: schema.TaskCloseStale}); err != nil {
-				return StaleOut{}, errs.Prefix("task stale --close --dry-run: "+s.Row.ID.String()+" would fail (nothing written)", err)
-			}
+		verb += " --dry-run"
+	}
+	for _, s := range hits {
+		cerr := engine.CheckFirst(engine.WithConfirmed(ctx), func(cctx context.Context) error {
+			_, err := o.cancel(cctx, CancelIn{ID: s.Row.ID.String(), Reason: schema.TaskCloseStale})
+			return err
+		})
+		if cerr != nil {
+			return StaleOut{}, errs.Prefix(verb+": "+s.Row.ID.String()+" would fail (nothing written)", cerr)
 		}
+	}
+	if in.DryRun {
 		out.Human = h.String() + "would cancel them with close_reason stale (nothing written, --dry-run)\n"
 		return out, nil
 	}

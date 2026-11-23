@@ -169,7 +169,20 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		}
 		return o.applyDry(ctx, to, project, p)
 	}
-	return o.applyWrite(ctx, to, project, p)
+	// devco:D-938: the mission, the default list and every task are staged
+	// and land as ONE store commit; a task the write refuses (a bad
+	// timebox, a repo that does not resolve) drops the whole stage, so a
+	// refused plan writes nothing, never a mission row without its tasks
+	sctx := engine.Staging(store.WithCommitTitle(ctx, "mission apply: "+strings.TrimSpace(p.Mission.Title)))
+	defer engine.Discard(sctx) // no-op once committed
+	out, err := o.applyWrite(sctx, to, project, p)
+	if err != nil {
+		return ApplyOut{}, errs.Prefix("mission apply: nothing written", err)
+	}
+	if _, err = engine.Commit(sctx); err != nil {
+		return ApplyOut{}, err
+	}
+	return out, nil
 }
 
 // applyWrite writes what the plan p is missing (apply, after its checks).

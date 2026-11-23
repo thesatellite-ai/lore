@@ -140,7 +140,7 @@ func (o ops) actorMergeOps() []op.Entry {
 	if !ok {
 		return nil
 	}
-	return []op.Entry{op.Define(op.Spec{Name: OpActorMerge, Summary: "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other; its row stays, marked merged_into; asks first",
+	return []op.Entry{op.Define(op.Spec{Name: OpActorMerge, Summary: "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other; its row stays, marked merged_into; asks first; a row a write refuses is named and the rest are merged (a rerun finishes)",
 		Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.Refused}, writeErrors...),
 		Confirm: op.ConfirmRule{MayAsk: true},
 		Examples: []op.Example{

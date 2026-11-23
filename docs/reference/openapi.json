@@ -2275,7 +2275,7 @@
     "/v1/actors/merge": {
       "post": {
         "operationId": "actor.merge",
-        "summary": "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other; its row stays, marked merged_into; asks first",
+        "summary": "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other; its row stays, marked merged_into; asks first; a row a write refuses is named and the rest are merged (a rerun finishes)",
         "tags": [
           "actor"
         ],

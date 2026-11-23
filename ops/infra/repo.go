@@ -1635,16 +1635,22 @@ func repoMergeIDs(ctx context.Context, env Env, files RepoFiles, rw OriginRewrit
 		}
 	}
 	winner := canon.String(out.RepoID)
+	// devco:D-932/D-938: the dry run AND the write first run every row's
+	// real rewrite check-only (engine.CheckFirst: every check, nothing
+	// written), so a row the write refuses fails with the write's code
+	// before any row is rewritten, never part way through
+	verb := "repo merge-ids"
 	if in.DryRun {
-		// devco:D-932: the dry run runs every row's real rewrite,
-		// check-only (engine.WithCheckOnly: every check, nothing written),
-		// so a row the write refuses fails here with the write's code
-		cctx := engine.WithCheckOnly(ctx)
-		for _, m := range out.Rows {
-			if err := rewriteMergedOrigin(cctx, rw, m, alias, winner); err != nil {
-				return RepoMergeIDsOut{}, errs.Prefix("repo merge-ids --dry-run: "+m.ID+" would fail (nothing written)", err)
-			}
+		verb += " --dry-run"
+	}
+	for _, m := range out.Rows {
+		if err := engine.CheckFirst(ctx, func(cctx context.Context) error {
+			return rewriteMergedOrigin(cctx, rw, m, alias, winner)
+		}); err != nil {
+			return RepoMergeIDsOut{}, errs.Prefix(verb+": "+m.ID+" would fail (nothing written)", err)
 		}
+	}
+	if in.DryRun {
 		out.human = mergeIDsText(out, "would rewrite")
 		return out, nil
 	}

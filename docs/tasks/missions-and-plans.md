@@ -8,7 +8,7 @@ One task is one step. Most real goals need many steps in an order: take the phot
 
 A **plan** is a written note with a title and a body, such as "Collect emails on the home page first, then send one newsletter a month." Use it to write down the idea before you split it into tasks.
 
-A **plan file** is a small YAML file (a plain text format of `name: value` lines) that lists a mission and its tasks. `lore mission apply` reads it and creates everything at once. Running it again adds nothing, so you can keep the file in the repo and apply it safely.
+A **plan file** is a small YAML file (a plain text format of `name: value` lines) that lists a mission and its tasks. `lore mission apply` reads it and creates everything at once. Running it again adds nothing, so you can keep the file in the repo and apply it safely. If any task of the file is refused (a `timebox` that is no duration, say), nothing is written: the error names the task, and once the file is fixed the next run creates everything.
 
 A **handoff** is a short note for a person, like a sticky note on their desk: "Two of the three sections are written; the team photo is still missing." It appears in their `lore inbox` until they mark it read.
 

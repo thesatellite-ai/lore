@@ -78,4 +78,24 @@ func TestJourneyDryRunChecksLikeTheWrite(t *testing.T) {
 		lap.LoreIn(code, "task", "add", "--template", "rel", "--arg", "p=high", "--dry-run").OK(t).Says(t, "would add 2 tasks", "Tag the build")
 		lap.LoreIn(code, "task", "list").OK(t).Never(t, "Release", "Tag the build")
 	})
+
+	// devco:D-938 (H-199): a write of many rows the write itself refused
+	// part way (the plan's second task, the template's sub-task) left
+	// its first rows written; it writes nothing now, then the fixed input
+	// writes every row
+	w.Step("day3/a-refused-plan-or-template-writes-nothing", func() {
+		plan := "mission:\n  title: Launch\ntasks:\n  - key: a\n    title: Write the page\n  - key: b\n    title: Ship the page\n    after: [a]\n"
+		lap.LoreIn(code, "mission", "apply", "--file", put("half.yaml", plan+"    timebox: soon\n"), "--yes").
+			Refused(t, "E_INVALID_INPUT", "nothing written", "task b: timebox soon")
+		lap.LoreIn(code, "mission", "list").OK(t).Never(t, "Launch")
+		lap.LoreIn(code, "task", "list").OK(t).Never(t, "Write the page")
+		lap.LoreIn(code, "task", "add", "--template", "rel", "--arg", "p=high", "--yes").OK(t)
+		kid := put("kid.yaml", "args:\n  p:\n    required: true\ntask: {title: Hotfix, children: [{title: Patch the feed, priority: \"${arg:p}\"}]}\n")
+		lap.LoreIn(code, "task", "template", "add", "--name", "kid", "--from-file", kid, "--yes").OK(t)
+		lap.LoreIn(code, "task", "add", "--template", "kid", "--arg", "p=someday", "--yes").
+			Refused(t, "E_INVALID_INPUT", "nothing written", "bad --priority someday")
+		lap.LoreIn(code, "task", "list").OK(t).Says(t, "Release").Never(t, "Hotfix")
+		lap.LoreIn(code, "mission", "apply", "--file", put("whole.yaml", plan+"    timebox: 30m\n"), "--yes").OK(t).Says(t, "Launch (created)", "Ship the page")
+		lap.LoreIn(code, "task", "list").OK(t).Says(t, "Write the page", "Ship the page")
+	})
 }

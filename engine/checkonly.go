@@ -93,3 +93,18 @@ func stagedView(ctx context.Context, name store.Source, table row.Table, id ids.
 	}
 	return store.Row{}, false
 }
+
+// CheckFirst runs write in a check-only stage it discards (devco:D-938):
+// every check of every row the write would make runs, a later step sees
+// the stage's earlier rows (stagedView), and nothing is written. An
+// operation that writes many rows but cannot hold them in ONE real stage
+// (a step reads its own earlier write back: a template's sub-task its
+// parent, a task tree's child its parent, a merge's delete its re-pointed
+// referrers) calls it before its real write, so a row the write would
+// refuse stops the whole write before its first row lands, never part
+// way through. Its dry run is the same call without the write after it.
+func CheckFirst(ctx context.Context, write func(context.Context) error) error {
+	sctx := Staging(WithCheckOnly(ctx))
+	defer Discard(sctx)
+	return write(sctx)
+}

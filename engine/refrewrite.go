@@ -245,16 +245,21 @@ func (e *Engine) MergeRows(ctx context.Context, w RowWriter, table row.Table, ke
 			return res, errs.Wrap(errs.ReadOnly, "merge: "+string(r.Table)+" "+r.ID.String()+" names "+drop.String()+" but its store "+string(r.Store)+" is not writable; nothing changed", werr)
 		}
 	}
-	if dryRun {
-		// devco:D-932: the dry run runs the real re-points and delete in
-		// a check-only stage it discards: each write's checks run, the
-		// delete sees the re-pointed referrers as the write would
-		// (stagedView), and nothing is written
-		sctx := Staging(WithConfirmed(WithCheckOnly(ctx)))
-		defer Discard(sctx)
-		if err := e.mergeWrites(sctx, w, table, keep, drop, refs); err != nil {
+	// devco:D-932/D-938: the dry run AND the write first run the real
+	// re-points and delete in a check-only stage they discard
+	// (CheckFirst): each write's checks run, the delete sees the
+	// re-pointed referrers as the write would (stagedView), and nothing is
+	// written; so a referrer the write refuses stops the merge before its
+	// first re-point, never leaving half the referrers moved
+	if err := CheckFirst(WithConfirmed(ctx), func(sctx context.Context) error {
+		return e.mergeWrites(sctx, w, table, keep, drop, refs)
+	}); err != nil {
+		if dryRun {
 			return res, errs.Prefix("merge --dry-run: would fail (nothing written)", err)
 		}
+		return res, errs.Prefix("merge: nothing written", err)
+	}
+	if dryRun {
 		return res, nil
 	}
 	b, ok := BatchOf(ctx)

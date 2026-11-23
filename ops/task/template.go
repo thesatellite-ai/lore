@@ -789,17 +789,22 @@ func (o ops) addTemplate(ctx context.Context, in AddIn) (AddOut, error) {
 	walkTemplate(tree, 0, func(n TemplateTask, depth int) { plan = append(plan, TemplateAdded{Title: n.Title, Depth: depth}) })
 	base := in
 	base.Template, base.Args, base.DryRun = "", nil, false
-	if in.DryRun {
-		// devco:D-932: the dry run runs the real apply into a check-only
-		// stage it discards: every task's add, checklist and gate is
-		// checked as the write checks it (a sub-task reads its parent from
-		// the stage, engine.stagedView), and nothing is written
-		sctx := engine.Staging(engine.WithCheckOnly(ctx))
-		_, werr := o.applyTemplate(sctx, base, tree, t.Name)
-		engine.Discard(sctx)
-		if werr != nil {
+	// devco:D-932/D-938: the dry run AND the write first run the real
+	// apply into a check-only stage they discard: every task's add,
+	// checklist and gate is checked as the write checks it (a sub-task
+	// reads its parent from the stage, engine.stagedView), and nothing is
+	// written; so a task the write refuses stops it before the root task
+	// lands, never leaving half a template behind
+	if werr := engine.CheckFirst(ctx, func(sctx context.Context) error {
+		_, err := o.applyTemplate(sctx, base, tree, t.Name)
+		return err
+	}); werr != nil {
+		if in.DryRun {
 			return AddOut{}, errs.Prefix("task add --template "+t.Name+" --dry-run: would fail (nothing written)", werr)
 		}
+		return AddOut{}, errs.Prefix("task add --template "+t.Name+": nothing written", werr)
+	}
+	if in.DryRun {
 		var b strings.Builder
 		b.WriteString("would add " + strconv.Itoa(len(plan)) + " tasks (template " + t.Name + "):\n")
 		for _, p := range plan {
