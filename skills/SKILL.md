@@ -365,6 +365,7 @@ When the user wants to flag, revisit, or update an EXISTING capture, do NOT crea
 | "Update dec_<id>'s body" / "Edit decision dec_<id>" | `lore decision edit --id dec_<id> --body "<new>"` (direct mutation; no need to show first if user provided the new content) |
 | "Update the X prompt template" | `lore prompt edit --id <X> --body "<new>"` |
 | "Update pattern X" | `lore pattern edit --id <X> --body "<new>"` |
+| "Import what TECHNICAL.md / the README says" | `lore docs import --from TECHNICAL.md --dry-run`, then without `--dry-run`: unverified memories and proposed decisions with `fact_evidence` = the doc line; verify each against the code (`lore meta set --id <id> --pair fact_status=verified --set fact_verified_at=<YYYY-MM-DD>`) before relying on it |
 | "Bulk archive mem_<id>, mem_<id>, mem_<id>" | A few IDs: one `lore memory archive --id <id>` call each. Dozens or more (or a mix of adds, edits, archives and `meta set`): write one JSON line per write to a file and run `lore batch apply --file <file> --dry-run`, then without `--dry-run`: one commit per store instead of one per row; undo with `lore batch undo --id <bat_id>` |
 | "Mission msn_<id> is complete / ship msn_<id>" | `lore mission done --id msn_<id>` (mission has its own `done` verb; do NOT use `task done` for msn_<id> IDs) |
 | "Done with mission msn_<id>" | `lore mission done --id msn_<id>` (mission/handoff have no `archive` — use status transitions: `mission done`, `mission cancel`, `mission pause`/`resume`, `handoff ack`) |
@@ -669,6 +670,13 @@ For more than a handful of rows (an import of hundreds of notes), put one write 
 #              {"op": "meta set", "input": {"id": "mem_…", "pair": "team=core"}}
 lore batch apply --file notes.jsonl --dry-run   # checks every line, writes nothing
 lore batch apply --file notes.jsonl --yes       # one commit per store; prints the undo
+```
+A long technical doc that stays where it is (TECHNICAL.md, README.md): draft its facts and stated choices as unverified notes, each pointing at its doc line, then check each against the code before trusting it:
+```bash
+lore docs import --from TECHNICAL.md --dry-run   # lists the memories and proposed decisions it would draft
+lore docs import --from TECHNICAL.md --yes       # one commit per store; a re-import adds nothing
+lore memory list --meta fact_status=unverified   # (and decision list) the drafts nobody checked yet
+lore meta set --id <id> --pair fact_status=verified --set fact_verified_at=<YYYY-MM-DD>   # after checking the code
 ```
 
 ### P2 — Capture correction

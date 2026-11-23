@@ -170,10 +170,10 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		out.Batch = id.String()
 	}
 	bctx = store.WithCommitTitle(bctx, "batch apply: "+strconv.Itoa(len(lines))+" ops from "+filepath.Base(in.File)+", batch "+id.String())
-	a := applier{run: r, ctx: bctx, dry: in.DryRun, out: &out}
+	a := applier{run: r, ctx: bctx, dry: in.DryRun, out: &out, what: "batch apply", unit: "line"}
 	a.open()
 	for _, l := range lines {
-		if err = a.line(l); err != nil {
+		if _, err = a.line(l); err != nil {
 			engine.Discard(a.stage)
 			return out, a.failed(l, err)
 		}
@@ -196,6 +196,9 @@ type applier struct {
 	stage context.Context
 	dry   bool
 	out   *ApplyOut
+	// what names the command in errors ("batch apply"); unit is one of
+	// its steps ("line" of the file, "note" of import docs).
+	what, unit string
 	// done is how many lines were run into stages already written.
 	done, staged int
 }
@@ -203,25 +206,26 @@ type applier struct {
 // open starts a fresh stage.
 func (a *applier) open() { a.stage = engine.Staging(a.ctx) }
 
-// line runs one line into the open stage. A line that writes a row the
-// stage already holds lands the stage first and runs again in a new one.
-func (a *applier) line(l applyLine) error {
-	_, err := a.run.RunLine(a.stage, l.entry, op.JSONDecoder{Body: l.body})
+// line runs one line into the open stage and returns the op's result. A
+// line that writes a row the stage already holds lands the stage first and
+// runs again in a new one.
+func (a *applier) line(l applyLine) (op.Result, error) {
+	res, err := a.run.RunLine(a.stage, l.entry, op.JSONDecoder{Body: l.body})
 	if errors.Is(err, store.ErrBatch) {
 		if a.dry {
 			a.note(engine.StagedStores(a.stage))
 			engine.Discard(a.stage)
 		} else if ferr := a.flush(); ferr != nil {
-			return ferr
+			return res, ferr
 		}
 		a.open()
-		_, err = a.run.RunLine(a.stage, l.entry, op.JSONDecoder{Body: l.body})
+		res, err = a.run.RunLine(a.stage, l.entry, op.JSONDecoder{Body: l.body})
 	}
 	if err != nil {
-		return err
+		return res, err
 	}
 	a.staged++
-	return nil
+	return res, nil
 }
 
 // flush writes the open stage, one store write per store.
@@ -249,9 +253,9 @@ func (a *applier) note(stores []store.Source) {
 // failed is the error of a refused line (l zero: the final store write),
 // naming what was written before it.
 func (a *applier) failed(l applyLine, err error) error {
-	what := "batch apply"
+	what := a.what
 	if l.n > 0 {
-		what += ": line " + strconv.Itoa(l.n) + " (" + l.name + ")"
+		what += ": " + a.unit + " " + strconv.Itoa(l.n) + " (" + l.name + ")"
 	}
 	if a.dry {
 		return errs.Prefix(what+" (--dry-run, nothing written)", err)
@@ -264,7 +268,7 @@ func (a *applier) failed(l applyLine, err error) error {
 		return errs.Prefix(what+": a store write failed after "+strconv.Itoa(a.out.Writes)+" store write(s) landed ("+
 			strings.Join(a.out.Stores, ", ")+") in batch "+b+" (undo: lore batch undo --id "+b+")", err)
 	}
-	return errs.Prefix(what+"; the "+strconv.Itoa(a.done)+" line(s) before it were written in batch "+b+
+	return errs.Prefix(what+"; the "+strconv.Itoa(a.done)+" "+a.unit+"(s) before it were written in batch "+b+
 		" (undo: lore batch undo --id "+b+"; or fix the line, drop the written lines and apply again)", err)
 }
 

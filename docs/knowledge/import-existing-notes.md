@@ -1,6 +1,6 @@
 # Bring in notes you already have
 
-**In short:** if your project already has notes in markdown files (a `CLAUDE.md`, an `AGENTS.md`, a notes folder), turn each piece that is still true into a lore row of the right kind: a rule, a decision, a memory. Then delete the old file, so there is one place for notes. lore 0.1.18 has no automatic importer; this page shows the hand-made way, which is also the moment to tidy up.
+**In short:** if your project already has notes in markdown files (a `CLAUDE.md`, an `AGENTS.md`, a notes folder), turn each piece that is still true into a lore row of the right kind: a rule, a decision, a memory. Then delete the old file, so there is one place for notes. This page shows the hand-made way, which is also the moment to tidy up; for a long technical doc that should stay where it is (a `TECHNICAL.md`, a `README.md`), `lore docs import` drafts the notes for you, marked unverified until someone checks them (see below).
 
 ## What it is and when you want it
 
@@ -71,6 +71,39 @@ $ lore batch apply --file notes.jsonl --yes
 applied 5 line(s) in 2 store write(s) (stores: repo, acme/notes); batch bat_7c21…e04a (undo: lore batch undo --id bat_7c21…e04a)
 ```
 
+## Draft notes from a technical doc: lore docs import
+
+A `TECHNICAL.md` or `README.md` already says how the code works and why some choices were made, but an agent only sees what lore holds. `lore docs import --from <file>` (repeat `--from` for several files) reads the doc and drafts one note per paragraph or bullet: a memory for a fact, and a decision with status `proposed` where the text states a choice and its reason ("we chose X over Y because …"). Headings, code blocks, tables, HTML and one-line bullets such as "ok" are left out. No model is called, so the same doc always gives the same notes.
+
+Every draft says where it came from and that nobody has checked it yet:
+
+- `source_kind` is `imported` and `source_ref` is the doc line (`TECHNICAL.md:5`, the path relative to the repo);
+- metadata `fact_evidence` holds the doc line, then each `path:line` the text names that exists in the repo (`TECHNICAL.md:5, internal/queue/worker.go:4`);
+- metadata `fact_status` is `unverified`, and `fact_verified_at` is not set.
+
+```console
+$ lore docs import --from TECHNICAL.md --dry-run
+  memory (new) — The worker pulls jobs from the queue every five seconds and parks a job after…  [TECHNICAL.md:5, internal/queue/worker.go:4]
+  memory (new) — Invoices are rendered as PDF and kept for ninety days  [TECHNICAL.md:7]
+  decision (new) — We chose Postgres advisory locks over Redis locks because the service already…  [TECHNICAL.md:16]
+would draft 3 unverified notes from TECHNICAL.md, skip 0; nothing written (--dry-run)
+$ lore docs import --from TECHNICAL.md --yes
+…
+drafted 3 unverified notes from TECHNICAL.md in 1 store write, skipped 0; batch bat_7c21…e04a (undo: lore batch undo --id bat_7c21…e04a)
+```
+
+The notes are written like `lore batch apply`: each runs through the checks of its own command (the secret scan, policy, roles; `--secret-ref`, `--secret-unstored` and `--not-a-secret --reason <why>` answer a finding), all of them land as one commit per store under one batch, and a note a write refuses stops the import with nothing written. `--to <store>/<folder>` writes them into a store folder; `--dry-run` runs every check and writes nothing. A paragraph the doc says twice, or one that a memory or decision of any attached store already says (archived ones too, by the same test as `lore lint`'s `near_duplicate`), is skipped and listed with the id that holds it, so importing the doc again adds nothing.
+
+Check each draft against the code, then mark it checked; the rest stay easy to find:
+
+```console
+$ lore meta set --id mem_2e0c…0b6d --pair fact_status=verified --set fact_verified_at=2026-11-23
+$ lore memory list --meta fact_status=unverified
+$ lore decision list --meta fact_status=unverified
+```
+
+A draft that turned out wrong is archived like any note (`lore memory archive --id <id>`); a proposed decision that holds is accepted with `lore decision edit --id <id> --status accepted`.
+
 ## Try it: find the imported notes
 
 Search for a word from the old file, then render: the memory is found by `lore search`, and the rule (a `must` rule by default) is pinned into `.lore/LORE.md`, which is what your coding tool reads. The `1` is the number of lines in the rendered file that hold the rule.
@@ -114,6 +147,7 @@ lore: wrote ~/work/website/.lore/data/external_sources/ext_e9fa…224c.json
 - **Leave out what is no longer true.** An old line copied into a rule is worse than no rule. When in doubt, ask the team, or add it as a memory instead.
 - **`external-source` is a list only.** Registering or enabling a source does not read anything. Copy what you need from the wiki by hand, as above.
 - **Commit afterwards.** New rows are files in `.lore/data` and need a commit, together with the deletion of the old notes file.
+- **Imported drafts are not facts yet.** `lore docs import` copies what the doc says, right or stale; until a note's `fact_status` is `verified`, treat it as a lead to check in the code.
 - **Hundreds of rows: use one file.** One command per row is one store commit per row; `lore batch apply --file <file>` writes the whole file as one commit per store (see above).
 
 ## Related

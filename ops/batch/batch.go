@@ -175,6 +175,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: errsRead, Examples: []op.Example{{Title: "what one bulk action wrote", CLI: "lore batch show --id bat_9e02"}}}, o.show),
 		undoEntry(o),
 		applyEntry(o),
+		importDocsEntry(o),
 	}
 }
 

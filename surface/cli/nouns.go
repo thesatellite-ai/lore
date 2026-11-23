@@ -68,6 +68,7 @@ func nounDocs() map[string]NounDoc {
 		"cookbookrecipe":  {Short: "Manage cookbook recipes"},
 		"decision":        {Short: "Manage decisions (architectural records)"},
 		"directive":       {Short: "Install or show the lore agent-directive block in agent-loaded markdown"},
+		"docs":            {Short: "Draft unverified notes from the repo's own markdown docs (import)"},
 		"external-source": {Short: "Register external knowledge sources (add, enable, disable, list)"},
 		"gate":            {Short: "Human gates: stop agents until a person approves"},
 		"handoff":         {Short: "Manage handoffs"},

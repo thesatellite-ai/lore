@@ -40,6 +40,7 @@ var dryRunChecked = map[string]string{
 	"task.stale":               "--close: every task's real cancel, check-only",
 	"trash.add":                "the real DeleteMany, check-only",
 	"batch.apply":              "runs every line's real op in a stage it discards, check-only (ops/batch tests prove it)",
+	"docs.import":              "batch apply's applier: every note's real memory/decision add in a stage it discards (devco:D-940)",
 	"meta.set":                 "the one-row form (metaSetDry) runs the real write check-only after its own checks",
 	"meta.unset":               "the one-row form (metaUnsetDry) runs the real write check-only after its own checks",
 	"task.edit":                "--where runs every task's edit check-only",
@@ -182,6 +183,25 @@ var dryRunCases = []dryRunCase{
 	{op: "resource.import", seed: seedHostFiles, bad: `{"file":"{{id}}/bad.csv","kind":"host"}`, good: `{"file":"{{id}}/good.csv","kind":"host"}`},
 	{op: "meta.import", seed: seedMetaFiles, bad: `{"file":"{{id}}/bad.csv"}`, good: `{"file":"{{id}}/good.csv"}`},
 	{op: "meta.edit", seed: seedSizeKey, bad: `{"id":"size","type":"bool"}`, good: `{"id":"size","type":"number"}`},
+	// devco:D-940 (H-189): a doc whose paragraph holds a key fails the dry run as the import
+	{op: "docs.import", seed: seedDocFiles, bad: `{"from":["{{id}}/bad.md"]}`, good: `{"from":["{{id}}/good.md"]}`},
+}
+
+// seedDocFiles writes a doc whose second paragraph holds an access key
+// (bad.md) and a plain one (good.md); {{id}} is their folder.
+func seedDocFiles(t *testing.T, _ *App) string {
+	t.Helper()
+	dir := t.TempDir()
+	plain := "# Feed\n\nThe feed worker polls the upstream every five minutes and keeps a day of items.\n"
+	for name, body := range map[string]string{
+		"good.md": plain,
+		"bad.md":  plain + "\nThe deploy job signs uploads with the access key " + fakeAccessKey + " from the runner.\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
 }
 
 // seedTaskID is a task; its id is the case's {{id}}.
