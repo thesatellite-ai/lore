@@ -56,7 +56,7 @@ func (a *App) DoctorSearchIndex(ctx context.Context, fix bool) ([]DoctorFinding,
 		}
 		msg := staleIndexMessage(src, stale)
 		if len(stale) == 0 {
-			msg = "the search index of " + string(src) + " still holds rows under the name " + string(old[0]) + ", which no attachment uses here (the folder was attached under that name before): search and ask find their old text"
+			msg = leftoverIndexMessage(ctx, st, src, old[0])
 		}
 		f := DoctorFinding{Check: DoctorCheckSearchIndex, Level: DoctorWarning, Store: src,
 			Message: msg, Fix: rebuildCommand(src) + " (or lore doctor --fix)"}
@@ -104,6 +104,29 @@ func (a *App) staleIndexRows(ctx context.Context, st *state, src store.Source) (
 		}
 	}
 	return stale, nil
+}
+
+// leftoverIndexMessage is the finding's line for rows src's cache file
+// holds under old, a name no attachment uses any more: how many of src's
+// ids it holds twice (devco D-930, hunt H-188), or how many rows it holds
+// when the counts cannot be read.
+func leftoverIndexMessage(ctx context.Context, st *state, src, old store.Source) string {
+	c, err := st.caches.of(src)
+	if err != nil {
+		return "the search index of " + string(src) + " still holds rows under the name " + string(old) + ", which no attachment uses any more"
+	}
+	mine, merr := c.HeldVersions(ctx, src)
+	theirs, terr := c.HeldVersions(ctx, old)
+	if merr != nil || terr != nil {
+		return "the search index of " + string(src) + " still holds rows under the name " + string(old) + ", which no attachment uses any more"
+	}
+	twice := 0
+	for k := range theirs {
+		if _, ok := mine[k]; ok {
+			twice++
+		}
+	}
+	return "the search index of " + string(src) + " holds " + plural(twice, "id") + " twice: also under the name " + string(old) + " (" + plural(len(theirs), "row") + "), which no attachment uses any more (the folder was attached under that name before): search and ask find their old text"
 }
 
 // staleIndexMessage is the finding's line for src's stale rows.

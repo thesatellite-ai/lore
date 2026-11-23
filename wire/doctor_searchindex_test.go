@@ -149,7 +149,8 @@ func TestRebuildDropsRowsUnderAnEarlierAttachmentName(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := a.DoctorSearchIndex(ctx, false)
-	if err != nil || len(got) != 1 || !strings.Contains(got[0].Message, "under the name kb/app") {
+	// devco D-930: the finding counts the ids the file holds twice
+	if err != nil || len(got) != 1 || !strings.Contains(got[0].Message, "twice: also under the name kb/app") {
 		t.Fatalf("findings %+v %v", got, err)
 	}
 	if err := st.caches.Rebuild(ctx, store.SourceRepo); err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	opscache "github.com/thesatellite-ai/lore/ops/cache"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -41,6 +42,9 @@ type caches struct {
 	// combinedPath is the file of combined ("" without one): the lens
 	// attaches it (lensSources), on a repo's open and a store-only one.
 	combinedPath string
+	// others are, per cache file path, the names other live checkouts
+	// apply that file under (noteOtherUses): kept, never leftovers.
+	others map[string]map[store.Source]bool
 	// healed are the notices of damaged cache files moved aside and
 	// rebuilt during open (openHealing); the App hands them to
 	// Options.Notice once the open succeeds.
@@ -267,7 +271,7 @@ func (c *caches) Mirror(source store.Source) store.RowMirror {
 }
 
 // Rebuild implements store.Cache. Rows the same file holds under a name
-// no attachment of this open uses for it (the folder was attached under
+// no attachment uses for it any more (the folder was attached under
 // another name before) go too: they were searched with the rest and no
 // edit or rebuild reached them (devco D-920, public issue #142).
 func (c *caches) Rebuild(ctx context.Context, source store.Source) error {
@@ -286,20 +290,87 @@ func (c *caches) Rebuild(ctx context.Context, source store.Source) error {
 	return nil
 }
 
-// leftoverSources lists the sources f holds rows of that no attachment of
-// this open maps to f; none for the combined file, whose sources are the
-// attached stores past the per-store limit and change with them.
+// noteOtherUses records, per cache file, the names every other live
+// checkout on this machine applies it under (their cache use records,
+// sqlite.ReadUses; self is this open's own checkout, "" for a store-only
+// open). Why (devco D-930, hunt H-188): a folder's cache is shared by
+// every repo using the folder, each under its own attach name; a name
+// another repo still uses is that repo's live copy, not a leftover, so
+// dropping it would only make that repo read the whole folder again.
+func (c *caches) noteOtherUses(cacheRoot, self string) {
+	recs, err := sqlite.ReadUses(cacheRoot)
+	if err != nil {
+		return // no records: only this open's names are kept
+	}
+	others := map[string]map[store.Source]bool{}
+	for _, rf := range recs {
+		rec := rf.Record
+		if rec.Repo == "" || (self != "" && filepath.Clean(rec.Repo) == filepath.Clean(self)) || !opscache.RepoAlive(rec.Repo) {
+			continue
+		}
+		for _, u := range rec.Caches {
+			p := filepath.Join(cacheRoot, filepath.FromSlash(u.Path))
+			if others[p] == nil {
+				others[p] = map[store.Source]bool{}
+			}
+			others[p][store.Source(u.Store)] = true
+		}
+	}
+	c.mu.Lock()
+	c.others = others
+	c.mu.Unlock()
+}
+
+// dropUnusedNames removes from every cache file this open uses the rows
+// of names no attachment uses any more (leftoverSources), at once on the
+// open. Why (devco D-930, hunt H-188, public issue #142): a folder's cache
+// keyed rows by the name the folder is attached under, so after a
+// `lore store remove` and a `lore store add` under another name (or a
+// rename) the copies under the earlier name stayed in the file: no edit
+// reached them and search and ask kept finding their old text until a
+// `lore search rebuild`. Every attach, detach or rename now takes effect
+// on the next command, and a cache an older lore filled is cleaned on its
+// first open. A file that cannot be read is left to the doctor check.
+func (c *caches) dropUnusedNames(ctx context.Context) error {
+	c.mu.Lock()
+	files := map[*sqlite.Cache]bool{}
+	var order []*sqlite.Cache
+	for _, s := range c.order {
+		if f := c.by[s]; f != nil && !files[f] {
+			files[f] = true
+			order = append(order, f)
+		}
+	}
+	c.mu.Unlock()
+	var all []error
+	for _, f := range order {
+		for _, old := range c.leftoverSources(ctx, f) {
+			all = append(all, f.Rebuild(ctx, old))
+		}
+	}
+	return errors.Join(all...)
+}
+
+// leftoverSources lists the sources f holds rows of that no attachment
+// maps to f: neither this open nor the last open of another live checkout
+// (noteOtherUses).
 func (c *caches) leftoverSources(ctx context.Context, f *sqlite.Cache) []store.Source {
 	c.mu.Lock()
-	if f == c.combined {
-		c.mu.Unlock()
-		return nil
-	}
-	mine := map[store.Source]bool{}
+	keep := map[store.Source]bool{}
+	var path string
 	for s, g := range c.by {
 		if g == f {
-			mine[s] = true
+			keep[s] = true
+			if p := c.paths[s]; p != "" {
+				path = p
+			}
 		}
+	}
+	if f == c.combined {
+		path = c.combinedPath
+	}
+	for s := range c.others[path] {
+		keep[s] = true
 	}
 	c.mu.Unlock()
 	all, err := f.Sources(ctx)
@@ -308,7 +379,7 @@ func (c *caches) leftoverSources(ctx context.Context, f *sqlite.Cache) []store.S
 	}
 	var out []store.Source
 	for _, s := range all {
-		if !mine[s] {
+		if !keep[s] {
 			out = append(out, s)
 		}
 	}

@@ -322,6 +322,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		// the record. A failed write is ignored: it can only make prune
 		// drop a cache that the next command rebuilds.
 		_ = sqlite.RecordUse(cacheRoot, st.repoTop, uses)
+		// devco D-930 (#142): rows under a name no attachment uses any
+		// more go now, not at the next `lore search rebuild`; a failure
+		// leaves them to doctor's search_index check.
+		st.caches.noteOtherUses(cacheRoot, st.repoTop)
+		_ = st.caches.dropUnusedNames(ctx)
 	}
 
 	st.folders = map[store.Source]string{}
