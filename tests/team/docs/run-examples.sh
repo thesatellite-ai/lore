@@ -523,7 +523,7 @@ s_personal() {
   on alice work/scratch "lore memory add --body 'I prefer tabs over spaces' --to me"
   on alice work/website "lore memory list"
   on alice work/scratch "lore memory list"
-  on alice . "find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'"
+  on alice . "find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##' | sort"
 
   note "git personal store"
   remote alice/lore-me

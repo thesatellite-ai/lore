@@ -53,9 +53,9 @@ $ lore memory list
 mem_05e9…4603 [retrieved] I prefer tabs over spaces [me/everywhere]
 
 # alice, in ~
-$ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
-everywhere/memories/mem_05e9…4603.json
+$ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##' | sort
 agency/memories/mem_2ad3…f891.json
+everywhere/memories/mem_05e9…4603.json
 ```
 <!-- /example -->
 
