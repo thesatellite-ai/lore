@@ -294,6 +294,11 @@ func (a *App) outsideTo(ctx context.Context, in op.Input, write bool, opName str
 			project = tv.Text
 		}
 	}
+	if _, typed := in.TargetFieldName(); typed {
+		// a write whose target flag is not --to (op.TargetFielder:
+		// handoff add --store) runs where it names, as --to does (D-966)
+		_, to = typedTarget(in)
+	}
 	// an input naming its store through op.StoreRouter routes as its
 	// router says: under another field (task show --from, devco D-507),
 	// or wider than its --store (resource show --with-refs, D-792)
@@ -801,12 +806,7 @@ func (a *App) withSetupOfTarget(ctx context.Context, in op.Input) context.Contex
 	if strings.TrimSpace(op.SetupOf(ctx)) != "" || strings.TrimSpace(os.Getenv(opssetup.EnvSetup)) != "" {
 		return ctx
 	}
-	var to string
-	for _, tv := range in.Texts() {
-		if tv.Field == engine.InputTarget {
-			to = tv.Text
-		}
-	}
+	_, to := typedTarget(in)
 	if to == "" {
 		to = routedWriteStore(in) // --store of a write (devco D-586)
 	}

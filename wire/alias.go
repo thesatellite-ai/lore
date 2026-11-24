@@ -56,12 +56,7 @@ func (a *App) resolveAlias(ctx context.Context, e op.Entry, d op.Decoder) (op.De
 	if err != nil {
 		return d, nil // the engine's Run reports the decode error itself
 	}
-	to := ""
-	for _, tv := range in.Texts() {
-		if tv.Field == engine.InputTarget {
-			to = tv.Text
-		}
-	}
+	field, to := typedTarget(in)
 	if to == "" || strings.Contains(to, targetSep) {
 		return d, nil // `<store>/<folder>` and `<store>/.` name their place explicitly
 	}
@@ -90,8 +85,8 @@ func (a *App) resolveAlias(ctx context.Context, e op.Entry, d op.Decoder) (op.De
 	}
 	name, ok := orgAliases(ctx, a.opts, top)[to]
 	if !ok {
-		return nil, errs.New(errs.NotFound, "--to "+to+": this repository has no org store "+aliasWhat[to]).
-			WithHint("link the repo to an org (`lore org link --org <org> --project <folder>`), or name the store: --to <store>/<folder>")
+		return nil, errs.New(errs.NotFound, targetFlag(field)+" "+to+": this repository has no org store "+aliasWhat[to]).
+			WithHint("link the repo to an org (`lore org link --org <org> --project <folder>`), or name the store: " + targetFlag(field) + " <store>/<folder>")
 	}
 	return aliasDecoder{inner: d, from: to, to: string(name)}, nil
 }
@@ -143,10 +138,41 @@ func (d aliasDecoder) Decode(dst reflect.Value, fields []op.FieldInfo) error {
 	}
 	field := d.field
 	if field == "" {
-		field = engine.InputTarget
+		field = targetFieldOf(dst)
 	}
 	setField(dst, field, d.from, d.to)
 	return nil
+}
+
+// targetFieldOf is the json name of a decoded input's write target:
+// engine.InputTarget, or the field an op.TargetFielder input names
+// (handoff add's "store", devco D-966), so a rewrite of the target
+// (team, company, a linked or bare folder, `<store>/.`) reaches it.
+func targetFieldOf(v reflect.Value) string {
+	for v.Kind() == reflect.Pointer && !v.IsNil() {
+		if f, ok := fielderOf(v); ok {
+			return f
+		}
+		v = v.Elem()
+	}
+	if f, ok := fielderOf(v); ok {
+		return f
+	}
+	return engine.InputTarget
+}
+
+// fielderOf is v's op.TargetFielder field name, when v implements it.
+func fielderOf(v reflect.Value) (string, bool) {
+	if !v.IsValid() || !v.CanInterface() {
+		return "", false
+	}
+	// reflect.Value.Interface returns the stdlib's untyped value; it is
+	// narrowed to op.TargetFielder on this line and never kept untyped.
+	t, ok := v.Interface().(op.TargetFielder)
+	if !ok || t.TargetField() == "" {
+		return "", false
+	}
+	return t.TargetField(), true
 }
 
 // setTarget walks a decoded input struct (embedded structs included) and

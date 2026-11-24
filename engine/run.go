@@ -82,6 +82,17 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 			cl.target, named = e.StoreName(store.Source(tv.Text)), true
 		}
 	}
+	if _, typed := in.TargetFieldName(); typed && !named {
+		// devco D-966: an input whose typed target flag is not `to`
+		// (op.TargetFielder: handoff add's --store) names the call's
+		// target the same way, so every row the write makes without naming
+		// a store (the writer's actor row, a project row) lands where the
+		// op writes, and the checks below read that place, never the
+		// repo's default. The Runner attached a <store>/<folder> first.
+		if n, ok := in.NamedTarget(); ok && n != "" {
+			cl.target, named = e.StoreName(store.Source(n)), true
+		}
+	}
 	if _, err := e.attached(cl.target); err != nil {
 		if named {
 			return op.Result{}, e.unknownTarget(err)

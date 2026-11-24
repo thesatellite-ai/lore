@@ -43,7 +43,6 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
-	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -740,10 +739,8 @@ func (a *App) checkMeTarget(ctx context.Context, e op.Entry, d op.Decoder) error
 	if err != nil {
 		return nil // the engine's Run reports the decode error itself
 	}
-	for _, tv := range in.Texts() {
-		if tv.Field == engine.InputTarget && tv.Text != "" {
-			return checkPersonalTarget(ctx, a.opts.Home, a.projectDir(), tv.Text, func() []string { return a.personalNoneTargets(ctx) })
-		}
+	if _, to := typedTarget(in); to != "" {
+		return checkPersonalTarget(ctx, a.opts.Home, a.projectDir(), to, func() []string { return a.personalNoneTargets(ctx) })
 	}
 	return nil
 }

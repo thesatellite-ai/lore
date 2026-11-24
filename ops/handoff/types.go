@@ -47,6 +47,17 @@ type AddIn struct {
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 }
 
+// TargetField implements op.TargetFielder: --store is this op's write
+// target (its --to is the old alias of --for), so the Runner treats it as
+// it treats `--to` for every other kind: team/company and folder names
+// resolved, a `<store>/<folder>` attached and made the call's target, so
+// the actor and project rows the write makes land there too (devco D-966:
+// a repo linked to another folder refused "no store named
+// <store>/<folder> is attached" writing the actor row).
+func (AddIn) TargetField() string { return "store" }
+
+var _ op.TargetFielder = AddIn{}
+
 // ListIn is the input of handoff.list.
 type ListIn struct {
 	// MetaFlags: --meta / --place / --sort meta.<key> / --archived (METADATA 3.7).

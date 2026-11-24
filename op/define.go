@@ -389,11 +389,48 @@ type TargetNamer interface {
 	TargetName() (string, error)
 }
 
-// NamedTarget returns the target an input names through TargetNamer; ok
-// is false when the input has no such method or it could not be read.
+// TargetFielder is an optional method of an input struct whose write
+// target is a flag the caller types under another name than `to`:
+// TargetField is that field's json name (handoff add: "store", its --to
+// being the old alias of --for). The Runner then treats the field as it
+// treats `to` everywhere (team/company aliases, `<store>/<folder>`
+// attaching, the call's target, me and outside-repo routing), so the one
+// write command that spells its target --store reaches the same places
+// (devco D-966: it refused "no store named <store>/<folder> is attached"
+// writing its actor row in a repo linked to another folder).
+type TargetFielder interface {
+	TargetField() string
+}
+
+// TargetFieldName is the json name of the field an input names its write
+// target in through TargetFielder; ok is false for an input without one.
+func (i Input) TargetFieldName() (field string, ok bool) {
+	if !i.v.IsValid() || !i.v.CanInterface() {
+		return "", false
+	}
+	// reflect.Value.Interface returns the stdlib's untyped value; it is
+	// narrowed to TargetFielder on this line and never kept untyped.
+	t, isFielder := i.v.Interface().(TargetFielder)
+	if !isFielder || t.TargetField() == "" {
+		return "", false
+	}
+	return t.TargetField(), true
+}
+
+// NamedTarget returns the target an input names through TargetNamer (or
+// the text of its TargetFielder field); ok is false when the input has no
+// such method or it could not be read.
 func (i Input) NamedTarget() (name string, ok bool) {
 	if !i.v.IsValid() || !i.v.CanInterface() {
 		return "", false
+	}
+	if field, isField := i.TargetFieldName(); isField {
+		for _, tv := range i.Texts() {
+			if tv.Field == field {
+				return strings.TrimSpace(tv.Text), true
+			}
+		}
+		return "", true
 	}
 	// reflect.Value.Interface returns the stdlib's untyped value; it is
 	// narrowed to TargetNamer on this line and never kept untyped.

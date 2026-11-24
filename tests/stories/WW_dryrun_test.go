@@ -105,7 +105,7 @@ func wwDryOps(t *testing.T, w *wwWorld) []wwOp {
 		o := wwOp{wRead: wRead{Name: sp.Name, Path: op.CLIPath(sp.Name), In: in}}
 		help := w.m.Lore(w.m.Home, append(append([]string{}, o.Path...), "--help")...).Out()
 		o.Yes = strings.Contains(help, "--yes ")
-		o.To = strings.Contains(help, "--to string")
+		o.To = wwTargetFlag(in, help)
 		o.Body = strings.Contains(help, "--body string")
 		out = append(out, o)
 	}

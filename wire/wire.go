@@ -1445,11 +1445,9 @@ func (a *App) unreachableTarget(e op.Entry, d op.Decoder) error {
 	if err != nil {
 		return nil // the engine's Run reports the decode error itself
 	}
-	for _, tv := range in.Texts() {
-		if tv.Field == engine.InputTarget {
-			if uerr, ok := gone[store.Source(tv.Text)]; ok {
-				return uerr
-			}
+	if _, to := typedTarget(in); to != "" {
+		if uerr, ok := gone[store.Source(to)]; ok {
+			return uerr
 		}
 	}
 	return nil

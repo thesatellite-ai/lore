@@ -23,6 +23,12 @@ package stories
 // repo linked to acme/web reads only its folder by default, as memory list
 // and lore search do, so --store names the folder).
 //
+// devco D-966 (bug hunt H-225): handoff add spells its target --store (its
+// --to is the old alias of --for), and from the repo linked to another
+// folder it refused "write the actor row to store acme/api: no store named
+// acme/api is attached". It is a cell of the same grid: --store acme/api
+// from every placement lands in api with the folder's project.
+//
 // Every name, email and url is made up.
 
 import (
@@ -45,7 +51,12 @@ var wfpAdds = map[string][]string{
 	"memory":   {"--body", "d718 memory %s"},
 	"rule":     {"--body", "d718 rule %s"},
 	"decision": {"--title", "d718 decision %s", "--body", "one queue per folder"},
+	"handoff":  {"--for", wAdmin.Name, "--body", "d966 handoff %s"},
 }
+
+// wfpTargetFlag is the target flag of an add whose target is not --to
+// (handoff add: --store, D-966); every other add takes --to.
+var wfpTargetFlag = map[string]string{"handoff": "--store"}
 
 // wfpFind is the path of the first file named name under dir (breadth
 // does not matter: a folder holds one _meta.json and ids are unique).
@@ -136,14 +147,18 @@ func TestStoryWWWriteToFolderStampsItsProject(t *testing.T) {
 			{"home", m.Home, []string{"--setup", wSetup}},
 		} {
 			for noun, tmpl := range wfpAdds {
-				args := []string{noun, "add", "--json", "--to", to, "--yes"}
+				flag := "--to"
+				if f, ok := wfpTargetFlag[noun]; ok {
+					flag = f
+				}
+				args := []string{noun, "add", "--json", flag, to, "--yes"}
 				for _, a := range tmpl {
 					args = append(args, strings.ReplaceAll(a, "%s", p.name))
 				}
 				r := m.Lore(p.dir, append(args, p.extra...)...).OK(t)
 				id := wwJSONID(r.Stdout)
 				if id == "" {
-					t.Fatalf("%s: %s add --to %s printed no id:\n%s", p.name, noun, to, r)
+					t.Fatalf("%s: %s add %s %s printed no id:\n%s", p.name, noun, flag, to, r)
 				}
 				// read the folder's project after the write: the first
 				// write may be the one that records it
@@ -162,11 +177,11 @@ func TestStoryWWWriteToFolderStampsItsProject(t *testing.T) {
 	})
 
 	s.Step("D-965/every-content-kind-lists-and-searches-a-folder-row", func() {
-		// journeys.FolderKinds: every content kind but handoff, whose
-		// `add --store <store>/<folder>` of a folder this repo does not
-		// read is refused (journey TestJourneyFolderRowsListedByEveryKind
-		// covers it in the solo shape)
-		for _, k := range journeys.FolderKinds {
+		// journeys.FolderKinds and handoff, whose target flag is --store
+		// (its `add --store <store>/<folder>` of a folder this repo does
+		// not read was refused until D-966)
+		handoff := journeys.FolderKind{Kind: "handoff", Add: []string{"--store", "%t", "--for", wAdmin.Name, "--body", "%s"}, Search: true}
+		for _, k := range append(append([]journeys.FolderKind{}, journeys.FolderKinds...), handoff) {
 			mark := k.Mark()
 			m.Lore(wc.Dir, k.AddArgs(to, mark)...).OK(t)
 			for _, p := range []place{{"own-linked", wc.Dir, nil}, {"org-repo-own-project", pc.Dir, nil}} {

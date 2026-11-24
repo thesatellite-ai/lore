@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
-	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -45,11 +44,10 @@ func (a *App) confirmPersonalMentions(ctx context.Context, e op.Entry, d op.Deco
 	if err != nil {
 		return nil // the engine's Run reports the decode error itself
 	}
-	to := ""
+	field, to := typedTarget(in)
 	var texts []string
 	for _, tv := range in.Texts() {
-		if tv.Field == engine.InputTarget {
-			to = tv.Text
+		if tv.Field == field {
 			continue
 		}
 		texts = append(texts, tv.Text)

@@ -21,6 +21,30 @@ import (
 // targetSep splits `--to <store>/<folder>` (STORE TARGETS).
 const targetSep = "/"
 
+// typedTarget is the write target the caller typed and the json name of
+// the field it is in: `to`, or the field an op.TargetFielder input names
+// instead (handoff add's --store, its --to being the old alias of --for).
+// Every wire step that reads a write's target reads it here, so a target
+// spelled --store reaches the same aliases, folders, setups and routing as
+// --to (devco D-966: `handoff add --store <store>/<folder>` in a repo
+// linked to another folder refused "no store named … is attached").
+func typedTarget(in op.Input) (field, name string) {
+	field = engine.InputTarget
+	if f, ok := in.TargetFieldName(); ok {
+		field = f
+	}
+	for _, tv := range in.Texts() {
+		if tv.Field == field {
+			name = tv.Text
+		}
+	}
+	return field, name
+}
+
+// targetFlag is how a refusal names the flag of a typed target field
+// ("--to", "--store"): the field's json name is its flag name.
+func targetFlag(field string) string { return "--" + field }
+
 // prepareTarget looks at the operation's `to` before the engine runs it:
 // `--to <store>/<folder>` attaches that folder of an attached store (or of
 // `me`) as its own target, named "<store>/<folder>" (O1: one backend per
@@ -101,12 +125,7 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 	if err != nil {
 		return "", "", newFolder{}, nil // the engine's Run reports the decode error itself
 	}
-	to := ""
-	for _, tv := range in.Texts() {
-		if tv.Field == engine.InputTarget {
-			to = tv.Text
-		}
-	}
+	_, to := typedTarget(in)
 	if to == "" {
 		// mission apply names its target in the plan file (BUG-T8)
 		to, _ = in.NamedTarget()

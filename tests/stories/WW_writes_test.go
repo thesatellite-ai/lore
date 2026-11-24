@@ -288,11 +288,45 @@ func wwJSONID(stdout string) string {
 }
 
 // wwOp is one write op, its CLI path and inputs, and the flags its command
-// takes (probed once from --help).
+// takes (probed once from --help). To is the flag naming its target place
+// ("" for none, wwTargetFlag).
 type wwOp struct {
 	wRead
-	Yes, To, Body bool
-	Rank          int
+	Yes, Body bool
+	To        string
+	Rank      int
+}
+
+// wwTargetFlag is the flag a write takes its target place with: the flag
+// of the input field carrying the shared --to help (op.DescWriteTo), else
+// --to when its help lists one. devco D-966: handoff add's target is
+// --store and its --to the old alias of --for, so the matrix handed every
+// place to handoff as the recipient and never wrote a handoff anywhere,
+// and `--store <org>/<folder>` from a repo linked to another folder was
+// never run (it refused writing the actor row).
+func wwTargetFlag(in []op.FieldInfo, help string) string {
+	for _, f := range in {
+		if f.Desc == op.DescWriteTo && f.Flag != "" {
+			return "--" + f.Flag
+		}
+	}
+	if strings.Contains(help, "--to string") {
+		return "--to"
+	}
+	return ""
+}
+
+// wwWho is the person a place's writes are for (handoff add --for): the
+// org identity of org, or the personal one with no org.
+func wwWho(org string) journeys.Person {
+	switch org {
+	case wOrg:
+		return wwAcme
+	case wwOpsOrg:
+		return wwOpsID
+	default:
+		return wwHome
+	}
 }
 
 // wwSkip are writes the matrix does not run, each with its reason.
@@ -392,7 +426,7 @@ func wwOps(t *testing.T, w *wwWorld) []wwOp {
 		o := wwOp{wRead: wRead{Name: sp.Name, Path: op.CLIPath(sp.Name), In: e.InputFields()}, Rank: wwVerbRank(sp.Name)}
 		help := w.m.Lore(w.m.Home, append(append([]string{}, o.Path...), "--help")...).Out()
 		o.Yes = strings.Contains(help, "--yes ")
-		o.To = strings.Contains(help, "--to string")
+		o.To = wwTargetFlag(o.In, help)
 		o.Body = strings.Contains(help, "--body string")
 		out = append(out, o)
 	}
@@ -543,7 +577,7 @@ var wwOverride = map[string]func(c wwCtx) []string{
 	"rule.add":     func(wwCtx) []string { return []string{"--body", "matrix rule"} },
 	"task.add":     func(wwCtx) []string { return []string{"--title", "matrix task"} },
 	"memory.move":  func(c wwCtx) []string { return []string{"--id", c.ids["memory"], "--to", c.org + "/matrix-folder"} },
-	"handoff.add":  func(wwCtx) []string { return []string{"--title", "matrix handoff"} },
+	"handoff.add":  func(c wwCtx) []string { return []string{"--for", wwWho(c.org).Name} },
 	"setup.apply":  func(c wwCtx) []string { return []string{"--setup", wwSetupOf(c.org), "--step", "tools"} },
 	"setup.edit":   func(c wwCtx) []string { return []string{"--name", wwSetupOf(c.org)} },
 	"setup.enable": func(c wwCtx) []string { return []string{"--name", wwSetupOf(c.org)} },
@@ -595,8 +629,8 @@ func wwInput(o wwOp, c wwCtx, prBody string) []string {
 			args = append(args, "--"+f.Flag, v)
 		}
 	}
-	if o.To && c.p.To != "" && !wwHas(args, "--to") {
-		args = append(args, "--to", c.p.To)
+	if o.To != "" && c.p.To != "" && !wwHas(args, o.To) {
+		args = append(args, o.To, c.p.To)
 	}
 	if o.Yes {
 		args = append(args, "--yes")
