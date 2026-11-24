@@ -69,7 +69,7 @@ func TestMemberEditGitHub(t *testing.T) {
 		_, err := x.ops().staffAdd(ctx, StaffAddIn{Email: email, GitHub: "ann-work", DryRun: dry})
 		var e *errs.Error
 		if !errors.As(err, &e) || e.Code != errs.InvalidInput || !strings.Contains(e.Message, "GitHub login Ann-Personal, not ann-work") ||
-			!strings.Contains(e.Hint, "lore member edit --who "+email+" --github ann-work --yes") {
+			!strings.Contains(e.Hint, "lore member edit --who "+email+" --github ann-work --setup agency --yes") {
 			t.Fatalf("add with another login (dry run %v) = %v", dry, err)
 		}
 	}
@@ -105,7 +105,7 @@ func TestMemberEditGitHub(t *testing.T) {
 	w := edit("ann-work")
 	if w.Member.GitHub != "ann-work" || w.Member.Handle != "ann-personal" ||
 		!strings.Contains(w.Note, "earlier GitHub login Ann-Personal stays theirs") ||
-		!strings.Contains(w.Note, "lore member edit --who "+email+" --handle ann-work --yes") {
+		!strings.Contains(w.Note, "lore member edit --who "+email+" --handle ann-work --setup agency --yes") {
 		t.Fatalf("edit to ann-work = %+v", w)
 	}
 	if got := githubContacts(t, x, ann); len(got) != 2 || !got["ann-work"] || got["ann-personal"] {
@@ -148,10 +148,70 @@ func TestMemberEditGitHub(t *testing.T) {
 	wantCode(t, "edit to a bad login", err, errs.InvalidInput)
 	_, err = x.ops().staffEdit(ctx, StaffEditIn{Who: ann.String(), RowMetaFlags: engine.RowMetaFlags{Meta: []string{"github=ann-work"}}})
 	var e *errs.Error
-	if !errors.As(err, &e) || e.Code != errs.InvalidInput || e.Hint != `lore member edit --who `+ann.String()+` --github "ann-work" --yes` {
+	if !errors.As(err, &e) || e.Code != errs.InvalidInput || e.Hint != `lore member edit --who `+ann.String()+` --github "ann-work" --setup agency --yes` {
 		t.Errorf("--meta github = %v", err)
 	}
 	if got := contacts(); got != n {
 		t.Errorf("refused edits wrote %d contacts", got-n)
+	}
+}
+
+// TestMemberPrintedCommandsKeepTheSetup (devco:D-961): every command a
+// member op prints carries the --setup the run was given, so it runs where
+// it is printed. From the home folder of a machine with two org setups,
+// `member add --setup <s>` refused a login change with `lore member edit
+// --who … --github … --yes`, and that line was refused there ("no org
+// applies to this folder"); the edit's --handle line, the --meta hint,
+// the add's `lore sync` and the taken-handle note were the same. A run
+// without --setup prints the lines without it.
+func TestMemberPrintedCommandsKeepTheSetup(t *testing.T) {
+	const email = "ann@agency.example"
+	for _, c := range []struct{ setup, flag string }{
+		{"agency", " --setup agency"},
+		{"", ""},
+	} {
+		t.Run("setup="+c.setup, func(t *testing.T) {
+			x := newFixture(t)
+			ctx := op.WithConfirmed(op.WithSetup(x.ctx, c.setup), true)
+			want := func(what, got string, line string) {
+				t.Helper()
+				if !strings.Contains(got, line) {
+					t.Errorf("%s: want %q in:\n%s", what, line, got)
+				}
+				if c.flag == "" && strings.Contains(got, "--setup") {
+					t.Errorf("%s: a run without --setup printed one:\n%s", what, got)
+				}
+			}
+			hint := func(err error) string {
+				t.Helper()
+				var e *errs.Error
+				if !errors.As(err, &e) {
+					t.Fatalf("want a lore error, got %v", err)
+				}
+				return e.Hint
+			}
+			out, err := x.ops().staffAdd(ctx, StaffAddIn{Email: email, Name: "Ann", GitHub: "ann-personal"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ann := out.Added[0].ID
+			want("add text", out.Text(), "`lore sync"+c.flag+"`")
+			// @ann-personal is taken now: a second person whose email gives
+			// the same handle gets none, and the note names the edit
+			out2, err := x.ops().staffAdd(ctx, StaffAddIn{Email: "ann-personal@other.example", Name: "Ann Other"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want("taken handle note", strings.Join(out2.Notes, "\n"), "lore member edit --who ann-personal@other.example --handle <h>"+c.flag+" --yes")
+			_, err = x.ops().staffAdd(ctx, StaffAddIn{Email: email, GitHub: "ann-work", DryRun: true})
+			want("add with another login", hint(err), "lore member edit --who "+email+" --github ann-work"+c.flag+" --yes")
+			_, err = x.ops().staffEdit(ctx, StaffEditIn{Who: ann, RowMetaFlags: engine.RowMetaFlags{Meta: []string{"handle=ann2"}}})
+			want("--meta handle", hint(err), "lore member edit --who "+ann+` --handle "ann2"`+c.flag+" --yes")
+			w, err := x.ops().staffEdit(ctx, StaffEditIn{Who: ann, GitHub: "ann-work"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want("edit --github note", w.Note, "lore member edit --who "+email+" --handle ann-work"+c.flag+" --yes changes it")
+		})
 	}
 }

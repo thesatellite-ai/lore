@@ -115,7 +115,10 @@ type StaffAddOut struct {
 	Already []StaffRow `json:"already,omitempty"`
 	Where   string     `json:"where"`
 	// label is Roster.Label, for "the roster of …" (devco D-647).
-	label  string
+	label string
+	// setup is op.SetupFlag of the run, so the printed lore sync runs
+	// where printed (devco D-961).
+	setup  string
 	DryRun bool `json:"dry_run,omitempty"`
 	// Rows is how many roster rows the add wrote (one store commit).
 	Rows     int      `json:"rows"`
@@ -186,7 +189,7 @@ func (o StaffAddOut) Text() string {
 		join := cmp.Or(o.JoinWith, joinPlaceholder)
 		// C5: the roster commit waits for the admin's lore sync (unless the
 		// store is push=now), and a newcomer's join reads the remote roster
-		b.WriteString(fmt.Sprintf("  %d roster rows in the roster of %s, one store commit; once the roster is sent (`lore sync`), each person joins on their machine with: %s (matched by their email, no invite)\n", o.Rows, o.Where, join))
+		b.WriteString(fmt.Sprintf("  %d roster rows in the roster of %s, one store commit; once the roster is sent (`lore sync%s`), each person joins on their machine with: %s (matched by their email, no invite)\n", o.Rows, o.Where, o.setup, join))
 	}
 	return b.String() + profilestore.WarningText(o.Warnings)
 }
@@ -206,12 +209,14 @@ type StaffListOut struct {
 	Where   string     `json:"where"`
 	// label is Roster.Label, for "the roster of …" (devco D-647).
 	label string
+	// setup is op.SetupFlag of the run (devco D-961).
+	setup string
 }
 
 // Text is a table of the members.
 func (o StaffListOut) Text() string {
 	if len(o.Members) == 0 {
-		return "no members on the roster of " + o.label + " (lore member add --email <email>)\n"
+		return "no members on the roster of " + o.label + " (lore member add --email <email>" + o.setup + ")\n"
 	}
 	// N-2: every column is as wide as its widest cell, counted in terminal
 	// cells (a CJK name takes two a character), never a fixed width a long
@@ -528,11 +533,11 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 	}
 	if given != 1 {
 		return StaffAddOut{}, errs.New(errs.InvalidInput, "member add: give one of <email>, --from <file> or --from-invites").
-			WithHint("lore member add --email mira@agency.example --team @web")
+			WithHint("lore member add --email mira@agency.example --team @web" + op.SetupFlag(ctx))
 	}
 	if in.StartedOn != "" && in.Email == "" {
 		return StaffAddOut{}, errs.New(errs.InvalidInput, "member add: --started-on goes with one <email>, not --from or --from-invites").
-			WithHint("lore member add --email <email> --started-on YYYY-MM-DD; for the others run lore actor period edit --period <apd_id> --started-on YYYY-MM-DD after the add")
+			WithHint("lore member add --email <email> --started-on YYYY-MM-DD" + op.SetupFlag(ctx) + "; for the others run lore actor period edit --period <apd_id> --started-on YYYY-MM-DD" + op.SetupFlag(ctx) + " after the add")
 	}
 	// devco:D-938: the dry run opens the roster as the write does (its
 	// refusals: no org store, a client repo's store, an agent the policy
@@ -564,7 +569,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 	var specs []staffSpec
 	switch {
 	case in.From != "":
-		if specs, err = readStaffFile(in.From); err != nil {
+		if specs, err = readStaffFile(in.From, op.SetupFlag(ctx)); err != nil {
 			return StaffAddOut{}, err
 		}
 	case in.FromInvites:
@@ -576,7 +581,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		specs = []staffSpec{{Email: in.Email, Name: in.Name, Handle: in.Handle, GitHub: in.GitHub, Role: in.Role, Type: in.Type,
 			Teams: splitList(in.Teams), Projects: splitList(in.Projects), ProjectRoles: splitList(in.ProjectRoles), StartedOn: startedOn}}
 	}
-	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), label: r.Label(), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
+	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), label: r.Label(), setup: op.SetupFlag(ctx), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
 	plans, err := o.planStaff(ctx, r, specs, in.From, pending, &out)
 	if err != nil {
 		return StaffAddOut{}, err
@@ -741,7 +746,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 			return nil, err
 		}
 		if derived != "" && h != "" && taken[h] {
-			notes = append(notes, email+": no handle (@"+h+" is taken; member edit "+email+" --handle <h> sets one)")
+			notes = append(notes, email+": no handle (@"+h+" is taken; lore member edit --who "+email+" --handle <h>"+op.SetupFlag(ctx)+" --yes sets one)")
 			h = ""
 		}
 		if h != "" {
@@ -794,7 +799,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 				// changed nothing and said "nothing to add" with exit 0, so
 				// the login looked changed. It is refused (E_INVALID_INPUT,
 				// nothing written) with what differs and the edit that does it.
-				if p := githubDiffers(contacts, cur.ID.String(), email, s.GitHub, from); p != nil {
+				if p := githubDiffers(contacts, cur.ID.String(), email, s.GitHub, from, op.SetupFlag(ctx)); p != nil {
 					p.At = at
 					bad = append(bad, *p)
 					continue
@@ -803,7 +808,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 				// I-10: an add naming another handle changed nothing; say
 				// which handle stands and the command that changes it.
 				if was := fieldText(cur, actorFieldHandle); strings.TrimSpace(specs[i].Handle) != "" && s.Handle != "" && s.Handle != was {
-					out.Notes = append(out.Notes, email+": already a member as @"+was+"; the handle is unchanged (lore member edit --who "+email+" --handle "+s.Handle+" changes it)")
+					out.Notes = append(out.Notes, email+": already a member as @"+was+"; the handle is unchanged (lore member edit --who "+email+" --handle "+s.Handle+op.SetupFlag(ctx)+" --yes changes it)")
 				}
 				continue
 			}
@@ -828,7 +833,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		plans = append(plans, p)
 	}
 	if from != "" {
-		if e := fromfile.Refuse("member add --from", from, bad, "lore member add --from "+from+" --dry-run"); e != nil {
+		if e := fromfile.Refuse("member add --from", from, bad, "lore member add --from "+from+op.SetupFlag(ctx)+" --dry-run"); e != nil {
 			return nil, e
 		}
 	} else if e := fromfile.Refuse("member add", "", bad, ""); e != nil {
@@ -840,7 +845,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 // githubDiffers is the refusal of a member add that names a GitHub login
 // other than the one the member already has (nil when it names none or the
 // same): add never changes a member, `lore member edit --github` does.
-func githubDiffers(contacts []row.Row, actorID, email, login, from string) *fromfile.Problem {
+func githubDiffers(contacts []row.Row, actorID, email, login, from, setupFlag string) *fromfile.Problem {
 	if strings.TrimSpace(login) == "" {
 		return nil
 	}
@@ -853,7 +858,7 @@ func githubDiffers(contacts []row.Row, actorID, email, login, from string) *from
 	if have == "" {
 		reason = email + " is already a member with no GitHub login; member add does not change a member"
 	}
-	fix := "lore member edit --who " + email + " --github " + norm + " --yes"
+	fix := "lore member edit --who " + email + " --github " + norm + setupFlag + " --yes"
 	if from != "" {
 		fix = "run " + fix + " (or put " + cmp.Or(have, "nothing") + " in the github column)"
 	}
@@ -1001,12 +1006,12 @@ const staffHeader = "email,name,handle,github,role,type,teams,projects,project_r
 // its JSON entry), so every refusal points at the line to edit. A line with
 // the wrong number of cells is listed with the others; a quote that breaks
 // the rest of the file stops the read, naming its line and the reason.
-func readStaffFile(path string) ([]staffSpec, error) {
+func readStaffFile(path, setupFlag string) ([]staffSpec, error) {
 	b, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, fromfile.Unreadable("member add --from", path, err).WithHint("give a .csv or .json file")
 	}
-	recheck := "lore member add --from " + path + " --dry-run"
+	recheck := "lore member add --from " + path + setupFlag + " --dry-run"
 	if strings.EqualFold(filepath.Ext(path), ".json") {
 		var rows []struct {
 			Email        string   `json:"email"`
@@ -1172,7 +1177,7 @@ func (o ops) staffList(ctx context.Context, in StaffListIn) (StaffListOut, error
 	if rows == nil {
 		rows = []StaffRow{}
 	}
-	return StaffListOut{Members: rows, Where: r.Where(), label: r.Label()}, nil
+	return StaffListOut{Members: rows, Where: r.Where(), label: r.Label(), setup: op.SetupFlag(ctx)}, nil
 }
 
 // staffFind resolves who on r (email, @handle, act_ id) to its StaffRow.
@@ -1190,7 +1195,7 @@ func staffFind(ctx context.Context, r profilestore.Roster, who string) (row.Row,
 			return a, m, nil
 		}
 	}
-	return row.Row{}, StaffRow{}, errs.New(errs.NotFound, who+" is not a person on the roster of "+r.Label()).WithHint("lore member list")
+	return row.Row{}, StaffRow{}, errs.New(errs.NotFound, who+" is not a person on the roster of "+r.Label()).WithHint("lore member list" + op.SetupFlag(ctx))
 }
 
 // orIDs is names when set, else the ids (a show built without names).
@@ -1267,7 +1272,7 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 			return StaffWriteOut{}, errs.Prefix("member edit --github", err)
 		}
 	}
-	if err := metaNamesAFlag(in); err != nil {
+	if err := metaNamesAFlag(in, op.SetupFlag(ctx)); err != nil {
 		return StaffWriteOut{}, err
 	}
 	if _, err := adminSetup(ctx, o.env); err != nil {
@@ -1312,7 +1317,7 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 			engine.Discard(sctx)
 			return StaffWriteOut{}, errs.Prefix("member edit --github", err)
 		}
-		note = cmp.Or(note, githubEditNote(was, in))
+		note = cmp.Or(note, githubEditNote(was, in, op.SetupFlag(ctx)))
 	}
 	if in.Role != "" {
 		w := &writer{r: r, actor: a, today: r.Today(), orgRole: in.Role}
@@ -1340,7 +1345,7 @@ var staffEditFlags = []string{"github", "handle", "name", "role"}
 // edit's own fields (issue #161: `--meta github=<login>` was refused as a
 // reserved key with the hint "--name item_github", which on member edit
 // renames the person) and names the flag that changes it.
-func metaNamesAFlag(in StaffEditIn) error {
+func metaNamesAFlag(in StaffEditIn, setupFlag string) error {
 	for _, kv := range slices.Concat(in.Meta, in.MetaJSON) {
 		k, v, _ := strings.Cut(kv, "=")
 		k, _, _ = strings.Cut(strings.TrimSpace(k), ":")
@@ -1348,7 +1353,7 @@ func metaNamesAFlag(in StaffEditIn) error {
 			continue
 		}
 		return errs.New(errs.InvalidInput, "member edit: "+k+" is a roster field, not a custom field (--meta)").
-			WithHint("lore member edit --who " + in.Who + " --" + k + " " + work.Quote(v) + " --yes")
+			WithHint("lore member edit --who " + in.Who + " --" + k + " " + work.Quote(v) + setupFlag + " --yes")
 	}
 	return nil
 }
@@ -1357,7 +1362,7 @@ func metaNamesAFlag(in StaffEditIn) error {
 // login (still theirs for past commits) and a handle that was derived
 // from it, with the command that changes the handle too (issue #161: the
 // handle is never renamed silently).
-func githubEditNote(was StaffRow, in StaffEditIn) string {
+func githubEditNote(was StaffRow, in StaffEditIn, setupFlag string) string {
 	old := strings.TrimSpace(was.GitHub)
 	norm, _ := GitHubLogin(in.GitHub)
 	if old == "" || strings.EqualFold(old, norm) {
@@ -1365,7 +1370,7 @@ func githubEditNote(was StaffRow, in StaffEditIn) string {
 	}
 	n := "the earlier GitHub login " + old + " stays theirs (not primary), so their past commits still resolve to them"
 	if in.Handle == "" && strings.EqualFold(strings.TrimPrefix(was.Handle, handleMark), old) {
-		n += "; the handle @" + strings.TrimPrefix(was.Handle, handleMark) + " is unchanged (lore member edit --who " + cmp.Or(was.Email, was.ID) + " --handle " + norm + " --yes changes it)"
+		n += "; the handle @" + strings.TrimPrefix(was.Handle, handleMark) + " is unchanged (lore member edit --who " + cmp.Or(was.Email, was.ID) + " --handle " + norm + setupFlag + " --yes changes it)"
 	}
 	return n
 }
@@ -1373,7 +1378,7 @@ func githubEditNote(was StaffRow, in StaffEditIn) string {
 func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, error) {
 	rm, ok := o.env.(Remover)
 	if !ok {
-		return StaffWriteOut{}, errs.New(errs.Unsupported, "member remove: this lore build cannot offboard").WithHint("lore actor offboard --actor " + in.Who)
+		return StaffWriteOut{}, errs.New(errs.Unsupported, "member remove: this lore build cannot offboard").WithHint("lore actor offboard --actor " + in.Who + op.SetupFlag(ctx))
 	}
 	r, done, err := o.env.Roster(ctx, false)
 	if err != nil {
