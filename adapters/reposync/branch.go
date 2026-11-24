@@ -7,7 +7,9 @@ package reposync
 //
 //	peek <ref> [table] ─▶ ls-tree + cat-file of <project>/.lore/data at ref
 //	                     ─▶ one line per row: table, id, summary
-//	promote <id>… --to <branch> ─▶ the row files of this checkout
+//	promote <id>… --to <branch> ─▶ the row files of this checkout, each
+//	                        merged field by field over <branch>'s copy
+//	                        against git merge-base(HEAD, <branch>) (H-207)
 //	                     ─▶ a new commit on refs/heads/<branch> (CAS, never
 //	                        the checked-out branch), nothing pushed
 
@@ -24,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -138,6 +141,14 @@ type PromoteOptions struct {
 	DryRun bool
 	// Now is the commit time.
 	Now time.Time
+	// Merger merges a row both this checkout and Branch changed since
+	// they split (wire passes the field merge every other landing uses);
+	// nil merges nothing, so any such row clashes.
+	Merger git.Merger
+	// Take settles a row whose same text both sides changed: nil stops
+	// the promote with E_LAND_CONFLICT, true keeps this checkout's text of
+	// those fields, false Branch's; every other field still merges.
+	Take *bool
 }
 
 // PromoteResult is what promote did.
@@ -146,12 +157,25 @@ type PromoteResult struct {
 	Paths []string
 	// Commit is the new commit (empty on a dry run).
 	Commit string
+	// Merged are the rows Branch also changed since the split, merged
+	// field by field (Branch's edits kept).
+	Merged []string
+	// Taken are the rows whose clashing text Take settled.
+	Taken []string
+	// Same are the rows Branch already holds as merged (nothing to write).
+	Same []string
 }
 
 // Promote commits the current row files of IDs onto Branch as a new commit
 // (the branch's tree plus those files), with the person's git identity.
-// Nothing is pushed; the checked-out branch is refused (edit and commit
-// normally there).
+// Each file is merged over Branch's copy against the copy at git
+// merge-base(HEAD, Branch), through the same row merge as lore branch
+// promote (git.MergeRowOver): what only Branch changed since the two split
+// stays (#155 class, H-207: an archive, metadata or a newer body on Branch
+// was overwritten by this checkout's older copy). A text both changed
+// refuses the whole promote with E_LAND_CONFLICT, nothing written, unless
+// Take chose a side. Nothing is pushed; the checked-out branch is refused
+// (edit and commit normally there).
 func Promote(ctx context.Context, o PromoteOptions) (PromoteResult, error) {
 	var res PromoteResult
 	if o.Branch == "" {
@@ -167,16 +191,6 @@ func Promote(ctx context.Context, o PromoteOptions) (PromoteResult, error) {
 	o.Dir = projectDir(top, o.Dir) // E-FATES-6
 	dataDir := filepath.Join(o.Dir, filepath.FromSlash(dataRel))
 	prefix := PathPrefix(top, o.Dir)
-	files := map[string][]byte{}
-	for _, id := range o.IDs {
-		rel, b, ferr := findRowFile(dataDir, id)
-		if ferr != nil {
-			return res, ferr
-		}
-		p := prefix + dataRel + "/" + rel
-		files[p] = b
-		res.Paths = append(res.Paths, p)
-	}
 	ref := "refs/heads/" + o.Branch
 	old, ok, err := repo.ResolveRef(ctx, ref)
 	if err != nil {
@@ -185,10 +199,65 @@ func Promote(ctx context.Context, o PromoteOptions) (PromoteResult, error) {
 	if !ok {
 		return res, errs.New(errs.NotFound, "branch "+o.Branch+" not found").WithHint("promote commits onto an existing local branch")
 	}
-	if cur, cerr := run(ctx, o.Dir, "symbolic-ref", "--quiet", "--short", "HEAD"); cerr == nil && cur == o.Branch {
+	cur, cerr := run(ctx, o.Dir, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if cerr == nil && cur == o.Branch {
 		return res, errs.New(errs.InvalidInput, "refusing to commit onto the checked-out branch "+o.Branch+"; edit the files and commit normally")
 	}
-	if o.DryRun {
+	if cerr != nil || cur == "" {
+		cur = "this checkout"
+	}
+	split, err := promoteBase(ctx, repo, old)
+	if err != nil {
+		return res, err
+	}
+	files := map[string][]byte{}
+	var clashes []string
+	for _, id := range o.IDs {
+		rel, theirs, ferr := findRowFile(dataDir, id)
+		if ferr != nil {
+			return res, ferr
+		}
+		p := prefix + dataRel + "/" + rel
+		ours, err := readAt(ctx, repo, old, p)
+		if err != nil {
+			return res, err
+		}
+		base, err := readAt(ctx, repo, split, p)
+		if err != nil {
+			return res, err
+		}
+		doc, how, fields, err := git.MergeRowOver(o.Merger, base, ours, theirs, o.Take)
+		if err != nil {
+			return res, errs.Prefix("merge "+id+" with "+o.Branch+"'s copy", err)
+		}
+		switch how {
+		case git.RowMergeClash:
+			n := id
+			if len(fields) > 0 {
+				n += " (" + strings.Join(fields, ", ") + ")"
+			}
+			clashes = append(clashes, n)
+			continue
+		case git.RowMergeSame:
+			res.Same = append(res.Same, id)
+			continue
+		case git.RowMergeFields:
+			res.Merged = append(res.Merged, id)
+		case git.RowMergeTaken:
+			res.Taken = append(res.Taken, id)
+		}
+		files[p] = doc
+		res.Paths = append(res.Paths, p)
+	}
+	if len(clashes) > 0 {
+		verb := "nothing was committed"
+		if o.DryRun {
+			verb = "the promote would stop here (dry run, nothing changed)"
+		}
+		return res, errs.New(errs.LandConflict, cur+" and "+o.Branch+" both changed the same text of "+strings.Join(clashes, ", ")+" since they split; "+verb).
+			WithHint(syncPromoteClashHint(o))
+	}
+	if o.DryRun || len(files) == 0 {
 		return res, nil
 	}
 	sig, ok := repo.GitIdentity(ctx)
@@ -216,19 +285,71 @@ func Promote(ctx context.Context, o PromoteOptions) (PromoteResult, error) {
 	return res, nil
 }
 
+// promoteBase is the commit this checkout and the target tip split at:
+// git merge-base(HEAD, tip); "" when they share no history (every row the
+// target also holds then merges against no base).
+func promoteBase(ctx context.Context, repo *gitref.Repo, tip string) (string, error) {
+	head, ok, err := repo.ResolveCommit(ctx, "HEAD")
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "resolve HEAD", err)
+	}
+	if !ok {
+		return "", nil // an unborn branch: nothing committed to split from
+	}
+	mb, ok, err := repo.MergeBase(ctx, head, tip)
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "merge-base HEAD "+tip, err)
+	}
+	if !ok {
+		return "", nil
+	}
+	return mb, nil
+}
+
+// readAt is the file p at commit rev, nil when rev is "" or has no p.
+func readAt(ctx context.Context, repo *gitref.Repo, rev, p string) ([]byte, error) {
+	if rev == "" {
+		return nil, nil
+	}
+	b, ok, err := repo.ReadFile(ctx, rev, p)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "read "+p+" at "+rev, err)
+	}
+	if !ok {
+		return nil, nil
+	}
+	return b, nil
+}
+
+// syncPromoteClashHint names the two promotes that settle a clash, with
+// every id and flag the person ran (named flags, real ids).
+func syncPromoteClashHint(o PromoteOptions) string {
+	// one --ids per row: this op's ids do not split on commas
+	cmd := "lore sync promote --ids " + strings.Join(o.IDs, " --ids ") + " --to " + o.Branch
+	return "keep one side's text of those fields (every other field still merges): " + cmd + " --take branch keeps this checkout's, " +
+		cmd + " --take main keeps " + o.Branch + "'s; or edit the row on one side so both agree, then promote again"
+}
+
 // PromoteLines renders a promote for a terminal.
 func PromoteLines(o PromoteOptions, res PromoteResult) []string {
+	var out []string
 	if o.DryRun {
-		out := make([]string, 0, len(res.Paths))
+		out = make([]string, 0, len(res.Paths)+1)
 		for _, p := range res.Paths {
 			out = append(out, fmt.Sprintf("would commit %s onto %s", p, o.Branch))
 		}
-		return out
+	} else if res.Commit == "" {
+		// the counts below still say why (H-207: a --take main that keeps
+		// the target's copy as it is writes nothing)
+		out = []string{fmt.Sprintf("· %s already holds these rows; nothing committed", o.Branch)}
+	} else {
+		out = []string{fmt.Sprintf("✓ committed %d file(s) onto %s (%s) — not pushed", len(res.Paths), o.Branch, res.Commit[:min(promoteSHALen, len(res.Commit))])}
 	}
-	if res.Commit == "" {
-		return []string{fmt.Sprintf("· %s already holds these rows; nothing committed", o.Branch)}
+	if n := len(res.Merged) + len(res.Taken) + len(res.Same); n > 0 {
+		out = append(out, fmt.Sprintf("  %d as this checkout has them, %d merged field by field with newer edits on %s (those edits kept), %d settled by --take, %d already the same",
+			len(res.Paths)-len(res.Merged)-len(res.Taken), len(res.Merged), o.Branch, len(res.Taken), len(res.Same)))
 	}
-	return []string{fmt.Sprintf("✓ committed %d file(s) onto %s (%s) — not pushed", len(res.Paths), o.Branch, res.Commit[:min(promoteSHALen, len(res.Commit))])}
+	return out
 }
 
 // rowIDShape reports <prefix>_<suffix> with a lower-case alphanumeric

@@ -1,78 +1,106 @@
 package git
 
-// layerrowmerge.go — the one merge of a branch layer's copy of a row over
-// the copy a target holds now (the shared notes for lore branch promote,
-// the parent layer for lore branch land --into), against the layer base
-// the branch copied it from. Fields only the target changed keep the
-// target's value, fields only the branch changed take the branch's, and a
-// text both changed stops the write unless --take chose a side (#155:
-// promote wrote the branch's whole row over newer edits on main, so an
-// archive, metadata, a newer body and a done status were lost silently).
+// layerrowmerge.go — the one merge of a branch's copy of a row over the
+// copy a target holds now, against the base the branch copied it from:
+// lore branch promote (the shared notes), lore branch land --into (the
+// parent layer) and lore sync promote --to <branch> (a repo's own row
+// files, onto another code branch) all merge through MergeRowOver. Fields
+// only the target changed keep the target's value, fields only the branch
+// changed take the branch's, and a text both changed stops the write
+// unless --take chose a side (#155: promote wrote the branch's whole row
+// over newer edits on main, so an archive, metadata, a newer body and a
+// done status were lost silently).
 
 import "bytes"
 
-// layerMerge is how one branch layer row met the target's copy.
-type layerMerge int
+// RowMerge is how one branch copy of a row met the target's copy.
+type RowMerge int
 
 const (
-	// layerMergeBranch: the target holds the base's copy (or none), so the
+	// RowMergeBranch: the target holds the base's copy (or none), so the
 	// branch's copy is written as it is.
-	layerMergeBranch layerMerge = iota
-	// layerMergeSame: nothing to write (both agree, or only the target
+	RowMergeBranch RowMerge = iota
+	// RowMergeSame: nothing to write (both agree, or only the target
 	// changed the row).
-	layerMergeSame
-	// layerMergeFields: both changed the row, merged field by field.
-	layerMergeFields
-	// layerMergeTaken: both changed the same text; --take chose the side
+	RowMergeSame
+	// RowMergeFields: both changed the row, merged field by field.
+	RowMergeFields
+	// RowMergeTaken: both changed the same text; --take chose the side
 	// of those fields, every other field still merged.
-	layerMergeTaken
-	// layerMergeClash: both changed the same text and no side was chosen;
+	RowMergeTaken
+	// RowMergeClash: both changed the same text and no side was chosen;
 	// nothing may be written.
-	layerMergeClash
+	RowMergeClash
 )
 
-// mergeLayerRow merges theirs (the branch layer's copy) over ours (the
-// target's copy now, nil when it has none) against base (the layer base's
-// copy, nil when the branch added the row). take nil chooses no side; else
-// true keeps the branch's text of the clashing fields, false the target's.
-// It returns the document to write (nil for layerMergeSame and
-// layerMergeClash) and, for a clash, the clashing fields when the Merger
-// can name them.
-func (b *Backend) mergeLayerRow(base, ours, theirs []byte, take *bool) ([]byte, layerMerge, []string, error) {
+// mergeLayerRow is MergeRowOver with this backend's Merger.
+func (b *Backend) mergeLayerRow(base, ours, theirs []byte, take *bool) ([]byte, RowMerge, []string, error) {
+	return MergeRowOver(b.cfg.merger, base, ours, theirs, take)
+}
+
+// MergeRowOver merges theirs (the branch's copy) over ours (the target's
+// copy now, nil when it has none) against base (the copy the branch
+// started from, nil when the branch added the row), with m (nil = no
+// field merge: any change on both sides clashes). take nil chooses no
+// side; else true keeps the branch's text of the clashing fields, false
+// the target's. It returns the document to write (nil for RowMergeSame
+// and RowMergeClash) and, for a clash, the clashing fields when m can
+// name them. Exported so every command that writes one branch's copy of a
+// row over another's shares these rules instead of copying them (H-207).
+func MergeRowOver(m Merger, base, ours, theirs []byte, take *bool) ([]byte, RowMerge, []string, error) {
 	switch {
 	case ours == nil || bytes.Equal(ours, base):
-		return theirs, layerMergeBranch, nil, nil
+		return theirs, RowMergeBranch, nil, nil
 	case bytes.Equal(ours, theirs) || bytes.Equal(theirs, base):
-		return nil, layerMergeSame, nil, nil
-	case b.cfg.merger == nil:
+		return nil, RowMergeSame, nil, nil
+	case m == nil:
 		if take == nil {
-			return nil, layerMergeClash, nil, nil
+			return nil, RowMergeClash, nil, nil
 		}
 		if *take {
-			return theirs, layerMergeTaken, nil, nil
+			return theirs, RowMergeTaken, nil, nil
 		}
-		return ours, layerMergeTaken, nil, nil
+		return ours, RowMergeTaken, nil, nil
 	}
-	m, conflict, err := b.cfg.merger.Merge(base, ours, theirs)
+	merged, conflict, err := m.Merge(base, ours, theirs)
 	if err != nil {
-		return nil, layerMergeClash, nil, err
+		return nil, RowMergeClash, nil, err
 	}
 	if !conflict {
-		return m, layerMergeFields, nil, nil
+		if bytes.Equal(merged, ours) {
+			// the target already holds the merge (an earlier promote of the
+			// same copy): nothing to write, not counted as merged again
+			return nil, RowMergeSame, nil, nil
+		}
+		return merged, RowMergeFields, nil, nil
 	}
 	if take == nil {
-		return nil, layerMergeClash, b.clashFields(base, ours, theirs), nil
+		return nil, RowMergeClash, ClashFields(m, base, ours, theirs), nil
 	}
-	if pm, ok := b.cfg.merger.(PreferMerger); ok {
+	if pm, ok := m.(PreferMerger); ok {
 		// only the clashing fields take the chosen side (devco V-14)
 		pm2, perr := pm.MergePrefer(base, ours, theirs, *take)
 		if perr != nil {
-			return nil, layerMergeClash, nil, perr
+			return nil, RowMergeClash, nil, perr
 		}
-		return pm2, layerMergeTaken, nil, nil
+		return pm2, RowMergeTaken, nil, nil
 	}
 	if *take {
-		return theirs, layerMergeTaken, nil, nil
+		return theirs, RowMergeTaken, nil, nil
 	}
-	return ours, layerMergeTaken, nil, nil
+	return ours, RowMergeTaken, nil, nil
+}
+
+// ClashFields names the fields whose text both sides changed, when m can
+// (ClashNamer); nil otherwise.
+func ClashFields(m Merger, base, ours, theirs []byte) []string {
+	cn, ok := m.(ClashNamer)
+	if !ok || ours == nil || theirs == nil {
+		return nil
+	}
+	f, err := cn.Clashes(base, ours, theirs)
+	if err != nil {
+		return nil
+	}
+	return f
 }

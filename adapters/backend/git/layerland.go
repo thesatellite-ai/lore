@@ -258,18 +258,9 @@ func landConflict(branch, storeBranch string, clashes []landClash, dry bool) err
 			" keeps the branch's, " + land + " --take main --ids " + ids + " keeps " + storeBranch + "'s; or edit the row on one side so both agree, then land again")
 }
 
-// clashFields names the fields whose text both sides changed, when the
-// Merger can (ClashNamer); nil otherwise.
+// clashFields is ClashFields with this backend's Merger.
 func (b *Backend) clashFields(base, ours, theirs []byte) []string {
-	cn, ok := b.cfg.merger.(ClashNamer)
-	if !ok || ours == nil || theirs == nil {
-		return nil
-	}
-	f, err := cn.Clashes(base, ours, theirs)
-	if err != nil {
-		return nil
-	}
-	return f
+	return ClashFields(b.cfg.merger, base, ours, theirs)
 }
 
 // predictClashes is what a landing of rows would refuse, read without
@@ -616,18 +607,18 @@ func (b *Backend) LayerPromote(ctx context.Context, key branchlayer.Key, want []
 			return res, errs.Prefix("merge "+r.ID.String()+" with "+b.branch+"'s copy", err)
 		}
 		switch how {
-		case layerMergeClash:
+		case RowMergeClash:
 			clashes = append(clashes, landClash{id: r.ID.String(), fields: fields})
 			continue
-		case layerMergeSame:
+		case RowMergeSame:
 			res.Same = append(res.Same, r.ID)
 			continue
-		case layerMergeFields:
+		case RowMergeFields:
 			res.Merged = append(res.Merged, r.ID)
-		case layerMergeTaken:
+		case RowMergeTaken:
 			res.Taken = append(res.Taken, r.ID)
 		}
-		if how != layerMergeBranch {
+		if how != RowMergeBranch {
 			if c.Row, err = rowfs.DecodeRowFile(rowfs.RowPath(r.Table, r.ID), doc); err != nil {
 				return res, errs.Prefix("merge "+r.ID.String()+" with "+b.branch+"'s copy", err)
 			}

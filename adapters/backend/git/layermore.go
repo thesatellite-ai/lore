@@ -240,15 +240,15 @@ func (b *Backend) layerLandIntoLocked(ctx context.Context, key branchlayer.Key, 
 			return res, errs.Wrap(errs.Internal, "git: merge a row into "+into, merr)
 		}
 		switch how {
-		case layerMergeClash:
+		case RowMergeClash:
 			c := r.ID.String()
 			if len(fields) > 0 {
 				c += " (" + strings.Join(fields, ", ") + ")"
 			}
 			conflicts = append(conflicts, c)
-		case layerMergeBranch:
+		case RowMergeBranch:
 			puts[p] = doc // only the stacked branch changed it
-		case layerMergeFields, layerMergeTaken:
+		case RowMergeFields, RowMergeTaken:
 			puts[p] = doc
 			res.Merged = append(res.Merged, r.ID)
 		}

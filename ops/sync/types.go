@@ -69,6 +69,9 @@ type PromoteIn struct {
 	IDs    []string `json:"ids" arg:"0" rest:"true" desc:"row ids to commit onto the branch"`
 	Branch string   `json:"branch" flag:"to" alias:"branch" desc:"target branch (required)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be committed"`
+	// Take settles a row whose same text both this checkout and the
+	// target branch changed since they split (H-207).
+	Take string `json:"take,omitempty" flag:"take" desc:"branch or main: the side kept for a text both this checkout and the --to branch changed since they split (branch = this checkout's, main = the --to branch's; every other field still merges)"`
 }
 
 // MergeRowsIn is the input of sync.merge_rows.

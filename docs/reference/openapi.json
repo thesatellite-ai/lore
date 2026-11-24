@@ -98840,7 +98840,7 @@
     "/v1/syncs/promote": {
       "post": {
         "operationId": "sync.promote",
-        "summary": "Commit rows onto another local branch (e.g. an urgent rule onto main)",
+        "summary": "Commit rows onto another local branch (e.g. an urgent rule onto main), merged field by field with that branch's newer edits",
         "tags": [
           "sync"
         ],
@@ -98865,6 +98865,10 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "take": {
+                    "type": "string",
+                    "description": "branch or main: the side kept for a text both this checkout and the --to branch changed since they split (branch = this checkout's, main = the --to branch's; every other field still merges)"
                   }
                 },
                 "required": [
@@ -98939,7 +98943,7 @@
             }
           },
           "409": {
-            "description": "E_READ_ONLY, E_STALE, E_UNSUPPORTED",
+            "description": "E_LAND_CONFLICT, E_READ_ONLY, E_STALE, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {

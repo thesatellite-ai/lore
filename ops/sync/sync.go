@@ -134,7 +134,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(confirmed(w(OpPurge, "Durably remove rows archived before a cutoff (moved: lore trash purge --archived-before)", op.Example{Title: "moved: purge rows archived before a date", CLI: "lore trash purge --archived-before 2026-01-01 --confirm"})), run(o, Env.SyncPurge)),
 		op.Define(w(OpFixProjects, "Collapse several project rows into one (two parallel bootstraps met in a merge)", op.Example{Title: "see which project rows would be collapsed", CLI: "lore sync fix-projects --dry-run"}), run(o, Env.SyncFixProjects)),
 		op.Define(r(OpPeek, "List the lore rows another branch carries, without checking it out", op.Example{Title: "the tasks another branch carries", CLI: "lore sync peek --ref origin/feature-invite --table tasks"}), run(o, Env.SyncPeek)),
-		op.Define(w(OpPromote, "Commit rows onto another local branch (e.g. an urgent rule onto main)", op.Example{Title: "put an urgent rule onto main", CLI: "lore sync promote --ids rul_1f3a --to main"}), run(o, Env.SyncPromote)),
+		op.Define(withErrs(w(OpPromote, "Commit rows onto another local branch (e.g. an urgent rule onto main), merged field by field with that branch's newer edits", op.Example{Title: "put an urgent rule onto main", CLI: "lore sync promote --ids rul_1f3a --to main"}), errs.LandConflict), run(o, Env.SyncPromote)),
 		op.Define(w(OpMergeRows, "Fold a duplicate row into another (references move, the dropped row is trashed)", op.Example{Title: "fold a duplicate memory into another", CLI: "lore sync merge-rows --table memories --keep mem_0c3a --drop mem_0c3b"}), run(o, Env.SyncMergeRows)),
 		op.Define(w(OpCIMerge, "Merge a base branch into this branch when only lore data conflicts (for CI)", op.Example{Title: "in CI: merge main when only lore data conflicts", CLI: "lore sync ci-merge --base main"}), run(o, Env.SyncCIMerge)),
 		op.Define(w(OpInstallAction, "Add a GitHub workflow that merges lore data in pull requests (opt-in)", op.Example{Title: "preview the workflow file", CLI: "lore sync install-action --dry-run"}), run(o, Env.SyncInstallAction)),
@@ -200,4 +200,11 @@ func text(lines []string) string {
 		return ""
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// withErrs adds codes an op may return beyond its kind's list (sync.promote
+// refuses a text both branches changed with E_LAND_CONFLICT, H-207).
+func withErrs(s op.Spec, codes ...errs.Code) op.Spec {
+	s.Errors = append(slices.Clone(s.Errors), codes...)
+	return s
 }

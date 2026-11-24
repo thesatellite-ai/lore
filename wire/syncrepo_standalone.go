@@ -55,7 +55,13 @@ func (r RepoSync) SyncPromote(ctx context.Context, in opssync.PromoteIn) (opssyn
 	if c == nil {
 		c = clock.Real{}
 	}
-	o := reposync.PromoteOptions{Dir: r.dir(), IDs: in.IDs, Branch: in.Branch, DryRun: in.DryRun, Now: c.Now()}
+	take, err := promoteTake(in.Take, "--take branch keeps this checkout's text, --take main the text of the --to branch")
+	if err != nil {
+		return opssync.DoneOut{}, err
+	}
+	// the field merge every other landing uses (H-207: no whole-file write
+	// over the target branch's newer copy)
+	o := reposync.PromoteOptions{Dir: r.dir(), IDs: in.IDs, Branch: in.Branch, DryRun: in.DryRun, Now: c.Now(), Merger: mergerForLayers(), Take: take}
 	res, err := reposync.Promote(ctx, o)
 	if err != nil {
 		return opssync.DoneOut{}, err

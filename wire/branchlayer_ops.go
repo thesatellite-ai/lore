@@ -679,14 +679,9 @@ func (a *App) BranchPromote(ctx context.Context, in opsbranch.PromoteIn) (opsbra
 	if err != nil {
 		return opsbranch.DoneOut{}, err
 	}
-	var take *bool
-	switch in.Take {
-	case "":
-	case takeBranch, takeMain:
-		branchSide := in.Take == takeBranch
-		take = &branchSide
-	default:
-		return opsbranch.DoneOut{}, errs.New(errs.InvalidInput, "--take "+in.Take+": use branch or main").WithHint("--take branch keeps the branch's text, --take main the shared notes'")
+	take, err := promoteTake(in.Take, "--take branch keeps the branch's text, --take main the shared notes'")
+	if err != nil {
+		return opsbranch.DoneOut{}, err
 	}
 	res, err := lb.gb.LayerPromote(ctx, key, want, take)
 	if err != nil {
@@ -934,6 +929,20 @@ func normalizeRepoArg(ctx context.Context, raw string) (codeRepo, error) {
 		return codeRepo{}, errs.Wrap(errs.InvalidInput, "--repo "+raw, errors.Join(errNoRepo, err)).WithHint("--repo github.com/<owner>/<repo>")
 	}
 	return codeRepo{Remote: norm, PlainRemote: orgcfg.PlainRemote(raw, norm)}, nil
+}
+
+// promoteTake reads a promote's --take: "" chooses no side (nil), branch
+// keeps the promoted copy's text of a clashing field (true), main the
+// target's (false); lore branch promote and lore sync promote share it.
+func promoteTake(v, hint string) (*bool, error) {
+	switch v {
+	case "":
+		return nil, nil
+	case takeBranch, takeMain:
+		branchSide := v == takeBranch
+		return &branchSide, nil
+	}
+	return nil, errs.New(errs.InvalidInput, "--take "+v+": use branch or main").WithHint(hint)
 }
 
 // mergerForLayers is the row merger a config-less store clone (the CI
