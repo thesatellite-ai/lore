@@ -112,8 +112,10 @@ func TestExcerpt(t *testing.T) {
 	if ex, cut := excerpt("short", words, 100); cut || ex != "short" {
 		t.Errorf("a text that fits is cut: %q", ex)
 	}
-	if body := cutText(doc, words, 600); !strings.HasPrefix(body, elision+"\n") || !strings.HasSuffix(body, "\n"+elision) {
-		t.Errorf("cut body has no elision marks: %q", body)
+	// devco D-970: the matching sentence under its heading path, then the
+	// opening; text left out is marked
+	if body := cutText(doc, words, 600); !strings.Contains(body, "## Operations\nThe nightly backup") || !strings.HasPrefix(body, "# Platform design notes\n") || !strings.Contains(body, "\n"+elision+"\n") || !strings.HasSuffix(body, "\n"+elision) || len(body) > 600 {
+		t.Errorf("cut body lost its heading path or elision marks: %q", body)
 	}
 	// a row with no heading is cut by paragraph, marked where text was left out
 	plain := strings.ReplaceAll(strings.ReplaceAll(doc, "# ", ""), "#", "")

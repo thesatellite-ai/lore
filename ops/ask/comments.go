@@ -115,7 +115,9 @@ func (r Row) commentLines() string {
 	for _, c := range r.Comments {
 		text := strings.Join(strings.Fields(c.Body), " ")
 		if len(text) > commentMax {
-			text = cutAt(text, commentMax) + "…" // cut.go: at a space, never inside a character
+			// the sentences holding the question's words first (D-970),
+			// on one line
+			text = strings.Join(strings.Fields(cutText(text, r.Matched, commentMax)), " ")
 		}
 		day := ""
 		if c.At != "" {

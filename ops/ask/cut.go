@@ -170,11 +170,18 @@ func cutBody(body string, words []string, room int) (string, bool) {
 	return cutText(body, words, room), true
 }
 
-// cutText is body cut to its excerpt in room bytes, with an elision mark
-// on the side where text was left out.
+// cutText is body cut to room bytes: the sentences that hold the
+// question's words under their headings, then its opening
+// (keepSentences, devco D-970); with no sentence telling them apart its
+// excerpt (the start of body when no word matches), with an elision mark
+// on the side where text was left out. It is the one cut every printed
+// row, section and comment of an answer goes through.
 func cutText(body string, words []string, room int) string {
 	if len(body) <= room {
 		return body
+	}
+	if out, ok := keepSentences(body, words, room); ok {
+		return out
 	}
 	marks := 2 * (len(elision) + 1)
 	ex, _ := excerpt(body, words, max(room-marks, 1))
