@@ -558,3 +558,106 @@ func TestJourneyReadServerLimitsFollowWhatItKeeps(t *testing.T) {
 		}
 	})
 }
+
+// TestJourneyReadServerKeptOpenSeesHandEdits (bug hunt H-216): the read
+// server keeps a repo's whole open (every attached store's backend, the
+// caller's identity, the cache refresh, the pick-up of hand edits) across
+// commands while none of the files it was built from changed, so a warm
+// ask stops opening everything again. A hand edit in a store clone and in
+// the repo's .lore, even one that keeps the file's size, must still show
+// in the very next served read, as it shows one-shot.
+func TestJourneyReadServerKeptOpenSeesHandEdits(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	uma := w.Persona("Uma Reyes", "uma@acme-co.example")
+	lap := uma.Laptop()
+	me := w.Remote("github.com/uma-reyes/lore-me")
+	code := lap.Clone(w.Remote("github.com/acme-co/comet"), "comet")
+	w.Step("day1/notes-and-a-repo", func() {
+		lap.Lore(lap.Home, "store", "init", "--name", "me", "--url", me.SSHURL(), "--yes").OK(t)
+		lap.Lore(lap.Home, "store", "folder", "add", "me", "work").OK(t)
+		lap.Lore(lap.Home, "memory", "add", "--body", "Status update comet: beta with 4 teams.", "--to", "me/work", "--yes").OK(t)
+		lap.LoreIn(code, "init").OK(t)
+		lap.LoreIn(code, "memory", "add", "--body", "comet builds with make release, never make all.").OK(t)
+	})
+	// edit replaces old with new (same length) in the one row file under
+	// root that holds old
+	edit := func(root, old, new string) {
+		t.Helper()
+		var hit string
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				if d != nil && d.IsDir() && d.Name() == ".git" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if b, err := os.ReadFile(p); err == nil && strings.Contains(string(b), old) {
+				hit = p
+			}
+			return nil
+		})
+		if hit == "" {
+			t.Fatalf("no row file under %s holds %q", root, old)
+		}
+		b, err := os.ReadFile(hit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(hit, []byte(strings.Replace(string(b), old, new, 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.Step("day1/served-reads-see-hand-edits", func() {
+		log := filepath.Join(t.TempDir(), "read-server.log")
+		sock := lap.LorePath("run", "read.sock")
+		lap.SetEnv("LORE_READ_SERVER", "1")
+		lap.SetEnv("LORE_TEST_READ_SERVER_LOG", log)
+		defer func() {
+			lap.SetEnv("LORE_READ_SERVER", "")
+			lap.SetEnv("LORE_TEST_READ_SERVER_LOG", "")
+			_ = os.Remove(sock) // the server stops once its socket is gone
+		}()
+		lap.LoreIn(code, "search", "comet").OK(t) // starts the server
+		for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+			if _, err := os.Stat(sock); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no read server listens on %s", sock)
+			}
+		}
+		_ = os.Remove(log)
+		mine := []string{"ask", "--store", "me", "--query", "what is the status of comet"}
+		ours := []string{"search", "comet"}
+		// served reads run back to back, so each after the first is handed
+		// the open the one before kept (a one-shot run between them would
+		// move the caches and make the next one open afresh)
+		lap.LoreIn(code, ours...).OK(t).Says(t, "make release")
+		lap.LoreIn(code, ours...).OK(t).Says(t, "make release")
+		edit(filepath.Join(code.Dir, ".lore"), "make release", "make RELEASE") // same size: only the content changes
+		lap.LoreIn(code, ours...).OK(t).Says(t, "make RELEASE").Never(t, "make release")
+		lastOurs := lap.LoreIn(code, ours...).OK(t).Says(t, "make RELEASE")
+		lap.LoreIn(code, mine...).OK(t).Says(t, "beta with 4 teams")
+		lap.LoreIn(code, mine...).OK(t).Says(t, "beta with 4 teams")
+		edit(lap.LorePath("stores"), "beta with 4 teams", "beta with 9 teams")
+		lastMine := lap.LoreIn(code, mine...).OK(t)
+		// the repo's reads attach the store's folder too: the edit there
+		// (which waits for a command inside that folder) is said by every
+		// read, the second one included
+		lap.LoreIn(code, ours...).OK(t).Says(t, "waits")
+		lastOurs = lap.LoreIn(code, ours...).OK(t).Says(t, "waits")
+		if b, _ := os.ReadFile(log); strings.Count(string(b), "served\n") != 9 || strings.Contains(string(b), "one-shot") {
+			t.Errorf("want each read served, the log says:\n%s", b)
+		}
+		lap.SetEnv("LORE_READ_SERVER", "0") // one-shot from here
+		for _, c := range []struct {
+			args   []string
+			served teamharness.Result
+		}{{ours, lastOurs}, {mine, lastMine}} {
+			if got := lap.LoreIn(code, c.args...); got.Stdout != c.served.Stdout || got.Stderr != c.served.Stderr {
+				t.Errorf("served `lore %s` after a hand edit differs from one-shot:\nserved: %s\none-shot: %s", strings.Join(c.args, " "), c.served, got)
+			}
+		}
+	})
+}

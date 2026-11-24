@@ -35,9 +35,13 @@ package wire
 // a state.
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -122,59 +126,232 @@ func stateKey(opts Options, one attach.Store, here store.Source, also []attach.S
 // repoDir) builds its state from; "" when the home cannot be read (no
 // reuse).
 func stateFingerprint(home, repoDir string) string {
-	var b strings.Builder
-	add := func(p string, fi fs.FileInfo) {
-		b.WriteString(p + "\x00" + strconv.FormatInt(fi.Size(), 10) + "\x00" + strconv.FormatInt(fi.ModTime().UnixNano(), 10) + "\x00" + fi.Mode().String() + "\x01")
-	}
-	walk := func(root string) {
-		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return nil // a folder that went away or cannot be read: its files are gone from the print
-			}
-			if fi, err := d.Info(); err == nil {
-				add(p, fi)
-			}
-			return nil
-		})
-	}
-	entries := func(dir string) {
-		ents, err := os.ReadDir(dir)
-		if err != nil {
-			return
-		}
-		for _, e := range ents {
-			if fi, err := e.Info(); err == nil {
-				add(filepath.Join(dir, e.Name()), fi)
-			}
-		}
-	}
-	fi, err := os.Stat(home)
-	if err != nil || !fi.IsDir() {
+	var p filePrint
+	if !p.home(home) {
 		return ""
 	}
-	if fi, err := os.Stat(filepath.Join(home, "config.yaml")); err == nil {
-		add("config.yaml", fi)
+	if repoDir != "" {
+		p.entries(filepath.Join(repoDir, ".lore"))
 	}
-	entries(filepath.Join(home, "state"))
-	walk(filepath.Join(home, "cache"))
+	return p.b.String()
+}
+
+// filePrint builds a fingerprint: the path, size, time and mode of each
+// file added.
+type filePrint struct {
+	b strings.Builder
+	// hashNewer, when set, adds a hash of the content of every file walked
+	// with walkTree whose time is after it (racyHashWindow).
+	hashNewer time.Time
+}
+
+func (p *filePrint) add(path string, fi fs.FileInfo) {
+	p.b.WriteString(path + "\x00" + strconv.FormatInt(fi.Size(), 10) + "\x00" + strconv.FormatInt(fi.ModTime().UnixNano(), 10) + "\x00" + fi.Mode().String() + "\x01")
+}
+
+// walk adds every file under root (a folder that went away or cannot be
+// read: its files are gone from the print).
+func (p *filePrint) walk(root string) {
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if fi, err := d.Info(); err == nil {
+			p.add(path, fi)
+		}
+		return nil
+	})
+}
+
+// walkTree adds every file of a work tree under root but its .git
+// folders, with the content hash of a file newer than hashNewer: a hand
+// edit lands there, and an edit inside the file system's time step that
+// keeps the size changes no stat field (git's "racy" case).
+func (p *filePrint) walkTree(root string) {
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return nil
+		case d.IsDir() && d.Name() == ".git":
+			return filepath.SkipDir
+		case d.IsDir():
+			return nil
+		}
+		fi, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		p.add(path, fi)
+		if fi.Mode().IsRegular() && !fi.ModTime().Before(p.hashNewer) {
+			if body, err := os.ReadFile(path); err == nil {
+				sum := sha256.Sum256(body)
+				p.b.WriteString(hex.EncodeToString(sum[:]) + "\x01")
+			}
+		}
+		return nil
+	})
+}
+
+// entries adds each entry of dir, not what is below it.
+func (p *filePrint) entries(dir string) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		if fi, err := e.Info(); err == nil {
+			p.add(filepath.Join(dir, e.Name()), fi)
+		}
+	}
+}
+
+// home adds what every open builds from under the lore home (see the top
+// of this file); false when home is not a readable folder.
+func (p *filePrint) home(home string) bool {
+	fi, err := os.Stat(home)
+	if err != nil || !fi.IsDir() {
+		return false
+	}
+	if fi, err := os.Stat(filepath.Join(home, "config.yaml")); err == nil {
+		p.add("config.yaml", fi)
+	}
+	p.entries(filepath.Join(home, "state"))
+	p.walk(filepath.Join(home, "cache"))
+	for _, g := range storeGitDirs(home) {
+		p.gitDir(g)
+	}
+	return true
+}
+
+// gitDir adds the files of a git folder a commit, a checkout, a fetch or
+// a sync moves.
+func (p *filePrint) gitDir(g string) {
+	for _, f := range []string{"HEAD", "index", "packed-refs", "FETCH_HEAD", "ORIG_HEAD"} {
+		if fi, err := os.Stat(filepath.Join(g, f)); err == nil {
+			p.add(filepath.Join(g, f), fi)
+		}
+	}
+	p.walk(filepath.Join(g, "refs"))
+}
+
+// storeGitDirs is the .git folder of every store clone under home.
+func storeGitDirs(home string) []string {
 	var clones []string
 	for _, pat := range []string{"*", "*/*", "*/*/*"} {
 		hits, _ := filepath.Glob(filepath.Join(home, "stores", pat, ".git"))
 		clones = append(clones, hits...)
 	}
 	slices.Sort(clones)
-	for _, g := range clones {
-		for _, f := range []string{"HEAD", "index", "packed-refs", "FETCH_HEAD", "ORIG_HEAD"} {
-			if fi, err := os.Stat(filepath.Join(g, f)); err == nil {
-				add(filepath.Join(g, f), fi)
-			}
+	return clones
+}
+
+// racyHashWindow is how recent a work tree file must be for the
+// fingerprint of a kept repo open to hash its content (filePrint.walkTree):
+// well past any file system's time step, as the git status stamp's racy
+// guard (adapters/backend/git statusstamp.go).
+const racyHashWindow = 2 * time.Second
+
+// repoStateFingerprint describes every file a full repo open (App.state)
+// builds its state from, on top of stateFingerprint's: the files at the
+// top of the lore home (machine.json), the repo's git folder (a commit, a
+// checkout or a branch switch moves the live rows and the git status the
+// pick-up reads) and tree, the work tree print (repoTreePrint). "" when
+// one cannot be read.
+func repoStateFingerprint(home, repoTop, tree string) string {
+	var p filePrint
+	if repoTop == "" || tree == "" || !p.home(home) {
+		return ""
+	}
+	ents, err := os.ReadDir(home)
+	if err != nil {
+		return ""
+	}
+	for _, e := range ents {
+		if fi, err := e.Info(); err == nil && fi.Mode().IsRegular() {
+			p.add(filepath.Join(home, e.Name()), fi)
 		}
-		walk(filepath.Join(g, "refs"))
 	}
-	if repoDir != "" {
-		entries(filepath.Join(repoDir, ".lore"))
+	g, ok := repoGitDir(repoTop)
+	if !ok {
+		return ""
 	}
-	return b.String()
+	p.gitDir(g)
+	if common, err := os.ReadFile(filepath.Join(g, "commondir")); err == nil { // a linked worktree: its refs live in the main repo's git folder
+		c := strings.TrimSpace(string(common))
+		if !filepath.IsAbs(c) {
+			c = filepath.Join(g, c)
+		}
+		p.gitDir(c)
+	}
+	return p.b.String() + tree
+}
+
+// repoTreePrint describes the work trees a person edits by hand: every
+// store clone's (a hand edit there is picked up by the open) and every
+// file of the repo's .lore folder (its rows, stores.yaml). It is taken
+// once per command, before the open reads them (a new open) or when a
+// kept open is handed out, and the kept open carries it to the end of the
+// command: a read writes none of these files (a pick-up or any row write
+// marks the state written, and it is not kept), so an edit made while the
+// command ran differs from it and the next command opens afresh. Walking
+// them again at the end would cost every command a second walk and take
+// in such an edit as seen. "" when top is "".
+func repoTreePrint(home, top string) string {
+	if top == "" {
+		return ""
+	}
+	p := filePrint{hashNewer: time.Now().Add(-racyHashWindow)}
+	p.walkTree(filepath.Join(home, "stores"))
+	p.walkTree(filepath.Join(top, ".lore"))
+	return "tree\x01" + p.b.String()
+}
+
+// gitTopOf is the nearest folder at or above dir holding .git ("" when
+// none): the repo top an open of dir finds.
+func gitTopOf(dir string) string {
+	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			return d
+		}
+		if filepath.Dir(d) == d {
+			return ""
+		}
+	}
+}
+
+// repoGitDir is the git folder of the repo at top: top/.git, or the
+// folder a linked worktree's .git file names.
+func repoGitDir(top string) (string, bool) {
+	g := filepath.Join(top, ".git")
+	fi, err := os.Stat(g)
+	if err != nil {
+		return "", false
+	}
+	if fi.IsDir() {
+		return g, true
+	}
+	body, err := os.ReadFile(g)
+	if err != nil {
+		return "", false
+	}
+	d, ok := strings.CutPrefix(strings.TrimSpace(string(body)), "gitdir:")
+	if !ok {
+		return "", false
+	}
+	d = strings.TrimSpace(d)
+	if !filepath.IsAbs(d) {
+		d = filepath.Join(top, d)
+	}
+	return d, true
+}
+
+// fingerprint is the fingerprint of the files st was built from: a kept
+// repo open's (repoStateFingerprint) or a store-only open's.
+func (st *state) fingerprint(home, repoDir string) string {
+	if st.repoKept {
+		return repoStateFingerprint(home, st.repoTop, st.treePrint)
+	}
+	return stateFingerprint(home, repoDir)
 }
 
 // takeState returns the idle state of key when it is under stateMaxAge
@@ -189,7 +366,13 @@ func takeState(key, home, repoDir string) *state {
 		stateStats.misses.Add(1)
 		return nil
 	}
-	if fp := stateFingerprint(home, repoDir); fp == "" || fp != p.fp || time.Since(p.at) > stateMaxAge {
+	fp := ""
+	if p.st.repoKept {
+		fp = repoStateFingerprint(home, p.st.repoTop, repoTreePrint(home, p.st.repoTop)) // the work trees as they are now
+	} else {
+		fp = p.st.fingerprint(home, repoDir)
+	}
+	if fp == "" || fp != p.fp || time.Since(p.at) > stateMaxAge {
 		_ = p.st.close()
 		stateStats.stale.Add(1)
 		return nil
@@ -202,7 +385,7 @@ func takeState(key, home, repoDir string) *state {
 // must close: reuse off, not a kept open, or it wrote (a write's state
 // carries what it wrote; the next call opens afresh).
 func putState(st *state, home, repoDir string) bool {
-	if st.poolKey == "" || !stateReuseOn() || len(st.wroteTo) > 0 {
+	if st.poolKey == "" || !stateReuseOn() || len(st.wroteTo) > 0 || st.saidOnFinish {
 		return false
 	}
 	for _, f := range st.storeFormat {
@@ -210,7 +393,7 @@ func putState(st *state, home, repoDir string) bool {
 			return false
 		}
 	}
-	fp := stateFingerprint(home, repoDir)
+	fp := st.fingerprint(home, repoDir)
 	if fp == "" {
 		return false
 	}
@@ -238,4 +421,92 @@ func putState(st *state, home, repoDir string) bool {
 		_ = e.close()
 	}
 	return true
+}
+
+// repoStateKey is the read server's key of a full repo open (App.state):
+// stateKey's inputs (home, repo dir, the whole environment), every plain
+// value of the options (an actor flag, person-only), whether the command
+// is a read run (doctor_nocreate.go: such a run opens a repo with no lore
+// project read-only) and the identity the caller resolves to, with what
+// agent detection saw (it walks the caller's parent processes, which the
+// environment does not name). "" when the identity does not resolve: no
+// reuse.
+func repoStateKey(ctx context.Context, opts Options) string {
+	who, err := resolveIdentity(ctx, opts)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("repo-open\x01" + stateKey(opts, attach.Store{}, "", nil))
+	b.WriteString("\x01opts\x00")
+	plainPrint(&b, reflect.ValueOf(opts), 0)
+	b.WriteString("\x01read\x00" + strconv.FormatBool(noCreateOf(ctx) != nil) + "\x01who\x00")
+	plainPrint(&b, reflect.ValueOf(who), 0)
+	return b.String()
+}
+
+// plainPrintDepth bounds plainPrint (a value refers to itself through no
+// plain field, but a deep one costs every call).
+const plainPrintDepth = 6
+
+// plainPrint writes the plain data of v (text, numbers, flags, and lists,
+// string-keyed maps, structs and pointers of them, unexported fields
+// included) to b. Funcs, interfaces and channels are the host's wiring of
+// one command and print as "-": they never decide which files an open
+// reads or who it opens for, and their addresses differ on every call.
+func plainPrint(b *strings.Builder, v reflect.Value, depth int) {
+	if depth > plainPrintDepth {
+		b.WriteString("…")
+		return
+	}
+	switch v.Kind() {
+	case reflect.Bool:
+		b.WriteString(strconv.FormatBool(v.Bool()))
+	case reflect.String:
+		b.WriteString(strconv.Quote(v.String()))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		b.WriteString(strconv.FormatInt(v.Int(), 10))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		b.WriteString(strconv.FormatUint(v.Uint(), 10))
+	case reflect.Float32, reflect.Float64:
+		b.WriteString(strconv.FormatFloat(v.Float(), 'g', -1, 64))
+	case reflect.Pointer:
+		if v.IsNil() {
+			b.WriteString("nil")
+			return
+		}
+		plainPrint(b, v.Elem(), depth+1)
+	case reflect.Slice, reflect.Array:
+		b.WriteString("[" + strconv.Itoa(v.Len()) + ":")
+		for i := range v.Len() {
+			plainPrint(b, v.Index(i), depth+1)
+			b.WriteString(",")
+		}
+		b.WriteString("]")
+	case reflect.Map:
+		if v.Type().Key().Kind() != reflect.String {
+			b.WriteString("-")
+			return
+		}
+		keys := v.MapKeys()
+		slices.SortFunc(keys, func(x, y reflect.Value) int { return strings.Compare(x.String(), y.String()) })
+		b.WriteString("{")
+		for _, k := range keys {
+			b.WriteString(strconv.Quote(k.String()) + ":")
+			plainPrint(b, v.MapIndex(k), depth+1)
+			b.WriteString(",")
+		}
+		b.WriteString("}")
+	case reflect.Struct:
+		t := v.Type()
+		b.WriteString("{")
+		for i := range t.NumField() {
+			b.WriteString(t.Field(i).Name + ":")
+			plainPrint(b, v.Field(i), depth+1)
+			b.WriteString(",")
+		}
+		b.WriteString("}")
+	default: // func, interface, chan, unsafe pointer
+		b.WriteString("-")
+	}
 }

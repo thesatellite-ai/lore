@@ -33,10 +33,35 @@ func RemoteRequest(ctx context.Context) context.Context {
 }
 
 // IsRemoteRequest reports whether ctx was marked by RemoteRequest.
-func IsRemoteRequest(ctx context.Context) bool { return requestOf(ctx) != 0 }
-
-// requestOf is ctx's request number, 0 outside a REST request.
-func requestOf(ctx context.Context) requestID {
+func IsRemoteRequest(ctx context.Context) bool {
 	v, _ := ctx.Value(remoteRequestKey{}).(requestID)
+	return v != 0
+}
+
+// servedCommandKey marks a context as one command the read server runs
+// for a CLI process (ServedCommand).
+type servedCommandKey struct{}
+
+// ServedCommand marks ctx as one command of a process that serves many
+// (the read server, app/readserver_unix.go): it gets its own request
+// number, so the per-command state of a backend the server keeps across
+// commands (a kept open, statepool.go: storePush's read fetch, its
+// "commits wait for lore sync" line, OrgResolution's per-command sets)
+// starts afresh for it, exactly as in a one-shot process. Why (bug hunt
+// H-216): a kept repo open hands its backends to the next command; with
+// every served command numbered 0 the second one inherited the first's
+// "already said" and "already fetched" marks. Unlike RemoteRequest it
+// leaves the audit's session link alone: the command is the CLI's own.
+func ServedCommand(ctx context.Context) context.Context {
+	return context.WithValue(ctx, servedCommandKey{}, requestID(lastRequestID.Add(1)))
+}
+
+// requestOf is ctx's request number: a REST request's, else a served
+// command's (ServedCommand), else 0 (a one-shot CLI command).
+func requestOf(ctx context.Context) requestID {
+	if v, _ := ctx.Value(remoteRequestKey{}).(requestID); v != 0 {
+		return v
+	}
+	v, _ := ctx.Value(servedCommandKey{}).(requestID)
 	return v
 }

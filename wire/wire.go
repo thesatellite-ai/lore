@@ -463,7 +463,20 @@ type state struct {
 	// across calls (statepool.go, devco:D-890); "" never kept.
 	poolKey  string
 	openedAt time.Time // when it was opened (statepool.go stateMaxAge)
-	eng      *engine.Engine
+	// repoKept marks a full repo open the read server may keep (App.state,
+	// statepool.go repoStateFingerprint, bug hunt H-216).
+	repoKept bool
+	// treePrint is the work tree print of a kept repo open
+	// (repoTreePrint), taken before this command read the trees.
+	treePrint string
+	// openNotes are the notices the open said from the files it was built
+	// from (liveNote, strayProjectNotes); a kept open says them again
+	// without reading those files again (they are in its fingerprint).
+	openNotes []string
+	// saidOnFinish: the pick-up of hand edits said a line for this open
+	// (App.finishOpen); such an open is never kept (statepool.go).
+	saidOnFinish bool
+	eng          *engine.Engine
 	// linkedByRemote is the remote a store link names this repo by when it
 	// holds no lore data (Options.RepoLinkedByRemote): the repo store is
 	// read-only and the repo cache lives under ~/.lore; "" otherwise.
@@ -825,7 +838,17 @@ func (a *App) finishOpen(ctx context.Context, st *state) error {
 	if err := a.finishRefresh(ctx, st); err != nil {
 		return err
 	}
-	return st.pickUpThenSync(ctx, a.opts)
+	opts := a.opts
+	if say := opts.Notice; st.repoKept && say != nil {
+		// a kept repo open never runs the pick-up again, so one that said
+		// something (a hand edit that waits, a row it took in) is not kept:
+		// every command says it, as a one-shot one does (H-216)
+		opts.Notice = func(n string) {
+			st.saidOnFinish = true
+			say(n)
+		}
+	}
+	return st.pickUpThenSync(ctx, opts)
 }
 
 // armEngine installs the App's hooks on st's engine: the write-time
@@ -877,21 +900,41 @@ func (a *App) openState(ctx context.Context, rowsOnly bool) (st *state, finish b
 		// notices (engine.WithTableSnapshot, bug hunt H-214); later reads
 		// of the command read afresh
 		ctx := engine.WithTableSnapshot(ctx)
-		a.st, a.err = open(ctx, a.opts, a.extra, false)
+		key, kept := a.keptRepoState(ctx)
+		if kept != nil {
+			a.st, a.err = kept, nil // finished or not as it was when the last command closed
+		} else {
+			tree := ""
+			if key != "" {
+				tree = repoTreePrint(a.opts.Home, gitTopOf(a.opts.RepoDir)) // before the open reads the trees
+			}
+			a.st, a.err = open(ctx, a.opts, a.extra, false)
+			if a.err == nil {
+				a.st.unfinished = true
+				if tree != "" && a.st.here == "" && a.st.repoTop == gitTopOf(a.opts.RepoDir) {
+					a.st.poolKey, a.st.openedAt, a.st.repoKept, a.st.treePrint = key, time.Now(), true, tree
+				}
+			}
+		}
 		if a.err == nil {
-			a.st.unfinished = true
 			a.armEngine(a.st)
 			a.notePlaces(a.st) // servestale.go
 		}
 		if a.err == nil && a.opts.Notice != nil {
-			a.healedNotices(a.st)
+			if kept == nil {
+				a.healedNotices(a.st) // a kept open healed nothing for this command
+			}
 			if !a.st.refreshPending {
 				a.rowFileNotices(ctx, a.st) // fail closed: name every row file the refresh left out (rowfile_notice.go)
 			}
-			if n := liveNote(ctx, a.st); n != "" {
-				a.opts.Notice(n)
+			if kept == nil {
+				a.st.openNotes = nil
+				if n := liveNote(ctx, a.st); n != "" {
+					a.st.openNotes = append(a.st.openNotes, n)
+				}
+				a.st.openNotes = append(a.st.openNotes, strayProjectNotes(ctx, a.st)...)
 			}
-			for _, n := range strayProjectNotes(ctx, a.st) {
+			for _, n := range a.st.openNotes {
 				a.opts.Notice(n)
 			}
 		}
@@ -904,6 +947,30 @@ func (a *App) openState(ctx context.Context, rowsOnly bool) (st *state, finish b
 		a.st.unfinished, finish = false, true
 	}
 	return a.st, finish, a.err
+}
+
+// keptRepoState is the read server's kept repo open for this App's
+// inputs (statepool.go), or nil with the key a new open is kept under ("" =
+// never kept: reuse off, a folder attached for this one command, or an
+// identity that does not resolve). Why (bug hunt H-216): a served warm
+// lore ask spent about half its time opening the repo and every store it
+// attaches again (the backends, the actor checks over the store's rows,
+// the cache refresh, the pick-up of hand edits), though a read changes
+// none of it; the kept open is handed out only while every file it was
+// built from is unchanged and for at most stateMaxAge, so a teammate's
+// row that arrived by sync, a hand edit and a commit are seen by the next
+// command exactly as by a one-shot one. The open's notices are said again
+// by openState from the kept state, as a new open says them.
+func (a *App) keptRepoState(ctx context.Context) (string, *state) {
+	if !stateReuseOn() || len(a.extra) > 0 {
+		return "", nil
+	}
+	key := repoStateKey(ctx, a.opts)
+	if key == "" {
+		return "", nil
+	}
+	st := takeState(key, a.opts.Home, a.opts.RepoDir)
+	return key, st
 }
 
 // configState opens the repo-only state once (see App.cfg).

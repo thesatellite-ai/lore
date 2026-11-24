@@ -670,7 +670,7 @@ func (s *readServer) runFor(conn *net.UnixConn, req readRequest, fds []int) (cod
 		<-s.pipes
 	}
 	s.piped.Store(false)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(wire.ServedCommand(context.Background())) // per-command state of kept backends starts afresh (H-216)
 	defer cancel()
 	go func() { // the CLI never writes after go: a read returns when it goes away
 		var b [1]byte

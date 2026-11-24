@@ -1241,8 +1241,12 @@ func (b *liveBackend) overLanded(ctx context.Context, s *liveSession, ch store.C
 // push hooks caught them. migrate is exempt (leakExempt): it rewrites rows
 // the repo already holds, it does not add text.
 func (b *liveBackend) noSessionLeakCheck(ctx context.Context, changes []store.Change) error {
-	if b.h == nil || leakExempt(ctx) {
+	h := b.h
+	if r := runFrom(ctx); r != nil && r.h != nil {
+		h = r.h // this command's host: the read server may keep this backend across commands (wire statepool.go, H-216)
+	}
+	if h == nil || leakExempt(ctx) {
 		return nil
 	}
-	return b.h.leakCheckBranch(ctx, b.folder, changes)
+	return h.leakCheckBranch(ctx, b.folder, changes)
 }
