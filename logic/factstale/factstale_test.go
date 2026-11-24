@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/logic/factstale"
 )
@@ -154,5 +155,29 @@ func TestCheckerAsksGitOncePerItem(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("git ran %d times, want 1", calls)
+	}
+}
+
+// TestReverify (devco:D-953, bug hunt H-212): the command lint, show, ask
+// and context print for a stale fact: --store only for a row outside the
+// repo store, today's day, or the newest change's day when the clock is
+// behind it (so it always clears the verdict); nothing for a fresh one.
+func TestReverify(t *testing.T) {
+	now := time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)
+	stale := factstale.Verdict{Stale: true, Since: "2026-11-02", Changed: []factstale.Change{{Path: "a.go", Commit: "abc1234", At: time.Date(2026, 11, 10, 10, 0, 0, 0, time.UTC)}}}
+	for _, c := range []struct {
+		name, store string
+		v           factstale.Verdict
+		now         time.Time
+		want        string
+	}{
+		{"fresh", "", factstale.Verdict{}, now, ""},
+		{"repo store", "", stale, now, "when it still holds: lore meta set --id mem_1 --pair fact_verified_at=2026-11-24; when it does not: edit the row and its fact_evidence"},
+		{"a store folder", "kb/app", stale, now, "when it still holds: lore meta set --id mem_1 --store kb/app --pair fact_verified_at=2026-11-24; when it does not: edit the row and its fact_evidence"},
+		{"clock behind", "", stale, time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), "when it still holds: lore meta set --id mem_1 --pair fact_verified_at=2026-11-10; when it does not: edit the row and its fact_evidence"},
+	} {
+		if got := factstale.Reverify("mem_1", c.store, c.v, c.now); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
 	}
 }

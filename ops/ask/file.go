@@ -32,6 +32,10 @@ type Applied struct {
 	ID   string `json:"id"`
 	Kind string `json:"kind" desc:"rule, hotfix, memory, decision, pattern or architecture-note"`
 	Why  string `json:"why" desc:"why it applies: the glob, folder scope, mention or words that matched"`
+	// Stale and Reverify: the row states a fact whose evidence changed
+	// after it was verified, as lore context marks it (devco:D-953).
+	Stale    string `json:"stale,omitempty" desc:"set when the row's fact_evidence changed in git after fact_verified_at: stale: evidence changed since <day> (<files>)"`
+	Reverify string `json:"reverify,omitempty" desc:"set with stale: the command that clears it once the row and the code were read again"`
 }
 
 // FileContexter is the part of Env that says what applies to a file

@@ -220,6 +220,9 @@ type Row struct {
 	// changed in git after it was verified (devco:D-941): it ranks below a
 	// fresh row with the same match.
 	Stale string `json:"stale,omitempty" desc:"set when the row states a fact whose evidence files (fact_evidence) changed in git after it was verified (fact_verified_at): stale: evidence changed since <day> (<files>); check it before relying on it, it ranks below a fresh row with the same match"`
+	// Reverify is what clears Stale after reading the row and the code
+	// again (devco:D-953), the words lore lint and lore show print.
+	Reverify string `json:"reverify,omitempty" desc:"set with stale: when it still holds: lore meta set --id <id> [--store <store>] --pair fact_verified_at=<day>; when it does not: edit the row and its fact_evidence"`
 	// readTitle and readBody are Title and Body as the text answer prints
 	// them: each ${res:…} naming a resource the ask read replaced by the
 	// resource's name (refs.Readable, devco D-822). --json keeps the

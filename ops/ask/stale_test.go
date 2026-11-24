@@ -37,3 +37,49 @@ func TestFactSQLIsFileOnly(t *testing.T) {
 		t.Fatal("factSQL must be FileOnly")
 	}
 }
+
+// TestStaleAnswerSaysHowToReverify (devco:D-953, bug hunt H-212): an
+// answer that prints a stale row, ranked or applied by the file's context
+// (a question naming a file), says it is stale and how to clear it, once
+// per row and only for a row it printed, in text and in --json.
+func TestStaleAnswerSaysHowToReverify(t *testing.T) {
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	fix := func(id string) string {
+		return "when it still holds: lore meta set --id " + id + " --store kb/app --pair fact_verified_at=2026-11-23; when it does not: edit the row and its fact_evidence"
+	}
+	note := "stale: evidence changed since 2026-11-02 (svc/b.go)"
+	rows := []textRow{
+		{Table: "memories", ID: "mem_fresh", Place: "kb/app", Body: "quokka rule says exports run nightly", At: now.AddDate(0, 0, -2)},
+		{Table: "memories", ID: "mem_stale", Place: "kb/app", Body: "quokka rule says refunds are capped", At: now.AddDate(0, 0, -1), Stale: note, Reverify: fix("mem_stale")},
+	}
+	out := build(parseQuestion("quokka rule", now), data{rows: rows}, DefaultTop, DefaultMaxChars)
+	text := out.Text()
+	for _, want := range []string{"[" + note + "]", "re-verify each stale row", "  mem_stale: " + fix("mem_stale") + "\n"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("text misses %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "mem_fresh: when") {
+		t.Fatalf("a fresh row has a re-verify line:\n%s", text)
+	}
+	// the newer row replaces the older one on the same thing: the "now:"
+	// line it leads with carries the mark too
+	if !strings.Contains(text, "now: quokka rule says refunds are capped (changed ") || !strings.Contains(strings.SplitN(text, "\n", 2)[0], "["+note+"]") {
+		t.Fatalf("the now: line of a stale row is not marked:\n%s", text)
+	}
+	for _, r := range out.Rows {
+		if want := map[string]string{"mem_stale": fix("mem_stale")}[r.ID]; r.Reverify != want {
+			t.Fatalf("--json reverify of %s: %q, want %q", r.ID, r.Reverify, want)
+		}
+	}
+
+	// a row the file's context applied and the answer also ranks: one line
+	out.Applies = []Applied{{ID: "mem_stale", Kind: "memory", Why: "words", Stale: note, Reverify: fix("mem_stale")}, {ID: "mem_cut", Stale: note, Reverify: fix("mem_cut")}}
+	text = out.Text()
+	if n := strings.Count(text, "  mem_stale: when"); n != 1 {
+		t.Fatalf("want one re-verify line for mem_stale, got %d:\n%s", n, text)
+	}
+	if strings.Contains(text, "mem_cut") {
+		t.Fatalf("a row the answer did not print has a re-verify line:\n%s", text)
+	}
+}

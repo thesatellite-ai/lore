@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/factstale"
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
@@ -22,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/ops/internal/showfield"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
@@ -287,7 +289,43 @@ type ShowOut struct {
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
 	CreatedBy string    `json:"created_by,omitempty"`
 	UpdatedBy string    `json:"updated_by,omitempty"`
-	prov      *Origin
+	// Stale is set when the row states a fact about code whose evidence
+	// (fact_evidence) changed in git after it was verified
+	// (fact_verified_at), Reverify the command that clears it: the same
+	// words lore lint, search and ask print (devco:D-953, bug hunt H-212).
+	Stale    string `json:"stale,omitempty"`
+	Reverify string `json:"reverify,omitempty"`
+	prov     *Origin
+}
+
+// FactEnv is the Env upgrade that checks a row's fact evidence against the
+// code repository the command runs in (*wire.App); FactChecker is nil
+// outside a git repository, and show then marks nothing.
+type FactEnv interface {
+	FactChecker(ctx context.Context) *factstale.Checker
+}
+
+// markStale sets out.Stale and out.Reverify when r's fact evidence changed
+// after it was verified (devco:D-953).
+func (o ops) markStale(ctx context.Context, src store.Source, r row.Row, out *ShowOut) {
+	cl, ok := factstale.ClaimOf(r)
+	if !ok || !cl.Checkable() {
+		return
+	}
+	fe, ok := upgrade.As[FactEnv](o.env)
+	if !ok {
+		return
+	}
+	chk := fe.FactChecker(ctx)
+	if chk == nil {
+		return
+	}
+	v := chk.Check(ctx, cl)
+	st := ""
+	if src != store.SourceRepo {
+		st = string(src)
+	}
+	out.Stale, out.Reverify = v.Note(), factstale.Reverify(out.ID, st, v, opclock.Now(o.env))
 }
 
 // MoveOut is the output of row.move.
@@ -458,6 +496,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	}
 	metashow.AddLabels(out.Meta, labels) // METADATA 3.17, G-META-10
 	slices.Sort(out.MetaMasked)
+	o.markStale(ctx, src, r, &out)
 	if in.Force && !in.Reveal {
 		return ShowOut{}, errs.New(errs.InvalidInput, "--force goes with --reveal")
 	}
@@ -722,6 +761,9 @@ func (o ShowOut) Text() string {
 	shown := metashow.Display(o.Meta, o.MetaMasked) // an allowed value by its label
 	for _, k := range slices.Sorted(maps.Keys(shown)) {
 		b.WriteString("  meta " + k + ": " + shown[k] + "\n")
+	}
+	if o.Stale != "" { // devco:D-953: the mark and its fix, as lint prints them
+		b.WriteString("  " + o.Stale + "\n  fix: " + o.Reverify + "\n")
 	}
 	b.WriteString(auditrec.LineAt(o.CreatedAt, o.CreatedBy, o.UpdatedAt, o.UpdatedBy))
 	b.WriteString(expand.RefsText(o.Refs))

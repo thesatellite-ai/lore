@@ -6836,6 +6836,14 @@
                             "type": "string",
                             "description": "rule, hotfix, memory, decision, pattern or architecture-note"
                           },
+                          "reverify": {
+                            "type": "string",
+                            "description": "set with stale: the command that clears it once the row and the code were read again"
+                          },
+                          "stale": {
+                            "type": "string",
+                            "description": "set when the row's fact_evidence changed in git after fact_verified_at: stale: evidence changed since \u003cday\u003e (\u003cfiles\u003e)"
+                          },
                           "why": {
                             "type": "string",
                             "description": "why it applies: the glob, folder scope, mention or words that matched"
@@ -7089,6 +7097,10 @@
                           },
                           "place": {
                             "type": "string"
+                          },
+                          "reverify": {
+                            "type": "string",
+                            "description": "set with stale: when it still holds: lore meta set --id \u003cid\u003e [--store \u003cstore\u003e] --pair fact_verified_at=\u003cday\u003e; when it does not: edit the row and its fact_evidence"
                           },
                           "stale": {
                             "type": "string",
@@ -15423,6 +15435,14 @@
                           "name": {
                             "type": "string",
                             "description": "--topics: the topic (tag) name"
+                          },
+                          "reverify": {
+                            "type": "string",
+                            "description": "a stale pick: the command that clears it once the row and the code were read again"
+                          },
+                          "stale": {
+                            "type": "string",
+                            "description": "a pick whose fact_evidence changed in git after fact_verified_at: stale: evidence changed since \u003cday\u003e (\u003cfiles\u003e)"
                           },
                           "why": {
                             "type": "string",
@@ -73851,9 +73871,15 @@
                     "revealed": {
                       "type": "integer"
                     },
+                    "reverify": {
+                      "type": "string"
+                    },
                     "routed": {
                       "type": "string",
                       "description": "the \u003corg\u003e/\u003cfolder\u003e this read answered from when a resource of the org named this unlinked repo (absent otherwise)"
+                    },
+                    "stale": {
+                      "type": "string"
                     },
                     "store": {
                       "type": "string"

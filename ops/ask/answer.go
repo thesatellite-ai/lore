@@ -42,8 +42,9 @@ type textRow struct {
 	// Day is the row's day metadata (YYYY-MM-DD), "" when none.
 	Day string
 	// Stale says the row's fact evidence changed after it was verified
-	// (markStale, devco:D-941), "" when fresh or unchecked.
-	Stale string
+	// (markStale, devco:D-941), "" when fresh or unchecked; Reverify is
+	// the command that clears it (devco:D-953).
+	Stale, Reverify string
 	// stored is the row's date as the lens stores it (metaDayOf reads
 	// it), "" for a row not read from the lens.
 	stored string
@@ -1015,7 +1016,7 @@ func rowDay(r *textRow) string {
 
 // rowOf is row r as the answer prints it.
 func rowOf(r *textRow, matched []string) Row {
-	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale}
+	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale, Reverify: r.Reverify}
 	if r.Day != "" {
 		out.At = r.Day
 	} else if !r.At.IsZero() {
@@ -1156,10 +1157,39 @@ func (o Out) Text() string {
 	if o.Left > 0 {
 		fmt.Fprintf(&b, "\n%s left out to stay under %d characters; --max-chars %d prints more\n", plural.Count(o.Left, "more item"), o.maxChars, o.maxChars*2)
 	}
+	b.WriteString(o.reverifyText())
 	if cited := o.textCited(); len(cited) > 0 {
 		b.WriteString("cited: " + strings.Join(cited, " ") + "\n")
 	}
 	return b.String()
+}
+
+// reverifyText is one line per stale row the answer printed (a ranked
+// row or a row the file's context applied) with the command that clears
+// it, as lore lint and lore show print it (devco:D-953, bug hunt H-212):
+// the answer says what to do about a stale fact, not only that it is.
+func (o Out) reverifyText() string {
+	printed := map[string]bool{}
+	for _, id := range o.Cited {
+		printed[id] = true
+	}
+	var b strings.Builder
+	add := func(id, fix string) {
+		if fix != "" && printed[id] {
+			b.WriteString("  " + id + ": " + fix + "\n")
+			printed[id] = false // once, when a row is both applied and ranked
+		}
+	}
+	for _, a := range o.Applies {
+		add(a.ID, a.Reverify)
+	}
+	for _, r := range o.Rows {
+		add(r.ID, r.Reverify)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "\nre-verify each stale row (its evidence changed after fact_verified_at):\n" + b.String()
 }
 
 // textCited is the ids the text's cited line names: every cited item but
@@ -1507,7 +1537,11 @@ func (o Out) nowLine(rows map[string]Row) string {
 		if old, ok := rows[r.replaces]; ok {
 			line += "; before that: " + oneLine(old)
 		}
-		return line + ")\n"
+		line += ")"
+		if r.Stale != "" { // devco:D-953: the current value may no longer hold either
+			line += "  [" + r.Stale + "]"
+		}
+		return line + "\n"
 	}
 	return ""
 }

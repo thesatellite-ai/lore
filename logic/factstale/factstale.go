@@ -245,6 +245,28 @@ func (v Verdict) Note() string {
 	return "stale: evidence changed since " + v.Since + " (" + strings.Join(paths, ", ") + ")"
 }
 
+// Reverify is what clears a stale verdict once the row and the code were
+// read again, "" when v is fresh. Lint, show, ask and context print the
+// same words (devco:D-953, bug hunt H-212: ask and show printed no next
+// step, so an agent had to know lint's). store is the --store the row's
+// write needs ("" for the repo store). The day is today, or the newest
+// change's day when that is later (a skewed clock, a rebase), so the
+// command always clears the verdict.
+func Reverify(id, store string, v Verdict, now time.Time) string {
+	if !v.Stale {
+		return ""
+	}
+	day := now.UTC().Format(time.DateOnly)
+	for _, c := range v.Changed {
+		day = max(day, c.At.UTC().Format(time.DateOnly))
+	}
+	where := ""
+	if store != "" {
+		where = " --store " + store
+	}
+	return "when it still holds: lore meta set --id " + id + where + " --pair " + meta.KeyFactVerifiedAt + "=" + day + "; when it does not: edit the row and its " + meta.KeyFactEvidence
+}
+
 // Checker checks claims against one repository at one HEAD, each git
 // question asked once.
 type Checker struct {

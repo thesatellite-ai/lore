@@ -15,6 +15,8 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/factstale"
 	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // FactEnv is the optional part of Env that answers git questions about
@@ -57,7 +59,16 @@ func loadFacts(ctx context.Context, run Query) (map[string]factItems, error) {
 	return out, nil
 }
 
-// markStale sets Stale on each row whose evidence changed after it was
+// storeFlag is the --store a write of a row printed at place needs: none
+// for the repo store.
+func storeFlag(place string) string {
+	if place == string(store.SourceRepo) {
+		return ""
+	}
+	return place
+}
+
+// markStale sets Stale (and Reverify, devco:D-953) on each row whose evidence changed after it was
 // verified; nothing when env checks no facts.
 func markStale(ctx context.Context, env Env, rows []textRow, facts map[string]factItems) {
 	fe, ok := env.(FactEnv)
@@ -65,6 +76,7 @@ func markStale(ctx context.Context, env Env, rows []textRow, facts map[string]fa
 		return
 	}
 	var chk *factstale.Checker
+	now := opclock.Now(env)
 	for i := range rows {
 		f, ok := facts[rows[i].ID]
 		if !ok {
@@ -79,6 +91,7 @@ func markStale(ctx context.Context, env Env, rows []textRow, facts map[string]fa
 				return
 			}
 		}
-		rows[i].Stale = chk.Check(ctx, cl).Note()
+		v := chk.Check(ctx, cl)
+		rows[i].Stale, rows[i].Reverify = v.Note(), factstale.Reverify(rows[i].ID, storeFlag(rows[i].Place), v, now)
 	}
 }

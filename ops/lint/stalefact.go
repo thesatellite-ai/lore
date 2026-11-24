@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/factstale"
-	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/store"
@@ -80,7 +79,6 @@ func staleFacts(ctx context.Context, all map[row.Table][]sourced, chk *factstale
 		tables = append(tables, t)
 	}
 	slices.Sort(tables)
-	today := now.UTC().Format(time.DateOnly)
 	var out []Finding
 	seen := map[string]bool{}
 	for _, t := range tables {
@@ -99,20 +97,17 @@ func staleFacts(ctx context.Context, all map[row.Table][]sourced, chk *factstale
 			}
 			seen[id] = true
 			var files []string
-			day := today
 			for _, c := range v.Changed {
 				files = append(files, c.Path+" (in "+c.Commit+" on "+c.At.Format(time.DateOnly)+")")
-				// the fix must clear the finding: a commit dated after
-				// today (a skewed clock, a rebase) needs its own day
-				day = max(day, c.At.UTC().Format(time.DateOnly))
 			}
-			where := ""
+			where, st := "", ""
 			if s.src != store.SourceRepo {
-				where = " --store " + string(s.src)
+				st = string(s.src)
+				where = " --store " + st
 			}
 			out = append(out, Finding{Code: StaleFact, ID: id, Store: string(s.src),
 				Message: id + " states a fact about code whose evidence changed after " + v.Since + ": " + strings.Join(files, ", ") + "; read the row (lore show --id " + id + where + ") and the code again",
-				Fix:     "when it still holds: lore meta set --id " + id + where + " --pair " + meta.KeyFactVerifiedAt + "=" + day + "; when it does not: edit the row and its " + meta.KeyFactEvidence})
+				Fix:     factstale.Reverify(id, st, v, now)}) // the fix must clear the finding (devco:D-953: one wording)
 		}
 	}
 	return out

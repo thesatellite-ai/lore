@@ -11,7 +11,8 @@ package stories
 // changed file and the command that re-verifies it (which runs where
 // printed and clears it), doctor counts it, and search and ask mark it and
 // rank it below a fresh note with the same match, also when only a
-// comment on it matched (with D-942).
+// comment on it matched (with D-942); show and ask about the file say it is
+// stale and print the same re-verify command (D-953).
 
 import (
 	"encoding/json"
@@ -118,6 +119,41 @@ func TestStoryOStaleFactFlagged(t *testing.T) {
 		}
 		if pos[fresh] == 0 || pos[stale] == 0 || pos[fresh] > pos[stale] {
 			t.Fatalf("ask: want %s before %s:\n%s", fresh, stale, ans)
+		}
+	})
+
+	// devco:D-953 (bug hunt H-212): show says the note is stale and how to
+	// clear it, and so does ask when the question names the evidence file
+	// (its rows then come from lore context --for-file): the same command
+	// lint printed, which the last step runs.
+	s.Step("D-953/show-and-ask-about-the-file-say-stale-and-how-to-clear-it", func() {
+		ada.Lore(pc.Dir, "show", "--id", stale).OK(t).Says(t, "  stale: evidence changed since 2026-11-02 (billing/refund.go)\n  fix: when it still holds: "+fix+";")
+		if out := ada.Lore(pc.Dir, "show", "--id", fresh).OK(t).Stdout; strings.Contains(out, "stale") {
+			t.Fatalf("show of the fresh note says stale:\n%s", out)
+		}
+		ada.Lore(pc.Dir, "ask", "--query", "is a refund in billing/refund.go capped at the order total").OK(t).
+			Says(t, `stale="evidence changed since 2026-11-02 (billing/refund.go)"`, "re-verify each stale row", "  "+stale+": when it still holds: "+fix+";")
+		var ar struct {
+			Applies []struct {
+				ID       string `json:"id"`
+				Stale    string `json:"stale"`
+				Reverify string `json:"reverify"`
+			} `json:"applies"`
+		}
+		ans := ada.Lore(pc.Dir, "ask", "--query", "is a refund in billing/refund.go capped at the order total", "--json").OK(t).Stdout
+		if err := json.Unmarshal([]byte(ans), &ar); err != nil {
+			t.Fatalf("%v: %s", err, ans)
+		}
+		marked := false
+		for _, a := range ar.Applies {
+			if a.ID == stale {
+				marked = a.Stale != "" && strings.Contains(a.Reverify, fix)
+			} else if a.Stale != "" {
+				t.Fatalf("ask --json marks %s stale:\n%s", a.ID, ans)
+			}
+		}
+		if !marked {
+			t.Fatalf("ask --json: the applied stale note has no stale and reverify:\n%s", ans)
 		}
 	})
 

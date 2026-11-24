@@ -153,16 +153,20 @@ type FetchOut struct {
 	read *Reading
 }
 
-// FetchItem is one item of data: a pick (id, kind, why, bytes, meta) or a
-// topic line (name, counts).
+// FetchItem is one item of data: a pick (id, kind, why, bytes, meta,
+// stale, reverify) or a topic line (name, counts).
 type FetchItem struct {
-	ID     string            `json:"id,omitempty" desc:"a pick, an internal row: the row id"`
-	Kind   string            `json:"kind,omitempty" desc:"a pick: the row kind (rule, hotfix, memory, …)"`
-	Why    string            `json:"why,omitempty" desc:"a pick: why it applies"`
-	Bytes  int               `json:"bytes,omitempty" desc:"a pick: its size in the answer"`
-	Meta   map[string]string `json:"meta,omitempty" desc:"a pick with --meta: the row's metadata"`
-	Name   string            `json:"name,omitempty" desc:"--topics: the topic (tag) name"`
-	Counts TopicCounts       `json:"counts,omitzero" desc:"--topics: live rows per kind under the topic"`
+	ID    string            `json:"id,omitempty" desc:"a pick, an internal row: the row id"`
+	Kind  string            `json:"kind,omitempty" desc:"a pick: the row kind (rule, hotfix, memory, …)"`
+	Why   string            `json:"why,omitempty" desc:"a pick: why it applies"`
+	Bytes int               `json:"bytes,omitempty" desc:"a pick: its size in the answer"`
+	Meta  map[string]string `json:"meta,omitempty" desc:"a pick with --meta: the row's metadata"`
+	// Stale and Reverify: a pick stating a fact whose evidence changed
+	// after it was verified (devco:D-953).
+	Stale    string      `json:"stale,omitempty" desc:"a pick whose fact_evidence changed in git after fact_verified_at: stale: evidence changed since <day> (<files>)"`
+	Reverify string      `json:"reverify,omitempty" desc:"a stale pick: the command that clears it once the row and the code were read again"`
+	Name     string      `json:"name,omitempty" desc:"--topics: the topic (tag) name"`
+	Counts   TopicCounts `json:"counts,omitzero" desc:"--topics: live rows per kind under the topic"`
 }
 
 // TopicCounts is a topic line's counts per kind (the index's kinds).

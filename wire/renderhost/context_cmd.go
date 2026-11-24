@@ -47,6 +47,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/fspath"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
+	"github.com/thesatellite-ai/lore/logic/factstale"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -156,6 +157,7 @@ func (h *Host) contextAnswer(ctx context.Context, f *contextFlags, stdin io.Read
 	if err != nil {
 		return contextop.Answer{}, err
 	}
+	h.markStalePicks(ctx, res.picks) // devco:D-953
 	// 6.13: metadata only on request.
 	if f.withMeta {
 		if res, err = h.withMeta(ctx, res); err != nil {
@@ -225,11 +227,19 @@ type contextPick struct {
 	Why   string `json:"why"`
 	Bytes int    `json:"bytes"`
 	// Meta is the row's metadata, only with --meta (context_meta.go).
-	Meta  map[string]string `json:"meta,omitempty"`
-	metas []pickMeta
-	full  string
-	line  string
-	group string
+	Meta map[string]string `json:"meta,omitempty"`
+	// Stale and Reverify: the row's fact evidence changed after it was
+	// verified, and the command that clears it (markStalePicks, D-953).
+	Stale    string `json:"stale,omitempty"`
+	Reverify string `json:"reverify,omitempty"`
+	// fact is the row's fact_evidence claim (nil when it names none) and
+	// source the store it is in (the --store of Reverify).
+	fact   *factstale.Claim
+	source store.Source
+	metas  []pickMeta
+	full   string
+	line   string
+	group  string
 }
 
 // contextResult is a titled list of picks and the command for the rest.
@@ -425,7 +435,11 @@ func pickOf(k knowledgeRow, why string) contextPick {
 	}
 	full += body + "\n</" + k.kind + ">\n\n"
 	line := contextfit.LineForm(id, contextfit.ShortForm(id, renderField(k.r.Row, schema.FieldSummary), title, body))
-	return contextPick{ID: id, Kind: k.kind, Why: why, Bytes: len(full), full: full, line: line, group: groupOf(k.kind), metas: metasOf(k.r.Row)}
+	p := contextPick{ID: id, Kind: k.kind, Why: why, Bytes: len(full), full: full, line: line, group: groupOf(k.kind), metas: metasOf(k.r.Row), source: k.r.source}
+	if cl, ok := factstale.ClaimOf(k.r.Row); ok && cl.Checkable() {
+		p.fact = &cl
+	}
+	return p
 }
 
 // sortPicks orders picks by group (rules, hotfixes, notes) keeping the
@@ -838,6 +852,7 @@ func (h *Host) runContextHook(ctx context.Context, f *contextFlags, stdin io.Rea
 		seen = hookSeen{} // the start lines never mute the per-file hook
 	}
 	res = res.without(seen.ids)
+	h.markStalePicks(ctx, res.picks) // devco:D-953: an agent about to edit the file reads the mark too
 	if len(res.picks) == 0 {
 		return nil // nothing new to say: print nothing
 	}
