@@ -11643,6 +11643,10 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "take": {
+                    "type": "string",
+                    "description": "branch or main: the side kept for a text both changed since the branch copied the row (every other field still merges)"
                   }
                 },
                 "required": [

@@ -415,6 +415,9 @@ func (o PurgeOut) Text() string {
 // PromoteIn is the input of branch.promote.
 type PromoteIn struct {
 	IDs []string `json:"ids" flag:"ids" desc:"row ids of this branch's notes to put in the shared notes now (comma separated or repeated)"`
+	// Take settles a promoted row whose same text the shared notes also
+	// changed since the branch copied it (#155): every other field merges.
+	Take string `json:"take,omitempty" flag:"take" desc:"branch or main: the side kept for a text both changed since the branch copied the row (every other field still merges)"`
 }
 
 // ChoiceIn is the input of branch.isolate and branch.share.

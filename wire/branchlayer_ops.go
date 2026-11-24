@@ -679,14 +679,40 @@ func (a *App) BranchPromote(ctx context.Context, in opsbranch.PromoteIn) (opsbra
 	if err != nil {
 		return opsbranch.DoneOut{}, err
 	}
-	res, err := lb.gb.LayerPromote(ctx, key, want)
+	var take *bool
+	switch in.Take {
+	case "":
+	case takeBranch, takeMain:
+		branchSide := in.Take == takeBranch
+		take = &branchSide
+	default:
+		return opsbranch.DoneOut{}, errs.New(errs.InvalidInput, "--take "+in.Take+": use branch or main").WithHint("--take branch keeps the branch's text, --take main the shared notes'")
+	}
+	res, err := lb.gb.LayerPromote(ctx, key, want, take)
 	if err != nil {
 		return opsbranch.DoneOut{}, err
 	}
 	lb.mu.Lock()
 	lb.rows = nil
 	lb.mu.Unlock()
-	return opsbranch.DoneOut{OK: true, Lines: []string{fmt.Sprintf("✓ put %d row(s) of %s into the shared notes of %s (commit %s on %s; lore sync pushes it)", len(res.Rows), key.Branch, key.Folder, short7(res.Commit), lb.gb.Branch())}}, nil
+	return opsbranch.DoneOut{OK: true, Lines: promoteLines(res, key.Branch, key.Folder, lb.gb.Branch())}, nil
+}
+
+// promoteLines is lore branch promote's report: how many rows went in as
+// the branch has them, how many merged with newer edits on the store
+// branch (those edits kept, #155), how many --take settled, how many the
+// store branch already held.
+func promoteLines(res git.PromoteResult, branch, folder, storeBranch string) []string {
+	asIs := len(res.Rows) - len(res.Merged) - len(res.Taken) - len(res.Same)
+	where := "nothing new to commit on " + storeBranch
+	if res.Commit != "" {
+		where = "commit " + short7(res.Commit) + " on " + storeBranch + "; lore sync pushes it"
+	}
+	out := []string{fmt.Sprintf("✓ put %d row(s) of %s into the shared notes of %s (%s)", len(res.Rows), branch, folder, where)}
+	if len(res.Merged) > 0 || len(res.Taken) > 0 || len(res.Same) > 0 {
+		out = append(out, fmt.Sprintf("  %d as the branch has them, %d merged field by field with newer edits on %s (those edits kept), %d settled by --take, %d already the same", asIs, len(res.Merged), storeBranch, len(res.Taken), len(res.Same)))
+	}
+	return out
 }
 
 // BranchChoose implements opsbranch.Env: lore branch isolate|share add (or

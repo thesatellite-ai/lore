@@ -227,28 +227,29 @@ func (b *Backend) layerLandIntoLocked(ctx context.Context, key branchlayer.Key, 
 			return res, err
 		}
 		p := b.folder.StorePath(r.Table, r.ID)
-		switch {
-		case ours == nil || (base != nil && string(ours.Doc) == string(base.Doc)):
-			puts[p] = r.Doc // only the stacked branch changed it
-		case string(ours.Doc) == string(r.Doc):
-		default:
-			var baseDoc []byte
-			if base != nil {
-				baseDoc = base.Doc
+		var baseDoc, oursDoc []byte
+		if base != nil {
+			baseDoc = base.Doc
+		}
+		if ours != nil {
+			oursDoc = ours.Doc
+		}
+		// the one merge of a layer row over a newer copy (mergeLayerRow, #155)
+		doc, how, fields, merr := b.mergeLayerRow(baseDoc, oursDoc, r.Doc, nil)
+		if merr != nil {
+			return res, errs.Wrap(errs.Internal, "git: merge a row into "+into, merr)
+		}
+		switch how {
+		case layerMergeClash:
+			c := r.ID.String()
+			if len(fields) > 0 {
+				c += " (" + strings.Join(fields, ", ") + ")"
 			}
-			if b.cfg.merger == nil {
-				conflicts = append(conflicts, r.ID.String())
-				continue
-			}
-			m, conflict, merr := b.cfg.merger.Merge(baseDoc, ours.Doc, r.Doc)
-			if merr != nil {
-				return res, errs.Wrap(errs.Internal, "git: merge a row into "+into, merr)
-			}
-			if conflict {
-				conflicts = append(conflicts, r.ID.String())
-				continue
-			}
-			puts[p] = m
+			conflicts = append(conflicts, c)
+		case layerMergeBranch:
+			puts[p] = doc // only the stacked branch changed it
+		case layerMergeFields, layerMergeTaken:
+			puts[p] = doc
 			res.Merged = append(res.Merged, r.ID)
 		}
 	}

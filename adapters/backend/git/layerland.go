@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/branchlayer"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -538,14 +539,40 @@ func (b *Backend) pushLanding(ctx context.Context) error {
 // PromoteResult is what LayerPromote did.
 type PromoteResult struct {
 	Rows   []store.Row
-	Commit string // store branch commit
+	Commit string // store branch commit ("" when nothing needed writing)
+	// Merged are rows the store branch also changed since the layer copied
+	// them: merged field by field, its own changes kept (#155).
+	Merged []ids.AnyID
+	// Taken are rows both sides changed the same text of, settled by
+	// --take (every other field still merged).
+	Taken []ids.AnyID
+	// Same are rows the store branch already held as the merge gives
+	// (nothing written for them).
+	Same []ids.AnyID
+}
+
+// promoteClashHint is the --take way out of a promote refusal: the same
+// promote again with the side to keep (named flags, the real ids).
+func promoteClashHint(storeBranch string, want []ids.AnyID) string {
+	all := make([]string, 0, len(want))
+	for _, id := range want {
+		all = append(all, id.String())
+	}
+	cmd := "lore branch promote --ids " + strings.Join(all, ",")
+	return "keep one side's text of those fields (every other field still merges): " + cmd + " --take branch keeps the branch's, " +
+		cmd + " --take main keeps " + storeBranch + "'s; or edit the row on one side so both agree, then promote again"
 }
 
 // LayerPromote writes the named rows of the layer onto the store branch now
 // (one commit, through the folder's normal write, so the store branch's
 // own rules apply) and puts those files back to the layer base on the
-// layer, so they no longer differ there. Nothing is pushed: lore sync does.
-func (b *Backend) LayerPromote(ctx context.Context, key branchlayer.Key, want []ids.AnyID) (PromoteResult, error) {
+// layer, so they no longer differ there. Each row is merged field by field
+// against the layer base, as a landing does (mergeLayerRow): what only
+// the store branch changed since the layer copied the row stays (#155: an
+// archive, metadata, a newer body, a done status were overwritten). A text
+// both changed refuses the whole promote with E_LAND_CONFLICT unless take
+// chooses a side (true: the branch's). Nothing is pushed: lore sync does.
+func (b *Backend) LayerPromote(ctx context.Context, key branchlayer.Key, want []ids.AnyID, take *bool) (PromoteResult, error) {
 	var res PromoteResult
 	l, err := b.LayerOpen(ctx, key)
 	if err != nil {
@@ -559,28 +586,73 @@ func (b *Backend) LayerPromote(ctx context.Context, key branchlayer.Key, want []
 		return res, err
 	}
 	var changes []store.Change
+	var clashes []landClash
 	for _, id := range want {
 		i := slices.IndexFunc(rows, func(r store.Row) bool { return r.ID == id })
 		if i < 0 {
 			return res, errs.New(errs.NotFound, id.String()+" is not one of the notes of "+key.Branch).WithHint("lore branch show --branch " + key.Branch + " lists them")
 		}
 		r := rows[i]
+		res.Rows = append(res.Rows, r)
+		var ours []byte
 		c := store.Change{Row: r}
 		cur, gerr := b.Get(ctx, r.Table, r.ID)
 		switch {
 		case gerr == nil:
-			c.Expect = cur.HLC
+			c.Expect, ours = cur.HLC, cur.Doc
 		case !errors.Is(gerr, store.ErrNotFound):
 			return res, gerr
 		}
+		baseRow, err := b.LayerRowAt(ctx, l.Base, r.Table, r.ID)
+		if err != nil {
+			return res, err
+		}
+		var base []byte
+		if baseRow != nil {
+			base = baseRow.Doc
+		}
+		doc, how, fields, err := b.mergeLayerRow(base, ours, r.Doc, take)
+		if err != nil {
+			return res, errs.Prefix("merge "+r.ID.String()+" with "+b.branch+"'s copy", err)
+		}
+		switch how {
+		case layerMergeClash:
+			clashes = append(clashes, landClash{id: r.ID.String(), fields: fields})
+			continue
+		case layerMergeSame:
+			res.Same = append(res.Same, r.ID)
+			continue
+		case layerMergeFields:
+			res.Merged = append(res.Merged, r.ID)
+		case layerMergeTaken:
+			res.Taken = append(res.Taken, r.ID)
+		}
+		if how != layerMergeBranch {
+			if c.Row, err = rowfs.DecodeRowFile(rowfs.RowPath(r.Table, r.ID), doc); err != nil {
+				return res, errs.Prefix("merge "+r.ID.String()+" with "+b.branch+"'s copy", err)
+			}
+		}
 		changes = append(changes, c)
-		res.Rows = append(res.Rows, r)
 	}
-	if err := b.WriteBatch(ctx, Batch{Op: "branch.promote"}, changes); err != nil {
-		return res, err
+	if len(clashes) > 0 {
+		var named []string
+		for _, c := range clashes {
+			n := c.id
+			if len(c.fields) > 0 {
+				n += " (" + strings.Join(c.fields, ", ") + ")"
+			}
+			named = append(named, n)
+		}
+		return res, errs.New(errs.LandConflict, key.Branch+" and "+b.branch+" both changed the same text of "+strings.Join(named, ", ")+" since the branch copied it; nothing was promoted").
+			WithHint(promoteClashHint(b.branch, want))
 	}
-	if res.Commit, err = b.head(ctx); err != nil {
-		return res, err
+	if len(changes) > 0 {
+		if err := b.WriteBatch(ctx, Batch{Op: "branch.promote"}, changes); err != nil {
+			return res, err
+		}
+		if res.Commit, err = b.head(ctx); err != nil {
+			return res, err
+		}
 	}
 	lock, err := b.root.Lock(ctx)
 	if err != nil {
