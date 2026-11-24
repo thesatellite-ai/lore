@@ -199,7 +199,7 @@ func pushAddedLines(ctx context.Context, repo *gitref.Repo, remote string, updat
 		return map[string]map[int]bool{}
 	}
 	patch, err := repo.Run(ctx, gitref.Invocation{
-		Args:  []string{"-c", "core.quotePath=false", "diff-tree", "--stdin", "-p", "-U0", "--full-index", "-m", "--root", "-r", "--no-renames", "--diff-filter=ACMR", "--no-color", "--no-ext-diff", "--no-textconv"},
+		Args:  []string{"-c", "core.quotePath=false", "diff-tree", "--stdin", "-p", "-U0", "--full-index", "-m", "--root", "-r", "--find-renames", "--diff-filter=ACMR", "--no-color", "--no-ext-diff", "--no-textconv"},
 		Stdin: revs,
 	})
 	if err != nil {

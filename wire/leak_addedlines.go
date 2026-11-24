@@ -7,7 +7,9 @@ package wire
 // store, though the commit added none of it.
 //
 //	staged files (stagedFiles) ─▶ git diff --cached -U0 against the same
-//	   history bases ─▶ per file, the line numbers the commit adds
+//	   history bases ─▶ per file, the line numbers the commit adds (none
+//	   for a file whose hunks only remove lines, a mode-only change or a
+//	   pure rename: issue #156)
 //	─▶ addedLinesOnly: every other line blanked (line numbers kept, so a
 //	   finding still names file:line); lore's own files (.lore/…) and any
 //	   file the diff does not describe (binary, quoted path) stay whole
@@ -47,7 +49,7 @@ func stagedAddedLines(ctx context.Context, root string) (map[string]map[int]bool
 	}
 	added := map[string]map[int]bool{}
 	for _, base := range against {
-		args := []string{"-c", "core.quotePath=false", "diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--diff-filter=ACMR"}
+		args := []string{"-c", "core.quotePath=false", "diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", "--diff-filter=ACMR"}
 		if base != "" {
 			args = append(args, base)
 		}
@@ -64,8 +66,10 @@ func stagedAddedLines(ctx context.Context, root string) (map[string]map[int]bool
 
 // parseAddedLines reads a `git diff -U0` patch: per new-side path (the
 // "+++ b/<path>" line), the line numbers of its "@@ … +start[,count] @@"
-// hunks. A file with a header but no hunk (binary, mode change only) is
-// left out, so its staged content stays whole.
+// hunks. A file whose hunks only remove lines, a mode-only change and a
+// pure rename are in the map with no lines (they add nothing); a file the
+// diff does not describe line by line (binary, quoted path) is left out,
+// so its staged content stays whole.
 func parseAddedLines(patch string) map[string]map[int]bool {
 	out := map[string]map[int]bool{}
 	for _, f := range parseAddedFiles(patch) {
@@ -76,7 +80,8 @@ func parseAddedLines(patch string) map[string]map[int]bool {
 
 // addedFile is one file of a `git diff -U0` patch: its new-side path, its
 // new blob id (the "index <old>..<new>" line; abbreviated unless the diff
-// ran with --full-index) and the new-side line numbers its hunks add.
+// ran with --full-index, empty when the diff names none) and the new-side
+// line numbers its hunks add (empty when it adds nothing).
 type addedFile struct {
 	path, blob string
 	lines      map[int]bool
@@ -84,21 +89,48 @@ type addedFile struct {
 
 // parseAddedFiles is the one hunk reader of both leak hooks: the commit
 // check keys its result by path (parseAddedLines), the push check by blob
-// id (PushAddedLines). A file with no hunk is left out (kept whole).
+// id (PushAddedLines). A file is in the result when the diff says what it
+// adds: its "@@" hunks (none of them may add a line: a delete-only file
+// adds nothing, issue #156), or a header that changes no line (a mode-only
+// change, a rename with 100% similarity). A file the diff does not
+// describe (binary, a quoted path, no hunk) is left out, and the caller
+// reads it whole (fails closed).
 func parseAddedFiles(patch string) []addedFile {
 	var out []addedFile
 	var cur *addedFile
-	blob := ""
+	blob, header, gitLine := "", "", ""
+	plus, binary, hunk := false, false, false
+	// flush ends one "diff --git" section: a file with no "+++" line and
+	// no binary marker whose header names its path adds nothing.
+	flush := func() {
+		if !plus && !binary && header != "" {
+			out = append(out, addedFile{path: header, blob: blob, lines: map[int]bool{}})
+		}
+		if cur != nil && !hunk {
+			out = out[:len(out)-1] // a "+++" with no hunk: not described, kept whole
+		}
+		cur, blob, header, gitLine = nil, "", "", ""
+		plus, binary, hunk = false, false, false
+	}
 	for _, ln := range strings.Split(patch, "\n") {
 		switch {
 		case strings.HasPrefix(ln, "diff --git "):
-			cur, blob = nil, ""
+			flush()
+			gitLine = ln
 		case strings.HasPrefix(ln, "index "):
 			if f := strings.Fields(ln); len(f) > 1 {
 				_, blob, _ = strings.Cut(f[1], "..")
 			}
+		case strings.HasPrefix(ln, "new mode "):
+			header = modeOnlyPath(gitLine)
+		case strings.HasPrefix(ln, "rename to "):
+			if p := strings.TrimPrefix(ln, "rename to "); !strings.HasPrefix(p, `"`) {
+				header = p
+			}
+		case strings.HasPrefix(ln, "Binary files ") || ln == "GIT binary patch":
+			binary = true
 		case strings.HasPrefix(ln, "+++ "):
-			cur = nil
+			plus, cur = true, nil
 			if p, ok := strings.CutPrefix(ln, "+++ b/"); ok {
 				out = append(out, addedFile{path: p, blob: blob, lines: map[int]bool{}})
 				cur = &out[len(out)-1]
@@ -108,18 +140,29 @@ func parseAddedFiles(patch string) []addedFile {
 			if !ok {
 				continue
 			}
+			hunk = true
 			for n := start; n < start+count; n++ {
 				cur.lines[n] = true
 			}
 		}
 	}
-	kept := out[:0]
-	for _, f := range out {
-		if len(f.lines) > 0 {
-			kept = append(kept, f)
-		}
+	flush()
+	return out
+}
+
+// modeOnlyPath is the path of a "diff --git a/<p> b/<p>" header line,
+// or "" when it cannot be read for sure (a quoted path, or old and new
+// paths that differ).
+func modeOnlyPath(gitLine string) string {
+	h := strings.TrimPrefix(gitLine, "diff --git ")
+	if len(h) < 5 || (len(h)-5)%2 != 0 || !strings.HasPrefix(h, "a/") {
+		return ""
 	}
-	return kept
+	p := h[2 : 2+(len(h)-5)/2]
+	if h != "a/"+p+" b/"+p {
+		return ""
+	}
+	return p
 }
 
 // addLines merges lines into m[key].
@@ -135,7 +178,7 @@ func addLines(m map[string]map[int]bool, key string, lines map[int]bool) {
 // PushAddedLines reads the output of
 //
 //	git rev-list --parents <what the push sends> |
-//	git diff-tree --stdin -p -U0 --full-index -m --root -r --no-renames --diff-filter=ACMR
+//	git diff-tree --stdin -p -U0 --full-index -m --root -r --find-renames --diff-filter=ACMR
 //
 // (parents: each pushed commit's parent count) and returns, per new blob
 // id, the line numbers the pushed commits add to it (devco:D-728: the
@@ -144,8 +187,11 @@ func addLines(m map[string]map[int]bool, key string, lines map[int]bool) {
 // commit id on a line of its own before each parent's diff. A merge adds
 // only the lines that are new against every parent (a line one parent
 // already had is checked in that parent's own commits, when the push
-// sends them). A blob no pushed commit's diff describes is missing from
-// the result, so the caller keeps it whole (fails closed).
+// sends them). A blob whose pushed diffs only remove lines is in the
+// result with no lines (issue #156). A blob no pushed commit's diff
+// describes is missing from the result, so the caller keeps it whole
+// (fails closed). A mode-only change or a pure rename names no new blob:
+// its blob is the parent's, which the remote already has.
 func PushAddedLines(patch string, parents map[string]int) map[string]map[int]bool {
 	type section struct {
 		commit string
@@ -168,6 +214,9 @@ func PushAddedLines(patch string, parents map[string]int) map[string]map[int]boo
 			perCommit[sec.commit] = map[string][]map[int]bool{}
 		}
 		for _, f := range parseAddedFiles(sec.body.String()) {
+			if f.blob == "" {
+				continue // no new blob (mode-only, pure rename)
+			}
 			perCommit[sec.commit][f.blob] = append(perCommit[sec.commit][f.blob], f.lines)
 		}
 	}
