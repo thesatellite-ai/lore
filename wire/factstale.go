@@ -2,6 +2,12 @@ package wire
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/factstale"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
@@ -16,9 +22,64 @@ func (a *App) FactChecker(ctx context.Context) *factstale.Checker {
 	if err != nil || top == "" {
 		return nil
 	}
-	return factstale.NewChecker(func(ctx context.Context, args ...string) ([]byte, error) {
+	run := func(ctx context.Context, args ...string) ([]byte, error) {
 		return gitRun{dir: top, args: args}.output(ctx)
-	})
+	}
+	// the answers kept for this HEAD (bug hunt H-213): rev-parse is answered
+	// in process (gitfast), so a warm call with HEAD unchanged runs no git
+	out, err := run(ctx, "rev-parse", "--verify", "--quiet", "HEAD")
+	head := strings.TrimSpace(string(out))
+	if err != nil || head == "" {
+		return factstale.NewChecker(run) // no commit yet: nothing to keep
+	}
+	return factstale.NewMemoChecker(run, factMemo{path: a.factMemoPath(top), top: top, head: head})
+}
+
+// factMemoDir is the folder under the lore home's cache that keeps each
+// code repo's stale-fact answers (one file per repo, for its last HEAD).
+const factMemoDir = "factstale"
+
+// factMemoPath is the memo file of the code repo at top.
+func (a *App) factMemoPath(top string) string {
+	sum := sha256.Sum256([]byte(top))
+	return filepath.Join(writableHome(a.opts.Home), cacheDir, factMemoDir, hex.EncodeToString(sum[:12])+".json")
+}
+
+// factMemo is factstale.Memo on a file: the answers of one code repo at
+// one HEAD. A file of another repo or HEAD, or one that cannot be read, is
+// no answer (the checker asks git and writes it anew).
+type factMemo struct {
+	path, top, head string
+}
+
+// factMemoFile is the memo file's content.
+type factMemoFile struct {
+	Top  string             `json:"top"`
+	Head string             `json:"head"`
+	Snap factstale.Snapshot `json:"snapshot"`
+}
+
+// Load implements factstale.Memo.
+func (m factMemo) Load() (factstale.Snapshot, bool) {
+	raw, err := os.ReadFile(m.path)
+	if err != nil {
+		return factstale.Snapshot{}, false
+	}
+	var f factMemoFile
+	if json.Unmarshal(raw, &f) != nil || f.Top != m.top || f.Head != m.head {
+		return factstale.Snapshot{}, false
+	}
+	return f.Snap, true
+}
+
+// Save implements factstale.Memo; a write that fails only costs the next
+// command its git log, so the error is dropped.
+func (m factMemo) Save(s factstale.Snapshot) {
+	raw, err := json.Marshal(factMemoFile{Top: m.top, Head: m.head, Snap: s})
+	if err != nil {
+		return
+	}
+	_ = writeFileAtomic(m.path, raw, 0o600)
 }
 
 // markStaleHits sets Stale on every hit whose row states a fact about code

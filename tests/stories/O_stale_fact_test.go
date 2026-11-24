@@ -38,6 +38,32 @@ func TestStoryOStaleFactFlagged(t *testing.T) {
 		pc.With("GIT_AUTHOR_DATE="+day+"T10:00:00Z", "GIT_COMMITTER_DATE="+day+"T10:00:00Z").CommitAll("billing on " + day)
 	}
 	var fresh, stale, byCommit string
+	// shimGit puts a git that logs its arguments (to the returned file)
+	// first on ada's PATH, one-shot (a read server's git is not counted),
+	// until done.
+	shimGit := func(dir string) (calls string, done func()) {
+		realGit, err := exec.LookPath("git")
+		if err != nil {
+			t.Fatal(err)
+		}
+		calls = filepath.Join(dir, "git-calls.txt")
+		shim := filepath.Join(dir, "bin")
+		if err := os.MkdirAll(shim, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		script := "#!/bin/sh\necho \"$*\" >> '" + calls + "'\nexec '" + realGit + "' \"$@\"\n"
+		if err := os.WriteFile(filepath.Join(shim, "git"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		oldPath, oldServer := ada.Env("PATH"), ada.Env("LORE_READ_SERVER")
+		path := oldPath
+		if path == "" {
+			path = os.Getenv("PATH")
+		}
+		ada.SetEnv("PATH", shim+string(os.PathListSeparator)+path)
+		ada.SetEnv("LORE_READ_SERVER", "0") // count the git of this process, not a server's
+		return calls, func() { ada.SetEnv("PATH", oldPath); ada.SetEnv("LORE_READ_SERVER", oldServer) }
+	}
 
 	s.Step("D-941/facts-with-evidence-in-a-store-folder", func() {
 		pc.WriteFile("billing/refund.go", "package billing\n\n// Refund caps a refund at the order total.\nfunc Refund() {}\n")
@@ -230,27 +256,8 @@ func TestStoryOStaleFactFlagged(t *testing.T) {
 			t.Fatal(err)
 		}
 		ada.Lore(pc.Dir, "batch", "apply", "--file", batch, "--yes").OK(t)
-		realGit, err := exec.LookPath("git")
-		if err != nil {
-			t.Fatal(err)
-		}
-		calls := filepath.Join(dir, "git-calls.txt")
-		shim := filepath.Join(dir, "bin")
-		if err := os.MkdirAll(shim, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		script := "#!/bin/sh\necho \"$*\" >> '" + calls + "'\nexec '" + realGit + "' \"$@\"\n"
-		if err := os.WriteFile(filepath.Join(shim, "git"), []byte(script), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		oldPath, oldServer := ada.Env("PATH"), ada.Env("LORE_READ_SERVER")
-		path := oldPath
-		if path == "" {
-			path = os.Getenv("PATH")
-		}
-		ada.SetEnv("PATH", shim+string(os.PathListSeparator)+path)
-		ada.SetEnv("LORE_READ_SERVER", "0") // count the git of this process, not a server's
-		defer func() { ada.SetEnv("PATH", oldPath); ada.SetEnv("LORE_READ_SERVER", oldServer) }()
+		calls, done := shimGit(dir)
+		defer done()
 		for _, cmd := range [][]string{{"ask", "--query", "otter payout", "--json"}, {"search", "--query", "otter payout", "--json"}, {"lint", "--code", "stale_fact"}} {
 			if err := os.WriteFile(calls, nil, 0o600); err != nil {
 				t.Fatal(err)
@@ -262,7 +269,9 @@ func TestStoryOStaleFactFlagged(t *testing.T) {
 			raw, _ := os.ReadFile(calls)
 			// one git log over every path item, plus (lint only, which
 			// reads every row) one for the later changes of the one note
-			// naming a commit: never one per note
+			// naming a commit: never one per note. The first command asks
+			// git; the next ones at the same HEAD may answer from what it
+			// kept (devco:D-954), so they ask at most that much.
 			pathLogs, evidenceLogs := 0, 0
 			for l := range strings.SplitSeq(string(raw), "\n") {
 				if strings.HasPrefix(l, "--literal-pathspecs log") {
@@ -272,9 +281,46 @@ func TestStoryOStaleFactFlagged(t *testing.T) {
 					}
 				}
 			}
-			if pathLogs != 1 || evidenceLogs > 2 {
+			if pathLogs > 1 || (cmd[0] == "ask" && pathLogs != 1) || evidenceLogs > 2 {
 				t.Fatalf("lore %s ran %d git logs for the notes' evidence (%d over paths), want one over every path:\n%s", cmd[0], evidenceLogs, pathLogs, raw)
 			}
+		}
+	})
+
+	// devco:D-954 (bug hunt H-213): the one git log still cost ~90 ms of
+	// every warm lore ask. The answers are kept per code repo and HEAD in
+	// the lore home's cache: asked again at the same HEAD, ask starts no
+	// git for the notes' evidence and marks the same rows; a new commit
+	// moves HEAD, so the next ask asks git again and sees the change.
+	s.Step("D-954/ask-at-the-same-head-asks-git-nothing", func() {
+		calls, done := shimGit(t.TempDir())
+		defer done()
+		ask := func() (string, int) {
+			if err := os.WriteFile(calls, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out := ada.Lore(pc.Dir, "ask", "--query", "otter payout", "--json").Stdout
+			raw, _ := os.ReadFile(calls)
+			logs := 0
+			for l := range strings.SplitSeq(string(raw), "\n") {
+				if strings.HasPrefix(l, "--literal-pathspecs log") {
+					logs++
+				}
+			}
+			return out, logs
+		}
+		first, _ := ask()
+		again, logs := ask()
+		if logs != 0 {
+			t.Fatalf("lore ask at an unchanged HEAD ran %d evidence git logs, want none (the answers are kept per HEAD)", logs)
+		}
+		if !strings.Contains(again, "billing/gen/f") || strings.Count(again, "stale") != strings.Count(first, "stale") {
+			t.Fatalf("lore ask from the kept answers marks other rows:\nfirst:\n%s\nagain:\n%s", first, again)
+		}
+		pc.WriteFile("billing/gen/extra.go", "package gen\n")
+		commitOn("2026-11-13")
+		if _, logs := ask(); logs != 1 {
+			t.Fatalf("lore ask after a new commit ran %d evidence git logs, want one (a new HEAD asks again)", logs)
 		}
 	})
 }

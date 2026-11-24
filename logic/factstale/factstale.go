@@ -22,13 +22,17 @@
 // processes however many rows name evidence (bug hunt H-209: one git log
 // per item made lore ask take ~15 s on a store whose every row names its
 // evidence). Answers are cached for the life of the Checker (one command,
-// so one HEAD); no network. Git is injected (the wire layer runs it in the
-// code repo), so this package does no I/O.
+// so one HEAD) and, through a Memo, across commands at the same HEAD (bug
+// hunt H-213: the one primed git log still cost ~90 ms of every warm lore
+// ask): a warm call with HEAD unchanged asks git nothing. No network. Git
+// and the memo are injected (the wire layer runs git in the code repo and
+// keeps the memo in the lore home's cache), so this package does no I/O.
 package factstale
 
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -279,9 +283,37 @@ type Checker struct {
 	git   Git
 	cache map[string][]Change
 	times map[string]time.Time
+	// bound is, for an answer Prime read from a git log limited by
+	// --since, that limit: the answer says nothing of older commits, so it
+	// serves only a claim verified at or after it (no entry: the answer is
+	// the path's newest commit of all, good for any claim).
+	bound map[string]time.Time
 	// heads is each primed commit item's time and files (Prime), so
 	// readCommit skips its own git log and diff-tree.
 	heads map[string]commitHead
+	// memo keeps the answers across commands at one HEAD (nil: none).
+	memo  Memo
+	dirty bool
+}
+
+// Memo keeps a Checker's answers between commands (bug hunt H-213). The
+// answers hold while the repository's HEAD does: Load returns the snapshot
+// kept for the current HEAD (ok false for none, or one of another HEAD),
+// Save keeps one. The wire layer keys it by the code repo and its HEAD
+// commit; a failing Save only costs the next command its git log.
+type Memo interface {
+	Load() (Snapshot, bool)
+	Save(Snapshot)
+}
+
+// Snapshot is a Checker's answers, as a Memo keeps them.
+type Snapshot struct {
+	// Answers is the cached changes by item key (a path or commit item).
+	Answers map[string][]Change `json:"answers"`
+	// Times is each commit item's own time.
+	Times map[string]time.Time `json:"times,omitempty"`
+	// Bounds is each --since limited answer's limit (Checker.bound).
+	Bounds map[string]time.Time `json:"bounds,omitempty"`
 }
 
 // commitHead is a commit's id, time and the files it touched.
@@ -293,7 +325,42 @@ type commitHead struct {
 
 // NewChecker is a checker asking git through run.
 func NewChecker(run Git) *Checker {
-	return &Checker{git: run, cache: map[string][]Change{}, times: map[string]time.Time{}, heads: map[string]commitHead{}}
+	return &Checker{git: run, cache: map[string][]Change{}, times: map[string]time.Time{}, bound: map[string]time.Time{}, heads: map[string]commitHead{}}
+}
+
+// NewMemoChecker is a checker asking git through run that starts from the
+// answers memo kept for this HEAD and keeps what it learns there (Prime
+// saves once it asked git), so a command repeated at one HEAD runs no git
+// for its evidence (bug hunt H-213).
+func NewMemoChecker(run Git, memo Memo) *Checker {
+	c := NewChecker(run)
+	c.memo = memo
+	if snap, ok := memo.Load(); ok {
+		maps.Copy(c.cache, snap.Answers)
+		maps.Copy(c.times, snap.Times)
+		maps.Copy(c.bound, snap.Bounds)
+	}
+	return c
+}
+
+// known reports whether the cached answer for key serves a claim verified
+// at cutoff: an exact answer always does, a --since limited one only when
+// the claim is not older than its limit.
+func (c *Checker) known(key string, cutoff time.Time) bool {
+	if _, ok := c.cache[key]; !ok {
+		return false
+	}
+	b, limited := c.bound[key]
+	return !limited || !cutoff.Before(b)
+}
+
+// save hands the answers to the memo when Prime or Check asked git.
+func (c *Checker) save() {
+	if c.memo == nil || !c.dirty {
+		return
+	}
+	c.dirty = false
+	c.memo.Save(Snapshot{Answers: maps.Clone(c.cache), Times: maps.Clone(c.times), Bounds: maps.Clone(c.bound)})
 }
 
 // primeChunk is how many paths one primed git log names, so the command
@@ -317,10 +384,13 @@ func (c *Checker) Prime(ctx context.Context, claims []Claim) {
 		for _, e := range cl.Evidence {
 			switch e.Kind {
 			case KindPath:
-				if cl.Verified.IsZero() || want["p\x00"+e.Path] {
+				if cl.Verified.IsZero() || c.known("p\x00"+e.Path, cl.Verified) {
 					continue
 				}
-				if _, done := c.cache["p\x00"+e.Path]; done {
+				if want["p\x00"+e.Path] {
+					if cl.Verified.Before(since) {
+						since = cl.Verified
+					}
 					continue
 				}
 				want["p\x00"+e.Path] = true
@@ -346,7 +416,17 @@ func (c *Checker) Prime(ctx context.Context, claims []Claim) {
 	for chunk := range slices.Chunk(shas, primeChunk) {
 		c.primeCommits(ctx, chunk)
 	}
+	for _, sha := range shas {
+		// a commit item's verdict needs its later changes too: ask them
+		// now (from the primed heads), so the memo keeps the whole answer
+		c.commitChanges(ctx, sha, time.Time{})
+	}
+	c.save()
 }
+
+// Save hands every answer asked since the last save to the memo; a
+// command that called Check without Prime calls it once at the end.
+func (c *Checker) Save() { c.save() }
 
 // logMark starts each commit's header line in a primed git log's output,
 // so a file name can never be read as a commit.
@@ -376,8 +456,15 @@ func (c *Checker) primePaths(ctx context.Context, paths []string, since time.Tim
 		}
 	}
 	for _, p := range paths {
-		c.cache["p\x00"+p] = got[p] // nil: not changed after since
+		key := "p\x00" + p
+		c.cache[key] = got[p] // nil: not changed after since
+		if got[p] == nil {
+			c.bound[key] = since
+		} else {
+			delete(c.bound, key) // the newest commit of all: exact
+		}
 	}
+	c.dirty = true
 }
 
 // primeCommits caches each commit item's time and files from one git log;
@@ -470,7 +557,7 @@ func (c *Checker) Check(ctx context.Context, cl Claim) Verdict {
 // when it did not change, or git cannot tell).
 func (c *Checker) pathChanges(ctx context.Context, path string, cutoff time.Time) []Change {
 	key := "p\x00" + path
-	if _, ok := c.cache[key]; !ok {
+	if !c.known(key, cutoff) {
 		out, err := c.git(ctx, "--literal-pathspecs", "log", "-1", "--format=%H%x09%ct", "--", path)
 		var got []Change
 		if err == nil {
@@ -478,7 +565,8 @@ func (c *Checker) pathChanges(ctx context.Context, path string, cutoff time.Time
 				got = []Change{{Path: path, Commit: sha[:min(shortSHA, len(sha))], At: at}}
 			}
 		}
-		c.cache[key] = got
+		c.cache[key], c.dirty = got, true
+		delete(c.bound, key)
 	}
 	var out []Change
 	for _, ch := range c.cache[key] {
@@ -495,7 +583,7 @@ func (c *Checker) commitChanges(ctx context.Context, sha string, cutoff time.Tim
 	key := "c\x00" + sha
 	if _, ok := c.cache[key]; !ok {
 		at, changes := c.readCommit(ctx, sha)
-		c.cache[key], c.times[key] = changes, at
+		c.cache[key], c.times[key], c.dirty = changes, at, true
 	}
 	at := c.times[key]
 	var out []Change

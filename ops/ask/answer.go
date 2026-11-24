@@ -60,6 +60,12 @@ type textRow struct {
 	// times, ~5 ms of a warm served "where does X work now" (devco
 	// D-847).
 	words map[string]bool
+	// label is the row's label words (labelOf), built once per row when
+	// labeled is set. Why (bug hunt H-213): markReplaced compares every
+	// pair of candidate rows and split both rows' labels with a regexp for
+	// each pair, ~30 ms of a warm ask over 500 rows.
+	label   []string
+	labeled bool
 	// comments are the comments on the row, oldest first (comments.go,
 	// devco D-942): history, which can make the row answer, never answer
 	// in its place.
@@ -241,6 +247,14 @@ func sameLabel(a, b *textRow) bool {
 
 // labelOf is r's label words (sameLabel), nil when it has none.
 func labelOf(r *textRow) []string {
+	if !r.labeled {
+		r.label, r.labeled = readLabel(r), true
+	}
+	return r.label
+}
+
+// readLabel splits r's label words (labelOf keeps them on r).
+func readLabel(r *textRow) []string {
 	text := r.Title
 	if text == "" {
 		first, _, _ := strings.Cut(strings.TrimSpace(r.Body), "\n")

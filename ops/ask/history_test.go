@@ -143,3 +143,20 @@ func TestShortRowNeverReplacesLongNote(t *testing.T) {
 		}
 	}
 }
+
+// TestLabelSplitOncePerRow: bug hunt H-213 (devco:D-954). markReplaced
+// compares every pair of candidate rows; each row's label words are split
+// once and kept on the row, not once per pair (~30 ms of a warm ask over
+// 500 rows). A row's text never changes during one ask, so the kept label
+// is the row's label.
+func TestLabelSplitOncePerRow(t *testing.T) {
+	r := &textRow{Body: "Status update lumen (2026-09-01): the move is on track."}
+	first := labelOf(r)
+	if strings.Join(first, " ") != "status update lumen" {
+		t.Fatalf("label = %q, want status update lumen", first)
+	}
+	r.Body = "Budget orbit: changed under the row"
+	if got := labelOf(r); strings.Join(got, " ") != "status update lumen" {
+		t.Fatalf("labelOf split the row again (%q): the label is not kept on the row", got)
+	}
+}

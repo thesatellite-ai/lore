@@ -238,3 +238,65 @@ func TestPrimeAsksGitOnceForEveryPath(t *testing.T) {
 		t.Fatalf("git ran %d times for %d claims, want at most 3", calls, len(claims))
 	}
 }
+
+// mapMemo is a factstale.Memo in memory: the snapshot one command saved.
+type mapMemo struct {
+	snap  factstale.Snapshot
+	saved int
+}
+
+func (m *mapMemo) Load() (factstale.Snapshot, bool) { return m.snap, m.saved > 0 }
+func (m *mapMemo) Save(s factstale.Snapshot)        { m.snap, m.saved = s, m.saved+1 }
+
+// TestMemoCheckerAsksGitNothingAtTheSameHead: bug hunt H-213 (devco:D-954).
+// The first command primes and keeps its answers in the memo; a second
+// command at the same HEAD gives the same verdicts and starts no git, and
+// a claim verified before the first command's --since limit still asks git
+// (a limited "no change" answer says nothing of older commits).
+func TestMemoCheckerAsksGitNothingAtTheSameHead(t *testing.T) {
+	r := newRepo(t)
+	first := r.commit("2026-11-01", map[string]string{"billing/refund.go": "a\n", "billing/card.go": "b\n"})
+	r.commit("2026-11-10", map[string]string{"billing/refund.go": "a2\n"})
+	claims := []factstale.Claim{
+		claim(t, "2026-11-02", "billing/refund.go:3"),
+		claim(t, "2026-11-02", "billing/card.go:1"),
+		claim(t, "", first),
+	}
+	ctx := context.Background()
+	calls := 0
+	run := func(ctx context.Context, args ...string) ([]byte, error) {
+		calls++
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = r.dir
+		return cmd.Output()
+	}
+	memo := &mapMemo{}
+	one := factstale.NewMemoChecker(run, memo)
+	one.Prime(ctx, claims)
+	var want []factstale.Verdict
+	for _, c := range claims {
+		want = append(want, one.Check(ctx, c))
+	}
+	if !want[0].Stale || want[1].Stale || !want[2].Stale || memo.saved == 0 {
+		t.Fatalf("first command: verdicts %+v, memo saved %d times", want, memo.saved)
+	}
+	calls = 0
+	two := factstale.NewMemoChecker(run, memo)
+	two.Prime(ctx, claims)
+	for i, c := range claims {
+		if got := two.Check(ctx, c); got.Note() != want[i].Note() || got.Stale != want[i].Stale {
+			t.Errorf("claim %d: memo %+v, first %+v", i, got, want[i])
+		}
+	}
+	if calls != 0 {
+		t.Fatalf("the second command at the same HEAD ran git %d times, want none", calls)
+	}
+	// card.go's "no change" holds after 2026-11-02 only: an older claim asks
+	older := claim(t, "2026-10-01", "billing/card.go:1")
+	if v := two.Check(ctx, older); !v.Stale {
+		t.Fatalf("a claim older than the kept answer's limit is fresh: %+v", v)
+	}
+	if calls == 0 {
+		t.Fatal("a claim older than the kept answer's limit was answered from it, without git")
+	}
+}
