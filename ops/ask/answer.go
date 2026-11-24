@@ -310,6 +310,18 @@ func build(q question, d data, top, maxChars int) Out {
 		lead = len(out.Rows)
 	default:
 		out.Rows, lead = topRows(q, ms, d.rows, d.view, top)
+		if len(out.Rows) == 0 && len(ms) > 0 && !q.about {
+			// no row is about the resources it names: the rows holding
+			// two or more of its words and topics answer, the resources
+			// follow (devco D-949, public issue #157: never the resource
+			// cards alone while rows match). One shared word or topic
+			// ("money" for a budget row of another project) is no match:
+			// "who handles the money at birchwood-co" stays the company
+			// and the people its fields link.
+			rows, _ := topRows(q, nil, d.rows, d.view, top)
+			out.Rows = slices.DeleteFunc(rows, func(r Row) bool { return len(r.Matched) < 2 })
+			lead = 0
+		}
 	}
 	names := nameIndex(d.resources)
 	for i := range out.Rows {
@@ -593,14 +605,21 @@ func tasksFor(q question, ms []match, ts []taskRow) []Task {
 }
 
 // subjectOf reports whether row r is about one of the matched resources:
-// its text names one, or it references one.
+// its text names one (a name the words split, widget_api, by all its
+// words), says the words the question found it by (match.said: the part
+// widget, the role cfo), or references one.
 func subjectOf(r *textRow, toks map[string]bool, ms []match) bool {
 	for _, m := range ms {
 		if slices.Contains(r.Refs, m.res.ID) {
 			return true
 		}
 		for _, n := range m.res.names() {
-			if allWords(toks, n) {
+			if allWords(toks, nameKey(n)) {
+				return true
+			}
+		}
+		for _, w := range m.said {
+			if allWords(toks, w) {
 				return true
 			}
 		}
@@ -721,9 +740,18 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	return s, true
 }
 
-// namesResource reports whether word w is (a typo of) a matched name.
+// namesResource reports whether word w is (a typo of) a matched name, a
+// word of a matched name the words split (api of widget_api), or a word
+// the question found a resource by (match.said): a row is not more
+// about the question for saying it, it is about the resource.
 func namesResource(w string, ms []match) bool {
 	for _, m := range ms {
+		if slices.Contains(m.said, w) {
+			return true
+		}
+		if ws := keyWords(nameKey(m.res.Name)); len(ws) > 1 && slices.Contains(ws, w) {
+			return true
+		}
 		for i, n := range m.res.names() {
 			// an alias (names()[1:]) is a typo only from four letters on:
 			// cto is not the alias CFO

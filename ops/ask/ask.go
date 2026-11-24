@@ -30,12 +30,14 @@ package ask
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"math"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/dates"
+	"github.com/thesatellite-ai/lore/logic/resquar"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
@@ -326,13 +328,16 @@ func cell(v value.Value) string {
 // "<table>_all" view): the lens is built with these alone (devco D-813),
 // so a call does not read and view the other tables of every cache.
 // TestLensTablesCoverTheStatements fails when a statement reads another.
-var LensTables = []string{"resources", "kinds", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents", "hotfixes", "comments"}
+var LensTables = []string{"resources", "kinds", "kind_fields", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents", "hotfixes", "comments"}
 
 // typedSQL reads the resources (with kind name, fields and history), the
-// open tasks, their owed_by / owed_to metadata and their --ref pointers,
-// in one statement: a first column says which a line is.
+// allowed value ids of each kind field, the open tasks, their owed_by /
+// owed_to metadata and their --ref pointers, in one statement: a first
+// column says which a line is.
 const typedSQL = `SELECT 'res', r.id, r.place, COALESCE(k.name, r.kind), r.name, r.fields, r.history, r.updated_at, r.aliases
 FROM resources_all r LEFT JOIN kinds_all k ON k.id = r.kind WHERE r.archived_at IS NULL
+UNION ALL SELECT 'fld', f.id, '', '', '', f.value_ids, '', '', ''
+FROM kind_fields_all f WHERE COALESCE(f.value_ids, '') <> ''
 UNION ALL SELECT 'tsk', t.id, t.place, t.status, t.title, '', '', t.created_at, ''
 FROM tasks_all t WHERE t.status NOT IN ('done', 'cancelled')
 UNION ALL SELECT 'met', m.entity_id, '', m.key_name, m.value_text, '', '', '', ''
@@ -361,6 +366,10 @@ func loadTyped(ctx context.Context, run Query) ([]resourceRow, []taskRow, error)
 	seenRes := map[string]bool{}
 	type pending struct{ kind, id, a, b string }
 	var later []pending
+	// a closed value is stored as its val_ id: the fields are read once
+	// every field's value ids are (the lines come in any order)
+	rawFields := map[string]string{}
+	valueIDs := map[string]map[string]string{}
 	for _, row := range res.Rows {
 		if len(row) < 8 {
 			continue
@@ -375,11 +384,18 @@ func loadTyped(ctx context.Context, run Query) ([]resourceRow, []taskRow, error)
 				continue
 			}
 			seenRes[c[1]] = true
-			r := resourceRow{ID: c[1], Place: c[2], Kind: c[3], Name: c[4], Fields: fieldsOf(c[5]), History: historyOf(c[6]), Updated: c[7]}
+			r := resourceRow{ID: c[1], Place: c[2], Kind: c[3], Name: c[4], History: historyOf(c[6]), Updated: c[7]}
 			if len(c) > 8 {
 				r.Aliases = aliasesOf(c[8])
 			}
+			rawFields[r.ID] = c[5]
 			rs = append(rs, r)
+		case "fld":
+			// a field's copies (store, extension) add their ids together
+			if valueIDs[c[1]] == nil {
+				valueIDs[c[1]] = map[string]string{}
+			}
+			maps.Copy(valueIDs[c[1]], resquar.ValueIDsOf([]byte(c[5])))
 		case "tsk":
 			if _, dup := at[c[1]]; dup {
 				continue
@@ -389,6 +405,9 @@ func loadTyped(ctx context.Context, run Query) ([]resourceRow, []taskRow, error)
 		default:
 			later = append(later, pending{c[0], c[1], c[3], c[4]})
 		}
+	}
+	for i := range rs {
+		rs[i].Fields = fieldsOf(rawFields[rs[i].ID], valueIDs)
 	}
 	for _, p := range later {
 		i, ok := at[p.id]
@@ -418,21 +437,31 @@ func aliasesOf(s string) []string {
 }
 
 // fieldsOf reads resources.fields: {fld_id: {name, v}} → name/value pairs
-// in name order.
-func fieldsOf(s string) []fieldValue {
+// in name order. A closed value stored as its val_ id (with its name in
+// v_name, OQ-AV) reads as its current name by valueIDs (fld_ id → val_ id
+// → name), else as v_name, as resource list and search print it
+// (resquar.Shown). Why (devco D-949, public issue #157): the cards of an
+// answer printed "status: val_…" where resource list prints "active".
+func fieldsOf(s string, valueIDs map[string]map[string]string) []fieldValue {
 	if s == "" {
 		return nil
 	}
 	var m map[string]struct {
-		Name string          `json:"name"`
-		V    json.RawMessage `json:"v"`
+		Name  string          `json:"name"`
+		V     json.RawMessage `json:"v"`
+		VName json.RawMessage `json:"v_name"`
 	}
 	if json.Unmarshal([]byte(s), &m) != nil {
 		return nil
 	}
 	out := make([]fieldValue, 0, len(m))
-	for _, f := range m {
-		out = append(out, fieldValue{Name: f.Name, Value: rawText(f.V)})
+	for fid, f := range m {
+		var vName []byte
+		if len(f.VName) > 0 && string(f.VName) != "null" {
+			vName = f.VName
+		}
+		v := resquar.Shown(resquar.Field{ValueIDs: valueIDs[fid]}, f.V, vName)
+		out = append(out, fieldValue{Name: f.Name, Value: rawText(v)})
 	}
 	sortFields(out)
 	return out
@@ -655,18 +684,7 @@ func sqlText(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + 
 // question in meaning may hold none of its words, so one-shot and served
 // calls read the same corpus and print the same answer.
 func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool) (rows []textRow, c *corpus, fill func(*textRow), err error) {
-	var terms []string
-	for _, m := range ms {
-		terms = append(terms, m.res.Name)
-		// a note that names it by an alias ("lunch with Bobby") is about it
-		terms = append(terms, m.res.Aliases...)
-	}
-	if len(ms) == 0 {
-		terms = append(terms, q.words...)
-		for _, t := range q.topics {
-			terms = append(terms, t.row...)
-		}
-	}
+	terms := rowTerms(q, ms)
 	f := rowFilter{pats: make([]string, 0, len(terms)), ids: map[string]bool{}, win: !q.window.IsZero()}
 	for _, t := range terms {
 		f.pats = append(f.pats, likeText(t))
@@ -730,6 +748,30 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 		}
 	}
 	return rows, c, fill, nil
+}
+
+// rowTerms are the words a row must hold (one of) to be read for q: the
+// matched resources' names, aliases and the words the question found
+// them by, and always the question's words and topic words. Why the
+// question's words with a matched resource too (devco D-949, public issue
+// #157): when no row is about the resource, the rows holding the words
+// still answer (build), so ask never answers with the resource alone
+// while rows match.
+func rowTerms(q question, ms []match) []string {
+	var terms []string
+	for _, m := range ms {
+		terms = append(terms, m.res.Name)
+		// a note that names it by an alias ("lunch with Bobby") is about it
+		terms = append(terms, m.res.Aliases...)
+		// and one that says the word the question found it by (the part
+		// widget of widget_api)
+		terms = append(terms, m.said...)
+	}
+	terms = append(terms, q.words...)
+	for _, t := range q.topics {
+		terms = append(terms, t.row...)
+	}
+	return terms
 }
 
 // rowOfLine is the text row of a text statement's row line (Refs and Day

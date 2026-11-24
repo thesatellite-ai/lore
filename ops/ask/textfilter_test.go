@@ -219,17 +219,7 @@ func TestDayMetadataNearTheWindow(t *testing.T) {
 func likeOracle(t *testing.T, run Query, q question, ms []match) []textRow {
 	t.Helper()
 	ctx := context.Background()
-	var terms []string
-	for _, m := range ms {
-		terms = append(terms, m.res.Name)
-		terms = append(terms, m.res.Aliases...)
-	}
-	if len(ms) == 0 {
-		terms = append(terms, q.words...)
-		for _, tp := range q.topics {
-			terms = append(terms, tp.row...)
-		}
-	}
+	terms := rowTerms(q, ms)
 	like := func(s string) string {
 		r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 		return sqlText("%" + r.Replace(strings.ToLower(s)) + "%")

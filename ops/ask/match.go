@@ -52,7 +52,26 @@ type match struct {
 	how string
 	// field names the field whose value matched (MatchField).
 	field string
+	// said are the question's words that found it when they are not one
+	// of its whole names: one part of its name or of an alias ("widget"
+	// for widget_api), a field value ("cfo"). A row that says them is
+	// about it as a row that says its name is (subjectOf), and loadRows
+	// reads those rows. Why (devco D-949, public issue #157): "how does
+	// the widget import work" matched the code_repo widget_api by the
+	// part widget, and only rows naming widget_api in full could answer,
+	// so the notes about the widget import were left out and the answer
+	// was three resource cards.
+	said []string
 }
+
+// nameKey is a resource name as the question's tokens read it (aliasKey):
+// widget_api is "widget api", since a question word never holds an
+// underscore; alice-ng stays alice-ng.
+func nameKey(name string) string { return aliasKey(name) }
+
+// keyWords are the words of a name or alias key ("widget api" → widget,
+// api).
+func keyWords(k string) []string { return strings.Fields(k) }
 
 // matchResources finds the resources a question is about: by name or
 // alias first (a token is the name, a word of an alias or the whole of a
@@ -65,36 +84,55 @@ type match struct {
 func matchResources(q question, rs []resourceRow) []match {
 	byName := map[string][]*resourceRow{}
 	byAlias := map[string][]*resourceRow{}
+	var longNames []int // names of several words as tokens (widget_api)
 	for i := range rs {
-		byName[strings.ToLower(rs[i].Name)] = append(byName[strings.ToLower(rs[i].Name)], &rs[i])
+		k := nameKey(rs[i].Name)
+		byName[k] = append(byName[k], &rs[i])
+		if len(keyWords(k)) > 1 {
+			longNames = append(longNames, i)
+		}
 		for _, a := range rs[i].Aliases {
 			k := aliasKey(a)
 			byAlias[k] = append(byAlias[k], &rs[i])
 		}
 	}
 	var out []match
-	seen := map[string]bool{}
-	add := func(r *resourceRow, how, field string) {
-		if seen[r.ID] {
+	at := map[string]int{}
+	add := func(r *resourceRow, how, field, said string) {
+		if i, seen := at[r.ID]; seen {
+			if said != "" && out[i].how == how && !slices.Contains(out[i].said, said) {
+				out[i].said = append(out[i].said, said)
+			}
 			return
 		}
-		seen[r.ID] = true
-		out = append(out, match{res: r, how: how, field: field})
+		at[r.ID] = len(out)
+		m := match{res: r, how: how, field: field}
+		if said != "" {
+			m.said = []string{said}
+		}
+		out = append(out, m)
 	}
 	// 1. the name, whole; then an alias, whole: one word (Bobby) or the
-	// words of a longer one in a row ("robert kim", "chief of staff")
+	// words of a longer one in a row ("robert kim", "chief of staff"); a
+	// name the tokens split (widget_api: widget api) is whole when its
+	// words stand in a row
+	said := " " + strings.Join(q.tokens, " ") + " "
 	for _, t := range q.tokens {
 		for _, r := range byName[t] {
-			add(r, MatchName, "")
+			add(r, MatchName, "", "")
 		}
 	}
-	said := " " + strings.Join(q.tokens, " ") + " "
+	for _, i := range longNames {
+		if strings.Contains(said, " "+nameKey(rs[i].Name)+" ") {
+			add(&rs[i], MatchName, "", "")
+		}
+	}
 	for k, owners := range byAlias {
 		if k == "" || skipWords[k] || !strings.Contains(said, " "+k+" ") {
 			continue
 		}
 		for _, r := range owners {
-			add(r, MatchAlias, "")
+			add(r, MatchAlias, "", "")
 		}
 	}
 	// a name part ("alice" for alice-ng) or an alias part ("robert" for
@@ -107,11 +145,11 @@ func matchResources(q question, rs []resourceRow) []match {
 			for i := range rs {
 				name := strings.ToLower(rs[i].Name)
 				if name != t && slices.Contains(strings.FieldsFunc(name, isNameSep), t) {
-					add(&rs[i], MatchName, "")
+					add(&rs[i], MatchName, "", t)
 				}
 				for _, a := range rs[i].Aliases {
 					if slices.Contains(strings.FieldsFunc(aliasKey(a), isNameSep), t) {
-						add(&rs[i], MatchAlias, "")
+						add(&rs[i], MatchAlias, "", t)
 					}
 				}
 			}
@@ -128,7 +166,7 @@ func matchResources(q question, rs []resourceRow) []match {
 			continue
 		}
 		for _, h := range idx.Near(t, typoBudget(t)) {
-			add(&rs[h.Owner], MatchTypo, "")
+			add(&rs[h.Owner], MatchTypo, "", "")
 		}
 	}
 	if len(out) > 0 {
@@ -142,7 +180,7 @@ func matchResources(q question, rs []resourceRow) []match {
 				continue
 			}
 			if strings.Contains(said, " "+v+" ") {
-				add(&rs[i], MatchField, f.Name)
+				add(&rs[i], MatchField, f.Name, v)
 				break
 			}
 		}

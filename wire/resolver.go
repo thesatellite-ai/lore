@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/logic/resquar"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -331,7 +332,7 @@ func (s *refSnapshot) resField(res located, path string) (string, bool) {
 		if def != nil && refBool(def.r, fieldSensitive) {
 			return "", false
 		}
-		v, ok := subValue(e.V, sub)
+		v, ok := subValue(shownValue(e, def), sub)
 		if !ok {
 			return "", false
 		}
@@ -400,6 +401,7 @@ const (
 	fieldResKind     = "kind"
 	fieldResArchived = "archived_at"
 	fieldResFields   = "fields"
+	fieldValueIDs    = "value_ids" // kind_fields: the allowed values' ids (OQ-AV)
 	fieldKindID      = "kind_id"
 	varTypeSecretRef = "secret_ref"
 )
@@ -431,10 +433,40 @@ func refRawScalar(raw json.RawMessage) string {
 }
 
 // resEntry is one entry of a resource's fields object (STORE_SERVER_SPEC
-// 4.4: {"fld_…": {"name": "ip", "v": …}}).
+// 4.4: {"fld_…": {"name": "ip", "v": …}}); a closed value holds its val_
+// id in v and its name in v_name (OQ-AV).
 type resEntry struct {
-	Name string          `json:"name"`
-	V    json.RawMessage `json:"v"`
+	Name  string          `json:"name"`
+	V     json.RawMessage `json:"v"`
+	VName json.RawMessage `json:"v_name"`
+}
+
+// shownValue is entry e's value as a reference fills it in: a closed
+// value's val_ id(s) become the current name(s) by field def's value ids,
+// else the v_name label (resquar.Shown, as resource list prints it). Why
+// (devco D-949, public issue #157): ${res:widget_api.status} filled in
+// the val_ id where resource list prints active.
+func shownValue(e resEntry, def *located) json.RawMessage {
+	var f resquar.Field
+	if def != nil {
+		if raw, ok := valueIDsJSON(def.r.Fields[fieldValueIDs]); ok {
+			f.ValueIDs = resquar.ValueIDsOf(raw)
+		}
+	}
+	var vName []byte
+	if len(e.VName) > 0 && string(e.VName) != "null" {
+		vName = e.VName
+	}
+	return resquar.Shown(f, e.V, vName)
+}
+
+// valueIDsJSON is a kind_fields.value_ids cell as JSON: decoded as a list
+// or kept as text holding the array.
+func valueIDsJSON(v value.Value) ([]byte, bool) {
+	if t, ok := v.(value.Text); ok {
+		return []byte(t.String()), true
+	}
+	return value.JSONForm(v)
 }
 
 func resEntries(r row.Row) map[string]resEntry {
