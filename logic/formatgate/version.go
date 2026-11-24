@@ -35,7 +35,7 @@ func effective(binary string) string {
 // declares (lore org config set --key min_lore_version) never shuts out a
 // build of the very code that set it. A stamped release binary is compared
 // by its own version only.
-const SourceRelease = "0.1.44"
+const SourceRelease = "0.1.45"
 
 // ValidVersion reports whether v is a release version the gate compares
 // (major.minor.patch, an optional leading v): the only shape a declared
