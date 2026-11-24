@@ -362,6 +362,10 @@ const (
 	TrailerState      = "Lore-Layer-State"
 	TrailerLanded     = "Lore-Layer-Landed"
 	TrailerParent     = "Lore-Layer-Parent"
+	// TrailerSplitRow is "<row id> <store commit>", once per row: the copy
+	// that row's text was taken from when it is older than the layer base
+	// (see Facts.SplitRows).
+	TrailerSplitRow = "Lore-Layer-Split-Row"
 	// TrailerRestored marks the commit `lore branch restore` adds on top of
 	// a layer brought back from the trash (devco V-8): lore sync never moves
 	// such a layer to the trash on its own; the next write drops the mark
@@ -386,6 +390,15 @@ type Facts struct {
 	// Parent is the code branch whose layer this one is stacked on (it
 	// started from that layer's tip); "" for a layer on the shared notes.
 	Parent string
+	// SplitRows maps a row id to the store commit its copy in this layer
+	// was taken from, for rows whose base is older than the layer base:
+	// when a parent layer lands, its stacked layers move onto the landing,
+	// and a row both the stacked layer and the landing changed the same
+	// text of keeps the stacked layer's text with its original base, so the
+	// stacked layer's own land or promote still sees main's side of that
+	// text and stops with E_LAND_CONFLICT (#155 stacked: the move wrote the
+	// stacked layer's old copies over main's newer edits).
+	SplitRows map[string]string
 	// Restored is when a person brought the layer back from the trash, set
 	// only on that restore commit (TrailerRestored); zero otherwise.
 	Restored time.Time
@@ -413,6 +426,14 @@ func (f Facts) Trailers() string {
 	line(TrailerState, string(f.State))
 	line(TrailerLanded, f.Landed)
 	line(TrailerParent, f.Parent)
+	splitIDs := make([]string, 0, len(f.SplitRows))
+	for id := range f.SplitRows {
+		splitIDs = append(splitIDs, id)
+	}
+	slices.Sort(splitIDs)
+	for _, id := range splitIDs {
+		line(TrailerSplitRow, id+" "+f.SplitRows[id])
+	}
 	if !f.Restored.IsZero() {
 		line(TrailerRestored, f.Restored.UTC().Format(time.RFC3339))
 	}
@@ -460,6 +481,13 @@ func ParseFacts(message string) (Facts, bool) {
 			f.Landed = v
 		case TrailerParent:
 			f.Parent = v
+		case TrailerSplitRow:
+			if id, commit, ok := strings.Cut(v, " "); ok && id != "" && commit != "" {
+				if f.SplitRows == nil {
+					f.SplitRows = map[string]string{}
+				}
+				f.SplitRows[id] = commit
+			}
 		case TrailerRestored:
 			if t, err := time.Parse(time.RFC3339, v); err == nil {
 				f.Restored = t

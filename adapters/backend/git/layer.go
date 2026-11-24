@@ -69,6 +69,18 @@ type Layer struct {
 // Exists reports whether there is a layer.
 func (l Layer) Exists() bool { return l.Tip != "" }
 
+// RowBase is the store commit the layer's copy of row id was taken from:
+// the layer base, or the older split commit Facts.SplitRows records for a
+// row that clashed when a parent landing moved this layer (#155 stacked).
+// Every land, promote and clash prediction reads a row's base here, so
+// main's side of that text is never mistaken for the layer's own change.
+func (l Layer) RowBase(id ids.AnyID) string {
+	if c, ok := l.Facts.SplitRows[id.String()]; ok && c != "" {
+		return c
+	}
+	return l.Base
+}
+
 // localTrashName is a trash ref's own name, whether ref is it or its
 // fetched copy.
 func localTrashName(ref string) string {
@@ -274,6 +286,7 @@ func (b *Backend) layerWriteLocked(ctx context.Context, req LayerWriteRequest) (
 	} else {
 		// keep the facts the layer began with; the write adds its code head
 		req.Facts.Parent = l.Facts.Parent
+		req.Facts.SplitRows = l.Facts.SplitRows
 		started, by, split, baseBranch := l.Facts.Started, l.Facts.By, l.Facts.Split, l.Facts.BaseBranch
 		if !started.IsZero() {
 			req.Facts.Started = started

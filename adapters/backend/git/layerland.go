@@ -22,6 +22,7 @@ package git
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -198,7 +199,13 @@ func (b *Backend) layerLandLocked(ctx context.Context, req LandRequest) (LandRes
 	if err != nil {
 		return res, err
 	}
-	commit, merged, err := b.squashLayer(ctx, tip, req)
+	var split []splitRow
+	for _, r := range res.Rows {
+		if from := l.RowBase(r.ID); from != l.Base {
+			split = append(split, splitRow{row: r, from: from})
+		}
+	}
+	commit, merged, err := b.squashLayer(ctx, tip, req, split)
 	err = errors.Join(err, putBack())
 	if err != nil {
 		return res, err
@@ -286,7 +293,7 @@ func (b *Backend) predictClashes(ctx context.Context, l Layer, rows []store.Row,
 	var names []string
 	for _, r := range rows {
 		p := b.folder.StorePath(r.Table, r.ID)
-		names = append(names, l.Base+":"+p, main+":"+p, l.Tip+":"+p)
+		names = append(names, l.RowBase(r.ID)+":"+p, main+":"+p, l.Tip+":"+p)
 	}
 	blobs, err := b.readBlobs(ctx, names)
 	if err != nil {
@@ -298,7 +305,7 @@ func (b *Backend) predictClashes(ctx context.Context, l Layer, rows []store.Row,
 			continue
 		}
 		p := b.folder.StorePath(r.Table, r.ID)
-		base, ours, theirs := blobs[l.Base+":"+p], blobs[main+":"+p], blobs[l.Tip+":"+p]
+		base, ours, theirs := blobs[l.RowBase(r.ID)+":"+p], blobs[main+":"+p], blobs[l.Tip+":"+p]
 		if ours == nil || theirs == nil || string(ours) == string(base) || string(ours) == string(theirs) {
 			continue // main kept the base's copy, or both agree: no clash
 		}
@@ -383,7 +390,7 @@ func (b *Backend) landedTrash(ctx context.Context, key branchlayer.Key) (string,
 // for the authority replay (devco R-5, C35: a squash credited every row to
 // whoever landed it, and a CI runner off the roster had every landed row
 // held back).
-func (b *Backend) squashLayer(ctx context.Context, tip string, req LandRequest) (string, []ids.AnyID, error) {
+func (b *Backend) squashLayer(ctx context.Context, tip string, req LandRequest, split []splitRow) (string, []ids.AnyID, error) {
 	remote, err := b.resolve(ctx, b.work, trackingRefNS+b.branch)
 	if err != nil {
 		return "", nil, err
@@ -412,12 +419,14 @@ func (b *Backend) squashLayer(ctx context.Context, tip string, req LandRequest) 
 			return "", nil, errors.Join(errs.Wrap(errs.Internal, "git: merge the layer", err), b.abortLanding(ctx))
 		}
 	}
+	merged, conflicts, err := b.mergeSplitRows(ctx, tip, split, req.Take)
+	if err != nil {
+		return "", nil, errors.Join(err, b.abortLanding(ctx))
+	}
 	paths, err := b.unmerged(ctx)
 	if err != nil {
 		return "", nil, errors.Join(err, b.abortLanding(ctx))
 	}
-	var merged []ids.AnyID
-	var conflicts []landClash
 	for _, p := range paths {
 		if id, taken, terr := b.takeSide(ctx, p, req.Take); terr != nil {
 			return "", nil, errors.Join(terr, b.abortLanding(ctx))
@@ -449,6 +458,59 @@ func (b *Backend) squashLayer(ctx context.Context, tip string, req LandRequest) 
 	b.removeSquashMsg(ctx)
 	h, err := b.head(ctx)
 	return h, merged, err
+}
+
+// splitRow is a landing row whose layer copy was taken from an older
+// store commit than the layer base (Layer.RowBase).
+type splitRow struct {
+	row  store.Row
+	from string
+}
+
+// mergeSplitRows settles the split rows of a landing merge in progress
+// against their own base: git merged them against the layer base, where
+// main's side of a text both changed looks unchanged (#155 stacked). Each
+// is merged again (base = its split commit, ours = HEAD, theirs = the
+// layer tip) and staged; a text both changed that --take does not settle
+// is a clash.
+func (b *Backend) mergeSplitRows(ctx context.Context, tip string, split []splitRow, take map[ids.AnyID]bool) ([]ids.AnyID, []landClash, error) {
+	var merged []ids.AnyID
+	var clashes []landClash
+	for _, s := range split {
+		p := b.folder.StorePath(s.row.Table, s.row.ID)
+		blobs, err := b.readBlobs(ctx, []string{s.from + ":" + p, "HEAD:" + p, tip + ":" + p})
+		if err != nil {
+			return nil, nil, err
+		}
+		var side *bool
+		if t, named := take[s.row.ID]; named {
+			side = &t
+		}
+		ours := blobs["HEAD:"+p]
+		doc, how, fields, err := b.mergeLayerRow(blobs[s.from+":"+p], ours, blobs[tip+":"+p], side)
+		if err != nil {
+			return nil, nil, errs.Prefix("merge "+s.row.ID.String()+" with "+b.branch+"'s copy", err)
+		}
+		switch how {
+		case RowMergeClash:
+			clashes = append(clashes, landClash{id: s.row.ID.String(), fields: fields})
+			continue
+		case RowMergeSame:
+			doc = ours
+		case RowMergeFields, RowMergeTaken:
+			merged = append(merged, s.row.ID)
+		}
+		if doc == nil {
+			continue // a delete git already merged
+		}
+		if err := b.root.WriteFile(p, doc); err != nil {
+			return nil, nil, err
+		}
+		if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"add", "--", p}}); err != nil {
+			return nil, nil, errs.Wrap(errs.Internal, "git: stage a merged row", err)
+		}
+	}
+	return merged, clashes, nil
 }
 
 // abortLanding undoes a landing merge that will not be committed: git
@@ -594,7 +656,7 @@ func (b *Backend) LayerPromote(ctx context.Context, key branchlayer.Key, want []
 		case !errors.Is(gerr, store.ErrNotFound):
 			return res, gerr
 		}
-		baseRow, err := b.LayerRowAt(ctx, l.Base, r.Table, r.ID)
+		baseRow, err := b.LayerRowAt(ctx, l.RowBase(r.ID), r.Table, r.ID)
 		if err != nil {
 			return res, err
 		}
@@ -670,7 +732,15 @@ func (b *Backend) resetLayerRows(ctx context.Context, l Layer, rows []store.Row)
 		}
 		puts[p] = at.Doc
 	}
-	msg := "lore: branch.promote " + strconv.Itoa(len(rows)) + " rows to " + b.branch + " (" + l.Key.Folder + ")\n\n" + l.Facts.Trailers() + TrailerStoreBase + ": " + l.Base + "\n"
+	f := l.Facts
+	if len(f.SplitRows) > 0 {
+		// the reset rows hold the base's copy again: no older base of their own
+		f.SplitRows = maps.Clone(f.SplitRows)
+		for _, r := range rows {
+			delete(f.SplitRows, r.ID.String())
+		}
+	}
+	msg := "lore: branch.promote " + strconv.Itoa(len(rows)) + " rows to " + b.branch + " (" + l.Key.Folder + ")\n\n" + f.Trailers() + TrailerStoreBase + ": " + l.Base + "\n"
 	commit, err := b.commitOnto(ctx, l.Tip, puts, dels, msg)
 	if err != nil {
 		return err

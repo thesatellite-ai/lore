@@ -60,16 +60,54 @@ func (b *Backend) baseVersions(ctx context.Context, base string, rows []store.Ro
 
 // rebaseLayer moves l's rows (keep) onto base: a merge commit of base's
 // tree plus the rows, parents base and l's old tip, recording base as the
-// layer base and parent as its parent layer ("" = none). The ref moves by
+// layer base and parent as its parent layer ("" = none). Each row is
+// merged over base's copy against the copy the layer took it from
+// (mergeLayerRow), so what base changed since (a parent's landing with
+// main's newer edits) stays base's, not a change the layer would undo on
+// its own land (#155 stacked: the raw copies made the layer's land write
+// its old copies over an archive, metadata, a newer body and a done
+// status). A row whose same text both sides changed keeps the layer's
+// text of those fields and its original base (Facts.SplitRows), so the
+// layer's land still stops on it with E_LAND_CONFLICT. The ref moves by
 // compare-and-swap and the commit is pushed when the remote has the layer
 // (a fast-forward: the old tip is a parent).
 func (b *Backend) rebaseLayer(ctx context.Context, l Layer, base string, keep []store.Row, parent string) (string, error) {
 	puts := make(map[string][]byte, len(keep))
+	var split map[string]string
+	branch := true
 	for _, r := range keep {
-		puts[b.folder.StorePath(r.Table, r.ID)] = r.Doc
+		p := b.folder.StorePath(r.Table, r.ID)
+		if r.Doc == nil {
+			puts[p] = r.Doc
+			continue
+		}
+		from := l.RowBase(r.ID)
+		blobs, err := b.readBlobs(ctx, []string{from + ":" + p, base + ":" + p})
+		if err != nil {
+			return "", err
+		}
+		old, now := blobs[from+":"+p], blobs[base+":"+p]
+		doc, how, _, err := b.mergeLayerRow(old, now, r.Doc, nil)
+		if err != nil {
+			return "", errs.Prefix("move "+r.ID.String()+" onto "+short(base), err)
+		}
+		switch how {
+		case RowMergeSame:
+			continue // base already holds the layer's copy: nothing of it left to land
+		case RowMergeClash:
+			if doc, _, _, err = b.mergeLayerRow(old, now, r.Doc, &branch); err != nil {
+				return "", errs.Prefix("move "+r.ID.String()+" onto "+short(base), err)
+			}
+			if split == nil {
+				split = map[string]string{}
+			}
+			split[r.ID.String()] = from
+		}
+		puts[p] = doc
 	}
 	f := l.Facts
 	f.Parent = parent
+	f.SplitRows = split
 	msg := "lore: the notes of " + l.Key.Branch + " moved onto " + short(base) + " (" + l.Key.Folder + ")\n\n" + f.Trailers() + TrailerStoreBase + ": " + base + "\n"
 	commit, err := b.commitOntoParents(ctx, base, []string{l.Tip}, puts, nil, msg)
 	if err != nil {
@@ -218,7 +256,7 @@ func (b *Backend) layerLandIntoLocked(ctx context.Context, key branchlayer.Key, 
 	puts := map[string][]byte{}
 	var conflicts []string
 	for _, r := range res.Rows {
-		base, err := b.LayerRowAt(ctx, child.Base, r.Table, r.ID)
+		base, err := b.LayerRowAt(ctx, child.RowBase(r.ID), r.Table, r.ID)
 		if err != nil {
 			return res, err
 		}

@@ -1,6 +1,7 @@
 package branchlayer
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -127,10 +128,11 @@ func TestFactsRoundTrip(t *testing.T) {
 	t.Parallel()
 	f := Facts{Repo: "github.com/acme/app", Folder: "app", Branch: "feat/x", BaseBranch: "main", Split: "9f3c", CodeHead: "77ab",
 		Started: time.Date(2026, 11, 20, 9, 12, 0, 0, time.UTC), By: "act_1", State: StateLanded, Landed: "1a2b", Parent: "feat/a",
-		Restored: time.Date(2026, 11, 21, 8, 0, 0, 0, time.UTC)}
+		SplitRows: map[string]string{"mem_2": "c0ffee", "mem_1": "beef01"},
+		Restored:  time.Date(2026, 11, 21, 8, 0, 0, 0, time.UTC)}
 	msg := "lore: 2 rows on feat/x (app)\n\n" + f.Trailers()
 	got, ok := ParseFacts(msg)
-	if !ok || got != f {
+	if !ok || !reflect.DeepEqual(got, f) {
 		t.Fatalf("ParseFacts = %+v %v, want %+v", got, ok, f)
 	}
 	if _, ok := ParseFacts("lore: merge origin\n"); ok {
