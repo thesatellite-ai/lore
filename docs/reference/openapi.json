@@ -43178,7 +43178,7 @@
             }
           },
           "409": {
-            "description": "E_MIGRATE_LOCKED, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "description": "E_CONTENDED, E_MIGRATE_LOCKED, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -43189,6 +43189,16 @@
           },
           "500": {
             "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
             "content": {
               "application/json": {
                 "schema": {

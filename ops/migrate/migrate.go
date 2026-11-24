@@ -628,7 +628,7 @@ func baseOps(rw Rewriter) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRun, Summary: "Rewrite v0.1.17 row files (_v: 1) as _v: 2 (the migrated nouns)",
 			Permission: op.PermAdmin, Access: op.AccessWrite, RESTNoun: restNoun,
-			Errors: []errs.Code{errs.Stale, errs.StoreLocked, errs.StoreReadOnly, errs.InvalidInput, errs.OldLore, errs.MigrateLocked, errs.ConfigInvalid, errs.NotAStore, errs.Unsupported, errs.Refused, errs.Internal}, // Unsupported: outside a code repo (devco D-523)
+			Errors: []errs.Code{errs.Stale, errs.StoreLocked, errs.StoreReadOnly, errs.InvalidInput, errs.OldLore, errs.MigrateLocked, errs.Contended, errs.Offline, errs.ConfigInvalid, errs.NotAStore, errs.Unsupported, errs.Refused, errs.Internal}, // Unsupported: outside a code repo (devco D-523); Contended, Offline: the --team-lock hold lost every race or could not reach the remote (devco:D-967)
 			Examples: []op.Example{
 				{Title: "see what would change", CLI: "lore migrate run --dry-run", Want: "count:"},
 				{Title: "rewrite once the whole team runs 0.1.18 (each store's push mode decides the push)", CLI: "lore migrate run", Want: "count:"},

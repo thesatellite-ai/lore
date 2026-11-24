@@ -15,6 +15,10 @@ package teame2e
 //	                            two clones migrate --offline under different clocks and
 //	                            actors, commit, push one, pull into the other: no conflict,
 //	                            the same tree
+//	TestMigrateRaceReleaseDropsSignals
+//	                            a run whose lock push loses to a release
+//	                            deleting the empty signals ref retries and
+//	                            takes the lock (devco:D-967)
 //
 // The rows that stop a run at a named point (crash, pause) are in
 // team_e2e_migrate_hooks_test.go; TestMigrateRaceLiveWritesAndClaims is in
@@ -314,4 +318,66 @@ func TestMigrateRaceOfflineThenMerge(t *testing.T) {
 		t.Fatalf("the merged tree differs from the pushed migration:\n%s", c2.Git("diff", "--stat", "origin/main", "--", dataDir))
 	}
 	c2.MustLore("migrate", "run", "--offline").Never(t, "memories/mem_")
+}
+
+// releaseRaceHook parks the first push that moves an existing
+// refs/lore/signals to a new commit (a run taking the team lock over an
+// empty board) until the test has deleted the ref: it touches <dir>/arrived
+// and waits for <dir>/go. Every other push passes at once.
+const releaseRaceHook = `#!/bin/sh
+z=0000000000000000000000000000000000000000
+while read old new ref; do
+  if [ "$ref" = refs/lore/signals ] && [ "$old" != "$z" ] && [ "$new" != "$z" ] && [ ! -f "%[1]s/go" ]; then
+    touch "%[1]s/arrived"
+    while [ ! -f "%[1]s/go" ]; do sleep 0.05; done
+  fi
+done
+exit 0
+`
+
+// TestMigrateRaceReleaseDropsSignals (devco:D-967, bug hunt H-226): a
+// teammate's release takes its hold off refs/lore/signals (an empty board
+// is left) and then deletes the empty ref. A run that fetched that board
+// and pushes its own hold meanwhile loses to the delete; git 2.53 answers
+// "[remote rejected] (reference does not exist)". That is a lost race: the
+// run retries and takes the lock, never the bare "[E_INTERNAL] internal
+// error" TestMigrateRaceNClones met on Actions now and then. The hook makes
+// the interleaving certain instead of timing-dependent.
+func TestMigrateRaceReleaseDropsSignals(t *testing.T) {
+	w, app, c := migrateFixture(t)
+	empty := w.Git(app.Dir, "-c", "user.name=alice", "-c", "user.email=alice@acme.example", "commit-tree", strings.TrimSpace(w.Git(app.Dir, "hash-object", "-t", "tree", "-w", os.DevNull)), "-m", "signals: release")
+	app.SetRef(refSignals, strings.TrimSpace(empty))
+	handshake := t.TempDir()
+	if err := os.WriteFile(filepath.Join(app.Dir, "hooks", "pre-receive"), []byte(fmt.Sprintf(releaseRaceHook, handshake)), 0o755); err != nil { //nolint:gosec // a hook must be executable
+		t.Fatal(err)
+	}
+	cmd := c.Command("migrate", "run", "--team-lock", "--push")
+	var out strings.Builder
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(testtime.Scale(30 * time.Second))
+	for {
+		if _, err := os.Stat(filepath.Join(handshake, "arrived")); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			t.Fatal("the run never pushed a hold over the empty board")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	app.DeleteRef(refSignals) // the teammate's release drops the empty ref
+	if err := os.WriteFile(filepath.Join(handshake, "go"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := cmd.Wait()
+	if err != nil || strings.Contains(out.String(), "E_INTERNAL") {
+		t.Fatalf("a run that lost its lock push to a release's delete must retry and take the lock (err %v):\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "team lock: pushed a hold") {
+		t.Fatalf("the run did not take the team lock:\n%s", out.String())
+	}
+	assertMigrated(t, "alice", memoryFiles(t, c))
 }

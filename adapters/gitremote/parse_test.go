@@ -99,6 +99,7 @@ func TestClassifyRejectionWordings(t *testing.T) {
 		{"incorrect old value", "incorrect old value provided", "", StatusStale, StatusNonFastForward},
 		{"failed to lock", "failed to lock", "", StatusStale, StatusNonFastForward},
 		{"create race", "reference already exists", "", StatusStale, StatusNonFastForward},
+		{"delete race (git 2.53, devco:D-967)", "reference does not exist", "", StatusStale, StatusNonFastForward},
 		{"atomic tx lock loss", "atomic transaction failed", "", StatusStale, StatusNonFastForward},
 		// genuine refusals
 		{"pre-receive hook", "pre-receive hook declined", "", StatusRemoteRejected, StatusRemoteRejected},

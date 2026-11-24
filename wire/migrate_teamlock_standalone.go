@@ -235,8 +235,12 @@ func holdRenewedAt(s signals.Signal) time.Time {
 }
 
 // migrateLockError maps a signals error to the core's codes: a live hold
-// is E_MIGRATE_LOCKED naming holder, host and age (7.2); a push that could
-// not be confirmed is E_OFFLINE (the hold needs the network).
+// is E_MIGRATE_LOCKED naming holder, host and age (7.2); a write that lost
+// every race is E_CONTENDED (the remote answered each push, so it is not
+// offline); a push that could not be confirmed is E_OFFLINE (the hold needs
+// the network); a refusal by the remote is coordErr's E_REFUSED; anything
+// else still names its cause (devco:D-967: a lost race git 2.53 words
+// "reference does not exist" printed a bare "[E_INTERNAL] internal error").
 func migrateLockError(err error, now time.Time) error {
 	var he *signals.HeldError
 	var off *signals.OfflineError
@@ -250,9 +254,16 @@ func migrateLockError(err error, now time.Time) error {
 		msg += " (lock renewed " + shortDuration(now.Sub(holdRenewedAt(s)).Round(time.Second)) + " ago)"
 		return errs.New(errs.MigrateLocked, msg).
 			WithHint("run `lore migrate status` in a few minutes; a crashed holder's lock expires on its own, or its owner clears it with `lore migrate unlock --team`")
+	case errors.As(err, &off) && off.RacesLost:
+		return errs.Wrap(errs.Contended, "migrate: the team lock on "+signals.CodeRepoRef+" could not be taken: "+off.Reason, err).
+			WithHint("other writers kept winning the signals ref (a teammate's migration or claims); run `lore migrate run` again in a moment")
 	case errors.As(err, &off):
 		return errs.Wrap(errs.Offline, "migrate: the team lock on "+signals.CodeRepoRef+" could not be taken: "+off.Reason, err).
 			WithHint("reconnect and run again, or `lore migrate run --offline` (branch files only) / `--no-push`")
 	}
-	return err
+	var typed *errs.Error
+	if mapped := coordErr(err); errors.As(mapped, &typed) {
+		return mapped
+	}
+	return errs.Wrap(errs.Internal, "migrate: the team lock on "+signals.CodeRepoRef+" could not be taken: "+err.Error(), err)
 }

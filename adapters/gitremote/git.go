@@ -326,6 +326,9 @@ func parsePorcelain(out, stderr string, modes map[string]UpdateMode) map[string]
 // "failed to lock" when the other push still held the ref lock, "reference
 // already exists" when two pushes create the same absent ref at once and the
 // loser's expect-absent check passed before the winner's create landed,
+// "reference does not exist" when the ref this push expected at a value was
+// deleted by another push meanwhile (git 2.53's ref transaction wording; a
+// released hold dropping the signals ref did it, devco:D-967),
 // "atomic transaction failed" when an atomic push's server-side ref
 // transaction could not take its locks because another push held them; git
 // then reports every ref of the losing push with it and applies none,
@@ -336,7 +339,7 @@ func parsePorcelain(out, stderr string, modes map[string]UpdateMode) map[string]
 // same lost race as a stale lease, only detected one step later, so it must
 // be retried like one — never reported as a refusal. Hook declines and
 // protection refusals carry their own reasons and never match these.
-var serverRaceReasons = []string{"incorrect old value provided", "cannot lock ref", "failed to lock", "reference already exists", "atomic transaction failed", "failed to update ref", "unable to update local ref"}
+var serverRaceReasons = []string{"incorrect old value provided", "cannot lock ref", "failed to lock", "reference already exists", "reference does not exist", "atomic transaction failed", "failed to update ref", "unable to update local ref"}
 
 // classifyRejection maps a "!" line's summary to a Status; mode is the
 // update's mode, which decides how a lost race is reported.

@@ -1348,9 +1348,24 @@ func coordErrPush(err error, push string) error {
 		return errs.New(errs.LostClaim, err.Error())
 	case errors.Is(err, signals.ErrBadName):
 		return errs.New(errs.InvalidInput, err.Error())
+	case errors.Is(err, signals.ErrRejected):
+		// devco:D-967: the remote's own reason is the message; unmapped it
+		// printed as a bare "[E_INTERNAL] internal error"
+		return errs.Wrap(errs.Refused, err.Error(), err).WithHint(signalsRejectedHint)
+	case errors.Is(err, signals.ErrPartial):
+		return errs.Wrap(errs.Internal, err.Error(), err).WithHint(signalsPartialHint)
 	}
 	return err
 }
+
+// signalsRejectedHint is the next step of a signals write the remote
+// refused for a reason a retry cannot fix (signals.ErrRejected).
+const signalsRejectedHint = "the remote refused the write to its coordination ref (a hook, a protected ref or a permission, named above); fix that on the remote, then run the command again"
+
+// signalsPartialHint is the next step of a signals write that landed while
+// its companion write did not (signals.ErrPartial: a host without atomic
+// push); a rerun converges.
+const signalsPartialHint = "the coordination write reached the remote but the write that goes with it did not; run the command again (a rerun completes it)"
 
 // notGatedID is the task id a coord.ErrNotGated names (its text is
 // "<ErrNotGated>: <id> (request one …)"); "the task" when none parses.
