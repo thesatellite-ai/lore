@@ -136,8 +136,11 @@ func readCodeRepo(ctx context.Context, top string) (codeRepo, bool) {
 	if c.Default == "" {
 		c.Default = defaultCodeBranch
 	}
-	if c.Head != "" {
-		c.Split = run("merge-base", "HEAD", "refs/remotes/origin/"+c.Default)
+	// the default branch resolved first: a clone that never fetched it
+	// answers no split without a failing git process, and the merge base of
+	// two commit ids is kept in-process (gitfast, bug hunt H-215)
+	if origin, ok := liveRefCommit(ctx, top, "refs/remotes/origin/"+c.Default); c.Head != "" && ok {
+		c.Split = run("merge-base", c.Head, origin)
 	}
 	return c, true
 }

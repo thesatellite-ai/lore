@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // The linked shape's bars.
@@ -32,7 +34,13 @@ const (
 	// repo; measured ~190 ms warm on the dev box at D-950 (one git log per
 	// call), ~110-190 ms at D-954 (the answers kept per HEAD: no git log),
 	// ~80 ms at D-955 (each store's small tables read once per open, the
-	// kept notes' word sets built once; ~120 ms on the same box before).
+	// kept notes' word sets built once; ~120 ms on the same box before),
+	// ~65-70 ms at D-956 once the files settle (no git process on a warm
+	// call: each store's status kept while its files are unchanged, no
+	// failing merge-base; ~18 ms of it is the client process starting).
+	// The calls here come within 2 s of a store write, where git still
+	// runs (statusSettle), ~100 ms on a loaded box. Stretched by
+	// testtime.SpeedBar on a slower machine.
 	linkedWarmBar = 200 * time.Millisecond
 )
 
@@ -77,8 +85,8 @@ func TestBenchLinkedStoresAsk(t *testing.T) {
 		if cold > linkedColdBar {
 			misses = append(misses, fmt.Sprintf("%q: cold %d ms, bar %d ms", q, cold.Milliseconds(), linkedColdBar.Milliseconds()))
 		}
-		if warm[1] > linkedWarmBar {
-			misses = append(misses, fmt.Sprintf("%q: warm %d ms, bar %d ms", q, warm[1].Milliseconds(), linkedWarmBar.Milliseconds()))
+		if bar := testtime.SpeedBar(linkedWarmBar); warm[1] > bar {
+			misses = append(misses, fmt.Sprintf("%q: warm %d ms, bar %d ms", q, warm[1].Milliseconds(), bar.Milliseconds()))
 		}
 	}
 	if len(misses) > 0 {

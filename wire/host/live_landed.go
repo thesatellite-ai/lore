@@ -151,8 +151,22 @@ func (s *liveSession) removedHere(ctx context.Context, remote, file string) bool
 
 // mergeBase is the merge base of HEAD and rev ("" when git cannot say:
 // no common history, an unborn HEAD).
+//
+// Both sides are resolved first, so a rev that names no commit (a repo with
+// no remote, or one never fetched) answers "" without a git process, and
+// the merge base of two commit ids is answered and kept in-process
+// (gitfast): a warm lore ask in a repo with no origin ran a failing `git
+// merge-base HEAD refs/remotes/origin/main` on every call (bug hunt H-215).
 func (s *liveSession) mergeBase(ctx context.Context, rev string) string {
-	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"merge-base", "HEAD", rev}})
+	head, ok, err := s.repo.ResolveCommit(ctx, "HEAD")
+	if err != nil || !ok {
+		return ""
+	}
+	other, ok, err := s.repo.ResolveCommit(ctx, rev)
+	if err != nil || !ok {
+		return ""
+	}
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"merge-base", head, other}})
 	if err != nil {
 		return ""
 	}

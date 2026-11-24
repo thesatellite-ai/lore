@@ -120,7 +120,13 @@ func (b *Backend) HandChanges(ctx context.Context) (HandReport, error) {
 	if b.mode == modeRepo {
 		out, err = b.repoStatus(ctx) // shared with the read's IndexView (perf3)
 	} else {
-		out, err = b.git.run(ctx, call{dir: b.work, args: []string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames"}})
+		// kept across commands while the clone's files did not change
+		// (statusstamp.go, bug hunt H-215): a read server ran it per store
+		// on every warm read
+		args := []string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames"}
+		out, err = statusKept(b.work+"\x00"+strings.Join(args, "\x00"), func() stampInput { return b.cloneStatusStamp(ctx) }, func() ([]byte, error) {
+			return b.git.run(ctx, call{dir: b.work, args: args})
+		})
 	}
 	if err != nil {
 		return HandReport{}, errs.Wrap(errs.Internal, "git: read the changed files of "+b.work, err)

@@ -130,6 +130,10 @@ type Backend struct {
 	tableHead string
 	tableRows map[string][]store.Row
 
+	// statusFilesList is the index, info/exclude and the global ignore
+	// file, found once (statusstamp.go).
+	statusFilesOnce sync.Once
+	statusFilesList []string
 	// indexPath is the repo's index file, found once (repoStatus).
 	indexPathOnce sync.Once
 	indexPath     string

@@ -239,7 +239,8 @@ func (b *Backend) repoStatus(ctx context.Context) ([]byte, error) {
 	// folder (ls-files --others) on every read (D-110: each walk lstats
 	// every row file, slow on macOS); HandChanges skips "!!" lines.
 	args := append([]string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--ignored", "--no-renames", "--"}, b.root.Layout().Pathspecs(b.folder.Name())...)
-	m := statusMemoFor(b.work + "\x00" + strings.Join(args, "\x00"))
+	key := b.work + "\x00" + strings.Join(args, "\x00")
+	m := statusMemoFor(key)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	idx := b.indexFileStat(ctx)
@@ -248,7 +249,11 @@ func (b *Backend) repoStatus(ctx context.Context) ([]byte, error) {
 	if m.ok && scope != nil && m.scope == scope && m.gen == gen && m.index == idx && idx != (indexStat{}) {
 		return m.out, nil
 	}
-	out, err := b.git.run(ctx, call{dir: b.work, args: args})
+	// across commands: kept while the data folder's files did not change
+	// (statusstamp.go, bug hunt H-215)
+	out, err := statusKept(key, func() stampInput { return b.repoStatusStamp(ctx) }, func() ([]byte, error) {
+		return b.git.run(ctx, call{dir: b.work, args: args})
+	})
 	if err != nil {
 		m.ok = false
 		return nil, err
