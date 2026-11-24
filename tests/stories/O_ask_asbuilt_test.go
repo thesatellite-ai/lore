@@ -16,9 +16,11 @@ package stories
 // planned note comes last. devco D-968 (H-227, Sync benchmark set 5):
 // such resources take one item of the answer (not a fifth of the cap),
 // after every row, so the hotfix that answers a product question is shown.
+// D-969: a long note ranks by its section.
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -128,6 +130,38 @@ func TestStoryOAskAsBuiltNotesFirst(t *testing.T) {
 		own, cb := strings.Index(out, "thirty seconds"), strings.Index(out, "five seconds")
 		if own < 0 || cb >= 0 && cb < own {
 			t.Errorf("[O D-963] the other client's row ranks above the repo's own (%s):\n%s", home, out)
+		}
+	})
+
+	// devco D-969 (bug hunt H-228, Sync benchmark set 5 asks 2 and 4): a
+	// long as-built note whose one section answers lost to a short memory
+	// sharing more of the question's words and was not shown. It now ranks
+	// by that section (its heading names the asked words), leads, prints
+	// that section first marked "(matching section)", and the printed
+	// lore show --id prints it whole.
+	s.Step("D-969/long-note-ranks-by-its-section", func() {
+		var doc strings.Builder
+		doc.WriteString("# As built: runtime\n\n## Process model\n\nOne process per container; signals go to the supervisor.\n\n")
+		doc.WriteString("## Entrypoint boot order\n\nThe entrypoint runs migrations, then the cache warm, then the HTTP listener.\n\n")
+		for i := 0; doc.Len() < 4000; i++ {
+			fmt.Fprintf(&doc, "## Notes %d\n\nThe parcel desk prints zebra labels at the dock and carriers collect parcels twice daily. Theme colours come from the brand palette.\n\n", i+1)
+		}
+		add := ada.Lore(pc.Dir, "architecturenote", "add", "--title", "As built: runtime", "--body", doc.String(), "--meta", "fact_state=live", "--yes", "--json").OK(t)
+		id := regexp.MustCompile(`anr_[0-9a-f]{20,}`).FindString(add.Out())
+		ada.Lore(pc.Dir, "memory", "add", "--body", "The container entrypoint runs the boot steps in order and logs each step.", "--yes").OK(t)
+		r := ada.Lore(pc.Dir, "ask", "--query", "in which order does the container entrypoint run its boot steps").OK(t)
+		out := r.Out()
+		note, mem := strings.Index(out, "As built: runtime"), strings.Index(out, "logs each step")
+		mark := strings.Index(out, "§ As built: runtime > Entrypoint boot order (matching section)\n")
+		if id == "" || note < 0 || mem >= 0 && mem < note || mark < note || !strings.Contains(out[max(mark, 0):], "migrations, then the cache warm") {
+			t.Fatalf("[O D-969] the long note does not lead with its matching section, marked:\n%s", r)
+		}
+		cmd := "lore show --id " + id + " prints it whole"
+		if !strings.Contains(out, cmd) {
+			t.Fatalf("[O D-969] no %q:\n%s", cmd, r)
+		}
+		if show := ada.Lore(pc.Dir, "show", "--id", id).OK(t); !strings.Contains(show.Out(), "## Notes 1") {
+			t.Errorf("[O D-969] the printed `lore show --id %s` does not print the note whole:\n%s", id, show)
 		}
 	})
 }

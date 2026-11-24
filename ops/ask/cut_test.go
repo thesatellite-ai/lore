@@ -159,7 +159,7 @@ func TestCutBodyBestSections(t *testing.T) {
 	for _, room := range []int{2000, 900, minCut} {
 		body, cut := cutBody(doc, words, room)
 		first, _, _ := strings.Cut(body, "\n")
-		if !cut || first != sectionMark+"Orbit design notes > Rollout plan" || !strings.Contains(body, "starts on 2026-06-05") {
+		if !cut || first != sectionMark+"Orbit design notes > Rollout plan"+matchingMark || !strings.Contains(body, "starts on 2026-06-05") {
 			t.Errorf("room %d: the best section is not printed first:\n%s", room, body)
 		}
 		if len(body) > room {
@@ -183,7 +183,7 @@ func TestCutBodyBestSections(t *testing.T) {
 	d := data{rows: []textRow{{Table: "memories", ID: "mem_note", Place: "me/notes", Body: doc, At: now.AddDate(0, 0, -1)}}}
 	o := build(parseQuestion("when does phase two of the orbit rollout start", now), d, 0, DefaultMaxChars)
 	text := o.Text()
-	if len(o.Rows) != 1 || o.Rows[0].FullChars != len(doc) || !strings.Contains(text, "   "+sectionMark+"Orbit design notes > Rollout plan\n") || !strings.Contains(text, "starts on 2026-06-05") || len(o.body()) > DefaultMaxChars {
+	if len(o.Rows) != 1 || o.Rows[0].FullChars != len(doc) || !strings.Contains(text, "   "+sectionMark+"Orbit design notes > Rollout plan"+matchingMark+"\n") || !strings.Contains(text, "starts on 2026-06-05") || len(o.body()) > DefaultMaxChars {
 		t.Errorf("the answer does not print the best section:\n%s", text)
 	}
 }

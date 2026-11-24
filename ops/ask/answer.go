@@ -90,6 +90,10 @@ type textRow struct {
 	// (idents.go, bug hunt H-230), built once when identsBuilt is set.
 	identList   [][]string
 	identsBuilt bool
+	// secs are the word sets of a long row's sections (sectionsOf,
+	// longsec.go), built once when sectioned is set.
+	secs      []rowSection
+	sectioned bool
 }
 
 // tokens is the word set of r's title and body (tokensOf), built on the
@@ -132,6 +136,7 @@ type rowSplit struct {
 	content splitSlot[[]string]
 	label   splitSlot[[]string]
 	idents  splitSlot[[][]string]
+	secs    splitSlot[[]rowSection]
 }
 
 // splitSlot is one word set of a rowSplit and whether it is built (a
@@ -863,6 +868,11 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 		}
 	}
 	s.comments = commentsOf(r, cmts)
+	if s.score > 0 {
+		// devco D-969: a long row ranks by its best section too, its
+		// heading naming the question's words (longsec.go)
+		s.score += headBonus(q, ms, r)
+	}
 	if s.score == 0 && r.meaning {
 		// nearest the question in meaning, sharing none of its words: the
 		// lowest band, after every row holding a word (corpus.go, devco

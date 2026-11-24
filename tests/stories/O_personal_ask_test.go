@@ -682,7 +682,7 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when does phase two of the orbit rollout start")
 		r.OK(t)
 		out := r.Out()
-		for _, want := range []string{"§ Orbit design notes > Rollout plan\n", "Phase two starts on 2026-06-05", "lore show --id " + id + " prints it whole"} {
+		for _, want := range []string{"§ Orbit design notes > Rollout plan (matching section)\n", "Phase two starts on 2026-06-05", "lore show --id " + id + " prints it whole"} {
 			if id == "" || !strings.Contains(out, want) {
 				t.Errorf("[O D-888] the long note is not printed as its best section: no %q in\n%s", want, out)
 			}
@@ -714,7 +714,7 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when is the vela office move")
 		r.OK(t)
 		out := r.Out()
-		for _, want := range []string{"§ Vela weekly sync > Office move\n", "booked for 2026-07-14", "lore show --id " + id + " prints it whole", "cited: " + id} {
+		for _, want := range []string{"§ Vela weekly sync > Office move (matching section)\n", "booked for 2026-07-14", "lore show --id " + id + " prints it whole", "cited: " + id} {
 			if id == "" || !strings.Contains(out, want) {
 				t.Errorf("[O D-892] the note is not printed as its best section: no %q in\n%s", want, out)
 			}
@@ -739,7 +739,7 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when is the vela office move")
 		r.OK(t)
 		out := r.Out()
-		for _, want := range []string{"§ Vela weekly sync > Office move\n", "booked for 2026-07-14", "Vela status: the office move is on track."} {
+		for _, want := range []string{"§ Vela weekly sync > Office move (matching section)\n", "booked for 2026-07-14", "Vela status: the office move is on track."} {
 			if !strings.Contains(out, want) {
 				t.Errorf("[O D-893] the answer misses %q:\n%s", want, out)
 			}

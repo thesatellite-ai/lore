@@ -232,7 +232,7 @@ type Row struct {
 	// best sections, each after a "§ <heading path>" line, devco D-888;
 	// else its best paragraph, with … where text was left out), and
 	// FullChars is the whole body's length (lore show --id prints it).
-	FullChars int    `json:"full_chars,omitempty" desc:"set when the row was cut to the part that answers the question: a markdown row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, best first, each after a line § <heading path>), and a row longer than --max-chars its best sections or else its best paragraph (… marking text left out); this is the whole body's length; lore show --id <id> prints it whole"`
+	FullChars int    `json:"full_chars,omitempty" desc:"set when the row was cut to the part that answers the question: a row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, best first, each after a line § <heading path>, the first marked (matching section)) or else its best paragraph (… marking text left out), and a row longer than --max-chars the same within the room left; this is the whole body's length; lore show --id <id> prints it whole"`
 	History   string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
 	// Comments are the comments on the row that hold a word of the
 	// question (devco D-942): history, printed under the row, never an

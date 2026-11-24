@@ -5,9 +5,11 @@ import (
 	"strings"
 )
 
-// Long rows: a row longer than longRow characters whose text has markdown
-// headings is printed as its best sections by heading, at most longRoom
-// characters of them, not whole.
+// Long rows: a row longer than longRow characters is printed as the part
+// of it that answers the question, at most longRoom characters, never
+// whole: a markdown row as its best sections by heading, any other as its
+// best paragraph (chunkLong); it is ranked by its best section too
+// (longsec.go).
 //
 // Why (devco D-892, pick list item 6): a design doc or weekly notes of
 // 2-10 KB fit under the 4,000-character cap and were printed whole, so
@@ -21,14 +23,21 @@ const (
 	longRoom = 1000
 )
 
-// chunkLong replaces the body of every row of o longer than longRow that
-// has markdown headings by its best sections for the question
-// (bestSections: each after a "§ <heading path>" line, best first, at
-// most longRoom characters) and sets FullChars to the whole body's
-// length, so the answer says lore show --id <id> prints it whole. A row
-// whose sections hold no word of the question the others do not (no
-// basis to pick one) stays whole. A date question keeps whole rows: the
-// rows of its dates are the answer.
+// chunkLong replaces the body of every row of o longer than longRow by
+// the part of it that answers the question (cutBody, at most longRoom
+// characters): a row with markdown headings by its best sections
+// (bestSections: each after a "§ <heading path>" line, best first, the
+// first marked "(matching section)"), any other row, or one whose
+// sections hold no word of the question the others do not, by its best
+// paragraph with "…" where text was left out. It sets FullChars to the
+// whole body's length, so the answer says lore show --id <id> prints it
+// whole. A date question keeps whole rows: the rows of its dates are the
+// answer.
+//
+// Why a long row is never printed whole (devco D-969, bug hunt H-228,
+// S5-04): an architecture note of ~3,900 characters whose sections all
+// repeated the question's words stayed whole and was the only row of the
+// 4,000-character answer; the memory that answered was left out.
 func (o *Out) chunkLong() {
 	if o.When != "" && !o.prior {
 		return
@@ -39,15 +48,10 @@ func (o *Out) chunkLong() {
 			continue
 		}
 		words := cutWords(r.Matched, o.asked)
-		body, ok := bestSections(r.Body, words, longRoom)
-		if !ok {
-			continue
-		}
+		body, _ := cutBody(r.Body, words, longRoom)
 		read := ""
 		if r.readBody != "" {
-			if read, ok = bestSections(r.readBody, words, longRoom); !ok {
-				continue
-			}
+			read, _ = cutBody(r.readBody, words, longRoom)
 		}
 		r.FullChars, r.Body, r.readBody = len(r.Body), body, read
 	}

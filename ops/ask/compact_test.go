@@ -27,7 +27,8 @@ func midDoc() string {
 // TestLongRowPrintsBestSections (devco D-892): a markdown row longer than
 // longRow characters prints its best sections by heading, not whole, even
 // when it fits under --max-chars, says how long it is whole and how to
-// read it whole; a shorter row and a row without headings stay whole.
+// read it whole; a shorter row stays whole, a long row without headings
+// is cut to its best paragraph (devco D-969).
 func TestLongRowPrintsBestSections(t *testing.T) {
 	t.Parallel()
 	doc := midDoc()
@@ -56,8 +57,10 @@ func TestLongRowPrintsBestSections(t *testing.T) {
 	if strings.Contains(text, "Session handling in plain terms") {
 		t.Errorf("a section that does not answer is printed:\n%s", text)
 	}
-	if p := o.Rows[1]; p.FullChars != 0 || p.Body != plain {
-		t.Errorf("a long row without headings was cut: full_chars %d", p.FullChars)
+	// devco D-969 (S5-04): a long row without headings is cut too, to its
+	// best paragraph, so it never fills the answer
+	if p := o.Rows[1]; p.FullChars != len(plain) || len(p.Body) > longRoom || !strings.Contains(p.Body, "billing database backup") {
+		t.Errorf("a long row without headings: full_chars %d body %d, want %d and at most %d", p.FullChars, len(p.Body), len(plain), longRoom)
 	}
 	short := midDoc()[:longRow-100]
 	o = build(parseQuestion("when does the nightly backup of the billing database run", now), data{rows: []textRow{{Table: "memories", ID: "mem_short", Place: "repo", Body: short, At: now}}}, 0, 0)

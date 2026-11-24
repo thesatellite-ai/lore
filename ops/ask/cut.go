@@ -339,10 +339,10 @@ func setextLevel(line string) int {
 
 // bestSections is body's sections that answer words best, best first,
 // as many as fit in room bytes, each after a line with sectionMark and
-// its heading path; the first one cut to its best part (cutText) when it
+// its heading path (the first one's followed by matchingMark); the first one cut to its best part (cutText) when it
 // is longer than room. A section's score is the sum, over the words its
 // heading path or text holds, of ln(1 + n/df) (n sections, df of them
-// holding the word): a word most sections repeat weighs little, a word
+// holding the word; twice that when its heading path holds it): a word most sections repeat weighs little, a word
 // every section holds nothing (a section holding only such words is not
 // printed) and a word only one section holds picks it. ok is false when
 // body has no heading or no section holds a word the others do not (the
@@ -359,9 +359,9 @@ func bestSections(body string, words []string, room int) (string, bool) {
 	if len(secs) < 2 || len(words) == 0 {
 		return "", false
 	}
-	toks := make([]map[string]bool, len(secs))
+	toks, heads := make([]map[string]bool, len(secs)), make([]map[string]bool, len(secs))
 	for i, s := range secs {
-		toks[i] = tokensOf(s.path + "\n" + s.text)
+		toks[i], heads[i] = tokensOf(s.path+"\n"+s.text), tokensOf(s.path)
 	}
 	score := make([]float64, len(secs))
 	n := float64(len(secs))
@@ -376,7 +376,11 @@ func bestSections(body string, words []string, room int) (string, bool) {
 			continue // held by every section: it picks none of them
 		}
 		for _, i := range hold {
-			score[i] += math.Log(1 + n/float64(len(hold)))
+			wt := math.Log(1 + n/float64(len(hold)))
+			if hasWord(heads[i], strings.ToLower(w)) {
+				wt *= 2 // devco D-969: a heading naming the word counts twice (longsec.go)
+			}
+			score[i] += wt
 		}
 	}
 	order := make([]int, 0, len(secs))
@@ -394,6 +398,9 @@ func bestSections(body string, words []string, room int) (string, bool) {
 	used := 0
 	for _, i := range order {
 		head := sectionMark + secs[i].path + "\n"
+		if len(parts) == 0 {
+			head = sectionMark + secs[i].path + matchingMark + "\n" // devco D-969: the answer starts here
+		}
 		text := strings.TrimSpace(secs[i].text)
 		sep := 0
 		if len(parts) > 0 {
