@@ -126,11 +126,11 @@ func corpusOf(lines [][]value.Value) *corpus {
 		// bug hunt H-214: every call copies its rows out of the kept
 		// corpus (ask.go), so a word set or label built on the copy was
 		// built again by the next call: a warm ask split all ~550 rows of
-		// a four-store repo with a regexp each time (~15 ms). Built here
-		// once, on the kept row, they travel with each copy (read only).
-		contentOf(&r) // the word set too (tokens)
-		r.firstTokens()
-		labelOf(&r)
+		// a four-store repo with a regexp each time (~15 ms). The copies
+		// share the kept row's split, which the first call to need a word
+		// set fills (bug hunt H-219: never here, where a cold call would
+		// split every row of the store, read or not).
+		r.split = &rowSplit{}
 		c.rows = append(c.rows, r)
 	}
 	corpusMu.Lock()

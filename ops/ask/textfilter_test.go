@@ -299,13 +299,13 @@ func likeOracle(t *testing.T, run Query, q question, ms []match) []textRow {
 	return out
 }
 
-// withoutMemos is rows without the word sets a kept corpus row carries
-// built (corpusOf, bug hunt H-214) and a row read once builds on use: the
+// withoutMemos is rows without the word sets a kept corpus row shares
+// (corpusOf, bug hunt H-214/H-219) and a row read once builds on use: the
 // two reads answer the same rows whichever built them.
 func withoutMemos(rows []textRow) []textRow {
 	out := make([]textRow, len(rows))
 	for i, r := range rows {
-		r.words, r.first, r.content, r.label, r.labeled = nil, nil, nil, nil, false
+		r.words, r.first, r.content, r.label, r.labeled, r.split = nil, nil, nil, nil, false, nil
 		out[i] = r
 	}
 	return out

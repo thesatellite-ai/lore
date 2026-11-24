@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/dates"
@@ -71,6 +72,11 @@ type textRow struct {
 	// first is the word set of the title and the body's first line
 	// (firstTokens), built once.
 	first map[string]bool
+	// split is the word sets of the kept corpus row this row was copied
+	// from, shared by every copy (nil for a row read once). The fields
+	// above stay this copy's own memo; split carries what one call built
+	// to the next call's copy (bug hunt H-219).
+	split *rowSplit
 	// comments are the comments on the row, oldest first (comments.go,
 	// devco D-942): history, which can make the row answer, never answer
 	// in its place.
@@ -81,20 +87,73 @@ type textRow struct {
 // first call and kept on r.
 func (r *textRow) tokens() map[string]bool {
 	if r.words == nil {
-		r.words = tokensOf(r.Title + "\n" + r.Body)
+		r.words = shareSplit(r.split, func(s *rowSplit) *splitSlot[map[string]bool] { return &s.words }, func() map[string]bool {
+			return tokensOf(r.Title + "\n" + r.Body)
+		})
 	}
 	return r.words
 }
 
 // firstTokens is the word set of r's title and its body's first line,
-// built on the first call and kept on r. Why (bug hunt H-214): score split
-// that text again with a regexp for every row of every call (~4 ms of a
-// warm ask over 500 rows); a kept corpus row builds it once (corpusOf).
+// built on the first call and kept on r (and on the kept corpus row r was
+// copied from). Why (bug hunt H-214): score split that text again with a
+// regexp for every row of every call (~4 ms of a warm ask over 500 rows).
 func (r *textRow) firstTokens() map[string]bool {
 	if r.first == nil {
-		r.first = tokensOf(r.Title + "\n" + firstLine(r.Body))
+		r.first = shareSplit(r.split, func(s *rowSplit) *splitSlot[map[string]bool] { return &s.first }, func() map[string]bool {
+			return tokensOf(r.Title + "\n" + firstLine(r.Body))
+		})
 	}
 	return r.first
+}
+
+// rowSplit is the word sets of one kept corpus row (corpusOf), built the
+// first time any call needs one and read by every later call's copy of
+// the row. Why (bug hunt H-219): H-214 built all of them for every row
+// when the corpus was parsed, so a cold lore ask (the store just changed,
+// a new corpus) split all ~6,000 rows of a personal store with a regexp,
+// ~70 ms, though the answer reads the word sets of the few hundred rows it
+// scores. Built on use and shared, the cold call pays for the rows it
+// reads and a warm call still splits nothing. The lock makes the read
+// server's concurrent calls safe; the text never changes after the parse.
+type rowSplit struct {
+	mu      sync.Mutex
+	words   splitSlot[map[string]bool]
+	first   splitSlot[map[string]bool]
+	content splitSlot[[]string]
+	label   splitSlot[[]string]
+}
+
+// splitSlot is one word set of a rowSplit and whether it is built (a
+// built label can be nil: a row with no label words).
+type splitSlot[T any] struct {
+	v     T
+	built bool
+}
+
+// shareSplit is the word set slot names in s, built by build when not
+// built yet; with no shared split (a row read once) it is build's result.
+// build runs outside the lock (contentOf's reads tokens, another slot),
+// so two calls racing build it twice and keep the first.
+func shareSplit[T any](s *rowSplit, slot func(*rowSplit) *splitSlot[T], build func() T) T {
+	if s == nil {
+		return build()
+	}
+	s.mu.Lock()
+	p := slot(s)
+	if p.built {
+		v := p.v
+		s.mu.Unlock()
+		return v
+	}
+	s.mu.Unlock()
+	v := build()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !p.built {
+		p.v, p.built = v, true
+	}
+	return p.v
 }
 
 // data is everything one ask reads.
@@ -257,13 +316,15 @@ func restates(newer, older *textRow) bool {
 // every pair markReplaced compares, ~10 ms of a warm ask over 500 rows.
 func contentOf(r *textRow) []string {
 	if r.content == nil {
-		out := make([]string, 0, len(r.tokens()))
-		for w := range r.tokens() {
-			if !skipWords[w] {
-				out = append(out, w)
+		r.content = shareSplit(r.split, func(s *rowSplit) *splitSlot[[]string] { return &s.content }, func() []string {
+			out := make([]string, 0, len(r.tokens()))
+			for w := range r.tokens() {
+				if !skipWords[w] {
+					out = append(out, w)
+				}
 			}
-		}
-		r.content = out
+			return out
+		})
 	}
 	return r.content
 }
@@ -284,7 +345,7 @@ func sameLabel(a, b *textRow) bool {
 // labelOf is r's label words (sameLabel), nil when it has none.
 func labelOf(r *textRow) []string {
 	if !r.labeled {
-		r.label, r.labeled = readLabel(r), true
+		r.label, r.labeled = shareSplit(r.split, func(s *rowSplit) *splitSlot[[]string] { return &s.label }, func() []string { return readLabel(r) }), true
 	}
 	return r.label
 }
