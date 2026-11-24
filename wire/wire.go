@@ -873,6 +873,10 @@ func (a *App) openState(ctx context.Context, rowsOnly bool) (st *state, finish b
 	}
 	if !a.opened {
 		a.opened = true
+		// one read of each store's small tables for the open and its
+		// notices (engine.WithTableSnapshot, bug hunt H-214); later reads
+		// of the command read afresh
+		ctx := engine.WithTableSnapshot(ctx)
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
 		if a.err == nil {
 			a.st.unfinished = true

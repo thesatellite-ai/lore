@@ -120,6 +120,15 @@ type Backend struct {
 	fullMu   sync.Mutex
 	fullHead string
 	fullRows []store.Row
+	// tableRows is the reads narrowed to a few tables (store.WithTables)
+	// at tableHead's commit, by table set (tablesKey). Every open lists the
+	// small tables (actors, projects) once per helper and, through the
+	// engine's move-leftover check, once per other attached store: with four
+	// stores a warm lore ask read the same actors table of the same commit
+	// about a dozen times (bug hunt H-214). A commit moves HEAD, which
+	// misses; it is dropped with the full read (dropCaches).
+	tableHead string
+	tableRows map[string][]store.Row
 
 	// indexPath is the repo's index file, found once (repoStatus).
 	indexPathOnce sync.Once

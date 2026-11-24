@@ -955,7 +955,11 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	// hinted read is partial, so it returns the empty cursor and is not
 	// kept as the full read.
 	pathspecs, hinted := b.folder.Pathspecs(), false
-	if tables := store.TablesOf(ctx); from == "" && len(tables) > 0 {
+	tables := store.TablesOf(ctx)
+	if from == "" && len(tables) > 0 {
+		if rows, ok := b.cachedTables(h, tables); ok {
+			return rows, "", nil
+		}
 		pathspecs, hinted = b.folder.TablePathspecs(tables), true
 	}
 	paths, err := b.changedPaths(ctx, from, h, pathspecs)
@@ -992,7 +996,6 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 		for _, p := range paths {
 			listed[p] = true
 		}
-		tables := store.TablesOf(ctx)
 		for p := range auth.held {
 			blob := auth.trusted[p]
 			if blob == "" || listed[p] || (hinted && !slices.Contains(tables, row.Table(tableOfPath(p)))) {
@@ -1036,12 +1039,49 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 		rows = append(rows, auth.creditRow(roots[name], r)) // C35: the committer named as the writer
 	}
 	if hinted {
+		b.keepTables(h, tables, rows)
 		return rows, "", nil
 	}
 	if from == "" {
 		b.keepFull(h, rows)
 	}
 	return rows, store.Cursor(h), nil
+}
+
+// tablesKey names a table set whatever its order.
+func tablesKey(tables []row.Table) string {
+	names := make([]string, len(tables))
+	for i, t := range tables {
+		names[i] = string(t)
+	}
+	slices.Sort(names)
+	return strings.Join(slices.Compact(names), "\x00")
+}
+
+// cachedTables is a copy of a read narrowed to tables at commit h, if one
+// was kept there (Backend.tableRows).
+func (b *Backend) cachedTables(h string, tables []row.Table) ([]store.Row, bool) {
+	b.fullMu.Lock()
+	defer b.fullMu.Unlock()
+	if b.tableHead == "" || b.tableHead != h {
+		return nil, false
+	}
+	rows, ok := b.tableRows[tablesKey(tables)]
+	if !ok {
+		return nil, false
+	}
+	return copyRows(rows), true
+}
+
+// keepTables records rows as the read narrowed to tables at commit h; a
+// new commit starts the set again.
+func (b *Backend) keepTables(h string, tables []row.Table, rows []store.Row) {
+	b.fullMu.Lock()
+	defer b.fullMu.Unlock()
+	if b.tableHead != h || b.tableRows == nil {
+		b.tableHead, b.tableRows = h, map[string][]store.Row{}
+	}
+	b.tableRows[tablesKey(tables)] = copyRows(rows)
 }
 
 // cachedFull is a copy of the full read at commit h, if the last one was

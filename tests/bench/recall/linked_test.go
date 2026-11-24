@@ -30,8 +30,10 @@ const (
 	// linkedWarmBar is above the personal store's 50 ms: a call here reads
 	// four stores and checks every candidate row's evidence in the code
 	// repo; measured ~190 ms warm on the dev box at D-950 (one git log per
-	// call), ~110-190 ms at D-954 (the answers kept per HEAD: no git log).
-	linkedWarmBar = 300 * time.Millisecond
+	// call), ~110-190 ms at D-954 (the answers kept per HEAD: no git log),
+	// ~80 ms at D-955 (each store's small tables read once per open, the
+	// kept notes' word sets built once; ~120 ms on the same box before).
+	linkedWarmBar = 200 * time.Millisecond
 )
 
 // linkedQuestions are asked of the linked shape: rows answer each.

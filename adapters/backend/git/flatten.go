@@ -289,6 +289,7 @@ func (b *Backend) Head(ctx context.Context) (string, error) { return b.head(ctx)
 func (b *Backend) dropCaches() {
 	b.fullMu.Lock()
 	b.fullHead, b.fullRows = "", nil
+	b.tableHead, b.tableRows = "", nil
 	b.fullMu.Unlock()
 }
 

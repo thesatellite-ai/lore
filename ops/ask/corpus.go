@@ -122,7 +122,16 @@ func corpusOf(lines [][]value.Value) *corpus {
 	for i := range pickLines(lines) {
 		id := cell(lines[i][colID])
 		c.at[id] = len(c.rows)
-		c.rows = append(c.rows, rowOfLine(lines[i], id))
+		r := rowOfLine(lines[i], id)
+		// bug hunt H-214: every call copies its rows out of the kept
+		// corpus (ask.go), so a word set or label built on the copy was
+		// built again by the next call: a warm ask split all ~550 rows of
+		// a four-store repo with a regexp each time (~15 ms). Built here
+		// once, on the kept row, they travel with each copy (read only).
+		contentOf(&r) // the word set too (tokens)
+		r.firstTokens()
+		labelOf(&r)
+		c.rows = append(c.rows, r)
 	}
 	corpusMu.Lock()
 	if len(corpusKept) >= maxKeptCorpora {

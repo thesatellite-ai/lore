@@ -66,6 +66,11 @@ type textRow struct {
 	// each pair, ~30 ms of a warm ask over 500 rows.
 	label   []string
 	labeled bool
+	// content is the row's words without filler (contentOf), built once.
+	content []string
+	// first is the word set of the title and the body's first line
+	// (firstTokens), built once.
+	first map[string]bool
 	// comments are the comments on the row, oldest first (comments.go,
 	// devco D-942): history, which can make the row answer, never answer
 	// in its place.
@@ -79,6 +84,17 @@ func (r *textRow) tokens() map[string]bool {
 		r.words = tokensOf(r.Title + "\n" + r.Body)
 	}
 	return r.words
+}
+
+// firstTokens is the word set of r's title and its body's first line,
+// built on the first call and kept on r. Why (bug hunt H-214): score split
+// that text again with a regexp for every row of every call (~4 ms of a
+// warm ask over 500 rows); a kept corpus row builds it once (corpusOf).
+func (r *textRow) firstTokens() map[string]bool {
+	if r.first == nil {
+		r.first = tokensOf(r.Title + "\n" + firstLine(r.Body))
+	}
+	return r.first
 }
 
 // data is everything one ask reads.
@@ -219,17 +235,37 @@ func restates(newer, older *textRow) bool {
 		return true
 	}
 	nt := newer.tokens()
-	total, held := 0, 0
-	for w := range older.tokens() {
-		if skipWords[w] {
-			continue
-		}
-		total++
+	content := contentOf(older)
+	total, held := len(content), 0
+	for i, w := range content {
 		if nt[w] || nt[w+"s"] || (len(w) > 3 && nt[strings.TrimSuffix(w, "s")]) {
 			held++
 		}
+		// bug hunt H-214: the answer is known before the last word (half
+		// held, or half out of reach): markReplaced asks this of every
+		// pair of a folder's candidate rows
+		if left := total - i - 1; 2*held >= total || 2*(held+left) < total {
+			break
+		}
 	}
 	return 2*held >= total
+}
+
+// contentOf is r's words without the filler words (skipWords), built
+// once per row and kept on r. Why (bug hunt H-214): restates
+// walked r's whole word set and looked each word up in skipWords for
+// every pair markReplaced compares, ~10 ms of a warm ask over 500 rows.
+func contentOf(r *textRow) []string {
+	if r.content == nil {
+		out := make([]string, 0, len(r.tokens()))
+		for w := range r.tokens() {
+			if !skipWords[w] {
+				out = append(out, w)
+			}
+		}
+		r.content = out
+	}
+	return r.content
 }
 
 // maxLabel is how far into a row's first line its label's colon may be.
@@ -701,7 +737,7 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 				s.score += 4
 				s.matched = append(s.matched, t.name)
 				if first == nil {
-					first = tokensOf(r.Title + "\n" + firstLine(r.Body))
+					first = r.firstTokens()
 				}
 				if hasWord(first, w) {
 					s.score++

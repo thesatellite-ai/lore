@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"maps"
+	"reflect"
 	"slices"
 	"sync"
 
@@ -35,6 +36,10 @@ import (
 type readSnapshot struct {
 	mu   sync.Mutex
 	full map[store.Backend]*snapFill
+	// tablesOnly marks a table snapshot (WithTableSnapshot): it keeps each
+	// store's reads of one table (tables) and never reads a whole store.
+	tablesOnly bool
+	tables     map[tableFillKey]*snapFill
 	// decoded memoizes row decodes for the snapshot's life (decode).
 	decoded map[decodeKey]decodedRow
 }
@@ -50,6 +55,37 @@ type snapFill struct {
 
 type readSnapshotKey struct{}
 
+// keyable reports whether b can key a snapshot map: a backend whose
+// value is not comparable (a struct holding a map or func, say a test's
+// wrapper) would panic as a map key, so its reads go to it directly.
+func keyable(b store.Backend) bool {
+	return b != nil && reflect.ValueOf(b).Comparable()
+}
+
+// tableFillKey names one store's read of one table in a table snapshot.
+type tableFillKey struct {
+	b     store.Backend
+	table row.Table
+}
+
+// WithTableSnapshot returns ctx with a new table snapshot: each store's
+// read of one table (readTable: actors, projects, …) is made once and
+// shared until a write through the engine drops that store's reads, as
+// WithReadSnapshot does for whole stores, but a table read stays narrowed
+// to its table (a whole-store read of every folder would cost more than
+// the few small tables an open lists). Why (bug hunt H-214): opening a
+// repo with four stores listed the actors and projects tables once per
+// helper (the identity match, the moved-key lookup, the stray-project
+// notice) and, through hideMoveLeftovers, once more per other attached
+// store: O(stores²) reads of one commit's same rows, ~20 ms of a warm lore
+// ask. A ctx that has a snapshot already keeps it.
+func WithTableSnapshot(ctx context.Context) context.Context {
+	if snapshotOf(ctx) != nil {
+		return ctx
+	}
+	return context.WithValue(ctx, readSnapshotKey{}, &readSnapshot{tablesOnly: true, tables: map[tableFillKey]*snapFill{}})
+}
+
 // WithReadSnapshot returns ctx with a new, empty read snapshot: reads of a
 // whole store under it are made once and shared until a write through the
 // engine drops them. It replaces any snapshot ctx already had.
@@ -60,10 +96,10 @@ func WithReadSnapshot(ctx context.Context) context.Context {
 // EnsureReadSnapshot is ctx when it has a read snapshot already (a doctor
 // run's shared one), else WithReadSnapshot(ctx).
 func EnsureReadSnapshot(ctx context.Context) context.Context {
-	if snapshotOf(ctx) != nil {
+	if s := snapshotOf(ctx); s != nil && !s.tablesOnly {
 		return ctx
 	}
-	return WithReadSnapshot(ctx)
+	return WithReadSnapshot(ctx) // a table snapshot does not share whole-store reads
 }
 
 func snapshotOf(ctx context.Context) *readSnapshot {
@@ -76,7 +112,7 @@ func snapshotOf(ctx context.Context) *readSnapshot {
 // bytes are shared and never written to.
 func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error) {
 	s := snapshotOf(ctx)
-	if s == nil {
+	if s == nil || s.tablesOnly || !keyable(st.Backend) {
 		return readAllOf(ctx, st)
 	}
 	s.mu.Lock()
@@ -120,6 +156,50 @@ func (s *readSnapshot) fill(ctx context.Context, st Attached, f *snapFill) {
 	}
 }
 
+// readTableShared is st's read of table through a table snapshot s: the
+// first reader reads (narrowed to table), the others wait for it and
+// share its rows (each gets its own slice). A failed read is not kept.
+func (s *readSnapshot) readTableShared(ctx context.Context, st Attached, table row.Table) ([]store.Row, error) {
+	if !keyable(st.Backend) {
+		rows, _, err := st.Backend.Read(store.WithTables(withMirror(ctx, st), table), "")
+		return rows, err
+	}
+	k := tableFillKey{b: st.Backend, table: table}
+	s.mu.Lock()
+	f, ok := s.tables[k]
+	if !ok {
+		f = &snapFill{done: make(chan struct{})}
+		s.tables[k] = f
+	}
+	s.mu.Unlock()
+	if !ok {
+		func() {
+			defer close(f.done)
+			f.err = errFillAborted // replaced below unless Read panics
+			f.rows, _, f.err = st.Backend.Read(store.WithTables(withMirror(ctx, st), table), "")
+		}()
+		if f.err != nil {
+			s.mu.Lock()
+			if s.tables[k] == f {
+				delete(s.tables, k)
+			}
+			s.mu.Unlock()
+			return nil, f.err
+		}
+	} else {
+		select {
+		case <-f.done:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		if f.err != nil {
+			rows, _, err := st.Backend.Read(store.WithTables(withMirror(ctx, st), table), "")
+			return rows, err
+		}
+	}
+	return slices.Clone(f.rows), nil
+}
+
 // errFillAborted is what waiters see of a fill whose read panicked.
 var errFillAborted = errs.New(errs.Internal, "a shared store read did not finish")
 
@@ -129,7 +209,10 @@ var errFillAborted = errs.New(errs.Internal, "a shared store read did not finish
 // rows (store.WithTables). The backend may ignore the hint and return
 // every row; the caller keeps only table's rows either way.
 func readOneTable(ctx context.Context, st Attached, table row.Table) ([]store.Row, error) {
-	if snapshotOf(ctx) != nil {
+	if s := snapshotOf(ctx); s != nil {
+		if s.tablesOnly {
+			return s.readTableShared(ctx, st, table)
+		}
 		rows, _, err := readAll(ctx, st)
 		return rows, err
 	}
@@ -174,9 +257,14 @@ func mirroredReaderOf(b store.Backend) (store.MirroredReader, bool) {
 // dropSnapshot forgets ctx's snapshot of st's backend: called before every
 // write, purge and sync through it.
 func dropSnapshot(ctx context.Context, st Attached) {
-	if s := snapshotOf(ctx); s != nil {
+	if s := snapshotOf(ctx); s != nil && keyable(st.Backend) {
 		s.mu.Lock()
 		delete(s.full, st.Backend)
+		for k := range s.tables {
+			if k.b == st.Backend {
+				delete(s.tables, k)
+			}
+		}
 		s.mu.Unlock()
 	}
 }

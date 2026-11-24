@@ -81,6 +81,9 @@ const (
 // repoOnly opens just the repo store (the store operations' engine). On
 // any failure everything opened so far is closed.
 func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool) (*state, error) {
+	// bug hunt H-214: the open's helpers list the same small tables of
+	// every store; each store's table is read once for the whole open
+	ctx = engine.WithTableSnapshot(ctx)
 	// Hand edits are picked up before any store fetches or pushes
 	// (handedit.go, App.state runs the pick-up once the open is done):
 	// until then the stores read their last commits only.
@@ -1370,6 +1373,7 @@ func openDetached(ctx context.Context, opts Options, one *attach.Store) (*state,
 // also are attached beside one (never the default target): the company
 // folder a store-only open on a project folder reads kinds and policy from.
 func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here store.Source, also ...attach.Store) (*state, error) {
+	ctx = engine.WithTableSnapshot(ctx) // as open (bug hunt H-214)
 	st := &state{actorDone: map[store.Source]bool{}}
 	if err := st.resolveActor(ctx, opts, true); err != nil {
 		return nil, err

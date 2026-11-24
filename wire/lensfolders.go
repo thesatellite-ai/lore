@@ -70,7 +70,7 @@ func (a *App) lensFolders(ctx context.Context) []attach.Store {
 		if (s.Folder != "" && s.Folder != rowfs.FolderRoot) || s.Name == attach.ReservedMe || s.URL == "" {
 			continue
 		}
-		dir, derr := a.storeDir(ctx, s)
+		dir, derr := a.lensStoreDir(ctx, s)
 		if derr != nil {
 			continue // a store not cloned here has no folders to read
 		}
@@ -89,6 +89,25 @@ func (a *App) lensFolders(ctx context.Context) []attach.Store {
 		}
 	}
 	return out
+}
+
+// lensStoreDir is s's local folder: the open state's backend of s when
+// this open attached it (its clone folder), else storeDir. Why (bug hunt
+// H-214): storeDir opens the store again only to ask its folder, and a
+// warm lore ask asks it twice per whole-attached store (the scope and the
+// lens), ~10 ms of every call on a repo with three such stores.
+func (a *App) lensStoreDir(ctx context.Context, s attach.Store) (string, error) {
+	a.mu.Lock()
+	st := a.st
+	a.mu.Unlock()
+	if st != nil && st.eng != nil {
+		if loc, err := attachLocation(s, s.Folder); err == nil && loc != "" && st.eng.LocationOf(s.Name) == loc {
+			if d, ok := concrete(st.byName[s.Name]).(storeDirOf); ok && d.Dir() != "" {
+				return d.Dir(), nil // the same store at the same place: its own folder
+			}
+		}
+	}
+	return a.storeDir(ctx, s)
 }
 
 // orgEntryAttach reports whether s is the org entry's attach of this repo

@@ -160,7 +160,7 @@ func TestTextRowsMatchTheLikeStatement(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: %v", c.q, err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !reflect.DeepEqual(withoutMemos(got), withoutMemos(want)) {
 				t.Errorf("%s (%d resources, keeps %v): rows differ from the LIKE statement\n got %+v\nwant %+v", c.q, len(c.ms), keeps, got, want)
 			}
 			for _, s := range read {
@@ -295,6 +295,18 @@ func likeOracle(t *testing.T, run Query, q question, ms []match) []textRow {
 			r.Day = metaDayOf(q, days[id], r.stored, near)
 		}
 		out = append(out, r)
+	}
+	return out
+}
+
+// withoutMemos is rows without the word sets a kept corpus row carries
+// built (corpusOf, bug hunt H-214) and a row read once builds on use: the
+// two reads answer the same rows whichever built them.
+func withoutMemos(rows []textRow) []textRow {
+	out := make([]textRow, len(rows))
+	for i, r := range rows {
+		r.words, r.first, r.content, r.label, r.labeled = nil, nil, nil, nil, false
+		out[i] = r
 	}
 	return out
 }
