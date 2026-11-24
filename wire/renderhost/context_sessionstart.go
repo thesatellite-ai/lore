@@ -98,7 +98,9 @@ func (h *Host) sessionStartPinned(ctx context.Context) ([]contextPick, int) {
 	if len(p.pins) == 0 {
 		return nil, 0
 	}
-	note := fmt.Sprintf(sessionStartPinnedNote, h.redact(p.dir))
+	// D-952: the pinned rows' time and where the current ones are, so a
+	// session that runs for hours knows to re-check a pinned warning.
+	note := fmt.Sprintf(sessionStartPinnedNote, h.redact(p.dir)) + pinnedAsOfLine(newestPin(p.pins))
 	picks := []contextPick{{Kind: ctxKindNote, Why: "no LORE.md here", Bytes: len(note), full: note, line: note, group: groupPinned}}
 	size := len(note) + len("## "+groupPinned+"\n\n")
 	// D-909: exactly what the private file shows of each pinned row (the

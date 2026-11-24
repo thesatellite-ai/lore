@@ -167,8 +167,8 @@ For coding agents, `lore render` writes the internal context (the private notes 
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (3129 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
-✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
+✓ .lore/LORE.md (3217 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.full.md (432 bytes, every pinned entry in full; not imported)
 lore render: .lore/LORE.md and .lore/LORE.full.md not committed in this repo yet; added to this clone's .git/info/exclude so a git pull of a teammate's commit that adds them works (to commit them from this clone: git add -f .lore/LORE.md .lore/LORE.full.md)
 = ~/work/website/AGENTS.md (pointer present)
 ✓ private context → ~/.lore/render/app-rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks

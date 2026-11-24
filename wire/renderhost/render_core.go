@@ -139,6 +139,9 @@ type pinnedHotfix struct {
 	Dir string
 	// Origin is where the row came from (render_stamp.go).
 	Origin string
+	// Updated is the row's last edit (the files' "pinned rows as of"
+	// time, devco:D-952).
+	Updated time.Time
 }
 
 // pinSkips counts rows that would have been pinned before 0.1.18 but are
@@ -399,7 +402,7 @@ func (h *Host) loadPinnedHotfixes(ctx context.Context, projectID string, skips *
 			ID: r.ID.String(), Severity: sev,
 			Title: renderField(r.Row, renderFieldTitle), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),
 			Summary: renderField(r.Row, schema.FieldSummary), TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope),
-			Pin: renderPin(r.Row), Origin: r.origin(),
+			Pin: renderPin(r.Row), Origin: r.origin(), Updated: renderUpdated(r.Row),
 		})
 	}
 	return out, nil

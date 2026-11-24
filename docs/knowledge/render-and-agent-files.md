@@ -78,8 +78,8 @@ lore initialized
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (3341 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
-✓ .lore/LORE.full.md (520 bytes, every pinned entry in full; not imported)
+✓ .lore/LORE.md (3429 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.full.md (608 bytes, every pinned entry in full; not imported)
 = ~/work/website/CLAUDE.md (pointer present)
 $ cat CLAUDE.md
 <!-- lore:pointer:start -->
@@ -89,15 +89,15 @@ $ cat CLAUDE.md
 # Website
 Hand-written notes stay here.
 $ grep -n -A3 'Run the tests\|Safari' .lore/LORE.md
-31:**Checkout button is broken on Safari**
-32-
-33-Use the old button until the fix ships.
-34-</hotfix>
+33:**Checkout button is broken on Safari**
+34-
+35-Use the old button until the fix ships.
+36-</hotfix>
 --
-39:Run the tests before you push
-40-</rule>
-41-
-42-## Index: fetch on demand
+41:Run the tests before you push
+42-</rule>
+43-
+44-## Index: fetch on demand
 ```
 <!-- /example -->
 
@@ -141,7 +141,7 @@ $ lore render --dry-run | head -12
 ```console
 # alice, in website
 $ lore render --target AGENTS.md
-✓ .lore/LORE.md (3335 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3423 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 $ cat AGENTS.md
 <!-- lore:pointer:start -->
@@ -154,8 +154,8 @@ Read `.lore/LORE.md` (at the repository root) before answering: it holds this pr
 ```console
 # alice, in website
 $ lore render --out docs/agent-notes.md --target AGENTS.md
-✓ docs/agent-notes.md (3335 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
-✓ docs/LORE.full.md (520 bytes, every pinned entry in full; not imported)
+✓ docs/agent-notes.md (3423 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ docs/LORE.full.md (608 bytes, every pinned entry in full; not imported)
 ✓ ~/work/website/AGENTS.md (pointer → docs/agent-notes.md)
 $ cat AGENTS.md; ls docs
 <!-- lore:pointer:start -->
@@ -176,7 +176,7 @@ A file lore writes in a repository (a tool file such as `CLAUDE.md`, `AGENTS.md`
 ```console
 # alice, in website
 $ lore render --no-pointer
-✓ .lore/LORE.md (3341 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3429 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ```
 <!-- /example -->
 
@@ -207,9 +207,9 @@ $ lore why-context
 render_id:    rnd_162d…9666
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
-total_bytes:  3341
+total_bytes:  3429
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
-scope:        1 rules, 1 hotfixes, 0 memories in full; 3341 of 32000 bytes (profile claude_code), nothing moved out of the core
+scope:        1 rules, 1 hotfixes, 0 memories in full; 3429 of 32000 bytes (profile claude_code), nothing moved out of the core
 ```
 <!-- /example -->
 
@@ -220,9 +220,9 @@ scope:        1 rules, 1 hotfixes, 0 memories in full; 3341 of 32000 bytes (prof
 # alice, in website
 $ lore render --trend
 .lore/LORE.md: renders in the last 14 days (budget 32000 bytes, profile claude_code)
-  2026-11-02 10:00     3341 bytes
-  2026-11-02 10:00     3335 bytes
-  2026-11-02 10:00     3341 bytes
+  2026-11-02 10:00     3429 bytes
+  2026-11-02 10:00     3423 bytes
+  2026-11-02 10:00     3429 bytes
 growth: needs renders at least a day apart
 ```
 <!-- /example -->
@@ -242,15 +242,15 @@ $ lore pin set --id rul_54fe…28f2 --context line
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context line (lore render to apply)
 $ lore render >/dev/null && grep -n 'price change' .lore/LORE.md
-42:- `rul_54fe…28f2` Every price change needs the client written OK
+44:- `rul_54fe…28f2` Every price change needs the client written OK
 $ lore pin set --id rul_54fe…28f2 --context full
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context full (lore render to apply)
 $ lore render >/dev/null && grep -n -B1 -A2 'price change' .lore/LORE.md
-38-<rule id="rul_54fe…28f2" severity="must" trust="0.50">
-39:Every price change needs the client written OK
-40-</rule>
-41-
+40-<rule id="rul_54fe…28f2" severity="must" trust="0.50">
+41:Every price change needs the client written OK
+42-</rule>
+43-
 $ lore pin unset --id rul_54fe…28f2
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 unpinned (render ranks it again)
@@ -316,6 +316,7 @@ To copy the lore skill into your coding tool's skill folder and keep it current,
 - **`lore scope move` does not move files.** Rename the folder with `git mv` yourself, then run `scope move` so the scope's label follows it. On macOS or Windows a rename that only changes case needs two steps (`git mv src/Charts src/charts.tmp`, then `git mv src/charts.tmp src/charts`).
 - **A folder scope names the folder as it is spelled on disk.** Where the file system ignores case, `--scope dir:SRC/charts` for the folder `src/charts` is refused (`no such folder in the repo`), since no file path would ever match it.
 - **A write keeps the rendered files current.** Adding, editing or archiving a rule or hotfix, or changing its severity, rewrites the private render under `~/.lore/render/` (the file `CLAUDE.local.md` imports) at once, so an archived rule is dropped and an edited one shows its new text. `.lore/LORE.md` is rewritten when its rows changed only while git does not track it; a committed copy is refreshed by lore's pre-commit hook in the commit that carries the row files, so a write (and the commit it prints, such as `lore migrate run`'s) leaves no other file changed. A tool's SessionStart hook also brings the private render up to date before a session starts, for rows changed from another checkout. When `lore doctor` still names a stale render (one edited by hand, or a read-only lore home), `lore render` rewrites it.
+- **Every rendered file says when its pinned rows were taken.** `.lore/LORE.md`, `.lore/LORE.full.md`, a folder's own file, the private files under `~/.lore/render/` and the SessionStart answer of a repo with no LORE.md print one line next to their pinned rules and hotfixes: `Pinned rows as of 2026-11-24 09:30 UTC; a row's current text: lore show --id <id>`. The time is the newest change among those rows, never the time of the render, so a render with no row changed writes the same bytes. A session that loaded the file hours ago reads it as a cue: before acting on a pinned warning, `lore show --id <id>` prints that row as it is now (`lore context --for-file <path>` leaves out an always-on row the file already shows in full).
 - **Never edit `.lore/LORE.md` by hand.** The next render replaces it. Edit the rows and render again.
 - **Write your own notes outside the markers.** Everything between `<!-- lore:pointer:start -->` and `<!-- lore:pointer:end -->` belongs to lore and is replaced on every render.
 - **A new tool file is not wired by itself.** If you start using another tool after lore was set up, run `lore render --target <profile>` once; render reminds you while the file has no pointer.

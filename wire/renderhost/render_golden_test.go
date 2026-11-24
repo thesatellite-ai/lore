@@ -210,8 +210,15 @@ func TestRenderCoreGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := buildFullFile(pr, ph); got != goldenWant {
-		t.Fatalf("LORE.full.md differs\n--- got\n%s\n--- want\n%s", got, goldenWant)
+	// devco:D-952: the rows here are made at the wall clock, so the "as
+	// of" line is built from their newest change and placed under the title.
+	asOf := pinnedAsOfLine(newestPinned(pr, ph))
+	if asOf == "" {
+		t.Fatal("devco:D-952: no pinned-rows-as-of line for a file with pinned rows")
+	}
+	want := strings.Replace(goldenWant, "# Project knowledge (full)\n\n", "# Project knowledge (full)\n\n"+asOf, 1)
+	if got := buildFullFile(pr, ph); got != want {
+		t.Fatalf("LORE.full.md differs\n--- got\n%s\n--- want\n%s", got, want)
 	}
 	if skips.ManualRules != 1 || skips.SupersededRules != 1 {
 		t.Fatalf("skips %+v, want 1 manual + 1 superseded rule", skips)

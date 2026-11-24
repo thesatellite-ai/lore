@@ -108,8 +108,8 @@ rul_162d…9666 [must/always] Run the tests before you push
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (3129 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
-✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
+✓ .lore/LORE.md (3217 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.full.md (432 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
 $ cat AGENTS.md
 <!-- lore:pointer:start -->
@@ -168,7 +168,7 @@ Notes:
   -   alice on devbox: lore dev (last save 2026-11-02)
   - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 Context (information, nothing to fix):
-  - context: .lore/LORE.md 3129 of 16000 bytes (19%, profile codex); warn at 80%
+  - context: .lore/LORE.md 3217 of 16000 bytes (20%, profile codex); warn at 80%
 ```
 <!-- /example -->
 

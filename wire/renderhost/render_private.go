@@ -705,7 +705,7 @@ const (
 func coreSize(bodies []privateBody) int {
 	n := 0
 	for _, b := range bodies {
-		n += len(b.head)
+		n += len(b.head) + len(pinnedAsOfLine(newestPin(b.pins)))
 		for _, p := range b.pins {
 			n += len(p.text)
 		}
@@ -752,12 +752,14 @@ func fitPrivateRoom(bodies []privateBody, budget, room, perFile int) privateFit 
 	out := privateFit{coreBytes: coreSize(bodies)}
 	var all []privatePin
 	fixed := 0
+	asOf := make([]string, len(bodies)) // D-952: when each file's pinned rows were taken
 	for i, b := range bodies {
 		for _, p := range b.pins {
 			p.body = i
 			all = append(all, p)
 		}
-		fixed += len(b.head) + perFile
+		asOf[i] = pinnedAsOfLine(newestPin(b.pins))
+		fixed += len(b.head) + len(asOf[i]) + perFile
 		if budget > 0 {
 			fixed += privateFixedReserve()
 		}
@@ -801,6 +803,7 @@ func fitPrivateRoom(bodies []privateBody, budget, room, perFile int) privateFit 
 	for i, b := range bodies {
 		var t strings.Builder
 		t.WriteString(b.head)
+		t.WriteString(asOf[i])
 		if ps[i].rules.Len() > 0 {
 			t.WriteString(privateRulesHead)
 			t.WriteString(ps[i].rules.String())

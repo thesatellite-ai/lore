@@ -64,14 +64,18 @@ func TestPrivateHardBudgetD909(t *testing.T) {
 			}
 		}
 	}
-	// rank: every full row ranks before every index row; critical hotfixes first
-	sawLine := false
+	// rank: a row is in full before every index row, except a later block
+	// shorter than the first one that stayed a line (fitPins: it may fill
+	// the room left); critical hotfixes first
+	sawLine, firstGrow := false, 0
 	for i, p := range fit.ranked {
 		switch {
-		case p.shown == p.text && sawLine:
-			// a later, shorter block may fill the room left; none here (one size)
-			t.Fatalf("pin %d %s is in full after an index line", i, p.id)
+		case p.shown == p.text && sawLine && len(p.text)-len(p.line) >= firstGrow:
+			t.Fatalf("pin %d %s is in full after an index line no longer than it", i, p.id)
 		case p.shown != p.text:
+			if !sawLine {
+				firstGrow = len(p.text) - len(p.line)
+			}
 			sawLine = true
 			if text := strings.TrimSuffix(strings.SplitN(p.shown, "] ", 2)[1], "\n"); len([]rune(text)) > pinIndexCuts[0] {
 				t.Fatalf("index text of %s is %d characters, over %d: %q", p.id, len([]rune(text)), pinIndexCuts[0], text)
