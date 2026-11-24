@@ -3,6 +3,7 @@ package content
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/store"
@@ -66,6 +67,41 @@ func (o Ops) ReadScope(ctx context.Context, repo string, noInherit, masterOnly, 
 		id = r.String()
 	}
 	return ScopeOf(id, noInherit, masterOnly, allRepos), id, nil
+}
+
+// ProjectScope is which projects' rows a list or search of a content kind
+// keeps (ProjectScopeOf). Without --project it is the calling repo's
+// project, plus every row of a store folder: a write into a folder takes
+// the folder's own project (engine placeFolderProject, D-718), so a
+// repo-project test alone hid every note written with `--to
+// <store>/<folder>` from `<kind> list` and `<kind> search` while `lore
+// search` found it (devco D-965). Rows another repo wrote into the repo
+// store or a store's root still stay out unless --project names them
+// (v0.1.17). With --project only that project's rows are kept.
+type ProjectScope struct {
+	id    string // "" = every project
+	named bool   // --project was given: no folder exception
+}
+
+// Keeps reports whether row r, read from src, is in the project scope.
+func (p ProjectScope) Keeps(src store.Source, r row.Row) bool {
+	switch {
+	case p.id == "", Field(r, FieldProject) == p.id:
+		return true
+	case p.named:
+		return false
+	}
+	return engine.IsFolderSource(src)
+}
+
+// ProjectScopeOf resolves a read's --project flag (ProjectFilter) into
+// the scope its list and search keep.
+func (o Ops) ProjectScopeOf(ctx context.Context, flag string) (ProjectScope, error) {
+	id, err := o.ProjectFilter(ctx, flag)
+	if err != nil {
+		return ProjectScope{}, err
+	}
+	return ProjectScope{id: id, named: flag != ""}, nil
 }
 
 // Hidden counts what a list leaves out (metalist.Hidden).

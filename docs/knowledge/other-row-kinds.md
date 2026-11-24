@@ -181,7 +181,7 @@ lore: wrote ~/work/website/.lore/data/tech_docs/tdc_376c…8e1a.json
 
 ## Step 4 — Read, change and search one kind
 
-Every kind has `show`, `search` and `delete`; most have `edit` too. `lore <kind> show --id <id>` prints a two-letter tag and the id, the title or name, any references and the body; `lore show --id <id>` prints every field of any row. `lore <kind> edit --id <id>` changes only the flags you give, and `lore <kind> search <words>` searches that kind alone.
+Every kind has `show`, `search` and `delete`; most have `edit` too. `lore <kind> show --id <id>` prints a two-letter tag and the id, the title or name, any references and the body; `lore show --id <id>` prints every field of any row. `lore <kind> edit --id <id>` changes only the flags you give, and `lore <kind> search <words>` searches that kind alone. A kind's `list` and `search` read what `lore search` reads: this repo's project's rows, and every row of a store folder they read (a note written with `--to <store>/<folder>` takes that folder's project and is listed there too); `--project <name>` keeps one project's rows, `--store <store>/<folder>` one folder's.
 
 <!-- example: knowledge#other-kinds-show-edit -->
 ```console

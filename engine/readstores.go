@@ -72,6 +72,15 @@ func ReadStoresOf(l StoreLister) []store.Source {
 // store's name ("acme/org", "me/acme").
 const storeFolderSep = "/"
 
+// IsFolderSource reports whether src is a store folder (<store>/<folder>,
+// e.g. acme/app) rather than the repo's own store or a store's root.
+// Why (devco D-965): a row written into a folder carries that folder's
+// project (placeFolderProject), so a read that keeps only the calling
+// repo's project must still keep a folder's rows: the folder is the scope.
+func IsFolderSource(src store.Source) bool {
+	return src != store.SourceRepo && strings.Contains(string(src), storeFolderSep)
+}
+
 // NamedSources is the read stores a `--store <name>` filter means: name
 // itself and every `<name>/<folder>` attached beside it. An org store's
 // rows live in its folders (acme/org for the company, acme/<project> per

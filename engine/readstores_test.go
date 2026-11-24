@@ -144,3 +144,16 @@ func TestNamedSourcesTakesFolders(t *testing.T) {
 		}
 	}
 }
+
+// TestIsFolderSource (devco D-965): only <store>/<folder> is a folder;
+// the repo store and a store's root are not.
+func TestIsFolderSource(t *testing.T) {
+	t.Parallel()
+	for src, want := range map[store.Source]bool{
+		store.SourceRepo: false, "kb": false, "kb/app": true, "me/acme": true,
+	} {
+		if got := IsFolderSource(src); got != want {
+			t.Errorf("IsFolderSource(%q) = %v, want %v", src, got, want)
+		}
+	}
+}

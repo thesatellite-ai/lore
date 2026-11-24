@@ -8,9 +8,10 @@ package externalsource
 import (
 	"context"
 	"encoding/json"
-	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"strconv"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -119,7 +120,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 // any attached store (E_NAME_TAKEN, as `tag add`): enable and disable
 // take a name, so two sources of one name could not be told apart.
 func (o ops) nameFree(ctx context.Context, project, name string) error {
-	rows, err := o.c.List(ctx, "", func(r row.Row) bool {
+	rows, err := o.c.List(ctx, "", func(_ store.Source, r row.Row) bool {
 		return content.Field(r, content.FieldProject) == project && content.Field(r, content.FieldName) == name
 	})
 	if err != nil || len(rows) == 0 {
@@ -137,7 +138,7 @@ func (o ops) nameFree(ctx context.Context, project, name string) error {
 // the attached stores' sources share it).
 func (o ops) resolve(ctx context.Context, raw string) (string, error) {
 	name := strings.TrimSpace(raw)
-	rows, err := o.c.List(ctx, "", func(r row.Row) bool { return content.Field(r, content.FieldName) == name })
+	rows, err := o.c.List(ctx, "", func(_ store.Source, r row.Row) bool { return content.Field(r, content.FieldName) == name })
 	if err != nil {
 		return "", err
 	}
@@ -176,12 +177,12 @@ func (o ops) enable(ctx context.Context, raw string, on bool) (content.WriteOut,
 // list returns the live sources, every project unless --project.
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	ctx = in.Deleted(ctx, o.c.Table) // DELETION 3.2: --include-deleted / --deleted-only
-	project, err := o.c.ProjectFilter(ctx, in.Project)
+	project, err := o.c.ProjectScopeOf(ctx, in.Project)
 	if err != nil {
 		return ListOut{}, err
 	}
-	rows, err := o.c.List(ctx, in.Store, func(r row.Row) bool {
-		return project == "" || content.Field(r, content.FieldProject) == project
+	rows, err := o.c.List(ctx, in.Store, func(src store.Source, r row.Row) bool {
+		return project.Keeps(src, r)
 	})
 	if err != nil {
 		return ListOut{}, err

@@ -13,6 +13,16 @@ package stories
 // writes --to acme/api, and each row file in the store clone carries the
 // api folder's project (its _meta.json project_id), never the caller's.
 //
+// devco D-965 (bug hunt H-224): the content kinds' list and search kept
+// only rows of the calling repo's project, so every row written into a
+// folder (which takes the folder's project, above) was missing from
+// `<kind> list` and `<kind> search` while `lore search` found it. The
+// second step writes one row of every content kind --to acme/api and
+// reads it back with each kind's list --store acme, list --store acme/api
+// and search --store acme/api, from the linked repo and the org repo (a
+// repo linked to acme/web reads only its folder by default, as memory list
+// and lore search do, so --store names the folder).
+//
 // Every name, email and url is made up.
 
 import (
@@ -149,5 +159,27 @@ func TestStoryWWWriteToFolderStampsItsProject(t *testing.T) {
 		}
 		// the folder's own reads list what was written there
 		m.Lore(wc.Dir, "task", "list", "--to", to).OK(t).Says(t, "d718 task own-linked", "d718 task home")
+	})
+
+	s.Step("D-965/every-content-kind-lists-and-searches-a-folder-row", func() {
+		// journeys.FolderKinds: every content kind but handoff, whose
+		// `add --store <store>/<folder>` of a folder this repo does not
+		// read is refused (journey TestJourneyFolderRowsListedByEveryKind
+		// covers it in the solo shape)
+		for _, k := range journeys.FolderKinds {
+			mark := k.Mark()
+			m.Lore(wc.Dir, k.AddArgs(to, mark)...).OK(t)
+			for _, p := range []place{{"own-linked", wc.Dir, nil}, {"org-repo-own-project", pc.Dir, nil}} {
+				reads := [][]string{{k.Kind, "list", "--store", wOrg}, {k.Kind, "list", "--store", to}}
+				if k.Search {
+					reads = append(reads, []string{k.Kind, "search", "--query", mark, "--store", to})
+				}
+				for _, rd := range reads {
+					if r := m.Lore(p.dir, rd...).OK(t); !strings.Contains(r.Stdout, mark) {
+						t.Errorf("[WW D-965 %s/%s] `lore %s` misses the row written with --to %s:\n%s", p.name, k.Kind, strings.Join(rd, " "), to, r)
+					}
+				}
+			}
+		}
 	})
 }

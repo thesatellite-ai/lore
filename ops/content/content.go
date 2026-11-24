@@ -444,8 +444,9 @@ type Listed struct {
 }
 
 // List returns the live rows of every attached store (or only store),
-// those keep accepts, in store order.
-func (o Ops) List(ctx context.Context, only string, keep func(row.Row) bool) ([]Listed, error) {
+// those keep accepts, in store order. keep gets the store each row is
+// read from, so a project test can tell a folder's rows (ProjectScope).
+func (o Ops) List(ctx context.Context, only string, keep func(store.Source, row.Row) bool) ([]Listed, error) {
 	sources := engine.ReadStoresOf(o.Env)
 	if only != "" {
 		sources = engine.NamedSources(o.Env, store.Source(only)) // the store and its folders (E-14)
@@ -457,7 +458,7 @@ func (o Ops) List(ctx context.Context, only string, keep func(row.Row) bool) ([]
 			return nil, err
 		}
 		for _, r := range rows {
-			if r.Deleted || !keep(r) {
+			if r.Deleted || !keep(src, r) {
 				continue
 			}
 			out = append(out, Listed{Source: src, Row: r})
@@ -486,11 +487,12 @@ type Found struct {
 }
 
 // Search matches the query against every attached store's cache and keeps
-// the live hits keep accepts (archived ones only with IncludeArchived),
+// the live hits keep accepts (archived ones only with IncludeArchived;
+// keep gets the store the hit is read from, as List's does),
 // best first, cut at the limit after the filter. more says one more hit in
 // scope matched past the limit (devco D-770: the cut was silent, so ten
 // listed read as the whole answer); the caller's SearchOut says so.
-func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(row.Row) bool) (found []Found, more bool, err error) {
+func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(store.Source, row.Row) bool) (found []Found, more bool, err error) {
 	if strings.TrimSpace(a.Query) == "" {
 		return nil, false, errs.New(errs.InvalidInput, o.Noun+" search: empty query")
 	}
@@ -514,7 +516,7 @@ func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(row.Row) bool) 
 		if err != nil {
 			return nil, false, err
 		}
-		if r.Deleted || (Field(r, FieldArchivedAt) != "" && !a.IncludeArchived) || !keep(r) {
+		if r.Deleted || (Field(r, FieldArchivedAt) != "" && !a.IncludeArchived) || !keep(src, r) {
 			continue
 		}
 		if len(out) == limit {

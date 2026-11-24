@@ -7,9 +7,10 @@ package prompt
 import (
 	"context"
 	"encoding/json"
+	"strings"
+
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
-	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -159,12 +160,12 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 // list returns the live prompts (archived ones too, as v0.1.17).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	ctx = in.Deleted(ctx, o.c.Table) // DELETION 3.2: --include-deleted / --deleted-only
-	project, err := o.c.ProjectFilter(ctx, in.Project)
+	project, err := o.c.ProjectScopeOf(ctx, in.Project)
 	if err != nil {
 		return ListOut{}, err
 	}
-	rows, err := o.c.List(ctx, in.Store, func(r row.Row) bool {
-		return project == "" || content.Field(r, content.FieldProject) == project
+	rows, err := o.c.List(ctx, in.Store, func(src store.Source, r row.Row) bool {
+		return project.Keeps(src, r)
 	})
 	if err != nil {
 		return ListOut{}, err
@@ -212,12 +213,12 @@ func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
 
 // search matches the query over name + body in every attached store.
 func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
-	project, err := o.c.ProjectFilter(ctx, in.Project)
+	project, err := o.c.ProjectScopeOf(ctx, in.Project)
 	if err != nil {
 		return SearchOut{}, err
 	}
 	found, more, err := o.c.Search(ctx, content.SearchArgs{Query: in.Query, Limit: in.Limit, Columns: in.Columns, IncludeArchived: in.IncludeArchived, Store: in.Store},
-		func(r row.Row) bool { return project == "" || content.Field(r, content.FieldProject) == project })
+		func(src store.Source, r row.Row) bool { return project.Keeps(src, r) })
 	if err != nil {
 		return SearchOut{}, err
 	}
