@@ -50,6 +50,10 @@ type question struct {
 	// fuzz is how many days around window a row still counts as dated
 	// near it (prior.go: timeBonus); 0 without a window.
 	fuzz float64
+	// parts are the parts of each question word written as a code
+	// identifier (JobTimeLimit: max run duration; idents.go, bug hunt
+	// H-230): a row spelling them all out holds the word.
+	parts map[string][]string
 }
 
 // oweDir is the direction of a debt question.
@@ -157,6 +161,18 @@ func parseQuestion(q string, now time.Time) question {
 			continue
 		}
 		out.words = append(out.words, w)
+	}
+	text := out.text
+	if out.file != "" {
+		text = strings.Replace(text, out.file, " ", 1) // a path says where, not what
+	}
+	for _, w := range reWord.FindAllString(text, -1) {
+		if ps := identParts(w); ps != nil {
+			if out.parts == nil {
+				out.parts = map[string][]string{}
+			}
+			out.parts[strings.Trim(strings.ToLower(w), ".")] = ps
+		}
 	}
 	out.owe = oweOf(low)
 	out.window, out.when = windowOf(low, now)

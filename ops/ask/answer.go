@@ -86,6 +86,10 @@ type textRow struct {
 	// devco D-942): history, which can make the row answer, never answer
 	// in its place.
 	comments []rowComment
+	// identList is the parts of each code identifier of the row's text
+	// (idents.go, bug hunt H-230), built once when identsBuilt is set.
+	identList   [][]string
+	identsBuilt bool
 }
 
 // tokens is the word set of r's title and body (tokensOf), built on the
@@ -127,6 +131,7 @@ type rowSplit struct {
 	first   splitSlot[map[string]bool]
 	content splitSlot[[]string]
 	label   splitSlot[[]string]
+	idents  splitSlot[[][]string]
 }
 
 // splitSlot is one word set of a rowSplit and whether it is built (a
@@ -776,11 +781,17 @@ func allWords(toks map[string]bool, name string) bool {
 	return len(ws) > 0
 }
 
-// tokensOf is the word set of a row's text.
+// tokensOf is the word set of a row's text: each word, and the parts of
+// each code identifier (ErrGroupNameTaken holds role, key and reserved;
+// idents.go, bug hunt H-230), so a question in plain words finds the row
+// that names the thing in code.
 func tokensOf(s string) map[string]bool {
 	out := map[string]bool{}
-	for _, w := range reWord.FindAllString(strings.ToLower(s), -1) {
-		out[strings.TrimSuffix(w, "'s")] = true
+	for _, w := range reWord.FindAllString(s, -1) {
+		out[strings.TrimSuffix(strings.ToLower(w), "'s")] = true
+		for _, p := range identParts(w) {
+			out[p] = true
+		}
 	}
 	return out
 }
@@ -836,7 +847,7 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 		if namesResource(w, ms) {
 			continue
 		}
-		if hasWord(toks, w) {
+		if hasWord(toks, w) || identWord(q, toks, w) {
 			s.score += 3
 			s.matched = append(s.matched, w)
 			if len(r.comments) > 0 {
@@ -865,6 +876,9 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	if len(ms) == 0 && len(s.matched) == 0 && !s.meaning {
 		return s, false
 	}
+	// H-230: the row naming the asked thing in one identifier
+	// (ErrGroupNameTaken for "reserved role key") ranks as a phrase
+	s.score += identBonus(q, ms, r)
 	// a row dated in (or near) the question's window ranks up (prior.go);
 	// it never makes a row answer on its own
 	s.score += timeBonus(q, r)
@@ -957,6 +971,7 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 			all = append(all, s)
 		}
 	}
+	rareBonus(q, all) // idents.go: the distinctive words count more (H-230)
 	// an everything-about answer leads with the newest row of each folder
 	// and topic (lore's structure): the fused order stays out of it
 	if !q.about {
