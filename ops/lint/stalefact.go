@@ -8,7 +8,7 @@ package lint
 //
 //	staleFacts(all, checker, today)
 //	  ├─ every live row whose metadata names fact_evidence
-//	  ├─ factstale.Checker.Check: one git log per evidence item
+//	  ├─ factstale.Checker.Prime + Check: one git log for every row's evidence (H-209)
 //	  └─ one finding per stale row: the changed files with their commit,
 //	     fix = after re-checking, lore meta set --id <id> --pair fact_verified_at=<day>
 //	     (today, or the newest change's day when a commit is dated later)
@@ -79,6 +79,16 @@ func staleFacts(ctx context.Context, all map[row.Table][]sourced, chk *factstale
 		tables = append(tables, t)
 	}
 	slices.Sort(tables)
+	// bug hunt H-209: one git log for every row's evidence, not one per item
+	var claims []factstale.Claim
+	for _, t := range tables {
+		for _, s := range all[t] {
+			if cl, ok := factstale.ClaimOf(s.r); ok && cl.Checkable() {
+				claims = append(claims, cl)
+			}
+		}
+	}
+	chk.Prime(ctx, claims)
 	var out []Finding
 	seen := map[string]bool{}
 	for _, t := range tables {

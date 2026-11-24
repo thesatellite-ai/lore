@@ -181,3 +181,60 @@ func TestReverify(t *testing.T) {
 		}
 	}
 }
+
+// TestPrimeAsksGitOnceForEveryPath (bug hunt H-209, devco:D-950): a command
+// checking many rows primes the checker first, so all their path items
+// cost one git log instead of one each (one per item made lore ask take
+// ~15 s on a store whose every row names its evidence), and the verdicts
+// are exactly those of the per-item checks: a folder item, a file name
+// with a space, a change on the verified day, a path git never had, a
+// commit item and an unknown commit.
+func TestPrimeAsksGitOnceForEveryPath(t *testing.T) {
+	r := newRepo(t)
+	first := r.commit("2026-11-01", map[string]string{"billing/refund.go": "a\n", "billing/card.go": "b\n", "docs/my notes.md": "n\n", "svc/a/x.go": "x\n"})
+	r.commit("2026-11-10", map[string]string{"billing/refund.go": "a2\n", "docs/my notes.md": "n2\n"})
+	r.commit("2026-11-12", map[string]string{"svc/a/x.go": "x2\n"})
+	claims := []factstale.Claim{
+		claim(t, "2026-11-02", "billing/refund.go:3"),
+		claim(t, "2026-11-10", "billing/refund.go:3"),
+		claim(t, "2026-11-02", "billing/card.go:1"),
+		claim(t, "2026-11-02", "docs/my notes.md"),
+		claim(t, "2026-11-11", "svc/a"),
+		claim(t, "2026-11-12", "svc"),
+		claim(t, "2026-11-02", "nothere/x.go:1"),
+		claim(t, "2026-11-05", "billing/card.go", "./billing/refund.go:9"),
+		claim(t, "", first),
+		claim(t, "2026-11-11", first),
+	}
+	for i := range 40 {
+		claims = append(claims, claim(t, "2026-11-02", "gen/f"+strings.Repeat("x", i%7)+string(rune('a'+i%26))+".go:1"))
+	}
+	ctx := context.Background()
+	want := make([]factstale.Verdict, len(claims))
+	plain := r.checker()
+	for i, c := range claims {
+		want[i] = plain.Check(ctx, c)
+	}
+	calls := 0
+	primed := factstale.NewChecker(func(ctx context.Context, args ...string) ([]byte, error) {
+		calls++
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = r.dir
+		return cmd.Output()
+	})
+	primed.Prime(ctx, claims)
+	for i, c := range claims {
+		got := primed.Check(ctx, c)
+		if got.Stale != want[i].Stale || got.Note() != want[i].Note() || !slices.Equal(got.Changed, want[i].Changed) {
+			t.Errorf("claim %d (%v): primed %+v, per item %+v", i, c.Evidence, got, want[i])
+		}
+	}
+	if !want[0].Stale || want[1].Stale || !want[3].Stale || !want[4].Stale || want[5].Stale || !want[8].Stale {
+		t.Fatalf("the per-item verdicts this test relies on changed: %+v", want)
+	}
+	// one git log for the paths, one for the commit item's files, one for
+	// the commit's later changes: never one per path
+	if calls > 3 {
+		t.Fatalf("git ran %d times for %d claims, want at most 3", calls, len(claims))
+	}
+}

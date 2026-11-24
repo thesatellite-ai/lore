@@ -75,8 +75,8 @@ func markStale(ctx context.Context, env Env, rows []textRow, facts map[string]fa
 	if !ok || len(facts) == 0 {
 		return
 	}
-	var chk *factstale.Checker
-	now := opclock.Now(env)
+	claims := map[int]factstale.Claim{}
+	list := make([]factstale.Claim, 0, len(rows))
 	for i := range rows {
 		f, ok := facts[rows[i].ID]
 		if !ok {
@@ -86,11 +86,21 @@ func markStale(ctx context.Context, env Env, rows []textRow, facts map[string]fa
 		if !ok || !cl.Checkable() {
 			continue
 		}
-		if chk == nil {
-			if chk = fe.FactChecker(ctx); chk == nil {
-				return
-			}
-		}
+		claims[i] = cl
+		list = append(list, cl)
+	}
+	if len(list) == 0 {
+		return
+	}
+	chk := fe.FactChecker(ctx)
+	if chk == nil {
+		return
+	}
+	// bug hunt H-209: one git log for every row's evidence, not one per
+	// item (every row naming its evidence made each ask take ~15 s)
+	chk.Prime(ctx, list)
+	now := opclock.Now(env)
+	for i, cl := range claims {
 		v := chk.Check(ctx, cl)
 		rows[i].Stale, rows[i].Reverify = v.Note(), factstale.Reverify(rows[i].ID, storeFlag(rows[i].Place), v, now)
 	}

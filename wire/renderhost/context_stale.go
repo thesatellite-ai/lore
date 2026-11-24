@@ -8,8 +8,9 @@ package renderhost
 // row that ranks above it in search was left out as "already printed").
 //
 //	pickOf ─► contextPick.fact (fact_evidence + fact_verified_at)
-//	contextAnswer, runContextHook ─► markStalePicks: one Checker per command
-//	  (the hook's git questions run under its own deadline)
+//	contextAnswer, runContextHook ─► markStalePicks: one Checker per command,
+//	  primed with every pick's evidence (one git log, devco:D-950; the
+//	  hook's git questions run under its own deadline)
 //	  └─ stale pick: `stale="evidence changed since …"` on its tag, "[stale: …]" on its line,
 //	     Stale + Reverify in --json (lore ask's applies)
 
@@ -33,16 +34,26 @@ func (h *Host) markStalePicks(ctx context.Context, picks []contextPick) {
 // only when a pick names evidence; nil marks nothing), dating the printed
 // fix from now.
 func markStale(ctx context.Context, picks []contextPick, checker func(context.Context) *factstale.Checker, now time.Time) {
-	var chk *factstale.Checker
+	var claims []factstale.Claim
+	for i := range picks {
+		if picks[i].fact != nil {
+			claims = append(claims, *picks[i].fact)
+		}
+	}
+	if len(claims) == 0 {
+		return
+	}
+	chk := checker(ctx)
+	if chk == nil {
+		return
+	}
+	// bug hunt H-209 (devco:D-950): one git log for every pick's evidence,
+	// not one per item, as ask, search and lint do
+	chk.Prime(ctx, claims)
 	for i := range picks {
 		p := &picks[i]
 		if p.fact == nil {
 			continue
-		}
-		if chk == nil {
-			if chk = checker(ctx); chk == nil {
-				return
-			}
 		}
 		v := chk.Check(ctx, *p.fact)
 		if !v.Stale {

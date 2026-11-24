@@ -16,15 +16,21 @@
 //	  │  changed after the commit (and after the verified day, when set)
 //	  └─ Verdict{Stale, Since, Changed} ─► Note: "stale: evidence changed since …"
 //
-// Cheap and local: one git log per evidence item, cached for the life of
-// the Checker (one command, so one HEAD); no network. Git is injected (the
-// wire layer runs it in the code repo), so this package does no I/O.
+// Cheap and local: Prime asks git once for every path item of the rows a
+// command is about to check (one git log over all their paths) and once
+// for the commit items' files, so a command costs a fixed handful of git
+// processes however many rows name evidence (bug hunt H-209: one git log
+// per item made lore ask take ~15 s on a store whose every row names its
+// evidence). Answers are cached for the life of the Checker (one command,
+// so one HEAD); no network. Git is injected (the wire layer runs it in the
+// code repo), so this package does no I/O.
 package factstale
 
 import (
 	"context"
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -273,11 +279,153 @@ type Checker struct {
 	git   Git
 	cache map[string][]Change
 	times map[string]time.Time
+	// heads is each primed commit item's time and files (Prime), so
+	// readCommit skips its own git log and diff-tree.
+	heads map[string]commitHead
+}
+
+// commitHead is a commit's id, time and the files it touched.
+type commitHead struct {
+	id    string
+	at    time.Time
+	files []string
 }
 
 // NewChecker is a checker asking git through run.
 func NewChecker(run Git) *Checker {
-	return &Checker{git: run, cache: map[string][]Change{}, times: map[string]time.Time{}}
+	return &Checker{git: run, cache: map[string][]Change{}, times: map[string]time.Time{}, heads: map[string]commitHead{}}
+}
+
+// primeChunk is how many paths one primed git log names, so the command
+// line stays far below the system's argument limit.
+const primeChunk = 256
+
+// Prime answers ahead, in a few git processes, what Check would ask git
+// one evidence item at a time for every claim (bug hunt H-209): the newest
+// change of every path item, from one `git log --name-only` over all the
+// paths limited to commits after the oldest verified day (an older commit
+// can make no claim stale), and each commit item's time and files from one
+// `git log --no-walk`. A path no listed commit touched has no change after
+// any of the claims' days. When git refuses a primed call (a commit this
+// clone does not have), nothing of it is cached and Check asks per item as
+// before. Calling Check without Prime gives the same verdicts.
+func (c *Checker) Prime(ctx context.Context, claims []Claim) {
+	var paths, shas []string
+	var since time.Time
+	want := map[string]bool{}
+	for _, cl := range claims {
+		for _, e := range cl.Evidence {
+			switch e.Kind {
+			case KindPath:
+				if cl.Verified.IsZero() || want["p\x00"+e.Path] {
+					continue
+				}
+				if _, done := c.cache["p\x00"+e.Path]; done {
+					continue
+				}
+				want["p\x00"+e.Path] = true
+				paths = append(paths, e.Path)
+				if since.IsZero() || cl.Verified.Before(since) {
+					since = cl.Verified
+				}
+			case KindCommit:
+				if _, done := c.heads[e.Commit]; done || want["c\x00"+e.Commit] {
+					continue
+				}
+				if _, done := c.cache["c\x00"+e.Commit]; done {
+					continue
+				}
+				want["c\x00"+e.Commit] = true
+				shas = append(shas, e.Commit)
+			}
+		}
+	}
+	for chunk := range slices.Chunk(paths, primeChunk) {
+		c.primePaths(ctx, chunk, since)
+	}
+	for chunk := range slices.Chunk(shas, primeChunk) {
+		c.primeCommits(ctx, chunk)
+	}
+}
+
+// logMark starts each commit's header line in a primed git log's output,
+// so a file name can never be read as a commit.
+const logMark = "\x01"
+
+// primePaths caches the newest change after since of each of paths.
+func (c *Checker) primePaths(ctx context.Context, paths []string, since time.Time) {
+	args := append([]string{"--literal-pathspecs", "log", "-z", "--format=" + "%x01%H%x09%ct", "--name-only", "--since=" + since.UTC().Format(time.RFC3339), "--"}, paths...)
+	out, err := c.git(ctx, args...)
+	if err != nil {
+		return // Check asks per path
+	}
+	asked := map[string]bool{}
+	for _, p := range paths {
+		asked[p] = true
+	}
+	got := map[string][]Change{}
+	for _, l := range logEntries(out) {
+		for _, f := range l.files {
+			// a path item may name a folder: a change to a file in it is
+			// a change to it (as `git log -1 -- <folder>` reports)
+			for p := f; p != "" && p != "."; p = parentOf(p) {
+				if asked[p] && got[p] == nil { // newest first: keep the first
+					got[p] = []Change{{Path: p, Commit: l.id[:min(shortSHA, len(l.id))], At: l.at}}
+				}
+			}
+		}
+	}
+	for _, p := range paths {
+		c.cache["p\x00"+p] = got[p] // nil: not changed after since
+	}
+}
+
+// primeCommits caches each commit item's time and files from one git log;
+// nothing when git refuses one of them (Check then asks per item).
+func (c *Checker) primeCommits(ctx context.Context, shas []string) {
+	args := append([]string{"log", "-z", "--no-walk=unsorted", "--root", "--format=" + "%x01%H%x09%ct", "--name-only"}, shas...)
+	out, err := c.git(ctx, args...)
+	if err != nil {
+		return
+	}
+	entries := logEntries(out)
+	if len(entries) != len(shas) {
+		return // git folded two items naming one commit: ask per item
+	}
+	for i, l := range entries {
+		c.heads[shas[i]] = l
+	}
+}
+
+// logEntries reads a primed git log's -z output: per commit a header
+// "\x01<sha>\t<unix seconds>" then its files, every item NUL-ended.
+func logEntries(out []byte) []commitHead {
+	var all []commitHead
+	for tok := range strings.SplitSeq(string(out), "\x00") {
+		tok = strings.TrimPrefix(tok, "\n")
+		if tok == "" {
+			continue
+		}
+		if head, ok := strings.CutPrefix(tok, logMark); ok {
+			if sha, at, ok := commitLine(head); ok {
+				all = append(all, commitHead{id: sha, at: at})
+			}
+			continue
+		}
+		if n := len(all); n > 0 {
+			all[n-1].files = append(all[n-1].files, tok)
+		}
+	}
+	return all
+}
+
+// parentOf is p's folder ("" at the top).
+func parentOf(p string) string {
+	i := strings.LastIndexByte(p, '/')
+	if i < 0 {
+		return ""
+	}
+	return p[:i]
 }
 
 // shortSHA is how many hex digits a printed commit keeps.
@@ -361,44 +509,47 @@ func (c *Checker) commitChanges(ctx context.Context, sha string, cutoff time.Tim
 
 // readCommit asks git for sha's time and its files' later changes.
 func (c *Checker) readCommit(ctx context.Context, sha string) (time.Time, []Change) {
-	// one git log, not rev-parse: lore's in-process git answers
-	// (adapters/gitfast) refuse rev-parse's peel syntax
-	head, err := c.git(ctx, "log", "-1", "--no-walk", "--format=%H%x09%ct", sha)
-	if err != nil {
-		return time.Time{}, nil // not a commit of this clone
+	h, primed := c.heads[sha]
+	if !primed {
+		// one git log, not rev-parse: lore's in-process git answers
+		// (adapters/gitfast) refuse rev-parse's peel syntax
+		head, err := c.git(ctx, "log", "-1", "--no-walk", "--format=%H%x09%ct", sha)
+		if err != nil {
+			return time.Time{}, nil // not a commit of this clone
+		}
+		var ok bool
+		if h.id, h.at, ok = commitLine(string(head)); !ok {
+			return time.Time{}, nil
+		}
+		// -z: a file name with a space or a non-ASCII letter is read whole
+		files, err := c.git(ctx, "diff-tree", "-z", "--root", "--no-commit-id", "--name-only", "-r", h.id)
+		if err != nil {
+			return h.at, nil
+		}
+		for f := range strings.SplitSeq(string(files), "\x00") {
+			if f != "" {
+				h.files = append(h.files, f)
+			}
+		}
 	}
-	id, at, ok := commitLine(string(head))
-	if !ok {
-		return time.Time{}, nil
-	}
-	files, err := c.git(ctx, "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", id)
-	if err != nil {
-		return at, nil
-	}
-	paths := strings.Fields(string(files))
+	id, at, paths := h.id, h.at, h.files
 	if len(paths) == 0 {
 		return at, nil
 	}
-	args := append([]string{"--literal-pathspecs", "log", "--format=%x00%H%x09%ct", "--name-only", id + "..HEAD", "--"}, paths...)
+	args := append([]string{"--literal-pathspecs", "log", "-z", "--format=%x01%H%x09%ct", "--name-only", id + "..HEAD", "--"}, paths...)
 	out, err := c.git(ctx, args...)
 	if err != nil {
 		return at, nil
 	}
 	var changes []Change
 	seen := map[string]bool{}
-	for block := range strings.SplitSeq(string(out), "\x00") {
-		lines := strings.Split(strings.TrimSpace(block), "\n")
-		sha, when, ok := commitLine(lines[0])
-		if !ok {
-			continue
-		}
-		for _, p := range lines[1:] {
-			p = strings.TrimSpace(p)
-			if p == "" || seen[p] || !contains(paths, p) {
+	for _, l := range logEntries(out) { // git log is newest first: the first is the newest change
+		for _, p := range l.files {
+			if seen[p] || !contains(paths, p) {
 				continue
 			}
-			seen[p] = true // git log is newest first: the first is the newest change
-			changes = append(changes, Change{Path: p, Commit: sha[:min(shortSHA, len(sha))], At: when})
+			seen[p] = true
+			changes = append(changes, Change{Path: p, Commit: l.id[:min(shortSHA, len(l.id))], At: l.at})
 		}
 	}
 	return at, changes

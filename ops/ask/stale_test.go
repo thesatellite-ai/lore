@@ -1,9 +1,13 @@
 package ask
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/logic/factstale"
 )
 
 // TestStaleRowRanksBelowFreshWithSameMatch (devco:D-941, bug hunt H-190):
@@ -81,5 +85,54 @@ func TestStaleAnswerSaysHowToReverify(t *testing.T) {
 	}
 	if strings.Contains(text, "mem_cut") {
 		t.Fatalf("a row the answer did not print has a re-verify line:\n%s", text)
+	}
+}
+
+// countingFacts is an Env whose fact checker counts the git calls it makes
+// (every path answers "changed on 2026-11-10").
+type countingFacts struct {
+	Env
+	calls *int
+}
+
+func (f countingFacts) FactChecker(context.Context) *factstale.Checker {
+	return factstale.NewChecker(func(_ context.Context, args ...string) ([]byte, error) {
+		*f.calls++
+		var out strings.Builder
+		for i, a := range args {
+			if a == "--" {
+				for _, p := range args[i+1:] {
+					out.WriteString("\x01" + "1234567890abcdef1234567890abcdef12345678\t1794304800\x00\n" + p + "\x00\x00")
+				}
+			}
+		}
+		if out.Len() == 0 {
+			return []byte("1234567890abcdef1234567890abcdef12345678\t1794304800\n"), nil
+		}
+		return []byte(out.String()), nil
+	})
+}
+
+// TestMarkStaleAsksGitOnceForEveryRow (bug hunt H-209, devco:D-950): when
+// every candidate row names its own evidence file, ask checks them all
+// with one git log, not one per row (one each made lore ask take ~15 s on
+// a store whose every row names its evidence), and still marks each one.
+func TestMarkStaleAsksGitOnceForEveryRow(t *testing.T) {
+	var rows []textRow
+	facts := map[string]factItems{}
+	for i := range 60 {
+		id := fmt.Sprintf("mem_%03d", i)
+		rows = append(rows, textRow{Table: "memories", ID: id, Body: "note"})
+		facts[id] = factItems{evidence: []string{fmt.Sprintf("svc/f%03d.go:1", i)}, verified: "2026-11-02"}
+	}
+	calls := 0
+	markStale(context.Background(), countingFacts{calls: &calls}, rows, facts)
+	if calls != 1 {
+		t.Fatalf("git ran %d times for %d rows, want 1", calls, len(rows))
+	}
+	for _, r := range rows {
+		if !strings.HasPrefix(r.Stale, "stale: evidence changed since 2026-11-02") {
+			t.Fatalf("%s not marked: %q", r.ID, r.Stale)
+		}
 	}
 }

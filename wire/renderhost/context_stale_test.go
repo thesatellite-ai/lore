@@ -2,6 +2,7 @@ package renderhost
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,5 +78,49 @@ func TestContextPickMarksStaleFact(t *testing.T) {
 	}
 	if f.Stale != "" || f.Reverify != "" || strings.Contains(f.full, "stale=") {
 		t.Fatalf("fresh pick marked: %+v", f)
+	}
+}
+
+// TestContextPicksAskGitOnce (bug hunt H-209, devco:D-950): lore context
+// (and so lore ask for a question naming a file) checks every pick's
+// evidence with one git log, not one per pick, and still marks each one.
+func TestContextPicksAskGitOnce(t *testing.T) {
+	var picks []contextPick
+	for i := range 30 {
+		cl, ok := factstale.ClaimOfItems([]string{fmt.Sprintf("svc/f%02d.go:1", i)}, "2026-11-02")
+		if !ok {
+			t.Fatal("no claim")
+		}
+		id := fmt.Sprintf("mem_%02d", i)
+		full := "<memory id=\"" + id + "\">\nbody\n</memory>\n\n"
+		picks = append(picks, contextPick{ID: id, full: full, line: "- body\n", fact: &cl, source: store.SourceRepo})
+	}
+	calls := 0
+	checker := func(context.Context) *factstale.Checker {
+		// every path answers "changed on 2026-11-10" in Prime's -z format
+		return factstale.NewChecker(func(_ context.Context, args ...string) ([]byte, error) {
+			calls++
+			var out strings.Builder
+			for i, a := range args {
+				if a == "--" {
+					for _, p := range args[i+1:] {
+						out.WriteString("\x01" + "1234567890abcdef1234567890abcdef12345678\t1794304800\x00\n" + p + "\x00\x00")
+					}
+				}
+			}
+			if out.Len() == 0 {
+				return []byte("1234567890abcdef1234567890abcdef12345678\t1794304800\n"), nil
+			}
+			return []byte(out.String()), nil
+		})
+	}
+	markStale(context.Background(), picks, checker, time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC))
+	if calls != 1 {
+		t.Fatalf("git ran %d times for %d picks, want 1", calls, len(picks))
+	}
+	for _, p := range picks {
+		if !strings.HasPrefix(p.Stale, "stale: evidence changed since 2026-11-02") {
+			t.Fatalf("%s not marked: %q", p.ID, p.Stale)
+		}
 	}
 }

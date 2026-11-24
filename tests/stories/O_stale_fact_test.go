@@ -16,6 +16,10 @@ package stories
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -204,6 +208,73 @@ func TestStoryOStaleFactFlagged(t *testing.T) {
 		out := ada.Lore(pc.Dir, "lint", "--code", "stale_fact").OK(t).Says(t, "1 finding(s)", "stale_fact "+byCommit).Stdout
 		if strings.Contains(out, "stale_fact "+stale) {
 			t.Fatalf("the re-verified fact is still reported:\n%s", out)
+		}
+	})
+
+	// devco:D-950 (bug hunt H-209): a store whose every note names its own
+	// evidence made each lore ask take ~15 s, one git log per note's file.
+	// Forty notes matching the question, each naming another file: ask (and
+	// search, lint) checks them all with one git log over every path, and
+	// still marks the stale ones.
+	s.Step("D-950/ask-checks-every-row-evidence-with-one-git-log", func() {
+		var lines strings.Builder
+		for i := range 40 {
+			file := fmt.Sprintf("billing/gen/f%02d.go", i)
+			pc.WriteFile(file, "package gen\n")
+			fmt.Fprintf(&lines, `{"op":"memory add","input":{"body":"otter payout note %d: payouts settle after the batch closes","meta":["fact_evidence=%s:1","fact_verified_at=2026-11-02"]}}`+"\n", i, file)
+		}
+		commitOn("2026-11-12")
+		dir := t.TempDir()
+		batch := filepath.Join(dir, "notes.jsonl")
+		if err := os.WriteFile(batch, []byte(lines.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		ada.Lore(pc.Dir, "batch", "apply", "--file", batch, "--yes").OK(t)
+		realGit, err := exec.LookPath("git")
+		if err != nil {
+			t.Fatal(err)
+		}
+		calls := filepath.Join(dir, "git-calls.txt")
+		shim := filepath.Join(dir, "bin")
+		if err := os.MkdirAll(shim, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		script := "#!/bin/sh\necho \"$*\" >> '" + calls + "'\nexec '" + realGit + "' \"$@\"\n"
+		if err := os.WriteFile(filepath.Join(shim, "git"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		oldPath, oldServer := ada.Env("PATH"), ada.Env("LORE_READ_SERVER")
+		path := oldPath
+		if path == "" {
+			path = os.Getenv("PATH")
+		}
+		ada.SetEnv("PATH", shim+string(os.PathListSeparator)+path)
+		ada.SetEnv("LORE_READ_SERVER", "0") // count the git of this process, not a server's
+		defer func() { ada.SetEnv("PATH", oldPath); ada.SetEnv("LORE_READ_SERVER", oldServer) }()
+		for _, cmd := range [][]string{{"ask", "--query", "otter payout", "--json"}, {"search", "--query", "otter payout", "--json"}, {"lint", "--code", "stale_fact"}} {
+			if err := os.WriteFile(calls, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out := ada.Lore(pc.Dir, cmd...).Stdout
+			if !strings.Contains(out, "billing/gen/f") {
+				t.Fatalf("lore %s: no row is marked stale:\n%s", cmd[0], out)
+			}
+			raw, _ := os.ReadFile(calls)
+			// one git log over every path item, plus (lint only, which
+			// reads every row) one for the later changes of the one note
+			// naming a commit: never one per note
+			pathLogs, evidenceLogs := 0, 0
+			for l := range strings.SplitSeq(string(raw), "\n") {
+				if strings.HasPrefix(l, "--literal-pathspecs log") {
+					evidenceLogs++
+					if strings.Contains(l, " --since=") {
+						pathLogs++
+					}
+				}
+			}
+			if pathLogs != 1 || evidenceLogs > 2 {
+				t.Fatalf("lore %s ran %d git logs for the notes' evidence (%d over paths), want one over every path:\n%s", cmd[0], evidenceLogs, pathLogs, raw)
+			}
 		}
 	})
 }
