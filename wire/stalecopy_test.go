@@ -62,12 +62,14 @@ func TestStaleCopyReadNamesUnreachableStore(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		failed    time.Duration // a failed fetch this long ago (0 = none)
-		lastGood  time.Time
+		goodAgo   time.Duration // the last good fetch this long before the subtest runs (0 = the fixed 3 h ago)
 		wantStale bool
 	}{
-		{"the fetch fails now", 0, good, true},
-		{"backing off after a failure", 10 * time.Second, good, true},
-		{"fetched a moment ago", 0, time.Now().Add(-time.Second), false},
+		{"the fetch fails now", 0, 0, true},
+		{"backing off after a failure", 10 * time.Second, 0, true},
+		// the age is taken when the subtest runs, not when the table is built: parallel subtests of a
+		// loaded -race run start late, and "a moment ago" must not drift past the fetch interval
+		{"fetched a moment ago", 0, time.Second, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -77,7 +79,11 @@ func TestStaleCopyReadNamesUnreachableStore(t *testing.T) {
 				t.Fatal(err)
 			}
 			state := t.TempDir()
-			if err := live.WriteFetchStamp(state, tc.lastGood); err != nil {
+			lastGood := good
+			if tc.goodAgo > 0 {
+				lastGood = time.Now().Add(-tc.goodAgo)
+			}
+			if err := live.WriteFetchStamp(state, lastGood); err != nil {
 				t.Fatal(err)
 			}
 			if tc.failed > 0 {
