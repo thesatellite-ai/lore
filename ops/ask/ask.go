@@ -175,6 +175,10 @@ type Resource struct {
 	// as one short line and such lines share a small part of the cap
 	// (devco D-963). --json keeps every field.
 	touched bool
+	// parts is how many of the question's words found it (match.said):
+	// of the resources a question only touches, the one it touches most
+	// takes the answer's one resource slot (devco D-968).
+	parts int
 }
 
 // Field is one field value of a resource; Was and ChangedAt say a value

@@ -206,6 +206,14 @@ func (r Resource) line() string {
 // question only touches may take under rows (devco D-963).
 const resShare = 5
 
+// resSlots is how many resources a question only touches an answer of
+// maxChars prints under its rows: one at DefaultMaxChars (and below), one
+// more per DefaultMaxChars above it, so --max-chars twice the cap prints
+// more of them. Why (devco D-968, Sync benchmark set 5): within a fifth
+// of the cap six code_repo lines still took six of the answer's items on
+// product questions; the question does not name them, the rows answer.
+func resSlots(maxChars int) int { return max(1, maxChars/DefaultMaxChars) }
+
 // briefChars caps the purpose text of a brief resource line.
 const briefChars = 100
 

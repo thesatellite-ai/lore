@@ -549,10 +549,30 @@ func leadOf(q question, identity bool, o *Out) answerFirst {
 // X: the resource, then the lead rows (the newest row of each folder:
 // the last meeting, the last journal day), then the open tasks, then the
 // other rows; lead is how many of o.Rows are those lead rows.
+//
+// A resource the question only touches (a part of its name or a field
+// value found it, Resource.touched) comes after every row and task when
+// a row matched, the one touched by the most question words first: a
+// resource the question does not name never outranks a matching row of
+// any kind. Why (devco D-968, Sync benchmark set 5): code_repo resources
+// named after the product ("shop_import_worker" for a "shop import"
+// question) stood before the rows whenever the best row was not a plain
+// match (a changed row leads with the resources), cap walked them first
+// and up to six of them took the answer's items next to the rows.
 func (o *Out) rank(q question, identity bool, lead int) []Ranked {
 	res := make([]Ranked, 0, len(o.Resources))
+	var touched []Resource
 	for _, r := range o.Resources {
+		if r.touched && len(o.Rows) > 0 && !identity {
+			touched = append(touched, r)
+			continue
+		}
 		res = append(res, Ranked{Kind: KindResource, ID: r.ID})
+	}
+	slices.SortStableFunc(touched, func(a, b Resource) int { return cmp.Compare(b.parts, a.parts) })
+	tail := make([]Ranked, 0, len(touched))
+	for _, r := range touched {
+		tail = append(tail, Ranked{Kind: KindResource, ID: r.ID})
 	}
 	tsk := make([]Ranked, 0, len(o.Tasks))
 	for _, t := range o.Tasks {
@@ -565,14 +585,14 @@ func (o *Out) rank(q question, identity bool, lead int) []Ranked {
 	o.answer = leadOf(q, identity, o)
 	switch o.answer {
 	case leadTasks:
-		return slices.Concat(tsk, res, rows)
+		return slices.Concat(tsk, res, rows, tail)
 	case leadRows:
-		return slices.Concat(rows, res, tsk)
+		return slices.Concat(rows, res, tsk, tail)
 	case leadAbout:
 		lead = min(lead, len(rows))
-		return slices.Concat(res, rows[:lead], tsk, rows[lead:])
+		return slices.Concat(res, rows[:lead], tsk, rows[lead:], tail)
 	}
-	return slices.Concat(res, tsk, rows)
+	return slices.Concat(res, tsk, rows, tail)
 }
 
 // isAbout reports an "everything about X" question: the resource leads,
@@ -623,7 +643,7 @@ func isIdentity(text string) bool {
 // owns). brief keeps only the name line (a debt question).
 func resourceOf(m match, all []resourceRow, brief bool) Resource {
 	r := m.res
-	out := Resource{ID: r.ID, Kind: r.Kind, Name: r.Name, Place: r.Place, Match: m.how, Aliases: r.Aliases, Fields: []Field{}, Linked: []Linked{}, touched: !m.whole}
+	out := Resource{ID: r.ID, Kind: r.Kind, Name: r.Name, Place: r.Place, Match: m.how, Aliases: r.Aliases, Fields: []Field{}, Linked: []Linked{}, touched: !m.whole, parts: len(m.said)}
 	if brief {
 		return out
 	}
@@ -1202,18 +1222,23 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 	// touches (a part of their name or a field value) print under the
 	// rows as one short line each and share at most a fifth of the cap,
 	// so ten code_repo cards whose purpose repeats the question's words
-	// never push out the rows that answer it
+	// never push out the rows that answer it. devco D-968 (set 5): a
+	// fifth of the cap still held six such lines, so they also take at
+	// most resSlots(maxChars) of the answer's items: one at the default
+	// cap, one more per default cap above it (the printed --max-chars
+	// <twice> prints more of them)
 	underRows := slices.ContainsFunc(order, func(r Ranked) bool { return r.Kind == KindRow })
-	briefRoom := maxChars / resShare
+	briefRoom, slots := maxChars/resShare, resSlots(maxChars)
 	for _, r := range order {
 		if r.Kind == KindResource && underRows && o.Resources[resIdx[r.ID]].touched {
 			n := len(o.Resources[resIdx[r.ID]].brief())
-			if n > briefRoom {
+			if n > briefRoom || slots == 0 {
 				o.Left++
 				o.leftBrief++
 				continue
 			}
 			briefRoom -= n
+			slots--
 		}
 		o.Ranked = append(o.Ranked, r)
 		fits := len(o.body()) <= maxChars

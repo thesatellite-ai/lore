@@ -13,7 +13,9 @@ package stories
 // architecture notes). Now the note leads, the cards print one short line
 // each within a fifth of the cap, the repo's own rows come before the
 // other client's (ask --store <org>, which reads every folder), and the
-// planned note comes last.
+// planned note comes last. devco D-968 (H-227, Sync benchmark set 5):
+// such resources take one item of the answer (not a fifth of the cap),
+// after every row, so the hotfix that answers a product question is shown.
 
 import (
 	"fmt"
@@ -75,14 +77,44 @@ func TestStoryOAskAsBuiltNotesFirst(t *testing.T) {
 				}
 			}
 		}
-		if cards > 5 || !strings.Contains(out, "more resources that only share a word with the question left out; --max-chars 8000 prints more") {
-			t.Errorf("[O D-963] %d cards; want at most a fifth of the answer and the line saying the rest were left out:\n%s", cards, r)
+		// devco D-968: one item at the default cap, not a fifth of it
+		if cards > 1 || !strings.Contains(out, "more resources that only share a word with the question left out; --max-chars 8000 prints more") {
+			t.Errorf("[O D-963/D-968] %d cards; want at most one and the line saying the rest were left out:\n%s", cards, r)
 		}
 		// the printed next step runs where printed and prints more cards
 		more := ada.Lore(pc.Dir, "ask", "--query", "how does the feed import pipeline work", "--max-chars", "8000").OK(t)
 		if strings.Count(more.Out(), "\ncode_repo ") <= cards {
 			t.Errorf("[O D-963] --max-chars 8000 prints no more cards:\n%s", more)
 		}
+	})
+
+	s.Step("D-968/resources-named-after-the-product-take-one-item", func() {
+		// Sync benchmark set 5 (S5-15): code_repo resources named after the
+		// product and its integration took four to six items and the
+		// hotfix that answered was left out
+		for _, n := range []string{"shop_app", "shop_import_worker", "sync_shop", "pim_shop_bridge", "workflow_engine", "workspace_api"} {
+			ada.Lore(pc.Dir, "resource", "add", "--kind", "code_repo", "--name", n,
+				"--set", "purpose=Shop and PIM integration: imports products, variants and options from a shop workspace into the catalog, per workflow",
+				"--set", "url=https://git.example.test/"+n, "--to", company, "--yes").OK(t)
+		}
+		ada.Lore(pc.Dir, "rule", "add", "--body", "Every shop import records who started it (workflow and user) on its run.", "--yes").OK(t)
+		ada.Lore(pc.Dir, "hotfix", "add", "--title", "One shop import per workflow and workspace",
+			"--body", "Only one shop import may run per workflow and workspace at a time: a second start returns ErrImportRunning.", "--yes").OK(t)
+		q := "can two shop imports run at the same time for the same workflow and workspace"
+		r := ada.Lore(pc.Dir, "ask", "--query", q).OK(t)
+		out := r.Out()
+		hotfix, card := strings.Index(out, "One shop import per workflow and workspace"), strings.Index(out, "code_repo ")
+		if hotfix < 0 || card >= 0 && card < hotfix || strings.Count(out, "\ncode_repo ") > 1 {
+			t.Errorf("[O D-968] the hotfix is not shown before at most one code_repo line:\n%s", r)
+		}
+		// the printed next step runs where printed and prints one more
+		more := ada.Lore(pc.Dir, "ask", "--query", q, "--max-chars", "8000").OK(t)
+		if strings.Count(more.Out(), "\ncode_repo ") != 2 {
+			t.Errorf("[O D-968] --max-chars 8000 does not print one more code_repo line:\n%s", more)
+		}
+		// named whole: the question is about it and its card stays
+		named := ada.Lore(pc.Dir, "ask", "--query", "what does shop_import_worker do").OK(t)
+		named.Says(t, "shop_import_worker")
 	})
 
 	s.Step("D-963/the-repo-folder-before-another-client", func() {
