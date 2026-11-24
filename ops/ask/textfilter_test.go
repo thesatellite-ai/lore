@@ -37,7 +37,11 @@ func textFixture(t *testing.T) Query {
 	t.Cleanup(func() { _ = db.Close() })
 	stmts := []string{
 		`CREATE TABLE memories_all (id TEXT, place TEXT, body TEXT, valid_at TEXT, valid_until TEXT, created_at TEXT, source_kind TEXT, superseded_by_id TEXT, archived_at TEXT)`,
-		`CREATE TABLE incidents_all (id TEXT, place TEXT, title TEXT, body TEXT, created_at TEXT)`,
+		`CREATE TABLE incidents_all (id TEXT, place TEXT, title TEXT, body TEXT, created_at TEXT, archived_at TEXT)`,
+		// devco D-963: the notes of how the system is built answer too
+		`CREATE TABLE architecture_notes_all (id TEXT, place TEXT, title TEXT, body TEXT, created_at TEXT, archived_at TEXT)`,
+		`CREATE TABLE cookbook_recipes_all (id TEXT, place TEXT, title TEXT, body TEXT, created_at TEXT, archived_at TEXT)`,
+		`CREATE TABLE workflows_all (id TEXT, place TEXT, name TEXT, body TEXT, created_at TEXT, archived_at TEXT)`,
 		`CREATE TABLE row_refs_all (entity_table TEXT, entity_id TEXT, ref_id TEXT)`,
 		`CREATE TABLE row_meta_all (entity_table TEXT, entity_id TEXT, key_name TEXT, item_idx INTEGER, value_text TEXT)`,
 		// D-942: comments make their row answer; none here, so the rows
@@ -54,9 +58,9 @@ func textFixture(t *testing.T) Query {
 			('mem_7', 'me/life', 'Went hiking at the lake trail.', NULL, NULL, '2026-11-21T00:00:00.000000000Z', NULL, NULL, NULL),
 			('mem_8', 'me/life', 'Typed up the hiking notes.', '2026-11-13T09:00:00.000000000Z', NULL, '2026-11-21T00:00:00.000000000Z', NULL, NULL, NULL)`,
 		`INSERT INTO incidents_all VALUES
-			('inc_1', 'me/work', NULL, 'Lumen outage', '2026-11-12T10:00:00.000000000Z'),
-			('inc_2', 'me/work', 'Kestrel pick', 'why we chose it', '2026-08-01T00:00:00.000000000Z'),
-			('inc_3', 'me/work', 'unrelated', 'text', '2026-07-01T00:00:00.000000000Z')`,
+			('inc_1', 'me/work', NULL, 'Lumen outage', '2026-11-12T10:00:00.000000000Z', NULL),
+			('inc_2', 'me/work', 'Kestrel pick', 'why we chose it', '2026-08-01T00:00:00.000000000Z', NULL),
+			('inc_3', 'me/work', 'unrelated', 'text', '2026-07-01T00:00:00.000000000Z', NULL)`,
 		`INSERT INTO row_refs_all VALUES ('memories', 'mem_6', 'res_lumen'), ('incidents', 'inc_3', 'res_other'), ('memories', 'mem_6', 'res_kestrel')`,
 		`INSERT INTO row_meta_all VALUES
 			('memories', 'mem_6', 'day', 0, '2026-11-12'),
@@ -75,7 +79,7 @@ func textFixture(t *testing.T) Query {
 		('dec_2', 'me/work', NULL, 'lumen with no title', '2026-11-12T00:00:00.000000000Z', NULL, NULL),
 		('dec_3', 'me/work', 'Kestrel', 'decide on kestrel', '2026-11-03T00:00:00.000000000Z', 'dec_4', NULL)`)
 	// every row view has updated_at (the version ask's pickLines compares)
-	for _, tbl := range []string{"memories", "incidents", "decisions", "rules", "patterns", "hotfixes"} {
+	for _, tbl := range []string{"memories", "incidents", "decisions", "rules", "patterns", "hotfixes", "architecture_notes", "cookbook_recipes", "workflows"} {
 		stmts = append(stmts, `ALTER TABLE `+tbl+`_all ADD COLUMN updated_at TEXT`)
 	}
 	for _, s := range stmts {

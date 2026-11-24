@@ -58,7 +58,10 @@ func TestStoryOAskPartOfName(t *testing.T) {
 			if at < 0 || card >= 0 && card < at {
 				t.Errorf("[O D-949] `lore ask --store me --query %q` does not lead with the note saying %q:\n%s", q, want, r)
 			}
-			if strings.Contains(out, "val_") || card >= 0 && !strings.Contains(out, "status active") {
+			// a card the question names whole (gizmo) prints its fields;
+			// one it only touches (widget of widget_*) prints one line
+			// with its purpose and link (devco D-963): never a val_ id
+			if strings.Contains(out, "val_") || card >= 0 && strings.Contains(q, "gizmo") && !strings.Contains(out, "status active") {
 				t.Errorf("[O D-949] `lore ask --store me --query %q` prints a value id, not the value's name:\n%s", q, r)
 			}
 		}

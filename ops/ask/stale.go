@@ -28,12 +28,13 @@ type FactEnv interface {
 
 // factSQL reads the fact keys of every row, one line per item: clock-free
 // and input-free, so the read server keeps its answer (FileOnly).
-const factSQL = "SELECT entity_id, key_name, value_text FROM row_meta_all WHERE key_name IN ('" + meta.KeyFactEvidence + "', '" + meta.KeyFactVerifiedAt + "') AND item_idx >= 0 AND path = ''"
+const factSQL = "SELECT entity_id, key_name, value_text FROM row_meta_all WHERE key_name IN ('" + meta.KeyFactEvidence + "', '" + meta.KeyFactVerifiedAt + "', '" + meta.KeyFactState + "') AND item_idx >= 0 AND path = ''"
 
 // factItems is one row's fact keys as the cache holds them.
 type factItems struct {
 	evidence []string
 	verified string
+	state    string // fact_state (devco D-963)
 }
 
 // loadFacts reads every row's fact keys (row id → items).
@@ -53,6 +54,8 @@ func loadFacts(ctx context.Context, run Query) (map[string]factItems, error) {
 			f.evidence = append(f.evidence, cell(r[2]))
 		case meta.KeyFactVerifiedAt:
 			f.verified = cell(r[2])
+		case meta.KeyFactState:
+			f.state = cell(r[2])
 		}
 		out[id] = f
 	}
@@ -66,6 +69,29 @@ func storeFlag(place string) string {
 		return ""
 	}
 	return place
+}
+
+// markFacts sets each row's FactState and Verified from its fact keys
+// (devco D-963): ranking by them needs no git, only the keys loadFacts
+// read.
+func markFacts(rows []textRow, facts map[string]factItems) {
+	if len(facts) == 0 {
+		return
+	}
+	for i := range rows {
+		if f, ok := facts[rows[i].ID]; ok {
+			rows[i].FactState, rows[i].Verified = f.state, dayPart(f.verified)
+		}
+	}
+}
+
+// dayPart is the YYYY-MM-DD of a stored date ("" stays ""), so two
+// verified days compare as days.
+func dayPart(s string) string {
+	if len(s) > 10 {
+		return s[:10]
+	}
+	return s
 }
 
 // markStale sets Stale (and Reverify, devco:D-953) on each row whose evidence changed after it was

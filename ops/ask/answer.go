@@ -46,6 +46,11 @@ type textRow struct {
 	// (markStale, devco:D-941), "" when fresh or unchecked; Reverify is
 	// the command that clears it (devco:D-953).
 	Stale, Reverify string
+	// FactState and Verified are the row's fact_state and
+	// fact_verified_at (markFacts, devco D-963): a live or fixed fact
+	// ranks above a planned or rejected one, a recently verified one
+	// above an older one with the same match.
+	FactState, Verified string
 	// stored is the row's date as the lens stores it (metaDayOf reads
 	// it), "" for a row not read from the lens.
 	stored string
@@ -618,7 +623,7 @@ func isIdentity(text string) bool {
 // owns). brief keeps only the name line (a debt question).
 func resourceOf(m match, all []resourceRow, brief bool) Resource {
 	r := m.res
-	out := Resource{ID: r.ID, Kind: r.Kind, Name: r.Name, Place: r.Place, Match: m.how, Aliases: r.Aliases, Fields: []Field{}, Linked: []Linked{}}
+	out := Resource{ID: r.ID, Kind: r.Kind, Name: r.Name, Place: r.Place, Match: m.how, Aliases: r.Aliases, Fields: []Field{}, Linked: []Linked{}, touched: !m.whole}
 	if brief {
 		return out
 	}
@@ -846,6 +851,13 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	if r.Imported {
 		s.score -= 2
 	}
+	// devco D-963 (Sync benchmark set 4): the repo's own folder before
+	// another folder or client with the same match, a built fact before a
+	// planned or rejected one; neither outweighs one more question word
+	s.score += factBonus(r.FactState)
+	if q.home != "" && r.Place == q.home {
+		s.score += homeBonus
+	}
 	if r.SupersededBy != "" {
 		s.score -= 3
 	}
@@ -873,6 +885,25 @@ func namesResource(w string, ms []match) bool {
 		}
 	}
 	return false
+}
+
+// homeBonus is what a row of the repo's own folder (question.home) adds
+// to its score: less than one question word (3), so a row of another
+// folder that holds more of the question still wins.
+const homeBonus = 2
+
+// factBonus is what a row's fact_state adds to its score (devco D-963):
+// +1 for a fact that holds now (live, fixed, built, shipped), -2 for one
+// that does not (planned, proposed, rejected, abandoned, retired), 0 for
+// none or another value.
+func factBonus(state string) int {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "live", "fixed", "built", "shipped":
+		return 1
+	case "planned", "proposed", "rejected", "abandoned", "retired":
+		return -2
+	}
+	return 0
 }
 
 // staleOrder puts a fresh row before a stale one (devco:D-941); 0 when
@@ -920,6 +951,9 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 		}
 		if c := staleOrder(a, b); c != 0 {
 			return c // devco:D-941: a fresh row before a stale one with the same match
+		}
+		if c := strings.Compare(b.row.Verified, a.row.Verified); c != 0 {
+			return c // devco D-963: the more recently verified fact first
 		}
 		if c := cmp.Compare(b.fused, a.fused); c != 0 {
 			return c
@@ -1154,13 +1188,33 @@ func rowOf(r *textRow, matched []string) Row {
 func (o *Out) cap(order []Ranked, maxChars int) {
 	o.maxChars = maxChars
 	o.Ranked = []Ranked{}
-	o.Left = 0
+	o.Left, o.leftBrief = 0, 0
 	rowIdx := map[string]int{}
 	for i, r := range o.Rows {
 		rowIdx[r.ID] = i
 	}
 	bestRow := true // no row of order seen yet
+	resIdx := map[string]int{}
+	for i, r := range o.Resources {
+		resIdx[r.ID] = i
+	}
+	// devco D-963 (Sync benchmark set 4): resources the question only
+	// touches (a part of their name or a field value) print under the
+	// rows as one short line each and share at most a fifth of the cap,
+	// so ten code_repo cards whose purpose repeats the question's words
+	// never push out the rows that answer it
+	underRows := slices.ContainsFunc(order, func(r Ranked) bool { return r.Kind == KindRow })
+	briefRoom := maxChars / resShare
 	for _, r := range order {
+		if r.Kind == KindResource && underRows && o.Resources[resIdx[r.ID]].touched {
+			n := len(o.Resources[resIdx[r.ID]].brief())
+			if n > briefRoom {
+				o.Left++
+				o.leftBrief++
+				continue
+			}
+			briefRoom -= n
+		}
 		o.Ranked = append(o.Ranked, r)
 		fits := len(o.body()) <= maxChars
 		if !fits && r.Kind == KindRow && bestRow {
@@ -1265,8 +1319,12 @@ func (o Out) Text() string {
 		// it (wire/emptysearch.go), as for every search
 		b.WriteString(NoAnswer + "\n")
 	}
-	if o.Left > 0 {
-		fmt.Fprintf(&b, "\n%s left out to stay under %d characters; --max-chars %d prints more\n", plural.Count(o.Left, "more item"), o.maxChars, o.maxChars*2)
+	if n := o.Left - o.leftBrief; n > 0 {
+		fmt.Fprintf(&b, "\n%s left out to stay under %d characters; --max-chars %d prints more\n", plural.Count(n, "more item"), o.maxChars, o.maxChars*2)
+	}
+	if o.leftBrief > 0 {
+		// devco D-963: left out by their share of the cap, not the cap
+		fmt.Fprintf(&b, "\n%s that only share a word with the question left out; --max-chars %d prints more\n", plural.Count(o.leftBrief, "more resource"), o.maxChars*2)
 	}
 	b.WriteString(o.reverifyText())
 	if cited := o.textCited(); len(cited) > 0 {

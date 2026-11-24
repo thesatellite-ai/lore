@@ -39,6 +39,10 @@ type question struct {
 	// now is the moment the question is asked: a row whose valid_until
 	// is not after it is history, not the answer (devco D-820).
 	now time.Time
+	// home is the store folder this repo is linked to (HomeEnv), "" when
+	// none: its rows rank above another folder's with the same match
+	// (devco D-963).
+	home string
 	// about is an everything-about-X question: the words say so
 	// ("everything about hollow"), or the question is only the name of a
 	// resource ("hollow"). Set by build once the resources are matched.

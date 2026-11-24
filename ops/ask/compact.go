@@ -115,6 +115,10 @@ func (o Out) compactBody(res map[string]Resource, tsk map[string]Task, rows map[
 				b.WriteString(strings.TrimPrefix(res[it.ID].text(), "\n"))
 				continue
 			}
+			if r := res[it.ID]; r.touched {
+				b.WriteString(r.brief())
+				continue
+			}
 			b.WriteString(res[it.ID].line())
 		case KindTask:
 			if i == 0 || o.Ranked[i-1].Kind != KindTask {
@@ -194,6 +198,51 @@ func (r Resource) line() string {
 			b.WriteString(" (was " + f.Was + ")")
 		}
 		sep = ", "
+	}
+	return b.String() + "\n"
+}
+
+// resShare is the part of --max-chars (1/resShare) the resources a
+// question only touches may take under rows (devco D-963).
+const resShare = 5
+
+// briefChars caps the purpose text of a brief resource line.
+const briefChars = 100
+
+// briefFields are the fields a brief resource line says what it is by,
+// the first one set wins.
+var briefFields = []string{"purpose", "description", "summary", "role", "title"}
+
+// brief is a resource the question only touches, under rows: one line
+// with its kind, name, what it is (its purpose or description, cut to
+// briefChars) and its link. Why (devco D-963, Sync benchmark set 4):
+// code_repo cards whose purpose and stack repeated the question's words
+// printed every field, ~380 characters each, and ten of them filled the
+// 4,000-character answer; lore resource show --id prints it whole.
+func (r Resource) brief() string {
+	var b strings.Builder
+	b.WriteString(r.Kind + " " + r.Name)
+	what, link := "", ""
+	for _, n := range briefFields {
+		for _, f := range r.Fields {
+			if what == "" && strings.EqualFold(f.Name, n) && f.Value != "" {
+				what = f.Value
+			}
+		}
+	}
+	for _, f := range r.Fields {
+		if link == "" && strings.Contains(f.Value, "://") {
+			link = f.Value
+		}
+	}
+	if rs := []rune(what); len(rs) > briefChars {
+		what = strings.TrimRight(string(rs[:briefChars]), " ,;") + "…"
+	}
+	if what != "" {
+		b.WriteString(": " + what)
+	}
+	if link != "" {
+		b.WriteString(" (" + link + ")")
 	}
 	return b.String() + "\n"
 }

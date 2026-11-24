@@ -75,6 +75,16 @@ type Env interface {
 	AskLens(ctx context.Context, repoOnly bool, fn func(q Query, keeps bool) error) error
 }
 
+// HomeEnv is an Env that names the store folder the repo is linked to
+// (its org link, `lore whoami` reads): ask ranks that folder's rows above
+// another folder's with the same match (devco D-963, Sync benchmark set
+// 4: an own repo reads the whole company store, and another client's
+// rows sharing a few words came before the repo's own notes). "" when
+// the repo is linked to no folder; *wire.App implements it.
+type HomeEnv interface {
+	AskHome(ctx context.Context) string
+}
+
 // RunIn is the input of ask.run.
 type RunIn struct {
 	Query string `json:"query" arg:"0" rest:"true" desc:"the question, in your own words: who is alice-ng, what is the status of orbit, what did we decide for orbit and why, what do I owe alice-ng, what does alice-ng owe me, what happened yesterday / last week / on 2026-11-02, everything about alice-ng (a typo, a nickname or a role finds the resource too); name the file you are changing (add partial refunds in billing/refund.go) for the rules and hotfixes that apply to it"`
@@ -115,7 +125,10 @@ type Out struct {
 	// by reflection and has no pointer type.
 	Abstain  Abstain `json:"abstain,omitzero" desc:"set when the question names something (a word written with a capital, such as a place or a pet's name) that no row holds: the rows are then the nearest the memory holds, not the answer"`
 	maxChars int
-	note     string
+	// leftBrief is how many of Left are resources the question only
+	// touches, left out by their share of the cap (devco D-963).
+	leftBrief int
+	note      string
 	// lead is how many of Rows (the first ones) are an everything-about
 	// answer's newest row of each folder, printed one line each (devco
 	// D-822); 0 for any other question.
@@ -157,6 +170,11 @@ type Resource struct {
 	Aliases []string `json:"aliases,omitempty" desc:"its other names: nicknames, full names, roles"`
 	Fields  []Field  `json:"fields" desc:"its field values (sensitive ones masked)"`
 	Linked  []Linked `json:"linked" desc:"the resources whose fields name it (the people of a company, the projects a person owns)"`
+	// touched says the question does not name it whole (a part of its
+	// name or a field value found it, match.whole): under rows it prints
+	// as one short line and such lines share a small part of the cap
+	// (devco D-963). --json keeps every field.
+	touched bool
 }
 
 // Field is one field value of a resource; Was and ChangedAt say a value
@@ -264,6 +282,12 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 			WithHint(`lore ask --query "what is the status of orbit"`)
 	}
 	q := parseQuestion(in.Query, opclock.Now(env).UTC())
+	if h, ok := env.(HomeEnv); ok {
+		// also with --store <org>, which reads every folder: the repo's
+		// own folder still comes first (a store without it has no row
+		// there, so nothing changes)
+		q.home = h.AskHome(ctx)
+	}
 	var d data
 	err := env.AskLens(ctx, in.Store == string(store.SourceRepo), func(run Query, keeps bool) error {
 		var lerr error
@@ -283,7 +307,9 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 			d.rows = withMeaning(q, ms, d.rows, c, d.view, fill)
 		}
 		if _, checks := env.(FactEnv); lerr == nil && checks && len(d.rows) > 0 {
-			d.facts, lerr = loadFacts(ctx, run) // devco:D-941: only an env that can check them
+			// devco:D-941 stale evidence and devco D-963 fact_state /
+			// fact_verified_at ranking: only an env that can check them
+			d.facts, lerr = loadFacts(ctx, run)
 		}
 		return lerr
 	})
@@ -291,6 +317,7 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 		return Out{}, err
 	}
 	markStale(ctx, env, d.rows, d.facts)
+	markFacts(d.rows, d.facts)
 	maxChars := in.MaxChars
 	if maxChars <= 0 {
 		maxChars = DefaultMaxChars
@@ -331,7 +358,7 @@ func cell(v value.Value) string {
 // "<table>_all" view): the lens is built with these alone (devco D-813),
 // so a call does not read and view the other tables of every cache.
 // TestLensTablesCoverTheStatements fails when a statement reads another.
-var LensTables = []string{"resources", "kinds", "kind_fields", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents", "hotfixes", "comments"}
+var LensTables = []string{"resources", "kinds", "kind_fields", "tasks", "row_meta", "knowledge_refs", "row_refs", "memories", "decisions", "rules", "patterns", "incidents", "hotfixes", "architecture_notes", "cookbook_recipes", "workflows", "comments"}
 
 // typedSQL reads the resources (with kind name, fields and history), the
 // allowed value ids of each kind field, the open tasks, their owed_by /
@@ -591,15 +618,28 @@ func metaDayOf(q question, items []string, at string, near dayRange) string {
 }
 
 // textTables are the tables ask reads rows from, with the SQL of their
-// title, text, date and valid-until columns.
-var textTables = []struct{ table, title, body, extra, until string }{
-	{"memories", "''", "m.body", "m.valid_at", "m.valid_until"},
-	{"decisions", "m.title", "m.body", "NULL", "NULL"},
-	{"rules", "''", "m.body", "NULL", "NULL"},
-	{"patterns", "m.title", "m.body", "NULL", "NULL"},
-	{"incidents", "m.title", "m.body", "NULL", "NULL"},
+// title, text, date and valid-until columns, and whether the table has a
+// superseded_by_id column (the notes of how the system is built have
+// none: a newer note edits the old one).
+var textTables = []struct {
+	table, title, body, extra, until string
+	supersedes                       bool
+}{
+	{"memories", "''", "m.body", "m.valid_at", "m.valid_until", true},
+	{"decisions", "m.title", "m.body", "NULL", "NULL", true},
+	{"rules", "''", "m.body", "NULL", "NULL", true},
+	{"patterns", "m.title", "m.body", "NULL", "NULL", true},
+	{"incidents", "m.title", "m.body", "NULL", "NULL", false},
 	// devco D-815: a hotfix is the trap a coding question must not miss
-	{"hotfixes", "m.title", "m.body", "NULL", "NULL"},
+	{"hotfixes", "m.title", "m.body", "NULL", "NULL", true},
+	// devco D-963 (Sync benchmark set 4): the notes that say how the
+	// system is built, how a recurring task is done and which steps a
+	// flow takes are answers as much as a memory or a decision is; ask
+	// read none of them, so the as-built architecture note that held the
+	// whole answer was never printed while lore search ranked it first.
+	{"architecture_notes", "m.title", "m.body", "NULL", "NULL", false},
+	{"cookbook_recipes", "m.title", "m.body", "NULL", "NULL", false},
+	{"workflows", "m.name", "m.body", "NULL", "NULL", false},
 }
 
 // Columns of a text statement line: kind ('row' or 'ref'), then for a row
@@ -636,10 +676,12 @@ func textStatement(cond string, refIDs []string) string {
 			imported = "(m.source_kind = 'imported')"
 		}
 		superseded := "''"
-		if t.table != "incidents" {
+		if t.supersedes {
 			superseded = "COALESCE(m.superseded_by_id, '')"
-			where = append(where, "m.archived_at IS NULL")
 		}
+		// every text table has archived_at (devco D-924): an archived row
+		// is not an answer, an incident's included
+		where = append(where, "m.archived_at IS NULL")
 		stmt := "SELECT 'row', '" + t.table + "', m.id, m.place, COALESCE(" + t.title + ", ''), COALESCE(" + t.body + ", ''), COALESCE(" + t.extra + ", m.created_at), " + imported + ", " + superseded + ", COALESCE(" + t.until + ", ''), lower(" + t.title + " || ' ' || " + t.body + "), COALESCE(m.created_at, ''), COALESCE(m.updated_at, '')" +
 			" FROM " + t.table + "_all m"
 		if len(where) > 0 {

@@ -11,7 +11,10 @@ package recall
 // ask took ~15 s per call on a store of this shape, one git log per
 // evidence file of every candidate row; the bars keep it fast: the cold
 // call (the first after a store write) under 2 s, the warm call (the
-// median of three) under linkedWarmBar.
+// median of three) under linkedWarmBar. The Sync-shaped case (devco
+// D-963) rides on it: as-built architecture notes in kb/app must lead the
+// answers of asBuiltQuestions, before the code_repo cards and another
+// folder's rows.
 
 import (
 	"fmt"
@@ -58,6 +61,16 @@ var linkedQuestions = []string{
 	"how does the import step hand off to search",
 }
 
+// asBuiltQuestions are the Sync-shaped case (devco D-963, Sync benchmark
+// set 4): each is answered by an as-built architecture note of kb/app,
+// which must lead the answer, before the org's code_repo cards (their
+// purpose repeats "import workers") and before another folder's row
+// with the same words.
+var asBuiltQuestions = map[string]string{
+	"how does the feed import pipeline write rows through the writer": "As built: feed import pipeline",
+	"how does the job queue retry a failed job":                       "As built: job queue retries",
+}
+
 // linkedRun runs lore (or git) in dir with the bench's environment.
 func linkedRun(t *testing.T, env []string, dir, bin string, args ...string) (string, time.Duration) {
 	t.Helper()
@@ -94,6 +107,14 @@ func TestBenchLinkedStoresAsk(t *testing.T) {
 		}
 		if bar := testtime.SpeedBar(linkedWarmBar); warm[1] > bar {
 			misses = append(misses, fmt.Sprintf("%q: warm %d ms, bar %d ms", q, warm[1].Milliseconds(), bar.Milliseconds()))
+		}
+	}
+	for q, want := range asBuiltQuestions {
+		out, _ := linkedRun(t, p.env, p.app, p.bin, "ask", "--query", q)
+		at := strings.Index(out, want)
+		other, card := strings.Index(out, "Client B"), strings.Index(out, "code_repo ")
+		if at < 0 || other >= 0 && other < at || card >= 0 && card < at {
+			misses = append(misses, fmt.Sprintf("%q: the as-built note %q does not lead the answer:\n%s", q, want, out))
 		}
 	}
 	if len(misses) > 0 {
@@ -226,6 +247,13 @@ func prepareLinked(t *testing.T) linkedShape {
 		t.Fatal(err)
 	}
 	lore("batch", "apply", "--file", batch, "--yes")
+	// the Sync-shaped case (asBuiltQuestions): as-built notes in the
+	// project folder, a planned note, another folder's look-alike rows
+	lore("architecturenote", "add", "--to", "kb/app", "--title", "As built: feed import pipeline", "--body", "As built: the feed import pipeline fetches the bulk file into object storage, then parse_and_ingest writes rows in batches of 500 through the one writer.", "--meta", "fact_state=live", "--meta", "fact_verified_at=2026-11-20", "--yes")
+	lore("architecturenote", "add", "--to", "kb/app", "--title", "As built: job queue retries", "--body", "As built: a failed job is retried by the queue worker with exponential backoff, 5 attempts, 30 s base delay; then it moves to the dead-letter table.", "--meta", "fact_state=live", "--meta", "fact_verified_at=2026-11-20", "--yes")
+	lore("memory", "add", "--to", "kb/app", "--body", "Plan: the job queue retry moves to a scheduler someday.", "--meta", "fact_state=planned", "--yes")
+	lore("memory", "add", "--to", "ops/billing", "--body", "Client B: their job queue retries a failed job 3 times.", "--yes")
+	lore("memory", "add", "--to", "ops/billing", "--body", "Client B: their feed import pipeline writes rows nightly.", "--yes")
 	_, first := linkedRun(t, env, app, bin, "ask", "--query", linkedQuestions[0])
 	t.Logf("linked shape written in %s; first read (every cache built) %d ms", dir, first.Milliseconds())
 	return linkedShape{app: app, bin: bin, env: env}

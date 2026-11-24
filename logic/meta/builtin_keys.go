@@ -14,6 +14,11 @@ const (
 	// KeyFactVerifiedAt is the day the fact was last checked against its
 	// evidence (--meta fact_verified_at=2026-11-22).
 	KeyFactVerifiedAt = "fact_verified_at"
+	// KeyFactState says whether the fact holds (live, fixed, planned,
+	// rejected …; --meta fact_state=live): lore ask ranks a live or fixed
+	// fact above a planned or rejected one (devco D-963). No type is
+	// registered for it, so any value a team uses is kept.
+	KeyFactState = "fact_state"
 )
 
 // builtinTypes are the types the keys lore reads get when a write

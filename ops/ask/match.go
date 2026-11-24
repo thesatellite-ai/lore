@@ -62,6 +62,12 @@ type match struct {
 	// so the notes about the widget import were left out and the answer
 	// was three resource cards.
 	said []string
+	// whole says the question names it: its name, an alias or a typo of
+	// one, said whole. False when a part of its name (feed of feed_api)
+	// or a field value found it: the question is then not about it, and
+	// under rows it prints as one short line (Resource.brief, devco
+	// D-963).
+	whole bool
 }
 
 // nameKey is a resource name as the question's tokens read it (aliasKey):
@@ -106,7 +112,9 @@ func matchResources(q question, rs []resourceRow) []match {
 			return
 		}
 		at[r.ID] = len(out)
-		m := match{res: r, how: how, field: field}
+		// a name, alias or typo of one said whole names it; a part of a
+		// name or a field value only touches it (match.whole)
+		m := match{res: r, how: how, field: field, whole: said == "" && how != MatchField}
 		if said != "" {
 			m.said = []string{said}
 		}

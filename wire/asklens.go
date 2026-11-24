@@ -62,3 +62,23 @@ func (a *App) Keep(model string, dim int, vecs map[uint64][]float32) {
 
 // App keeps lore ask's vectors in the home's cache (opsask.VectorFile).
 var _ opsask.VectorFile = (*App)(nil)
+
+// AskHome implements opsask.HomeEnv: the <org>/<folder> this repo's org
+// link names (linkedFolderTarget, what lore whoami prints as the reads of
+// "this repo's link"), the place its rows carry; "" outside a code repo,
+// in a store checkout and in a repo linked to no folder (devco D-963).
+// Why not LinkedFolderStore: that one names only a repo with lore files
+// of its own, and an own repo linked by --own has none.
+func (a *App) AskHome(ctx context.Context) string {
+	if a.opts.RepoDir == "" || inStore(a.opts.RepoDir) {
+		return ""
+	}
+	// an own repo linked by --own has no lore files, so storeRepoTop
+	// errs; top only renames a store name the repo's stores.yaml also
+	// uses, and "" renames none
+	top, _ := a.storeRepoTop(ctx)
+	return a.linkedFolderTarget(ctx, top)
+}
+
+// App names the repo's linked folder to lore ask (opsask.HomeEnv).
+var _ opsask.HomeEnv = (*App)(nil)
