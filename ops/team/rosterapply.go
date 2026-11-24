@@ -39,6 +39,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/ops/orgcmd"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/ops/stores"
@@ -696,6 +697,49 @@ func (w *writer) identity(ctx context.Context, emails []string, primaryEmail, gi
 		return c.Actor == w.actor.ID.String() && c.Type == teamprofile.ContactTypeGitHub && c.Primary
 	})
 	return w.ensureContact(ctx, all, teamprofile.ContactTypeGitHub, strings.TrimSpace(githubUser), norm, !hasPrimary)
+}
+
+// setGitHub makes login the person's GitHub login (`lore member edit
+// --github`, devco D-959): their github contact with that login becomes
+// the primary identity contact (written when they have none), and every
+// other github contact of theirs stops being primary but stays an
+// identity contact, so commits made under an older login still resolve to
+// them. A login another person holds as identity is E_CONTACT_TAKEN.
+// changed is false when login already was their primary login.
+func (w *writer) setGitHub(ctx context.Context, login string) (changed bool, err error) {
+	all, err := w.contacts(ctx)
+	if err != nil {
+		return false, err
+	}
+	norm, err := GitHubLogin(login)
+	if err != nil {
+		return false, err
+	}
+	before := len(w.wrote)
+	if err := w.ensureContact(ctx, all, teamprofile.ContactTypeGitHub, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(login), handleMark)), norm, true); err != nil {
+		return false, err
+	}
+	me := w.actor.ID.String()
+	for _, c := range all {
+		if c.Actor == me && c.Type == teamprofile.ContactTypeGitHub && c.Primary && c.Norm != norm {
+			if _, err := w.r.Update(ctx, schema.TableActorContacts, c.ID, map[string]value.Value{schema.FieldContactPrimary: value.BoolOf(false)}); err != nil {
+				return false, err
+			}
+			w.note(c.ID)
+		}
+	}
+	return len(w.wrote) > before, nil
+}
+
+// GitHubLogin is login as the roster compares it (a leading @ dropped,
+// lowercase), or E_INVALID_INPUT when it is not a GitHub user name.
+func GitHubLogin(login string) (string, error) {
+	raw := strings.TrimPrefix(strings.TrimSpace(login), handleMark)
+	norm, err := teamprofile.Normalize(schema.ContactKindHandle, raw)
+	if err != nil || norm == "" {
+		return "", errs.New(errs.InvalidInput, "github "+work.Quote(raw)+" is not a GitHub user name").WithHint("the GitHub login, as in https://github.com/<login>")
+	}
+	return norm, nil
 }
 
 // ensureContact writes or completes one identity contact.

@@ -520,3 +520,40 @@ func TestWritesCarryEngineWarnings(t *testing.T) {
 		t.Fatalf("already there %q %v", again.Warnings, err)
 	}
 }
+
+// TestContactAddPrimaryOfAnExistingContact (devco:D-959, issue #161): an
+// add with --primary of a login the person already has (not primary)
+// makes it the primary and clears the other; it said "already there",
+// wrote nothing and left the old login primary, so member show and the
+// contact list disagreed. The same add again is "already there".
+func TestContactAddPrimaryOfAnExistingContact(t *testing.T) {
+	ctx := context.Background()
+	f, mira, _ := world(t)
+	m := mira.String()
+	for _, in := range []ContactAddIn{
+		{Actor: "@mira", Type: "github", Value: "mira-home", Identity: true},
+		{Actor: "@mira", Type: "github", Value: "mira-work", Identity: true, Primary: true},
+	} {
+		if _, err := contactAdd(ctx, f, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	back := ContactAddIn{Actor: "@mira", Type: "github", Value: "@Mira-Home", Identity: true, Primary: true}
+	out, err := contactAdd(ctx, f, back)
+	if err != nil || out.Verb != verbEdited || !out.Contact.Primary {
+		t.Fatalf("add --primary of an existing login = %+v %v", out, err)
+	}
+	cs := contactsOf(f, m, "github")
+	if len(cs) != 2 || primaries(cs) != 1 {
+		t.Fatalf("github: %d contacts, %d primary", len(cs), primaries(cs))
+	}
+	for _, c := range cs {
+		if flag(c, schema.FieldContactPrimary) != (text(c, schema.FieldContactValueNorm) == "mira-home") || !flag(c, schema.FieldContactIdentity) {
+			t.Fatalf("contact %v", c.Fields)
+		}
+	}
+	pushes := f.Pushes
+	if out, err := contactAdd(ctx, f, back); err != nil || out.Verb != verbAlreadyThere || f.Pushes != pushes {
+		t.Fatalf("again: %+v %v", out, err)
+	}
+}

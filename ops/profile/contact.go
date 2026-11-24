@@ -24,7 +24,8 @@ import (
 //
 //	add ──▶ resolve <actor> ──▶ type live in the effective list (E_CONTACT_TYPE)
 //	    ──▶ Normalize(kind, value) (E_CONTACT_TYPE naming the check)
-//	    ──▶ same (actor, type, value_norm) live? "already there", no write
+//	    ──▶ same (actor, type, value_norm) live? "already there", no write;
+//	        one that lacks the asked --primary/--identity is edited to it
 //	    ──▶ --identity: type allows it (E_CONTACT_TYPE); no other actor holds
 //	        it (E_CONTACT_TAKEN); no older actor row of that email
 //	        (E_CONTACT_TAKEN, or --merge: preview, confirm, merged_into)
@@ -297,6 +298,11 @@ func contactAdd(ctx context.Context, env Env, in ContactAddIn) (ContactOut, erro
 		return ContactOut{}, errs.New(errs.InvalidInput, "actor contact add: an empty value")
 	}
 	var out ContactOut
+	// promote is the edit an add of a contact the person already has
+	// turns into when it asks for --primary or --identity the contact
+	// lacks (devco D-959, issue #161: `contact add --primary` of a login
+	// they had said "already there" and left the other login primary).
+	var promote *ContactEditIn
 	err := openWrite(ctx, env, &out.Warnings, func(r profilestore.Roster) (bool, error) {
 		a, err := r.ResolveActor(ctx, strings.TrimSpace(in.Actor))
 		if err != nil {
@@ -319,6 +325,11 @@ func contactAdd(ctx context.Context, env Env, in ContactAddIn) (ContactOut, erro
 		}
 		aid := a.ID.String()
 		if x, ok := v.sameContact(aid, t.Name, norm, ids.AnyID{}); ok {
+			p, i := in.Primary && !flag(x, schema.FieldContactPrimary), in.Identity && !flag(x, schema.FieldContactIdentity)
+			if p || i {
+				promote = &ContactEditIn{ID: x.ID.String(), Primary: p, Identity: i}
+				return false, nil
+			}
 			out = ContactOut{Contact: contactRow(x, v.actors, v.types), Verb: verbAlreadyThere, Where: r.Where()}
 			return false, nil
 		}
@@ -390,6 +401,12 @@ func contactAdd(ctx context.Context, env Env, in ContactAddIn) (ContactOut, erro
 		}
 		return true, nil
 	})
+	if err == nil && promote != nil {
+		// the edit's own checks (identity taken, one primary) apply
+		edited, eerr := contactEdit(ctx, env, *promote)
+		edited.Warnings = append(out.Warnings, edited.Warnings...)
+		return edited, eerr
+	}
 	return out, err
 }
 

@@ -19,7 +19,7 @@ package team
 //	       same email is marked accepted (its teams and projects kept)
 //	member.list / member.show <who>   ──▶ people on the roster: email,
 //	       handle, org role, teams, status
-//	member.edit <who> [--name --handle --role]
+//	member.edit <who> [--name --handle --github --role]
 //	member.remove <who> [--reason]    ──▶ actor offboard (period ended,
 //	       memberships ended, status left)
 //
@@ -324,6 +324,10 @@ type StaffEditIn struct {
 	Who    string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 	Name   string `json:"name,omitempty" flag:"name" desc:"new display name"`
 	Handle string `json:"handle,omitempty" flag:"handle" desc:"new @handle"`
+	// GitHub changes the person's GitHub login (devco D-959, issue #161):
+	// it becomes their primary github identity contact, the old login
+	// stays an identity contact so their past commits still resolve.
+	GitHub string `json:"github,omitempty" flag:"github" desc:"new GitHub login: becomes their primary github contact; the old login stays theirs for past commits (the handle is unchanged unless --handle)"`
 	Role   string `json:"role,omitempty" flag:"role" desc:"new org-level role (on their open stint)"`
 	// --meta / --meta-json / --meta-stdin: the person's custom fields,
 	// bound by the direct runner to this op's actors write (owner
@@ -456,9 +460,10 @@ func (o ops) staffOps(base, writeErrs []errs.Code) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: base,
 			Examples: []op.Example{{Title: "by email", CLI: "lore member show --who mira@agency.example", Want: "email"}}},
 			func(ctx context.Context, in StaffShowIn) (StaffShowOut, error) { return o.staffShow(ctx, in) }),
-		op.Define(op.Spec{Name: OpStaffEdit, Summary: "Change a person's name, @handle or org-level role",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "a new org role", CLI: "lore member edit --who mira@agency.example --role pm", Want: "updated"}}},
+		op.Define(op.Spec{Name: OpStaffEdit, Summary: "Change a person's name, @handle, GitHub login or org-level role",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(writeErrs), errs.ContactTaken),
+			Examples: []op.Example{{Title: "a new org role", CLI: "lore member edit --who mira@agency.example --role pm", Want: "updated"},
+				{Title: "a new GitHub login (the old one stays theirs for past commits)", CLI: "lore member edit --who mira@agency.example --github mira-work --yes", Want: "updated"}}},
 			func(ctx context.Context, in StaffEditIn) (StaffWriteOut, error) { return o.staffEdit(ctx, in) }),
 		op.Define(asking(op.Spec{Name: OpStaffRemove, Summary: "Take a person off the org (actor offboard: their stint and memberships end; the row stays for history)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.StatusChange}, writeErrs...),
@@ -660,6 +665,12 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 	if err != nil {
 		return nil, err
 	}
+	// contacts: an already-member's GitHub login, read as member show reads
+	// it (PrimaryGitHub), to refuse an add that names another (#161).
+	contacts, err := r.List(ctx, schema.TableActorContacts)
+	if err != nil {
+		return nil, err
+	}
 	emailFix := "lore member add --email <their work email>"
 	if from != "" {
 		emailFix = "put the person's work email in the email column"
@@ -779,6 +790,15 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		if found {
 			p.id = mustActorID(cur.ID)
 			if isMember(ctx, r, cur) {
+				// devco D-959 (#161): an add naming another GitHub login
+				// changed nothing and said "nothing to add" with exit 0, so
+				// the login looked changed. It is refused (E_INVALID_INPUT,
+				// nothing written) with what differs and the edit that does it.
+				if p := githubDiffers(contacts, cur.ID.String(), email, s.GitHub, from); p != nil {
+					p.At = at
+					bad = append(bad, *p)
+					continue
+				}
 				out.Already = append(out.Already, StaffRow{ID: cur.ID.String(), Email: email, Name: fieldText(cur, actorFieldName)})
 				// I-10: an add naming another handle changed nothing; say
 				// which handle stands and the command that changes it.
@@ -815,6 +835,29 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		return nil, e
 	}
 	return plans, nil
+}
+
+// githubDiffers is the refusal of a member add that names a GitHub login
+// other than the one the member already has (nil when it names none or the
+// same): add never changes a member, `lore member edit --github` does.
+func githubDiffers(contacts []row.Row, actorID, email, login, from string) *fromfile.Problem {
+	if strings.TrimSpace(login) == "" {
+		return nil
+	}
+	norm, err := GitHubLogin(login)
+	have := PrimaryGitHub(contacts, actorID)
+	if err != nil || strings.EqualFold(have, norm) {
+		return nil
+	}
+	reason := email + " is already a member with GitHub login " + have + ", not " + norm + "; member add does not change a member"
+	if have == "" {
+		reason = email + " is already a member with no GitHub login; member add does not change a member"
+	}
+	fix := "lore member edit --who " + email + " --github " + norm + " --yes"
+	if from != "" {
+		fix = "run " + fix + " (or put " + cmp.Or(have, "nothing") + " in the github column)"
+	}
+	return &fromfile.Problem{Reason: reason, Fix: fix, Code: errs.InvalidInput}
 }
 
 // staffFixable are the codes of a member add check that the person fixes
@@ -1082,18 +1125,13 @@ func staffRows(ctx context.Context, r profilestore.Roster, all bool) ([]StaffRow
 		if !all && !teamprofile.Pickable(st) {
 			continue
 		}
-		m := StaffRow{ID: id, Name: fieldText(a, actorFieldName), Handle: fieldText(a, actorFieldHandle), Status: st}
+		m := StaffRow{ID: id, Name: fieldText(a, actorFieldName), Handle: fieldText(a, actorFieldHandle), Status: st, GitHub: PrimaryGitHub(contacts, id)}
 		for _, c := range contacts {
-			if fieldText(c, schema.FieldContactActor) != id {
+			if c.Deleted || fieldText(c, schema.FieldContactActor) != id || fieldText(c, schema.FieldContactType) != teamprofile.ContactTypeEmail {
 				continue
 			}
-			switch fieldText(c, schema.FieldContactType) {
-			case teamprofile.ContactTypeEmail:
-				if m.Email == "" || fieldText(c, schema.FieldContactPrimary) == boolTrue {
-					m.Email = fieldText(c, schema.FieldContactValueNorm)
-				}
-			case teamprofile.ContactTypeGitHub:
-				m.GitHub = cmp.Or(fieldText(c, schema.FieldContactValue), fieldText(c, schema.FieldContactValueNorm)) // the login as given
+			if m.Email == "" || fieldText(c, schema.FieldContactPrimary) == boolTrue {
+				m.Email = fieldText(c, schema.FieldContactValueNorm)
 			}
 		}
 		if m.Email == "" {
@@ -1221,8 +1259,16 @@ func (o ops) staffShow(ctx context.Context, in StaffShowIn) (StaffShowOut, error
 }
 
 func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, error) {
-	if in.Name == "" && in.Handle == "" && in.Role == "" && in.RowMetaFlags.Empty() {
-		return StaffWriteOut{}, errs.New(errs.InvalidInput, "member edit: nothing to change").WithHint("give --name, --handle, --role or --meta key=value")
+	if in.Name == "" && in.Handle == "" && in.GitHub == "" && in.Role == "" && in.RowMetaFlags.Empty() {
+		return StaffWriteOut{}, errs.New(errs.InvalidInput, "member edit: nothing to change").WithHint("give --name, --handle, --github, --role or --meta key=value")
+	}
+	if in.GitHub != "" {
+		if _, err := GitHubLogin(in.GitHub); err != nil {
+			return StaffWriteOut{}, errs.Prefix("member edit --github", err)
+		}
+	}
+	if err := metaNamesAFlag(in); err != nil {
+		return StaffWriteOut{}, err
 	}
 	if _, err := adminSetup(ctx, o.env); err != nil {
 		return StaffWriteOut{}, errs.Prefix("member edit", err)
@@ -1232,7 +1278,7 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 	if err != nil {
 		return StaffWriteOut{}, err
 	}
-	a, _, err := staffFind(ctx, r, in.Who)
+	a, was, err := staffFind(ctx, r, in.Who)
 	if err != nil {
 		return StaffWriteOut{}, err
 	}
@@ -1260,6 +1306,14 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 			return StaffWriteOut{}, err
 		}
 	}
+	if in.GitHub != "" {
+		w := &writer{r: r, actor: a, today: r.Today()}
+		if _, err := w.setGitHub(sctx, in.GitHub); err != nil {
+			engine.Discard(sctx)
+			return StaffWriteOut{}, errs.Prefix("member edit --github", err)
+		}
+		note = cmp.Or(note, githubEditNote(was, in))
+	}
 	if in.Role != "" {
 		w := &writer{r: r, actor: a, today: r.Today(), orgRole: in.Role}
 		if err := w.setOrgRole(sctx); err != nil {
@@ -1276,6 +1330,44 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 		return StaffWriteOut{}, err
 	}
 	return StaffWriteOut{Member: m, Verb: "updated", Where: r.Where(), label: r.Label(), Note: note}, nil
+}
+
+// staffEditFlags are the member edit flags whose name a --meta key may
+// take by mistake: such a key is a roster field, never a custom field.
+var staffEditFlags = []string{"github", "handle", "name", "role"}
+
+// metaNamesAFlag refuses a --meta/--meta-json key that is one of member
+// edit's own fields (issue #161: `--meta github=<login>` was refused as a
+// reserved key with the hint "--name item_github", which on member edit
+// renames the person) and names the flag that changes it.
+func metaNamesAFlag(in StaffEditIn) error {
+	for _, kv := range slices.Concat(in.Meta, in.MetaJSON) {
+		k, v, _ := strings.Cut(kv, "=")
+		k, _, _ = strings.Cut(strings.TrimSpace(k), ":")
+		if !slices.Contains(staffEditFlags, k) {
+			continue
+		}
+		return errs.New(errs.InvalidInput, "member edit: "+k+" is a roster field, not a custom field (--meta)").
+			WithHint("lore member edit --who " + in.Who + " --" + k + " " + work.Quote(v) + " --yes")
+	}
+	return nil
+}
+
+// githubEditNote says what a --github edit left as it was: the earlier
+// login (still theirs for past commits) and a handle that was derived
+// from it, with the command that changes the handle too (issue #161: the
+// handle is never renamed silently).
+func githubEditNote(was StaffRow, in StaffEditIn) string {
+	old := strings.TrimSpace(was.GitHub)
+	norm, _ := GitHubLogin(in.GitHub)
+	if old == "" || strings.EqualFold(old, norm) {
+		return ""
+	}
+	n := "the earlier GitHub login " + old + " stays theirs (not primary), so their past commits still resolve to them"
+	if in.Handle == "" && strings.EqualFold(strings.TrimPrefix(was.Handle, handleMark), old) {
+		n += "; the handle @" + strings.TrimPrefix(was.Handle, handleMark) + " is unchanged (lore member edit --who " + cmp.Or(was.Email, was.ID) + " --handle " + norm + " --yes changes it)"
+	}
+	return n
 }
 
 func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, error) {

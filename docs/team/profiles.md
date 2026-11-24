@@ -127,7 +127,7 @@ acn_c0f3…b5b8 Mira Patel (@mira)       phone     +90 532 000 0000             
 
 | Command | What it does |
 |---|---|
-| `lore actor contact add --actor <actor> --type <type> --value <value> [--label l] [--primary] [--identity] [--note t] [--merge] [--yes]` | add a contact; adding the same one again prints "already there" and changes nothing |
+| `lore actor contact add --actor <actor> --type <type> --value <value> [--label l] [--primary] [--identity] [--note t] [--merge] [--yes]` | add a contact; adding the same one again prints "already there" and changes nothing, unless it asks for `--primary` or `--identity` the contact lacks: then that contact is edited to it (the other primary of its type cleared) |
 | `lore actor contact edit --id <acn_id> [--value v] [--label l] [--primary] [--no-primary] [--identity] [--no-identity] [--note t]` | change one contact |
 | `lore actor contact remove --id <acn_id> [--reason t]` | remove one contact (it goes to the trash and can be restored); rows the person wrote keep their name |
 | `lore actor contact list [--actor <actor>] [--type t] [--identity] [--json]` | one person's contacts, or everyone's (a phone list for the org) |

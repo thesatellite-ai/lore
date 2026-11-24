@@ -34696,7 +34696,7 @@
       },
       "patch": {
         "operationId": "member.edit",
-        "summary": "Change a person's name, @handle or org-level role",
+        "summary": "Change a person's name, @handle, GitHub login or org-level role",
         "tags": [
           "member"
         ],
@@ -34720,6 +34720,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "github": {
+                    "type": "string",
+                    "description": "new GitHub login: becomes their primary github contact; the old login stays theirs for past commits (the handle is unchanged unless --handle)"
+                  },
                   "handle": {
                     "type": "string",
                     "description": "new @handle"
@@ -34909,7 +34913,7 @@
             }
           },
           "409": {
-            "description": "E_POLICY_DENIED, E_PROJECT_NAME_COLLISION, E_REFUSED, E_UNSUPPORTED",
+            "description": "E_CONTACT_TAKEN, E_POLICY_DENIED, E_PROJECT_NAME_COLLISION, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {

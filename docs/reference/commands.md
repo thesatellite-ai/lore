@@ -419,7 +419,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 |---|---|---|
 | `lore member` … | The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join --invite <store-url> | — |
 | `lore member add` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join --invite <store-url> | — |
-| `lore member edit` | Change a person's name, @handle or org-level role | — |
+| `lore member edit` | Change a person's name, @handle, GitHub login or org-level role | — |
 | `lore member list` | List the org's people: email, name, org role, handle, teams | — |
 | `lore member remove` | Take a person off the org (actor offboard: their stint and memberships end; the row stays for history) | — |
 | `lore member show` | Show one person on the org roster | — |
