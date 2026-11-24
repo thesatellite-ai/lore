@@ -1,18 +1,25 @@
 package batch
 
 // importdocs.go — `lore docs import --from <TECHNICAL.md|README.md>`
-// (devco D-940, H-189): draft as-built notes from a repo's own docs.
+// (devco D-940, H-189; per section since D-962, H-221): draft as-built
+// notes from a repo's own docs.
 //
 //	read every --from        a text file under maxDocBytes, no NUL
-//	split (logic/docnotes)   one piece per paragraph or bullet; a piece
-//	                         that states a choice and its reason is a
-//	                         decision, the rest are facts
-//	drop repeats             a piece said twice in the files, or one a
-//	                         live or archived memory/decision already says
-//	                         (logic/neardup, the check lint near_duplicate
-//	                         runs), is skipped and listed; every add also
-//	                         carries an idempotency key over its text, so a
-//	                         re-import adds nothing twice
+//	split (logic/docnotes)   one piece per section, titled with its heading
+//	                         path, lists kept with their lead-in; a section
+//	                         with labelled Decision. / Considered. / Why.
+//	                         paragraphs, or a paragraph stating a choice
+//	                         and its reason, is a decision; boilerplate
+//	                         (contents, license, contributing, link-only
+//	                         lines) is left out
+//	drop repeats             a section a live or archived memory/decision
+//	                         already says is skipped whole; inside a fact
+//	                         section each paragraph or list said earlier in
+//	                         the import or by a stored note (logic/neardup,
+//	                         the check lint near_duplicate runs) is dropped
+//	                         and listed, the rest of the section is kept;
+//	                         every add also carries an idempotency key over
+//	                         its text, so a re-import adds nothing twice
 //	write                    memory add (fact) / decision add --status
 //	                         proposed (decision), each run through its own
 //	                         command's checks (secret scan, policy, roles),
@@ -109,6 +116,18 @@ type DocNote struct {
 	Title string `json:"title"`
 }
 
+// Reasons a piece or block is skipped (DocSkip.Reason; the per-doc
+// counts of DocCount name the same reasons).
+const (
+	// SkipStored: a stored memory or decision already says it.
+	SkipStored = "already_stored"
+	// SkipRepeat: an earlier piece of the same import says it.
+	SkipRepeat = "repeat_in_import"
+	// SkipTooLittle: what is left of a section once its repeats are
+	// dropped is under the word floor.
+	SkipTooLittle = "too_little_left"
+)
+
 // DocSkip is a piece docs.import did not write, and why.
 type DocSkip struct {
 	Evidence string `json:"evidence"`
@@ -116,18 +135,73 @@ type DocSkip struct {
 	// Existing is the row that already says it ("" when an earlier piece
 	// of the same import does).
 	Existing string `json:"existing,omitempty"`
-	Why      string `json:"why"`
+	// Reason is SkipStored, SkipRepeat or SkipTooLittle.
+	Reason string `json:"reason"`
+	Why    string `json:"why"`
+	// doc is the repo-relative doc it came from (for DocCount).
+	doc string
+}
+
+// DocCount is what one --from doc gave (H-221: the owner reads these per
+// doc to see how much of a doc became notes and why the rest did not).
+type DocCount struct {
+	File      string `json:"file"`
+	Memories  int    `json:"memories"`
+	Decisions int    `json:"decisions"`
+	// AlreadyStored, RepeatInImport and TooLittleLeft count the skipped
+	// list by its Reason.
+	AlreadyStored  int `json:"already_stored"`
+	RepeatInImport int `json:"repeat_in_import"`
+	TooLittleLeft  int `json:"too_little_left"`
+	// Boilerplate, LinkOnly and TooShort are what the split left out
+	// (logic/docnotes.Dropped): contents/license/contributing sections,
+	// link-only blocks, pieces under the word floor.
+	Boilerplate int `json:"boilerplate"`
+	LinkOnly    int `json:"link_only"`
+	TooShort    int `json:"too_short"`
+}
+
+// line is the doc's count line: what it drafts, then each skip reason
+// that happened.
+func (c DocCount) line(dry bool) string {
+	verb := "drafted "
+	if dry {
+		verb = "would draft "
+	}
+	s := c.File + ": " + verb + plural.Of(c.Memories, "memory", "memories") + ", " + plural.Count(c.Decisions, "decision")
+	var skipped []string
+	for _, r := range []struct {
+		n         int
+		one, many string
+	}{
+		{c.AlreadyStored, "already stored", "already stored"},
+		{c.RepeatInImport, "repeat in this import", "repeats in this import"},
+		{c.TooLittleLeft, "section with too little left", "sections with too little left"},
+		{c.Boilerplate, "boilerplate section", "boilerplate sections"},
+		{c.LinkOnly, "link-only block", "link-only blocks"},
+		{c.TooShort, "too short", "too short"},
+	} {
+		if r.n > 0 {
+			skipped = append(skipped, plural.Of(r.n, r.one, r.many))
+		}
+	}
+	if len(skipped) == 0 {
+		return s + "; skipped nothing\n"
+	}
+	return s + "; skipped " + strings.Join(skipped, ", ") + "\n"
 }
 
 // ImportDocsOut is the output of docs.import.
 type ImportDocsOut struct {
-	Batch   string    `json:"batch"`
-	Files   []string  `json:"files"`
-	Notes   []DocNote `json:"notes"`
-	Skipped []DocSkip `json:"skipped"`
-	Stores  []string  `json:"stores"`
-	Writes  int       `json:"writes"`
-	DryRun  bool      `json:"dry_run"`
+	Batch string   `json:"batch"`
+	Files []string `json:"files"`
+	// Docs is what each --from doc gave, in --from order.
+	Docs    []DocCount `json:"docs"`
+	Notes   []DocNote  `json:"notes"`
+	Skipped []DocSkip  `json:"skipped"`
+	Stores  []string   `json:"stores"`
+	Writes  int        `json:"writes"`
+	DryRun  bool       `json:"dry_run"`
 }
 
 // Text implements op.Texter.
@@ -142,6 +216,9 @@ func (o ImportDocsOut) Text() string {
 	}
 	for _, s := range o.Skipped {
 		b.WriteString("  skipped " + s.Evidence + " — " + s.Title + ": " + s.Why + "\n")
+	}
+	for _, c := range o.Docs {
+		b.WriteString(c.line(o.DryRun))
 	}
 	files := strings.Join(o.Files, ", ")
 	if o.DryRun {
@@ -186,10 +263,14 @@ type draft struct {
 	piece    docnotes.Piece
 	evidence string
 	docRef   string
+	// doc is the repo-relative doc path; root and dir are the repo root
+	// and the doc's folder its code references resolve against (a piece
+	// rebuilt after the repeat check recomputes its evidence).
+	doc, root, dir string
 }
 
 func (o ops) importDocs(ctx context.Context, in ImportDocsIn) (ImportDocsOut, error) {
-	out := ImportDocsOut{Files: []string{}, Notes: []DocNote{}, Skipped: []DocSkip{}, Stores: []string{}, DryRun: in.DryRun}
+	out := ImportDocsOut{Files: []string{}, Docs: []DocCount{}, Notes: []DocNote{}, Skipped: []DocSkip{}, Stores: []string{}, DryRun: in.DryRun}
 	r, ok := upgrade.As[LineRunner](o.env)
 	if !ok {
 		return out, errs.New(errs.Unsupported, "docs import: this surface cannot run writes")
@@ -199,11 +280,12 @@ func (o ops) importDocs(ctx context.Context, in ImportDocsIn) (ImportDocsOut, er
 	}
 	var drafts []draft
 	for _, f := range in.From {
-		ds, rel, err := readDoc(f)
+		ds, rel, dropped, err := readDoc(f)
 		if err != nil {
 			return out, err
 		}
 		out.Files = append(out.Files, rel)
+		out.Docs = append(out.Docs, DocCount{File: rel, Boilerplate: dropped.Boilerplate, LinkOnly: dropped.LinkOnly, TooShort: dropped.TooShort})
 		drafts = append(drafts, ds...)
 	}
 	existing, err := o.existingNotes(ctx)
@@ -212,6 +294,7 @@ func (o ops) importDocs(ctx context.Context, in ImportDocsIn) (ImportDocsOut, er
 	}
 	keep, skipped := dropRepeats(drafts, existing)
 	out.Skipped = skipped
+	countDocs(out.Docs, keep, skipped)
 	if len(keep) == 0 {
 		return out, nil
 	}
@@ -257,6 +340,42 @@ func (o ops) importDocs(ctx context.Context, in ImportDocsIn) (ImportDocsOut, er
 	return out, nil
 }
 
+// countDocs fills each doc's drafted and skipped counts. A doc named
+// twice in --from shares one count (the first).
+func countDocs(docs []DocCount, keep []draft, skipped []DocSkip) {
+	at := func(doc string) *DocCount {
+		for i := range docs {
+			if docs[i].File == doc {
+				return &docs[i]
+			}
+		}
+		return nil
+	}
+	for _, d := range keep {
+		if c := at(d.doc); c != nil {
+			if d.piece.Kind == docnotes.Decision {
+				c.Decisions++
+			} else {
+				c.Memories++
+			}
+		}
+	}
+	for _, s := range skipped {
+		c := at(s.doc)
+		if c == nil {
+			continue
+		}
+		switch s.Reason {
+		case SkipStored:
+			c.AlreadyStored++
+		case SkipRepeat:
+			c.RepeatInImport++
+		case SkipTooLittle:
+			c.TooLittleLeft++
+		}
+	}
+}
+
 // resultID is the "id" an add's JSON result carries ("" when none).
 func resultID(res op.Result) string {
 	b, err := res.JSON()
@@ -272,45 +391,54 @@ func resultID(res op.Result) string {
 	return v.ID
 }
 
-// readDoc reads one --from file into drafts; rel is its repo-relative path.
-func readDoc(path string) ([]draft, string, error) {
+// readDoc reads one --from file into drafts; rel is its repo-relative
+// path, dropped what the split left out.
+func readDoc(path string) ([]draft, string, docnotes.Dropped, error) {
+	var none docnotes.Dropped
 	if strings.TrimSpace(path) == "" {
-		return nil, "", errs.New(errs.InvalidInput, "docs import: --from is empty").WithHint("lore docs import --from TECHNICAL.md")
+		return nil, "", none, errs.New(errs.InvalidInput, "docs import: --from is empty").WithHint("lore docs import --from TECHNICAL.md")
 	}
 	abs, err := filepath.Abs(filepath.Clean(path))
 	if err != nil {
-		return nil, "", errs.Wrap(errs.InvalidInput, "docs import: "+path, err)
+		return nil, "", none, errs.Wrap(errs.InvalidInput, "docs import: "+path, err)
 	}
 	fh, err := os.Open(abs)
 	if err != nil {
-		return nil, "", errs.Wrap(errs.NotFound, "docs import: open "+path, err).WithHint("check the path: --from names a readable markdown file")
+		return nil, "", none, errs.Wrap(errs.NotFound, "docs import: open "+path, err).WithHint("check the path: --from names a readable markdown file")
 	}
 	defer func() { _ = fh.Close() }() // read only
 	b, err := io.ReadAll(io.LimitReader(fh, maxDocBytes+1))
 	if err != nil {
-		return nil, "", errs.Wrap(errs.InvalidInput, "docs import: read "+path, err)
+		return nil, "", none, errs.Wrap(errs.InvalidInput, "docs import: read "+path, err)
 	}
 	if len(b) > maxDocBytes {
-		return nil, "", errs.New(errs.InvalidInput, "docs import: "+path+" is over "+strconv.Itoa(maxDocBytes>>20)+" MB").
+		return nil, "", none, errs.New(errs.InvalidInput, "docs import: "+path+" is over "+strconv.Itoa(maxDocBytes>>20)+" MB").
 			WithHint("split it and import each part: lore docs import --from <part.md>")
 	}
 	if bytes.IndexByte(b, 0) >= 0 {
-		return nil, "", errs.New(errs.InvalidInput, "docs import: "+path+" is not a text file").WithHint("--from takes a markdown doc such as README.md")
+		return nil, "", none, errs.New(errs.InvalidInput, "docs import: "+path+" is not a text file").WithHint("--from takes a markdown doc such as README.md")
 	}
 	root := repoRoot(filepath.Dir(abs))
 	rel := relTo(root, abs)
 	var out []draft
-	for _, p := range docnotes.Split(string(b)) {
-		docRef := rel + ":" + strconv.Itoa(p.Line)
-		ev := []string{docRef}
-		for _, c := range p.CodeRefs {
-			if codeRefExists(root, filepath.Dir(abs), c) {
-				ev = append(ev, c)
-			}
-		}
-		out = append(out, draft{piece: p, evidence: strings.Join(ev, evidenceSep), docRef: docRef})
+	pieces, dropped := docnotes.SplitCounted(string(b))
+	for _, p := range pieces {
+		out = append(out, newDraft(p, rel, root, filepath.Dir(abs)))
 	}
-	return out, rel, nil
+	return out, rel, dropped, nil
+}
+
+// newDraft is p of the doc rel with its evidence: the doc line, then each
+// code path:line the text names that exists under root or dir.
+func newDraft(p docnotes.Piece, rel, root, dir string) draft {
+	docRef := rel + ":" + strconv.Itoa(p.Line)
+	ev := []string{docRef}
+	for _, c := range p.CodeRefs {
+		if codeRefExists(root, dir, c) {
+			ev = append(ev, c)
+		}
+	}
+	return draft{piece: p, evidence: strings.Join(ev, evidenceSep), docRef: docRef, doc: rel, root: root, dir: dir}
 }
 
 // repoRoot is the nearest folder at or above dir holding .git; dir when
@@ -389,37 +517,98 @@ func str(r row.Row, field string) string {
 	return ""
 }
 
-// dropRepeats keeps the drafts no earlier draft and no existing note
-// already says; the rest are listed as skipped.
+// dropRepeats keeps what no earlier draft and no existing note already
+// says; the rest is listed as skipped. A whole section a stored note says
+// (a re-import, a note written from it by hand) is skipped whole; a
+// decision is compared whole; a fact section loses only the paragraphs and
+// lists said before (by a stored note or earlier in this import) and keeps
+// the rest under its heading (H-221: a section is one note, but one
+// repeated paragraph must not drop what the section adds).
 func dropRepeats(drafts []draft, existing []neardup.Item) ([]draft, []DocSkip) {
 	var keep []draft
 	skipped := []DocSkip{}
-	seen := map[string]string{}
+	seen := map[string]string{} // folded text -> the doc line that said it first
+	var earlier []neardup.Item  // the kept blocks of this import (ID: their doc line)
+	var doc string              // the doc of the draft being checked
+	skip := func(ev, title, existingID, reason, why string) {
+		skipped = append(skipped, DocSkip{Evidence: ev, Title: title, Existing: existingID, Reason: reason, Why: why, doc: doc})
+	}
 	for i, d := range drafts {
-		norm := docnotes.Norm(d.piece.Text)
-		if first, dup := seen[norm]; dup {
-			skipped = append(skipped, DocSkip{Evidence: d.evidence, Title: shortTitle(d.piece), Why: "repeats " + first + " of this import"})
+		doc = d.doc
+		if m := neardup.Find([]neardup.Item{pieceItem(i, d)}, existing); len(m) > 0 {
+			skip(d.evidence, shortTitle(d.piece), m[0].Existing.ID, SkipStored, "already noted as "+m[0].Existing.ID+" ("+string(m[0].Why)+")")
 			continue
 		}
-		seen[norm] = d.docRef
-		it := draftItem(i, d)
-		if m := neardup.Find([]neardup.Item{it}, existing); len(m) > 0 {
-			skipped = append(skipped, DocSkip{Evidence: d.evidence, Title: shortTitle(d.piece), Existing: m[0].Existing.ID,
-				Why: "already noted as " + m[0].Existing.ID + " (" + string(m[0].Why) + ")"})
+		if d.piece.Kind == docnotes.Decision {
+			norm := docnotes.Norm(blocksText(d.piece.Blocks))
+			if first, dup := seen[norm]; dup {
+				skip(d.evidence, shortTitle(d.piece), "", SkipRepeat, "repeats "+first+" of this import")
+				continue
+			}
+			seen[norm] = d.docRef
+			keep = append(keep, d)
 			continue
 		}
-		keep = append(keep, d)
+		var blocks []docnotes.Block
+		for j, b := range d.piece.Blocks {
+			ref := d.doc + ":" + strconv.Itoa(b.Line)
+			title := gitleaks.MaskText(docnotes.Title(b.Text))
+			norm := docnotes.Norm(b.Text)
+			if first, dup := seen[norm]; dup {
+				skip(ref, title, "", SkipRepeat, "repeats "+first+" of this import")
+				continue
+			}
+			it := blockItem(i, j, b)
+			if m := neardup.Find([]neardup.Item{it}, existing); len(m) > 0 {
+				skip(ref, title, m[0].Existing.ID, SkipStored, "already noted as "+m[0].Existing.ID+" ("+string(m[0].Why)+")")
+				continue
+			}
+			if m := neardup.Find([]neardup.Item{it}, earlier); len(m) > 0 {
+				skip(ref, title, "", SkipRepeat, "repeats "+m[0].Existing.ID+" of this import ("+string(m[0].Why)+")")
+				continue
+			}
+			seen[norm] = ref
+			it.ID = ref
+			earlier = append(earlier, it)
+			blocks = append(blocks, b)
+		}
+		if len(blocks) == len(d.piece.Blocks) {
+			keep = append(keep, d)
+			continue
+		}
+		if p, ok := d.piece.WithBlocks(blocks); ok {
+			keep = append(keep, newDraft(p, d.doc, d.root, d.dir))
+		} else if len(blocks) > 0 {
+			skip(d.evidence, shortTitle(d.piece), "", SkipTooLittle, "too little left once the repeats are dropped")
+		}
 	}
 	return keep, skipped
 }
 
-// draftItem is d as the near-duplicate detector reads it.
-func draftItem(i int, d draft) neardup.Item {
-	t, title := string(schema.TableMemories), neardup.Headline("", "", d.piece.Text)
-	if d.piece.Kind == docnotes.Decision {
-		t, title = string(schema.TableDecisions), d.piece.Title
+// blocksText is the blocks' text without the heading path.
+func blocksText(bs []docnotes.Block) string {
+	parts := make([]string, len(bs))
+	for i, b := range bs {
+		parts[i] = b.Text
 	}
-	return neardup.Item{Table: t, ID: "draft-" + strconv.Itoa(i), Title: title, Body: d.piece.Text}
+	return strings.Join(parts, "\n\n")
+}
+
+// pieceItem is a whole draft as the near-duplicate detector reads it. A
+// fact is compared by its body only: its title is a heading path, and two
+// docs' "Overview" sections are not the same note.
+func pieceItem(i int, d draft) neardup.Item {
+	if d.piece.Kind == docnotes.Decision {
+		return neardup.Item{Table: string(schema.TableDecisions), ID: "draft-" + strconv.Itoa(i), Title: d.piece.Title, Body: d.piece.Text}
+	}
+	return neardup.Item{Table: string(schema.TableMemories), ID: "draft-" + strconv.Itoa(i), Body: d.piece.Text}
+}
+
+// blockItem is one paragraph or list of a fact draft as the detector
+// reads it (titled by its first line, as a stored memory is).
+func blockItem(i, j int, b docnotes.Block) neardup.Item {
+	return neardup.Item{Table: string(schema.TableMemories), ID: "draft-" + strconv.Itoa(i) + "-" + strconv.Itoa(j),
+		Title: neardup.Headline("", "", b.Text), Body: b.Text}
 }
 
 // draftLines are the memory add / decision add lines of the drafts.
@@ -474,8 +663,8 @@ func noteKind(p docnotes.Piece) string {
 	return "memory"
 }
 
-// shortTitle is a decision's title or a fact's first sentence, as the
-// output prints it: a value the secret rules flag is masked (a doc's token
+// shortTitle is a piece's title (a fact's heading path, a decision's
+// heading or first sentence) as the output prints it: a value the secret rules flag is masked (a doc's token
 // must not reach scrollback, even when --secret-unstored will store it as
 // ${secret:unstored}).
 func shortTitle(p docnotes.Piece) string {

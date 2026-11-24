@@ -20525,6 +20525,52 @@
                     "batch": {
                       "type": "string"
                     },
+                    "docs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "already_stored": {
+                            "type": "integer"
+                          },
+                          "boilerplate": {
+                            "type": "integer"
+                          },
+                          "decisions": {
+                            "type": "integer"
+                          },
+                          "file": {
+                            "type": "string"
+                          },
+                          "link_only": {
+                            "type": "integer"
+                          },
+                          "memories": {
+                            "type": "integer"
+                          },
+                          "repeat_in_import": {
+                            "type": "integer"
+                          },
+                          "too_little_left": {
+                            "type": "integer"
+                          },
+                          "too_short": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "file",
+                          "memories",
+                          "decisions",
+                          "already_stored",
+                          "repeat_in_import",
+                          "too_little_left",
+                          "boilerplate",
+                          "link_only",
+                          "too_short"
+                        ]
+                      }
+                    },
                     "dry_run": {
                       "type": "boolean"
                     },
@@ -20570,6 +20616,9 @@
                           "existing": {
                             "type": "string"
                           },
+                          "reason": {
+                            "type": "string"
+                          },
                           "title": {
                             "type": "string"
                           },
@@ -20580,6 +20629,7 @@
                         "required": [
                           "evidence",
                           "title",
+                          "reason",
                           "why"
                         ]
                       }
@@ -20597,6 +20647,7 @@
                   "required": [
                     "batch",
                     "files",
+                    "docs",
                     "notes",
                     "skipped",
                     "stores",

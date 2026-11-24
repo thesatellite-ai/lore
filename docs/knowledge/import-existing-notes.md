@@ -71,7 +71,7 @@ applied 5 line(s) in 2 store write(s) (stores: repo, acme/notes); batch bat_7c21
 
 ## Draft notes from a technical doc: lore docs import
 
-A `TECHNICAL.md` or `README.md` already says how the code works and why some choices were made, but an agent only sees what lore holds. `lore docs import --from <file>` (repeat `--from` for several files) reads the doc and drafts one note per paragraph or bullet: a memory for a fact, and a decision with status `proposed` where the text states a choice and its reason ("we chose X over Y because …"). Headings, code blocks, tables, HTML and one-line bullets such as "ok" are left out. No model is called, so the same doc always gives the same notes.
+A `TECHNICAL.md` or `README.md` already says how the code works and why some choices were made, but an agent only sees what lore holds. `lore docs import --from <file>` (repeat `--from` for several files) reads the doc and drafts one note per section: a memory whose first line is the heading path (`widget module › Overview`) followed by the section's paragraphs and lists, so a list stays with the sentence that introduces it and nested items stay under their item. A decision with status `proposed` is drafted where a section names its choice with labelled paragraphs (`Decision.` or `Chosen:`, with `Considered.`, `Why.` or `Rationale:` beside it), titled with the section's heading and holding every alternative and reason; a paragraph that states a choice and its reason ("we chose X over Y because …") is a proposed decision of its own. A section longer than about 2,000 characters is cut into parts at paragraph breaks (`… (part 2)`). Code blocks, tables, HTML, link-only lines (a table of contents, "See [X](x)."), boilerplate sections (contents, license, contributing, code of conduct, badges, acknowledgements) and sections with too few words are left out. No model is called, so the same doc always gives the same notes.
 
 Every draft says where it came from and that nobody has checked it yet:
 
@@ -81,16 +81,16 @@ Every draft says where it came from and that nobody has checked it yet:
 
 ```console
 $ lore docs import --from TECHNICAL.md --dry-run
-  memory (new) — The worker pulls jobs from the queue every five seconds and parks a job after…  [TECHNICAL.md:5, internal/queue/worker.go:4]
-  memory (new) — Invoices are rendered as PDF and kept for ninety days  [TECHNICAL.md:7]
+  memory (new) — Orbit › How it works  [TECHNICAL.md:5, internal/queue/worker.go:4]
   decision (new) — We chose Postgres advisory locks over Redis locks because the service already…  [TECHNICAL.md:16]
-would draft 3 unverified notes from TECHNICAL.md, skip 0; nothing written (--dry-run)
+TECHNICAL.md: would draft 1 memory, 1 decision; skipped nothing
+would draft 2 unverified notes from TECHNICAL.md, skip 0; nothing written (--dry-run)
 $ lore docs import --from TECHNICAL.md --yes
 …
-drafted 3 unverified notes from TECHNICAL.md in 1 store write, skipped 0; batch bat_7c21…e04a (undo: lore batch undo --id bat_7c21…e04a)
+drafted 2 unverified notes from TECHNICAL.md in 1 store write, skipped 0; batch bat_7c21…e04a (undo: lore batch undo --id bat_7c21…e04a)
 ```
 
-The notes are written like `lore batch apply`: each runs through the checks of its own command (the secret scan, policy, roles; `--secret-ref`, `--secret-unstored` and `--not-a-secret --reason <why>` answer a finding), all of them land as one commit per store under one batch, and a note a write refuses stops the import with nothing written. `--to <store>/<folder>` writes them into a store folder; `--dry-run` runs every check and writes nothing. A paragraph the doc says twice, or one that a memory or decision of any attached store already says (archived ones too, by the same test as `lore lint`'s `near_duplicate`), is skipped and listed with the id that holds it, so importing the doc again adds nothing.
+The notes are written like `lore batch apply`: each runs through the checks of its own command (the secret scan, policy, roles; `--secret-ref`, `--secret-unstored` and `--not-a-secret --reason <why>` answer a finding), all of them land as one commit per store under one batch, and a note a write refuses stops the import with nothing written. `--to <store>/<folder>` writes them into a store folder; `--dry-run` runs every check and writes nothing. A section that a memory or decision of any attached store already says (archived ones too, by the same test as `lore lint`'s `near_duplicate`) is skipped and listed with the id that holds it, so importing the doc again adds nothing. Inside a section, a paragraph or list that the doc said earlier or that a stored note already says is dropped and listed, and the rest of the section is still drafted under its heading. One line per doc counts what it drafted and what it skipped by reason (already stored, repeats in this import, boilerplate sections, link-only blocks, too short), for example `TECHNICAL.md: would draft 2 memories, 2 decisions; skipped 1 already stored, 2 boilerplate sections`; `--json` has the same counts under `docs` and a `reason` on each skipped entry.
 
 Check each draft against the code, then mark it checked; the rest stay easy to find:
 
