@@ -1,6 +1,7 @@
 package searchrank
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -243,5 +244,28 @@ func TestPlainReadsRefusedSyntax(t *testing.T) {
 		if p, ok := Of(q).Plain(); ok {
 			t.Errorf("%q: plain reading %+v, want none", q, p)
 		}
+	}
+}
+
+// TestPlanColonIsWords (devco D-964, H-223): a ':' in plain text is no
+// FTS5 syntax (column filter) but a word break, so "lint:runq-determinism
+// exempt" is planned like "lint runq-determinism exempt": natural, any
+// topic word, the same terms and FTS text. Before, the colon made the
+// text Syntax and the word one phrase every row had to hold.
+func TestPlanColonIsWords(t *testing.T) {
+	for colon, spaced := range map[string]string{
+		"lint:runq-determinism exempt": "lint runq-determinism exempt",
+		"lint:no-os-getenv":            "lint no-os-getenv",
+		"task gqlkit:all":              "task gqlkit all",
+		"deploy -friday lint:x":        "deploy -friday lint x",
+	} {
+		c, s := Of(colon), Of(spaced)
+		if c.Syntax || c.Natural != s.Natural || c.FTS != s.FTS || !slices.Equal(c.Terms, s.Terms) {
+			t.Errorf("Of(%q) = %+v, want the plan of %q: %+v", colon, c, spaced, s)
+		}
+	}
+	// FTS5 syntax next to a colon word is still syntax, its colon word cut
+	if w := Of(`"on call" lint:x`); !w.Syntax || w.FTS != `"on call" lint x` {
+		t.Errorf("syntax plan %+v", w)
 	}
 }

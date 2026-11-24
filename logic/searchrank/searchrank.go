@@ -59,7 +59,7 @@ type Words struct {
 	// needs only some of them, and TermFTS finds each word's rows.
 	Natural bool
 	// Syntax is set for text written in FTS5 syntax (a quote, '*', '(',
-	// ':', AND / OR / NOT / NEAR): it is run as written, so FTS5's refusal
+	// AND / OR / NOT / NEAR; not ':', ftsSyntaxChars): it is run as written, so FTS5's refusal
 	// of it stands (Retry).
 	Syntax bool
 	// not is the FTS5 tail leaving out the negated words (" NOT …"), ""
@@ -72,8 +72,11 @@ type Words struct {
 }
 
 // ftsSyntaxChars and ftsSyntaxWords make a query FTS5 syntax rather than
-// plain words.
-const ftsSyntaxChars = `"*(){}^:`
+// plain words. ':' is not one (H-223): FTS5 reads "x:" as a column
+// filter, but a person typing lint:no-os-getenv means the words, so a
+// colon separates words (metaquery.ColonParts); --column restricts the
+// fields.
+const ftsSyntaxChars = `"*(){}^`
 
 var ftsSyntaxWords = map[string]bool{"AND": true, "OR": true, "NOT": true, "NEAR": true}
 
@@ -95,7 +98,7 @@ func Plan(text string, parsed []metaquery.Term) Words {
 			neg = append(neg, n)
 			continue
 		}
-		pos = append(pos, t.Word)
+		pos = append(pos, metaquery.ColonParts(t.Word)...)
 	}
 	syntax := strings.ContainsAny(text, ftsSyntaxChars)
 	for _, w := range strings.Fields(text) {

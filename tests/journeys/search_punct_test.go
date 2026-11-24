@@ -8,7 +8,9 @@ package journeys
 // syntax. Punctuation around words is now read as the words, in `lore
 // search` (with or without a metadata condition) and in every `lore <kind>
 // search`; the documented syntax still works, and a query with no word
-// at all is still refused with its hint.
+// at all is still refused with its hint. A colon inside a word separates
+// words (devco D-964, H-223): `lint:no-os-getenv` finds the task about the
+// no-os-getenv lint.
 
 import "testing"
 
@@ -32,6 +34,15 @@ func TestJourneySearchPunctuation(t *testing.T) {
 		lap.LoreIn(repo, "search", "--query", "team:ops alice (person)").OK(t).Says(t, "alice-ng (person) leads orbit").Never(t, "syntax error")
 		lap.LoreIn(repo, "memory", "search", "--query", "alice (person)").OK(t).Says(t, "alice-ng (person) leads orbit")
 		lap.LoreIn(repo, "decision", "search", "--query", "orbit (project)").OK(t).Says(t, "orbit (project) ships weekly")
+	})
+
+	w.Step("day1/a-colon-separates-words", func() {
+		// devco D-964 (H-223): task names carry colons; lint:no-os-getenv
+		// found nothing as one phrase, now it finds the row saying the words
+		lap.LoreIn(repo, "task", "add", "--title", "Drop the os.Getenv calls flagged by the no-os-getenv lint").OK(t)
+		for _, args := range [][]string{{"search"}, {"task", "search"}} {
+			lap.LoreIn(repo, append(args, "--query", "lint:no-os-getenv")...).OK(t).Says(t, "flagged by the no-os-getenv lint").Never(t, "(no matches)")
+		}
 	})
 
 	w.Step("day1/syntax-still-works", func() {

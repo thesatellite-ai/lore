@@ -2,6 +2,7 @@ package metaquery
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -35,11 +36,11 @@ func TestSearchParse(t *testing.T) {
 		{"deploy.region:eu-central", "cond(deploy.region=eu-central) | "},
 		{"note:10:30", "cond(note=10:30) | "},
 		{`note:"10:30 standup"`, "cond(note=10:30 standup) | "},
-		{"url:https://x.example", `text(url:https://x.example) | "url:https://x.example"`},
-		{"title:invoice", `text(title:invoice) | "title:invoice"`},
+		{"url:https://x.example", `text(url:https://x.example) | url "https://x.example"`},
+		{"title:invoice", `text(title:invoice) | title invoice`},
 		{"billing_rate?", "has(billing_rate) | "},
 		{"what?", "text(what?) | what?"},
-		{"jira:", "text(jira:) | \"jira:\""},
+		{"jira:", "text(jira:) | jira"},
 		{`"exact phrase" a OR b`, `text("exact phrase") text(a) text(OR) text(b) | "exact phrase" a OR b`},
 		{"", " | "},
 		{`say "x"-y`, `text(say) text("x"-y) | say "x"-y`},
@@ -87,5 +88,57 @@ func TestFTSNegated(t *testing.T) {
 		if got := OnlyNegated(c.q); got != c.only {
 			t.Errorf("OnlyNegated(%q) = %v, want %v", c.q, got, c.only)
 		}
+	}
+}
+
+// TestColonParts (devco D-964, H-223): a ':' inside a text word separates
+// words, so lint:no-os-getenv finds a row holding "the no-os-getenv lint";
+// before, the word went to FTS5 as one phrase (adjacent words) and found
+// nothing. Times and quoted words stay whole; key:value on a known key
+// stays a condition.
+func TestColonParts(t *testing.T) {
+	cases := []struct {
+		w    string
+		want []string
+	}{
+		{"lint:no-os-getenv", []string{"lint", "no-os-getenv"}},
+		{"gqlkit:all", []string{"gqlkit", "all"}},
+		{"a:b:c", []string{"a", "b", "c"}},
+		{"lint:no*", []string{"lint", "no*"}},
+		{":lead", []string{"lead"}},
+		{"trail:", []string{"trail"}},
+		{"a::b", []string{"a", "b"}},
+		{":", nil},
+		{`foo:"bar baz"`, []string{"foo", `"bar baz"`}},
+		{`"lint:x"`, []string{`"lint:x"`}},
+		{"10:30", []string{"10:30"}},
+		{"16:9", []string{"16:9"}},
+		{"plain", []string{"plain"}},
+		{"a.b/c-d", []string{"a.b/c-d"}},
+		{"https://x.example/a", []string{"https://x.example/a"}},
+		{"see:https://x.example", []string{"see", "https://x.example"}},
+	}
+	for _, c := range cases {
+		if got := ColonParts(c.w); !slices.Equal(got, c.want) {
+			t.Errorf("ColonParts(%q) = %q, want %q", c.w, got, c.want)
+		}
+	}
+	none := func(string) bool { return false }
+	for q, want := range map[string]string{
+		"lint:runq-determinism exempt": `lint "runq-determinism" exempt`,
+		"gqlkit:all":                   "gqlkit all",
+		"lint:no* deploy":              "lint no* deploy",
+		"at 10:30":                     `at "10:30"`,
+		`"lint:x"`:                     `"lint:x"`,
+		"deploy -lint:x":               `(deploy) NOT "lint:x"`,
+	} {
+		if got := FTS(Parse(q, none)); got != want {
+			t.Errorf("FTS(%q) = %q, want %q", q, got, want)
+		}
+	}
+	// a known key still reads as a condition, not as two words
+	key := func(n string) bool { return n == "status" }
+	if got := Parse("status:open lint:x", key); len(got) != 2 || got[0].Kind != Cond || got[1].Kind != Text {
+		t.Errorf("Parse with key = %+v, want a Cond and a Text", got)
 	}
 }

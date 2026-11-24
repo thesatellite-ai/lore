@@ -206,7 +206,9 @@ func FTS(terms []Term) string {
 			neg = append(neg, ftsWord(w))
 			continue
 		}
-		pos = append(pos, ftsWord(t.Word))
+		for _, p := range ColonParts(t.Word) {
+			pos = append(pos, ftsWord(p))
+		}
 	}
 	if len(pos) == 0 {
 		return ""
@@ -256,6 +258,59 @@ func OnlyNegated(q string) bool {
 	}
 	return len(words) > 0
 }
+
+// ColonParts is a text word cut at each ':' outside double quotes, the
+// words a search looks for (H-223): task and script names are written
+// lint:no-os-getenv or gqlkit:all, and a row may hold the parts apart
+// ("the no-os-getenv lint"), so the colon separates words as a space
+// does. Kept whole: a quoted word ("lint:x"), a word whose every ':' sits
+// between two digits (10:30, 16:9), a URL's "://" (url:https://x.example
+// is url and https://x.example), and a word with no ':'. Empty parts
+// (a leading, trailing or doubled ':') are dropped; a word of colons only
+// gives no part. A key:value condition on a known key never gets here:
+// Parse reads it as Cond first.
+func ColonParts(w string) []string {
+	if !strings.Contains(w, ":") || strings.HasPrefix(w, `"`) || digitColons(w) {
+		return []string{w}
+	}
+	var out []string
+	var b strings.Builder
+	quoted := false
+	for i, r := range w {
+		switch {
+		case r == '"':
+			quoted = !quoted
+			b.WriteRune(r)
+		case r == ':' && !quoted && !strings.HasPrefix(w[i+1:], "//"):
+			if b.Len() > 0 {
+				out = append(out, b.String())
+				b.Reset()
+			}
+		default:
+			b.WriteRune(r)
+		}
+	}
+	if b.Len() > 0 {
+		out = append(out, b.String())
+	}
+	return out
+}
+
+// digitColons reports whether every ':' in w has a digit on each side (a
+// time or a ratio: 10:30, 16:9), which stays one word.
+func digitColons(w string) bool {
+	for i := 0; i < len(w); i++ {
+		if w[i] != ':' {
+			continue
+		}
+		if i == 0 || i == len(w)-1 || !isDigit(w[i-1]) || !isDigit(w[i+1]) {
+			return false
+		}
+	}
+	return true
+}
+
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 
 // ftsWord quotes one text word when FTS5 would read its punctuation as
 // syntax.

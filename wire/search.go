@@ -491,7 +491,9 @@ func (a *App) searchTrashed(ctx context.Context, eng *engine.Engine, targets []o
 			without = append(without, strings.Fields(strings.ToLower(searchrank.PlainText(n)))...)
 			continue
 		}
-		words = append(words, strings.Fields(strings.ToLower(searchrank.PlainText(t.Word)))...)
+		for _, p := range metaquery.ColonParts(t.Word) { // lint:x is lint and x, as in the live search (H-223)
+			words = append(words, strings.Fields(strings.ToLower(searchrank.PlainText(p)))...)
+		}
 	}
 	// D-435: a question's stop words ("how do we") are no words a trashed
 	// row must hold
@@ -865,7 +867,9 @@ func (a *App) searchResourceFields(ctx context.Context, eng *engine.Engine, t op
 
 // quotedFilter is the full-text filter of a field search's free text:
 // every word quoted (a field value's punctuation is no FTS5 syntax), a
-// negated word ("-friday", metaquery.Negated) left out of the hits.
+// word with a ':' cut into its words as in the live search
+// (metaquery.ColonParts, H-223), a negated word ("-friday",
+// metaquery.Negated) left out of the hits.
 func quotedFilter(text string) ftsFilter {
 	var pos, neg []string
 	for _, w := range strings.Fields(text) {
@@ -873,7 +877,7 @@ func quotedFilter(text string) ftsFilter {
 			neg = append(neg, searchrank.Quoted(n))
 			continue
 		}
-		pos = append(pos, w)
+		pos = append(pos, metaquery.ColonParts(w)...)
 	}
 	f := ftsFilter{match: searchrank.Quoted(strings.Join(pos, " "))}
 	switch {

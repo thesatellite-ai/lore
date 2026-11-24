@@ -35,16 +35,24 @@ var syntaxKept = []string{`"quokka"`, `quok*`, `quokka AND quokka`}
 // its hint (D-475).
 var noWordQueries = []string{`(`, `"`, `AND`, `a OR`, `NEAR(`}
 
+// colonQueries hold a word with a ':' the way task and script names are
+// written (lint:quokka, quokka:all): the colon separates words, so the
+// row holding "quokka" (and no "lint" next to it) is found (devco D-964,
+// H-223). Before, FTS5 got each such word as one phrase and found
+// nothing.
+var colonQueries = []string{`lint:quokka`, `quokka:all`, `lint:quokka exempt`, `zzz:yyy:quokka`}
+
 // kindQueries is the short set each `<noun>.search` runs (they share one
 // matcher, opsmemory.Match); `lore search` runs every query above.
-var kindQueries, kindNoWord = []string{`quokka (person)`, `"quokka`, `quok*`}, []string{`(`}
+var kindQueries, kindNoWord = []string{`quokka (person)`, `"quokka`, `quok*`, `lint:quokka`}, []string{`(`}
 
 // TestEverySearchReadsPunctuatedWords (devco D-798, P-14) walks `lore
 // search` and every registered `<noun>.search`: a query of words around a
 // stray parenthesis, quote, brace, ^ or dangling operator finds the row
 // holding the words, documented syntax still works as written, and a
 // query with no word at all is still E_INVALID_INPUT. Before, every
-// search returned the FTS5 syntax error for `quokka (person)`.
+// search returned the FTS5 syntax error for `quokka (person)`. A word
+// with a colon (lint:quokka) finds the row too (devco D-964, H-223).
 func TestEverySearchReadsPunctuatedWords(t *testing.T) {
 	h := opstest.New(t)
 	on := h.ID(h.MustYes("memory.add", `{"body":"a row to comment on"}`))
@@ -72,7 +80,8 @@ func TestEverySearchReadsPunctuatedWords(t *testing.T) {
 				t.Errorf("%s %s: %v, want the quokka row", op, in, err)
 				continue
 			}
-			if txt := opstest.Text(res); !strings.Contains(txt, "quokka") {
+			// "(no matches)" echoes the query, which holds the word too
+			if txt := opstest.Text(res); !strings.Contains(txt, "quokka") || strings.Contains(txt, "(no matches)") {
 				t.Errorf("%s %s: no quokka row:\n%s", op, in, txt)
 			}
 		}
@@ -83,5 +92,5 @@ func TestEverySearchReadsPunctuatedWords(t *testing.T) {
 	for _, op := range searches {
 		check(op, kindQueries, kindNoWord)
 	}
-	check("search.run", append(append([]string{}, punctQueries...), syntaxKept...), noWordQueries)
+	check("search.run", append(append(append([]string{}, punctQueries...), syntaxKept...), colonQueries...), noWordQueries)
 }
