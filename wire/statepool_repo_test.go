@@ -48,7 +48,8 @@ func TestRepoStatePoolSeesEveryChangeToItsFiles(t *testing.T) {
 	// openState takes it before the open reads the trees)
 	keep := func() *state {
 		t.Helper()
-		st := &state{poolKey: "k", openedAt: time.Now(), repoKept: true, repoTop: repo, treePrint: repoTreePrint(home, repo)}
+		since := treeHashSince(time.Now())
+		st := &state{poolKey: "k", openedAt: time.Now(), repoKept: true, repoTop: repo, treePrint: repoTreePrint(home, repo, since), treeSince: since}
 		if !putState(st, home, repo) {
 			t.Fatal("a repo open that wrote nothing was not kept")
 		}
@@ -108,9 +109,76 @@ func TestRepoStatePoolSeesEveryChangeToItsFiles(t *testing.T) {
 	if got := takeState("k", home, repo); got != nil {
 		t.Error("a hand edit made while a command ran was taken in as seen: the next command was handed the open that never read it")
 	}
-	said := &state{poolKey: "k", openedAt: time.Now(), repoKept: true, repoTop: repo, treePrint: repoTreePrint(home, repo), saidOnFinish: true}
+	since := treeHashSince(time.Now())
+	said := &state{poolKey: "k", openedAt: time.Now(), repoKept: true, repoTop: repo, treePrint: repoTreePrint(home, repo, since), treeSince: since, saidOnFinish: true}
 	if putState(said, home, repo) {
 		t.Error("a repo open whose pick-up said a line (a hand edit that waits) was kept: the next command would not say it, as a one-shot one does")
+	}
+}
+
+// TestRepoStatePoolKeepsATreeWhoseFilesAge (bug hunt H-217, devco:D-958):
+// a kept repo open stays kept while its files only grow older. A row
+// written just before the open (a store write, then reads) is hashed in
+// the open's tree print; once it is past racyHashWindow the check of the
+// next read must still print it hashed, or the print of an unchanged tree
+// differs and the read opens the repo and every store afresh and runs git
+// status in each clone (the bench question 2 s after a batch of 300
+// comments: warm 95-149 ms instead of ~50). The same-size same-time hand
+// edit of that aged file is still seen. Not parallel: the pool is
+// process-wide.
+func TestRepoStatePoolKeepsATreeWhoseFilesAge(t *testing.T) {
+	home := filepath.Join(t.TempDir(), ".lore")
+	repo := t.TempDir()
+	clone := filepath.Join(home, "stores", "_local", "kb")
+	row := filepath.Join(clone, "work", "comments", "c1.md")
+	for p, body := range map[string]string{
+		filepath.Join(home, "config.yaml"):   "personal:\n  store: x\n",
+		filepath.Join(clone, ".git", "HEAD"): "ref: refs/heads/main\n",
+		row:                                  "checked the import path again\n",
+		filepath.Join(repo, ".lore", "data", "r1.md"): "deploy with make release\n",
+		filepath.Join(repo, ".git", "HEAD"):           "ref: refs/heads/main\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stop := EnableStateReuse()
+	defer stop()
+	// written a moment before the line: hashed by the open, past the line
+	// by the time the next read checks
+	edge := 150 * time.Millisecond
+	written := time.Now().Add(-racyHashWindow + edge)
+	if err := os.Chtimes(row, written, written); err != nil {
+		t.Fatal(err)
+	}
+	keep := func() *state {
+		t.Helper()
+		since := treeHashSince(time.Now())
+		st := &state{poolKey: "k", openedAt: time.Now(), repoKept: true, repoTop: repo, treePrint: repoTreePrint(home, repo, since), treeSince: since}
+		if !putState(st, home, repo) {
+			t.Fatal("a repo open that wrote nothing was not kept")
+		}
+		return st
+	}
+	st := keep()
+	time.Sleep(2 * edge)
+	if got := takeState("k", home, repo); got != st {
+		t.Fatal("a kept repo open was not handed back once a file it hashed aged past the racy window: the tree did not change, yet the next read opened afresh")
+	}
+	if !putState(st, home, repo) {
+		t.Fatal("the handed-out open was not kept again")
+	}
+	if err := os.WriteFile(row, []byte("CHECKED THE IMPORT PATH AGAIN\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(row, written, written); err != nil {
+		t.Fatal(err)
+	}
+	if got := takeState("k", home, repo); got != nil {
+		t.Error("a same-size same-time hand edit of a file the open hashed was missed once the file aged past the racy window")
 	}
 }
 

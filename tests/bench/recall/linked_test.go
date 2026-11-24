@@ -39,9 +39,16 @@ const (
 	// call: each store's status kept while its files are unchanged, no
 	// failing merge-base; ~18 ms of it is the client process starting).
 	// The calls here come within 2 s of a store write, where git still
-	// runs (statusSettle), ~100 ms on a loaded box. Stretched by
+	// runs (statusSettle), ~100 ms on a loaded box. 44-53 ms at D-957 (the
+	// read server keeps the full repo open) but for the third question,
+	// 95-149 ms: its calls came 2 s after the batch of comments, and each
+	// check of the kept open printed the aging rows without the hash the
+	// open's print had, so each call opened afresh and ran git status in
+	// every clone; 44-49 ms at D-958 (the check hashes from the open's own
+	// cutoff). The bar stays above the owner's 50 ms: ~20 ms of a call is
+	// the client process starting and exiting. Stretched by
 	// testtime.SpeedBar on a slower machine.
-	linkedWarmBar = 200 * time.Millisecond
+	linkedWarmBar = 75 * time.Millisecond
 )
 
 // linkedQuestions are asked of the linked shape: rows answer each.

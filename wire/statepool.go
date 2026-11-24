@@ -245,11 +245,21 @@ func storeGitDirs(home string) []string {
 	return clones
 }
 
-// racyHashWindow is how recent a work tree file must be for the
-// fingerprint of a kept repo open to hash its content (filePrint.walkTree):
-// well past any file system's time step, as the git status stamp's racy
-// guard (adapters/backend/git statusstamp.go).
+// racyHashWindow is how recent a work tree file must be, before the open
+// that printed it, for the fingerprint of a kept repo open to hash its
+// content (filePrint.walkTree): well past any file system's time step, as
+// the git status stamp's racy guard (adapters/backend/git statusstamp.go).
 const racyHashWindow = 2 * time.Second
+
+// treeHashSince is the cutoff of a work tree print taken now: files from
+// racyHashWindow before it on are hashed. A kept open keeps the cutoff of
+// its print (state.treeSince) and is checked against a print with that
+// same cutoff, never a later one (bug hunt H-217, devco:D-958): with the
+// cutoff moved to each check's own now, a file written in the 2 s before
+// the open lost its hash once it aged past the line, so the print of an
+// unchanged tree differed and every read in those seconds opened the repo
+// and its stores afresh and ran git status in each clone (~100 ms more).
+func treeHashSince(now time.Time) time.Time { return now.Add(-racyHashWindow) }
 
 // repoStateFingerprint describes every file a full repo open (App.state)
 // builds its state from, on top of stateFingerprint's: the files at the
@@ -295,12 +305,15 @@ func repoStateFingerprint(home, repoTop, tree string) string {
 // marks the state written, and it is not kept), so an edit made while the
 // command ran differs from it and the next command opens afresh. Walking
 // them again at the end would cost every command a second walk and take
-// in such an edit as seen. "" when top is "".
-func repoTreePrint(home, top string) string {
+// in such an edit as seen. since is the hash cutoff (treeHashSince): the
+// open's own when it is taken for an open, the kept open's when it is
+// checked, so an unchanged tree prints the same both times. "" when top is
+// "".
+func repoTreePrint(home, top string, since time.Time) string {
 	if top == "" {
 		return ""
 	}
-	p := filePrint{hashNewer: time.Now().Add(-racyHashWindow)}
+	p := filePrint{hashNewer: since}
 	p.walkTree(filepath.Join(home, "stores"))
 	p.walkTree(filepath.Join(top, ".lore"))
 	return "tree\x01" + p.b.String()
@@ -368,7 +381,7 @@ func takeState(key, home, repoDir string) *state {
 	}
 	fp := ""
 	if p.st.repoKept {
-		fp = repoStateFingerprint(home, p.st.repoTop, repoTreePrint(home, p.st.repoTop)) // the work trees as they are now
+		fp = repoStateFingerprint(home, p.st.repoTop, repoTreePrint(home, p.st.repoTop, p.st.treeSince)) // the work trees as they are now, hashed from the kept print's cutoff
 	} else {
 		fp = p.st.fingerprint(home, repoDir)
 	}

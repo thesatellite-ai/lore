@@ -467,8 +467,11 @@ type state struct {
 	// statepool.go repoStateFingerprint, bug hunt H-216).
 	repoKept bool
 	// treePrint is the work tree print of a kept repo open
-	// (repoTreePrint), taken before this command read the trees.
+	// (repoTreePrint), taken before this command read the trees, and
+	// treeSince its hash cutoff: the print it is checked against takes the
+	// same one (statepool.go treeHashSince, bug hunt H-217).
 	treePrint string
+	treeSince time.Time
 	// openNotes are the notices the open said from the files it was built
 	// from (liveNote, strayProjectNotes); a kept open says them again
 	// without reading those files again (they are in its fingerprint).
@@ -904,15 +907,15 @@ func (a *App) openState(ctx context.Context, rowsOnly bool) (st *state, finish b
 		if kept != nil {
 			a.st, a.err = kept, nil // finished or not as it was when the last command closed
 		} else {
-			tree := ""
+			tree, since := "", treeHashSince(time.Now())
 			if key != "" {
-				tree = repoTreePrint(a.opts.Home, gitTopOf(a.opts.RepoDir)) // before the open reads the trees
+				tree = repoTreePrint(a.opts.Home, gitTopOf(a.opts.RepoDir), since) // before the open reads the trees
 			}
 			a.st, a.err = open(ctx, a.opts, a.extra, false)
 			if a.err == nil {
 				a.st.unfinished = true
 				if tree != "" && a.st.here == "" && a.st.repoTop == gitTopOf(a.opts.RepoDir) {
-					a.st.poolKey, a.st.openedAt, a.st.repoKept, a.st.treePrint = key, time.Now(), true, tree
+					a.st.poolKey, a.st.openedAt, a.st.repoKept, a.st.treePrint, a.st.treeSince = key, time.Now(), true, tree, since
 				}
 			}
 		}
