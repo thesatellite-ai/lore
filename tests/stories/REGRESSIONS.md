@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 2311 |
+| fixed | 2312 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -1294,6 +1294,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-976 | finding | bug hunt H-235 (Sync benchmark set 6 item 5: S6-05, S6-28, S6-34 and the siblings S6-27/28/29): `lore ask` matched a question word to a row word only as the same word or a prefix three letters off, so a question writing another form than the row (validate / validation, jobs / job, enqueuing / enqueue, encrypted / re-encrypts) did not match the answering row that `lore search` (stemmed) lists first; a row about something else writing the question's other words in its own form stood first and sibling questions got different rows | fixed | TestHasWordStemForms, TestStemKeysAreNoWords, TestFormsAnswerFirst, TestStoryOAskWordForms, TestBenchSet6WordForms | ops/ask forms.go: every word set tokensOf builds also holds the stem of each word (hybrid.Stem, the full-text index's Porter stemmer) under a mark, and hasWord matches a question word whose stem the set holds, so ranking, best section, excerpt and not-in-memory match the forms lore search matches |
 | devco:D-981 | finding | bug hunt H-246: real client, company and people names sat in tests and docs of the public tree, and nothing stopped one coming back | fixed | TestNoListedNamesInTrackedFiles, TestNamesGuardFiles, TestNamesGuardCommits, TestPrePushRefusesListedWord | the hits now use made-up names; tests/lib/names-guard.sh reads the private list from the machine and checks tracked text files and paths, commit authors and messages, added lines and stdin (file:line or the commit, never the word); .githooks/pre-push runs it on every pushed commit, internal/repoguard on the tree |
 | devco:D-982 | finding | bug hunt H-247: the D-981 guard committed a list of sha256 hashes of the denied words, and a hash of a short lowercase name is reversed in seconds, so the public repo re-published the private list | fixed | TestNamesGuardWithoutList, TestNamesGuardStdin, TestNamesGuardAllowFileIsGeneric, TestNamesGuardFiles | the hash list and its script are gone; the generic tests/lib/names-guard.sh reads the list from $NAMES_GUARD_FILE or ~/.config/names-guard/terms.txt on the machine (nothing derived from it in the repo), prints one skip line and passes where no list exists, and drops the generic words of tests/lib/names-guard-allow.txt |
+| devco:D-986 | finding | bug hunt H-249 (issue #177): in an org's own repo linked to a store folder, every write to the repo store failed with "staged batch writes act_… twice" once the agent's actor row there had an older lore's shape (no stable_key) and identity.agent_display renamed it: the key back-fill and the rename each updated the same row in one staged batch (and a stale-copy refresh in the same batch was silently dropped) | fixed | TestEnsureActorUpkeepIsOneStagedWrite, TestJourneyAgentDisplayOldRowInOrgRepo | wire/actor.go upkeepOwnRow: the key back-fill, the agent rename and the SOURCE_OF_TRUTH refresh of the caller's existing actor row are one update (the refresh still best effort), so a staged write commits all three |
 
 ## lore-adoptfix
 

@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -180,16 +181,9 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		// that exists, so a live write carries them with its row instead
 		// of rewriting the committed actor file (store.WithSupportingRefresh).
 		rctx := store.WithSupportingRefresh(ctx)
-		if berr := a.backfillKey(rctx, st, ref, cur, who); berr != nil {
-			return berr
+		if uerr := a.upkeepOwnRow(rctx, st, ref, cur, who); uerr != nil {
+			return uerr
 		}
-		if herr := hideAgentTool(rctx, st, ref, cur, who); herr != nil {
-			return herr
-		}
-		// SOURCE_OF_TRUTH actors: a copy whose stamp is not its source's
-		// version is rewritten on this first write to its store
-		// (actor_source.go; the caller's own actor only).
-		a.refreshOwnCopy(rctx, st, target, cur)
 		st.actorDone[target] = true
 		return nil
 	} else if !errs.Has(err, errs.NotFound) {
@@ -656,61 +650,91 @@ func agentKeyWidens(ctx context.Context, backends map[store.Source]store.Backend
 	return wideID, widen, nil
 }
 
-// backfillKey writes the caller's stable key (and handle) into its own
+// upkeepOwnRow brings the caller's existing actor row in ref's store up
+// to date with ONE update: the stable key back-fill (backfillKeyPatch),
+// the agent rename identity.agent_display asks for (hideToolPatch) and
+// the SOURCE_OF_TRUTH refresh of a stale or unstamped copy
+// (ownCopyPatch). One write, not one per step: inside a staged batch a
+// second update of the same row is refused ("staged batch writes … twice",
+// #177, devco:D-986), so an old-shaped agent row in an org's own repo
+// store failed every write there. The refresh stays best effort (a copy
+// that cannot be rewritten is the doctor's), so its fields alone never
+// fail the write.
+func (a *App) upkeepOwnRow(ctx context.Context, st *state, ref engine.Ref, cur row.Row, who ids.ID[ids.Actor]) error {
+	patch, err := backfillKeyPatch(st, ref, cur, who)
+	if err != nil {
+		return err
+	}
+	hide, err := hideToolPatch(st, cur, who)
+	if err != nil {
+		return err
+	}
+	maps.Copy(patch, hide)
+	refresh := a.ownCopyPatch(ctx, st, ref.Store, cur, patch)
+	if len(patch) == 0 {
+		if len(refresh) > 0 {
+			_, _ = st.eng.Update(ctx, ref, refresh) // best effort (actor_source.go file comment)
+		}
+		return nil
+	}
+	for k, v := range refresh {
+		if _, own := patch[k]; !own {
+			patch[k] = v
+		}
+	}
+	if _, err := st.eng.Update(ctx, ref, patch); err != nil && !errs.Has(err, errs.Stale) {
+		return errs.Prefix("wire: update the actor row in store "+string(ref.Store)+" (stable key, identity.agent_display)", err)
+	}
+	return nil
+}
+
+// backfillKeyPatch is the caller's stable key (and handle) for its own
 // actor row in ref's store when the row there has none but the store may
 // hold it (fullActorRow): a row written before the identity had a key, or
 // by an older build, gets the key on the person's next write there
 // (FB-ACTOR-KEY), so `lore actor list --json` and the roster resolve the
 // person by key. A store that may not hold the key (a client repo, a repo
 // that is not an org's own) is never written; a rebound open writes its
-// own fields, never these.
-func (a *App) backfillKey(ctx context.Context, st *state, ref engine.Ref, cur row.Row, who ids.ID[ids.Actor]) error {
-	if who != st.actor || st.rebound() || !fullActorRow(st, ref.Store) {
-		return nil
-	}
+// own fields, never these. Empty when nothing is missing.
+func backfillKeyPatch(st *state, ref engine.Ref, cur row.Row, who ids.ID[ids.Actor]) (map[string]value.Value, error) {
 	patch := map[string]value.Value{}
+	if who != st.actor || st.rebound() || !fullActorRow(st, ref.Store) {
+		return patch, nil
+	}
 	for k, v := range map[string]string{actorFieldKey: st.who.StableKey, actorFieldHandle: st.who.Handle} {
 		if v == "" || actorField(cur, k) != "" {
 			continue
 		}
 		t, err := value.TextOf(v)
 		if err != nil {
-			return errs.Wrap(errs.InvalidInput, "wire: the actor's "+k+" is not valid text", err)
+			return nil, errs.Wrap(errs.InvalidInput, "wire: the actor's "+k+" is not valid text", err)
 		}
 		patch[k] = t
 	}
-	if len(patch) == 0 {
-		return nil
-	}
-	if _, err := st.eng.Update(ctx, ref, patch); err != nil && !errs.Has(err, errs.Stale) {
-		return errs.Prefix("wire: add the stable key to the actor row in store "+string(ref.Store), err)
-	}
-	return nil
+	return patch, nil
 }
 
-// hideAgentTool renames the caller's own detected agent row written before
+// hideToolPatch renames the caller's own detected agent row written before
 // identity.agent_display hid the tool (#113, devco:D-900): a row that still
 // reads "<person> via <tool>" gets the name the mode gives now, on the
 // agent's next write to that store. Only toward hiding: a row already
 // hiding the tool is left as it is when the mode names it again (a machine
 // with the default never undoes a stricter one's rename), and only the
-// caller's own agent row, never a copy of someone else's.
-func hideAgentTool(ctx context.Context, st *state, ref engine.Ref, cur row.Row, who ids.ID[ids.Actor]) error {
+// caller's own agent row, never a copy of someone else's. Empty when the
+// row needs no rename.
+func hideToolPatch(st *state, cur row.Row, who ids.ID[ids.Actor]) (map[string]value.Value, error) {
 	if who != st.actor || !st.who.HidesTool() {
-		return nil
+		return nil, nil
 	}
 	want := st.who.DisplayName
 	if have := actorField(cur, actorFieldDisplay); have == "" || have == want {
-		return nil
+		return nil, nil
 	}
 	t, err := value.TextOf(want)
 	if err != nil {
-		return errs.Wrap(errs.InvalidInput, "wire: the agent's display name is not valid text", err)
+		return nil, errs.Wrap(errs.InvalidInput, "wire: the agent's display name is not valid text", err)
 	}
-	if _, err := st.eng.Update(ctx, ref, map[string]value.Value{actorFieldDisplay: t}); err != nil && !errs.Has(err, errs.Stale) {
-		return errs.Prefix("wire: rename the agent row in store "+string(ref.Store)+" (identity.agent_display)", err)
-	}
-	return nil
+	return map[string]value.Value{actorFieldDisplay: t}, nil
 }
 
 // actorField is the text of an actor row field ("" when absent or null).

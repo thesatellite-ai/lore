@@ -13,7 +13,8 @@ package wire
 //	        HLC / identity hash)
 //
 //	ensureActor ──▶ copy there? no ──▶ create it stamped (stampNewCopy)
-//	                            yes ──▶ stale or unstamped? ──▶ Update (refreshOwnCopy)
+//	                            yes ──▶ stale or unstamped? ──▶ Update (ownCopyPatch, one write with
+//	                                    the key back-fill and agent rename: upkeepOwnRow)
 //	                                    team: orgs[].identity.name follows the roster
 //	ActorReport ──▶ actor list / show, lore show <act_id>, doctor, Team versions
 //	RefreshActorCopies ──▶ `lore actor refresh` (the doctor's fix)
@@ -37,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	opsidentity "github.com/thesatellite-ai/lore/ops/identity"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
@@ -190,24 +192,38 @@ func refreshCopy(ctx context.Context, st *state, id ids.AnyID, src actorsource.S
 	return true, nil
 }
 
-// refreshOwnCopy is ensureActor's step for a copy that already exists in
+// ownCopyPatch is ensureActor's refresh of a copy that already exists in
 // target (cur): when it is the caller's own actor and stale or unstamped
-// against its source, rewrite it; in a team, also bring the config's
-// orgs[].identity.name in line with the roster. Best effort (file
-// comment): a failure leaves the copy for the doctor.
-func (a *App) refreshOwnCopy(ctx context.Context, st *state, target store.Source, cur row.Row) {
+// against its source, the fields that make it current; in a team, also
+// bring the config's orgs[].identity.name in line with the roster. The
+// caller writes it together with its other upkeep of the row
+// (upkeepOwnRow); pending holds those fields, already decided, so the
+// refresh is judged on the row as it will be. Best effort (file comment):
+// nil when the copy needs nothing or the fields are not valid text.
+func (a *App) ownCopyPatch(ctx context.Context, st *state, target store.Source, cur row.Row, pending map[string]value.Value) map[string]value.Value {
 	if cur.Deleted || cur.ID != st.actor.Any() {
-		return
+		return nil
 	}
 	at := a.actorSourceOf(ctx, st, cur.ID)
 	if at.roster != "" && at.src.Reachable {
 		a.followRosterName(ctx, st, at.src)
 	}
-	c := copyOfRow(st, target, cur, target == at.roster && at.src.Reachable)
+	next := cur
+	next.Fields = maps.Clone(cur.Fields)
+	maps.Copy(next.Fields, pending)
+	c := copyOfRow(st, target, next, target == at.roster && at.src.Reachable)
 	if !actorsource.NeedsRefresh(at.src, c) {
-		return
+		return nil
 	}
-	_, _ = refreshCopy(ctx, st, cur.ID, at.src, c) // best effort (file comment)
+	patch := actorsource.Patch(at.src, c)
+	if k, ok := patch[actorsource.FieldKind]; ok {
+		patch[actorsource.FieldKind] = actorKindOf(k)
+	}
+	fields, err := textFields(patch)
+	if err != nil || len(fields) == 0 {
+		return nil
+	}
+	return fields
 }
 
 // followRosterName rewrites orgs[<org>].identity.name in config.yaml to
