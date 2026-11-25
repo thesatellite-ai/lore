@@ -578,8 +578,8 @@ func (a *App) rosterCaller(ctx context.Context, r rosterAt) (whoIs, error) {
 // (detected or LORE_ACTOR=agent:…), or a surface that fixed an agent on the
 // call (REST X-Lore-Agent, profileContext).
 func (a *App) agentCaller(ctx context.Context, who identity.Resolved) bool {
-	if who.Kind == schema.ActorKindAgent || who.Agent != "" {
-		return true
+	if who.Kind == schema.ActorKindAgent || who.PolicyAgent() != "" {
+		return true // a bot too: agents.may_manage_people binds it (H-259)
 	}
 	if creditedAgent(ctx) != "" {
 		return true // a person-credited setup step run through an agent (D-424)

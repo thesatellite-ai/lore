@@ -356,7 +356,7 @@ An agent ran a command a team keeps to people: `agents.person_only` lists it (`l
 
 ### `E_POLICY_DENIED` naming `agents.no_write`
 
-An agent tried to write into a folder whose own policies keep it out (`agents.no_write` lists `*` or that agent). The message names the folder, the policy row and what lore saw ("this looks like agent:auto/codex/…"); nothing was written. Hand the change to a person, who runs the same command in their own terminal. A person who wants agents back in that folder changes the list there: `lore policy unset --key agents.no_write --to <store>/<folder> --yes` (in an org's company folder only an admin can). The agent itself cannot: removing the policy is a write into the same folder.
+An agent or a bot (`LORE_ACTOR=plugin:<label>`, `cron:<label>`, `system:<label>`) tried to write into a folder whose own policies keep it out (`agents.no_write` lists `*`, its key or its label). The message names the folder, the policy row and what lore saw ("this looks like agent:auto/codex/…"); nothing was written. Hand the change to a person, who runs the same command in their own terminal. A person who wants agents back in that folder changes the list there: `lore policy unset --key agents.no_write --to <store>/<folder> --yes` (in an org's company folder only an admin can). The agent itself cannot: removing the policy is a write into the same folder.
 
 ### "has no person behind it"
 

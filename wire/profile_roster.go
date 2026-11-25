@@ -121,7 +121,7 @@ func agentOfWriter(ctx context.Context, who identity.Resolved) (string, error) {
 	if who.StableKey == "" {
 		return "", errs.New(errs.InvalidInput, "no identity: lore cannot tell who you are").WithHint("run `lore whoami` to see the identity chain")
 	}
-	agent := who.Agent
+	agent := who.PolicyAgent() // a bot is bound like an agent (H-259)
 	if c, ok := ctx.Value(profileCallerKey{}).(op.Caller); ok && (c.AgentFixed || c.Agent != "") {
 		agent = c.Agent // the surface decided (REST X-Lore-Agent, or an explicit agent)
 	} else if agent == "" {

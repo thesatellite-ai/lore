@@ -89,6 +89,10 @@ const (
 	KindPlugin = "plugin"
 )
 
+// KindHook is the actors.kind of a git hook's own writes (schema
+// ActorKindHook): not a person either.
+const KindHook = "hook"
+
 // botKinds are the actors.kind values IsBotKind accepts.
 var botKinds = []string{KindSystem, KindCron, KindPlugin}
 
@@ -100,7 +104,18 @@ func BotKinds() []string { return slices.Clone(botKinds) }
 
 // knownKinds are the stable-key prefixes that name an actors.kind value
 // (dbent/schema/enums.go ActorKind); anything else reads as human.
-var knownKinds = []string{KindHuman, KindAgent, "hook", KindPlugin, KindCron, KindSystem}
+var knownKinds = []string{KindHuman, KindAgent, KindHook, KindPlugin, KindCron, KindSystem}
+
+// NonHuman reports whether kind is an actor kind that is not a person:
+// an agent, a bot (system, cron, plugin) or a hook. It is the one test
+// every agents.* policy and the agent-written trust mark go through
+// (PolicyAgent): a bot is refused and marked like an agent, never let
+// through as a person (H-259: LORE_ACTOR=plugin:<label> wrote into a
+// folder whose agents.no_write was "*", and its rules were not marked
+// agent-written). An anonymous person (auto) is a person.
+func NonHuman(kind string) bool {
+	return kind != KindHuman && slices.Contains(knownKinds, kind)
+}
 
 // kindSep separates a stable key's kind from its value.
 const kindSep = ":"
@@ -198,8 +213,9 @@ type Resolved struct {
 	Handle string
 	// Notes are one-line warnings worth printing (never fatal).
 	Notes []string
-	// Agent is the agent name policy checks see (Caller.Agent): the stable
-	// key of an agent identity, "" for a person or the CI actor.
+	// Agent is the stable key of an agent identity (detected or
+	// LORE_ACTOR=agent:<label>), "" for a person, a bot or the CI actor.
+	// Policy checks read PolicyAgent, which adds the bots.
 	Agent string
 	// Label is the actors.label: the tool slug of a detected agent, the
 	// provider of the CI actor.
@@ -242,6 +258,21 @@ func (r Resolved) ActorKey() string {
 
 // ActorID is r's actor id: ActorID of ActorKey.
 func (r Resolved) ActorID() (ids.ID[ids.Actor], error) { return ActorID(r.ActorKey()) }
+
+// PolicyAgent is the name the agents.* policies and the agent-written
+// trust mark see for r (op.Caller.Agent): an agent's key, the stable key
+// of any other non-human actor (plugin:helper, cron:nightly; NonHuman),
+// "" for a person. Why: Agent holds agents only, so a bot read as a person
+// and passed agents.no_write (H-259).
+func (r Resolved) PolicyAgent() string {
+	if r.Agent != "" {
+		return r.Agent
+	}
+	if NonHuman(r.Kind) {
+		return r.StableKey
+	}
+	return ""
+}
 
 // Stable reports whether the next run on this machine gets the same key.
 func (r Resolved) Stable() bool { return r.Step != StepEphemeral && r.StableKey != "" }

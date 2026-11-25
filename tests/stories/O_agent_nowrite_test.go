@@ -12,6 +12,12 @@ package stories
 // the key, the folder and the line a person runs, and that line works
 // where printed. The person still writes there, and the agent still
 // writes everywhere else.
+//
+// devco:D-991 (bug hunt H-259, security): a bot on the roster (lore actor
+// register --kind plugin, writing as LORE_ACTOR=plugin:<label>) passed
+// agents.no_write whatever it listed (*, plugin:<label>, <label>) and its
+// rules kept trust 0.50. A bot is now kept out like an agent, and its rule
+// waits for a person's approve, marked agent-written.
 
 import (
 	"testing"
@@ -76,5 +82,31 @@ func TestStoryOAgentNoWriteFolder(t *testing.T) {
 	s.Step("D-869/printed-unset-runs-for-the-person", func() {
 		ada.LoreIn(pc, unset...).OK(t)
 		codex.Lore("memory", "add", "--body", "the legal inbox is checked on Mondays", "--to", legal, "--yes").OK(t)
+	})
+
+	bot := pc.With(append(codexEnv, "LORE_ACTOR=plugin:helper")...)
+	s.Step("D-991/a-bot-is-kept-out-like-an-agent", func() {
+		ada.LoreIn(pc, "actor", "register", "--kind", "plugin", "--label", "helper", "--yes").OK(t).
+			Says(t, "plugin helper registered in the roster of", "LORE_ACTOR=plugin:helper")
+		for _, item := range []string{"*", "plugin:helper", "helper"} {
+			ada.LoreIn(pc, "policy", "set", "--key", "agents.no_write", "--value", item, "--to", legal, "--yes").OK(t)
+			r := bot.Lore("memory", "add", "--body", "the d991 bot note", "--to", legal, "--yes").
+				Refused(t, "E_POLICY_DENIED", "agents.no_write of "+legal, `"plugin:helper"`,
+					"lore policy unset --key agents.no_write --to "+legal+" --yes")
+			oCheck(t, "D-991/bot-refused-"+item, r.Code == 23, "plugin bot into %s with agents.no_write=%s: want exit 23 (E_POLICY_DENIED): %s", legal, item, r)
+			ada.LoreIn(pc, unset...).OK(t) // the printed line works for the person
+		}
+		ada.LoreIn(pc, "memory", "list", "--store", legal).Never(t, "the d991 bot note")
+	})
+
+	s.Step("D-991/a-bot-rule-waits-for-a-person", func() {
+		id := oAddedID(t, bot.Lore("rule", "add", "--body", "Bots file the weekly legal digest", "--to", legal, "--yes", "--json").OK(t))
+		if id == "" {
+			t.Fatal("rule add --json printed no id")
+		}
+		ada.LoreIn(pc, "rule", "show", "--id", id).OK(t).Says(t, "agent-written, not approved")
+		bot.Lore("rule", "approve", "--id", id, "--yes").Refused(t, "E_POLICY_DENIED")
+		ada.LoreIn(pc, "rule", "approve", "--id", id, "--yes").OK(t)
+		ada.LoreIn(pc, "rule", "show", "--id", id).OK(t).Never(t, "agent-written, not approved")
 	})
 }

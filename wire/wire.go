@@ -871,8 +871,8 @@ func (a *App) armEngine(st *state) {
 }
 
 // writerAgent is the agent a write runs for (engine.AgentSource): the
-// stable key the identity chain resolves with agent detection, "" for a
-// person, a person-only App (`lore api`, a person-credited setup step) or
+// stable key the identity chain resolves with agent detection, a bot's
+// key (plugin:helper, Resolved.PolicyAgent), "" for a person, a person-only App (`lore api`, a person-credited setup step) or
 // an identity that does not resolve (the write fails on its own then).
 // It resolves from the options, not the opened state, so a write from a
 // folder with no lore project (no row state) is judged the same.
@@ -884,7 +884,7 @@ func (a *App) writerAgent(ctx context.Context) string {
 	if err != nil {
 		return ""
 	}
-	return who.Agent
+	return who.PolicyAgent() // a bot is refused like an agent (H-259)
 }
 
 // openState is state's open under a.mu. finish reports that this call

@@ -4,8 +4,9 @@ package engine
 // agents.person_only (owner org-setup item 6, devco D-869). person_only
 // names commands, so a folder only people may change (acme/legal) stayed
 // open to every agent through any command person_only did not list. This
-// key names the place: an agent caller is refused every write into a
-// place whose OWN policies list it (or "*").
+// key names the place: an agent caller (a bot too: plugin, cron, system,
+// hook; identity.NonHuman, H-259) is refused every write into a place
+// whose OWN policies list it (or "*").
 //
 //	Run (agent caller, write op) ──▶ agentNoWrite(target)   refused before any row is written
 //	writeChanges / writePurge / move_many sinks
@@ -27,7 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// AgentsAll is the agents.no_write item that names every agent.
+// AgentsAll is the agents.no_write item that names every agent and bot.
 const AgentsAll = "*"
 
 // PlaceLabeler is the optional upgrade of a WriteGuard that names an
@@ -130,36 +131,40 @@ func (e *Engine) agentNoWrite(ctx context.Context, st Attached) error {
 	if eff, ok := set.Get(policy.KeyAgentsNoWrite); ok && !eff.Source.IsZero() {
 		where = " (policy " + eff.Source.String() + ")"
 	}
-	who := "every agent"
+	who := "every agent and bot"
 	if hit != AgentsAll {
 		who = strconv.Quote(hit)
 	}
 	key := string(policy.KeyAgentsNoWrite)
-	e2 := errs.New(errs.PolicyDenied, key+" of "+place+" lists "+who+where+": an agent may not write there, and this looks like "+strconv.Quote(agent)+"; nothing was written").
+	e2 := errs.New(errs.PolicyDenied, key+" of "+place+" lists "+who+where+": no agent or bot may write there, and this looks like "+strconv.Quote(agent)+"; nothing was written").
 		WithHint("a person runs it in their own terminal; a person (in an org's company folder, an admin) changes the list with `lore policy unset --key " + key + " --to " + place + " --yes` or `lore policy set --key " + key + " --value <agents> --to " + place + " --yes`")
 	e2.NeedsPerson = true
 	return e2
 }
 
 // agent stable keys (adapters/identity): "agent:auto/<tool>/<owner hex>"
-// for a detected agent, "agent:<label>" for LORE_ACTOR=agent:<label>.
+// for a detected agent, "<kind>:<label>" for LORE_ACTOR=agent:<label> and
+// for a bot (plugin:<label>, cron:<label>, system:<label>, H-259).
 const (
-	agentKeyPrefix  = "agent:"
+	agentKeySep     = ":"
+	agentKindAgent  = "agent"
 	agentAutoPrefix = "auto/"
 )
 
 // agentNames are the names an agents.no_write item may use for the agent
-// whose stable key is key: the key itself, its label after "agent:", and
-// for a detected agent the tool ("codex" of agent:auto/codex/1a2b3c), so a
-// folder names the tool once for every person's agent of that tool.
+// or bot whose stable key is key: the key itself, its label after the
+// kind ("helper" of plugin:helper), and for a detected agent the tool
+// ("codex" of agent:auto/codex/1a2b3c), so a folder names the tool once
+// for every person's agent of that tool. Why every kind: a bot's label
+// matched nothing while only "agent:" was cut (H-259).
 func agentNames(key string) []string {
 	names := []string{key}
-	rest, ok := strings.CutPrefix(key, agentKeyPrefix)
-	if !ok || rest == "" {
+	kind, rest, ok := strings.Cut(key, agentKeySep)
+	if !ok || kind == "" || rest == "" {
 		return names
 	}
 	names = append(names, rest)
-	if auto, isAuto := strings.CutPrefix(rest, agentAutoPrefix); isAuto {
+	if auto, isAuto := strings.CutPrefix(rest, agentAutoPrefix); isAuto && kind == agentKindAgent {
 		tool, _, _ := strings.Cut(auto, "/")
 		if tool != "" {
 			names = append(names, tool)

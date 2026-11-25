@@ -16,7 +16,7 @@ import (
 // of stored as a rule that never matches.
 //
 //	agents.person_only       an operation name (task.done), or <operation>.<input field> (meta.edit.merge_into, AGENT_IDENTITY 8.2)
-//	agents.no_write          an agent name (codex) or * for every agent
+//	agents.no_write          an agent or bot name (codex, plugin:helper) or * for every agent and bot
 //	routing.client_repos     <kind>=<target>, both sides non-empty
 //	meta.scope_aliases       <alias>=<scope label>, both sides non-empty
 //	context.targets          checked by checkContextTargets (tool profiles)
@@ -97,8 +97,9 @@ func personOnlyItemErr(it string) error {
 }
 
 // agentNameItem: an agents.no_write item is one agent name: a detected
-// tool (codex), a label of LORE_ACTOR=agent:<label>, or a full agent key
-// (agent:auto/codex/1a2b3c); letters, digits and "-_.:/".
+// tool (codex), a label of LORE_ACTOR=agent:<label> or of a bot
+// (plugin:<label>), or a full key (agent:auto/codex/1a2b3c,
+// plugin:helper); letters, digits and "-_.:/".
 func agentNameItem(it string) bool {
 	if it == "" {
 		return false

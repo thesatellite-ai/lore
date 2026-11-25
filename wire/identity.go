@@ -113,14 +113,15 @@ func (a *App) Who(ctx context.Context) (identity.Resolved, error) {
 
 // CallerAgent is the agent name the CLI puts on op.Caller.Agent so
 // agents.person_only also fires on the CLI (8.2): the stable key of an
-// agent identity (detected or LORE_ACTOR=agent:…), "" for a person, the
+// agent identity (detected or LORE_ACTOR=agent:…) or of a bot
+// (LORE_ACTOR=plugin:…, Resolved.PolicyAgent), "" for a person, the
 // CI actor, or an App whose actor was set by Options.
 func (a *App) CallerAgent(ctx context.Context) string {
 	who, err := a.Who(ctx)
 	if err != nil {
 		return ""
 	}
-	return who.Agent
+	return who.PolicyAgent() // a bot counts as an agent for every policy (H-259)
 }
 
 // ---- machine profile (AGENT_IDENTITY_DESIGN 6.8, CFG11) ----

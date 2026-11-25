@@ -138,6 +138,10 @@ const (
 	codexAgent = "agent:auto/codex/1a2b3c"
 	otherAgent = "agent:auto/othertool/1a2b3c"
 	botAgent   = "agent:release-bot"
+	// pluginBot is a roster bot (lore actor register --kind plugin): a
+	// non-person bound by agents.no_write like an agent (devco D-991).
+	pluginBot = "plugin:helper"
+	cronBot   = "cron:nightly"
 )
 
 // TestAgentNoWriteMatrix (owner org-setup item 6, devco D-869):
@@ -162,6 +166,11 @@ func TestAgentNoWriteMatrix(t *testing.T) {
 		{"label refuses agent:label", []string{"release-bot"}, botAgent, true},
 		{"full key refuses that agent", []string{codexAgent}, codexAgent, true},
 		{"another tool passes", []string{"codex"}, otherAgent, false},
+		{"star refuses a plugin bot", []string{"*"}, pluginBot, true},
+		{"star refuses a cron bot", []string{"*"}, cronBot, true},
+		{"full key refuses a plugin bot", []string{pluginBot}, pluginBot, true},
+		{"label refuses a plugin bot", []string{"helper"}, pluginBot, true},
+		{"another bot passes", []string{"helper"}, cronBot, false},
 		{"a person always passes", []string{"*"}, "", false},
 		{"no policy row: nobody is refused", nil, codexAgent, false},
 	}
@@ -252,9 +261,12 @@ func TestAgentNoWriteMoveAndUnset(t *testing.T) {
 func TestAgentNames(t *testing.T) {
 	t.Parallel()
 	for key, want := range map[string][]string{
-		codexAgent:  {codexAgent, "auto/codex/1a2b3c", "codex"},
-		botAgent:    {botAgent, "release-bot"},
-		"something": {"something"},
+		codexAgent:        {codexAgent, "auto/codex/1a2b3c", "codex"},
+		botAgent:          {botAgent, "release-bot"},
+		pluginBot:         {pluginBot, "helper"},
+		cronBot:           {cronBot, "nightly"},
+		"plugin:auto/x/y": {"plugin:auto/x/y", "auto/x/y"}, // only an agent's auto/ key names a tool
+		"something":       {"something"},
 	} {
 		got := agentNames(key)
 		if len(got) != len(want) {
