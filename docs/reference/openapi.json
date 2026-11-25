@@ -6866,6 +6866,43 @@
                         "type": "string"
                       }
                     },
+                    "conflicts": {
+                      "type": "array",
+                      "description": "set when two rows the answer prints state different values for the same named field (a snake, kebab or dotted key, a camelCase name, a --flag or a word in backticks: X = V, X: V, X defaults to V, no default for X, X is V ms; units compared after normalising, 5 s = 5000 ms), at most 3; check which is current with lore show --id \u003cid\u003e and fix or supersede the other",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string",
+                            "description": "the field both rows state a value for, as the first row writes it (request_timeout, --batch-size, http.timeout)"
+                          },
+                          "rows": {
+                            "type": "array",
+                            "description": "the two rows and the value each states, the one more likely current first (fact_state live or fixed before planned or rejected, then the newer fact_verified_at, then the newer day, then the answer's order); check which is current with lore show --id \u003cid\u003e",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "description": "the value as the row states it (5000 ms, no default)"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "value"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "field",
+                          "rows"
+                        ]
+                      }
+                    },
                     "context": {
                       "type": "string",
                       "description": "lore context's text for that file (rules and hotfixes in full while they fit)"

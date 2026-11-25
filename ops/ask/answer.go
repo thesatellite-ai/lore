@@ -477,6 +477,8 @@ func build(q question, d data, top, maxChars int) Out {
 	}
 	out.chunkLong()
 	out.cap(out.rank(q, identity, lead), maxChars)
+	// H-239: only the rows printed, after the cap cut them
+	out.Conflicts = out.conflictsOf()
 	comments := map[string][]Comment{}
 	for _, r := range out.Rows {
 		comments[r.ID] = r.Comments
@@ -1328,7 +1330,7 @@ func rowDay(r *textRow) string {
 
 // rowOf is row r as the answer prints it.
 func rowOf(r *textRow, matched []string) Row {
-	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale, Reverify: r.Reverify}
+	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale, Reverify: r.Reverify, factState: r.FactState, verified: r.Verified}
 	if r.Day != "" {
 		out.At = r.Day
 	} else if !r.At.IsZero() {
@@ -1493,6 +1495,7 @@ func (o Out) Text() string {
 		// it (wire/emptysearch.go), as for every search
 		b.WriteString(NoAnswer + "\n")
 	}
+	b.WriteString(o.conflictText())
 	if n := o.Left - o.leftBrief; n > 0 {
 		fmt.Fprintf(&b, "\n%s left out to stay under %d characters; --max-chars %d prints more\n", plural.Count(n, "more item"), o.maxChars, o.maxChars*2)
 	}

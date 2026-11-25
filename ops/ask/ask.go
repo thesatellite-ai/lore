@@ -123,8 +123,13 @@ type Out struct {
 	// (abstain.go, devco D-897); the zero value, left out of the JSON,
 	// when it does. A value, not a pointer: op.Define describes outputs
 	// by reflection and has no pointer type.
-	Abstain  Abstain `json:"abstain,omitzero" desc:"set when the question names something (a word written with a capital, such as a place or a pet's name) that no row holds: the rows are then the nearest the memory holds, not the answer"`
-	maxChars int
+	Abstain Abstain `json:"abstain,omitzero" desc:"set when the question names something (a word written with a capital, such as a place or a pet's name) that no row holds: the rows are then the nearest the memory holds, not the answer"`
+	// Conflicts are printed rows stating different values for the same
+	// named field (conflicts.go, bug hunt H-239): the text answer prints
+	// one line each so an agent checks which is current instead of
+	// taking the first.
+	Conflicts []Conflict `json:"conflicts,omitempty" desc:"set when two rows the answer prints state different values for the same named field (a snake, kebab or dotted key, a camelCase name, a --flag or a word in backticks: X = V, X: V, X defaults to V, no default for X, X is V ms; units compared after normalising, 5 s = 5000 ms), at most 3; check which is current with lore show --id <id> and fix or supersede the other"`
+	maxChars  int
 	// leftBrief is how many of Left are resources the question only
 	// touches, left out by their share of the cap (devco D-963).
 	leftBrief int
@@ -265,6 +270,10 @@ type Row struct {
 	// row replaces (the id Note names), "" when none: the text answer
 	// leads with a "now:" line for it (devco D-836).
 	replaces string
+	// factState and verified are the row's fact_state and
+	// fact_verified_at day (markFacts): a conflict line names the live,
+	// newer verified row first (conflicts.go).
+	factState, verified string
 }
 
 // RoutedStore implements the op package's StoreRouter, as sql.run does
