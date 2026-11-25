@@ -1,0 +1,5 @@
+# names-guard-allow.txt — generic words that may be on a maintainer's private
+# names list (tests/lib/names-guard.sh reads it from the machine) but are fine
+# in this repository, one per line, case-insensitive. '#' starts a comment.
+# Never put a client, company, project, host or person's name here: those
+# are what the guard is for.

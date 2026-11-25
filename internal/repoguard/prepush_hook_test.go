@@ -37,7 +37,7 @@ type hookRepo struct {
 	t   *testing.T
 	dir string
 	bin string   // holds the stand-in `task`
-	env []string // extra environment for the hook (a test deny list)
+	env []string // extra environment for the hook (a test names list)
 }
 
 func newHookRepo(t *testing.T) *hookRepo {
@@ -48,6 +48,10 @@ func newHookRepo(t *testing.T) *hookRepo {
 		}
 	}
 	r := &hookRepo{t: t, dir: gitInitRepo(t), bin: t.TempDir()}
+	// The hook's names guard reads the machine's private list by default; a
+	// scratch push must not depend on it, so the list is absent unless a test
+	// writes one (TestPrePushRefusesListedWord).
+	r.env = []string{"NAMES_GUARD_FILE=" + filepath.Join(r.bin, "no-names-list.txt")}
 	r.git("config", "user.email", "t@example.com")
 	r.git("config", "user.name", "t")
 	r.write("a.txt", "one\n")
