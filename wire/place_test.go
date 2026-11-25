@@ -108,9 +108,9 @@ func TestKeyNamespaceNamesTheLinkedFolder(t *testing.T) {
 	}
 	sync, widgetco := open("sync"), open("widgetco")
 	linkedSync := keyNamespace(engine.Attached{Name: "agency", Backend: sync}, "sync")
-	linkedRisify := keyNamespace(engine.Attached{Name: "agency", Backend: widgetco}, "/widgetco/")
+	linkedWidgetco := keyNamespace(engine.Attached{Name: "agency", Backend: widgetco}, "/widgetco/")
 	named := keyNamespace(engine.Attached{Name: "agency/sync", Backend: sync}, "sync")
-	if linkedSync == linkedRisify {
+	if linkedSync == linkedWidgetco {
 		t.Fatalf("two linked folders share the namespace %q", linkedSync)
 	}
 	if linkedSync != named || named != folderStore+"/sync" {

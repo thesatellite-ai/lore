@@ -156,6 +156,8 @@ task lore:hooks:install  # once per clone: use the committed .githooks
 
 `task lore:hooks:install` points git at `.githooks/`, whose `pre-push` hook enforces the gate. A passing `task check` records the tree of the tracked files it tested (`.git/lore-check-passed`). On `git push`, if every pushed commit has exactly that tree, the push goes through at once; otherwise the hook runs `task check` first and blocks the push if it fails, or if the code it tested is not the code being pushed (uncommitted changes while checking). `git push --no-verify` skips it, for emergencies only. The hook itself is tested in `internal/repoguard/prepush_hook_test.go`.
 
+This repository is public, so client, company and people names and private host names never go into it: tests and docs use made-up names (acme, alice, bob). `tests/lib/denyhash.txt` lists the sha256 of each denied word, lowercased (hashes only, never the words); `internal/repoguard` `TestNoDeniedWordsInTrackedFiles` fails naming the file and line of any tracked text file holding one, `bash tests/lib/denyhash.sh <file|->` checks one file or stdin the same way, and the `pre-push` hook refuses a commit whose author, committer, message or added lines hold one, naming the commit and never the word. To deny a new word, add the output of `printf %s word | sha256sum` (lowercase; a two-word phrase with one space) to the list.
+
 ### Landing: `check:fast` for a small fix, the full gate on main
 
 A small fix (a policy tweak, a message, one function and its test) need not wait for the full gate. The rule:

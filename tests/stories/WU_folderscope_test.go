@@ -53,7 +53,7 @@ func TestStoryWUFolderScope(t *testing.T) {
 	}
 	// tools first: the folder a bare "first other folder" pick would take
 	lore("memory", "add", "--body", "tools folder", "--to", inTools)
-	lore("resource", "add", "--kind", "code_repo", "--name", "acme_app", "--set", "project=sync", "--set", "url=github.com/acme-co/sync-go", "--set", "purpose="+long, "--to", inOrg)
+	lore("resource", "add", "--kind", "code_repo", "--name", "acme_app", "--set", "project=sync", "--set", "url=github.com/acme-co/acme-app", "--set", "purpose="+long, "--to", inOrg)
 	lore("resource", "add", "--kind", "code_repo", "--name", "tool_cli", "--set", "project=tools", "--set", "url=github.com/acme-co/tool-cli", "--to", inOrg)
 	lore("resource", "add", "--kind", "code_repo", "--name", "shared_ci", "--set", "url=github.com/acme-co/ci", "--to", inOrg)
 	lore("resource", "add", "--kind", "code_repo", "--name", "sync_web", "--set", "url=github.com/acme-co/sync-web", "--to", inSync)
@@ -67,7 +67,7 @@ func TestStoryWUFolderScope(t *testing.T) {
 			r.Says(t, "acme_app", "sync_web").Never(t, "E_KIND_UNKNOWN", "tool_cli", "shared_ci")
 			m.Lore(dir, "resource", "kinds", "--store", inSync).OK(t).Says(t, "code_repo")
 			m.Lore(dir, "resource", "kind", "show", "--id", "code_repo", "--store", inSync).OK(t).Says(t, "purpose")
-			m.Lore(dir, "resource", "show", "--id", "acme_app", "--store", inSync).OK(t).Says(t, "github.com/acme-co/sync-go")
+			m.Lore(dir, "resource", "show", "--id", "acme_app", "--store", inSync).OK(t).Says(t, "github.com/acme-co/acme-app")
 		}
 		// the whole org still lists every resource
 		m.Lore(m.Home, "resource", "list", "--store", wOrg).OK(t).Says(t, "acme_app", "tool_cli", "shared_ci", "sync_web").Never(t, folderNote)
@@ -81,7 +81,7 @@ func TestStoryWUFolderScope(t *testing.T) {
 
 	s.Step("D-584/narrow-default-view", func() {
 		r := m.Lore(m.Home, "resource", "list", "--store", wOrg).OK(t)
-		r.Says(t, "KIND", "NAME", "PROJECT", "URL", "github.com/acme-co/sync-go").Never(t, "CHECKED", "PURPOSE")
+		r.Says(t, "KIND", "NAME", "PROJECT", "URL", "github.com/acme-co/acme-app").Never(t, "CHECKED", "PURPOSE")
 		r = m.Lore(m.Home, "resource", "list", "--kind", "code_repo", "--store", wOrg).OK(t)
 		r.Says(t, "PURPOSE", "…").Never(t, long)
 		for _, line := range strings.Split(r.Out(), "\n") {

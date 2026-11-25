@@ -46,7 +46,7 @@ func TestStoryWNNames(t *testing.T) {
 	for _, f := range []string{"project", "url", "notes"} {
 		lore("resource", "field", "add", "--kind", "code_repo", "--field", f, "--type", "text", "--to", inOrg)
 	}
-	lore("resource", "add", "--kind", "code_repo", "--name", "acme_app", "--set", "project=sync", "--set", "url=github.com/acme-co/sync-go", "--to", inOrg)
+	lore("resource", "add", "--kind", "code_repo", "--name", "acme_app", "--set", "project=sync", "--set", "url=github.com/acme-co/acme-app", "--to", inOrg)
 	lore("memory", "add", "--body", "tools folder", "--to", inTools)
 	lore("meta", "add", "--name", "owner_team", "--type", "text", "--to", inSync)
 	memID := wuMemID.FindString(lore("memory", "add", "--body", "a sync note", "--to", inSync))

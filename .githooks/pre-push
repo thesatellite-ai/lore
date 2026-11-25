@@ -26,12 +26,43 @@ stamped() {
 
 # git passes "<local ref> <local sha> <remote ref> <remote sha>" per ref.
 trees=""
-while read -r _local_ref local_sha _remote_ref _remote_sha; do
+ranges=""
+while read -r _local_ref local_sha _remote_ref remote_sha; do
 	[ "$local_sha" = "$zero" ] && continue # deleting a remote ref: nothing to test
 	tree=$(git rev-parse "$local_sha^{tree}" 2>/dev/null) || continue
 	trees="$trees $tree"
+	ranges="$ranges $local_sha:$remote_sha"
 done
 [ -z "$trees" ] && exit 0
+
+# Denied words (devco D-981): no pushed commit may carry a word whose sha256
+# is in tests/lib/denyhash.txt (client, company and people names, private
+# hosts) in its author, committer, message or added lines. The commits
+# checked are those the remote does not have yet (all of a new branch's
+# commits that no remote-tracking ref holds). The refusal names the commit,
+# never the word. Runs before the stamp check: a stamped tree is no excuse.
+hook_dir=$(cd "$(dirname "$0")" && pwd)
+deny_script="$hook_dir/../tests/lib/denyhash.sh"
+[ -f "$deny_script" ] || deny_script="$(git rev-parse --show-toplevel)/tests/lib/denyhash.sh"
+if [ ! -f "$deny_script" ]; then
+	echo "pre-push: tests/lib/denyhash.sh is missing, so pushed commits cannot be checked for denied words — push blocked" >&2
+	exit 1
+fi
+for r in $ranges; do
+	local_sha=${r%%:*}
+	remote_sha=${r#*:}
+	if [ "$remote_sha" != "$zero" ] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+		commits=$(git rev-list "$remote_sha..$local_sha")
+	else
+		commits=$(git rev-list "$local_sha" --not --remotes)
+	fi
+	for c in $commits; do
+		if ! { git log -1 --format='%an <%ae>%n%cn <%ce>%n%B' "$c"; git show --format= --no-color --unified=0 "$c" | grep '^+' | grep -v '^+++ '; } | bash "$deny_script" - >/dev/null 2>&1; then
+			echo "pre-push: commit $c holds a denied word (its sha256 is in tests/lib/denyhash.txt) in its author, message or added lines; reword or amend it with a made-up name — push blocked" >&2
+			exit 1
+		fi
+	done
+done
 
 all_stamped() {
 	for t in $trees; do

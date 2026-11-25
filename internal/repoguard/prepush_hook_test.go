@@ -36,7 +36,8 @@ var loreTaskfile = filepath.Join(repoRoot, "Taskfile.lore.yml")
 type hookRepo struct {
 	t   *testing.T
 	dir string
-	bin string // holds the stand-in `task`
+	bin string   // holds the stand-in `task`
+	env []string // extra environment for the hook (a test deny list)
 }
 
 func newHookRepo(t *testing.T) *hookRepo {
@@ -122,7 +123,7 @@ func (r *hookRepo) push(sha string, path string) (int, string, int) {
 	}
 	cmd := testCmd(r.t, "sh", hook, "origin", "git@example.com:x.git")
 	cmd.Dir = r.dir
-	cmd.Env = append(os.Environ(), "PATH="+path)
+	cmd.Env = append(append(os.Environ(), r.env...), "PATH="+path)
 	cmd.Stdin = strings.NewReader("refs/heads/main " + sha + " refs/heads/main " + zeroSHA + "\n")
 	out, err := cmd.CombinedOutput()
 	code := 0

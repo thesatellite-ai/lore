@@ -49,7 +49,7 @@ func TestStoryWMMore(t *testing.T) {
 	lore("resource", "field", "add", "--kind", "code_repo", "--field", "uses", "--type", "ref", "--ref-kind", "code_repo", "--to", inOrg)
 	lore("memory", "add", "--body", "tools folder", "--to", inTools)
 	lore("resource", "add", "--kind", "code_repo", "--name", "shared_ci", "--to", inOrg)
-	lore("resource", "add", "--kind", "code_repo", "--name", "acme_app", "--set", "project=sync", "--set", "url=github.com/acme-co/sync-go", "--set", "uses=shared_ci", "--to", inOrg)
+	lore("resource", "add", "--kind", "code_repo", "--name", "acme_app", "--set", "project=sync", "--set", "url=github.com/acme-co/acme-app", "--set", "uses=shared_ci", "--to", inOrg)
 	lore("resource", "add", "--kind", "code_repo", "--name", "tool_cli", "--set", "project=tools", "--to", inOrg)
 	lore("resource", "add", "--kind", "code_repo", "--name", "sync_web", "--set", "uses=acme_app", "--to", inSync)
 	// org-wide, using a resource of the sync folder (graph --up, impact)

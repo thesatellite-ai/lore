@@ -13,7 +13,7 @@ import (
 func TestResListNarrowView(t *testing.T) {
 	long := strings.Repeat("purpose text ", 40)
 	out := ResListOut{every: true, Data: []Resource{
-		{Kind: "code_repo", Name: "acme_app", Values: map[string]string{"project": "sync", "url": "github.com/acme/sync-go", "purpose": long}},
+		{Kind: "code_repo", Name: "acme_app", Values: map[string]string{"project": "sync", "url": "github.com/acme/acme-app", "purpose": long}},
 		{Kind: "host", Name: "db1", Values: map[string]string{}},
 	}}
 	txt := out.Text()

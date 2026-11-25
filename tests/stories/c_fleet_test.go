@@ -107,15 +107,15 @@ func cTimed(t testing.TB, m *journeys.Machine, c *teamharness.Clone, limit time.
 // every row is kept, in one commit, and nothing is pushed.
 func TestStoryCMixedFormat(t *testing.T) {
 	s := New(t, "C")
-	syncGo := s.Seed(s.Remote("github.com/acme/acme_app"), func(dir string) { V017Repo(t, dir, "acme_app", SmallShape) })
+	acmeApp := s.Seed(s.Remote("github.com/acme/acme_app"), func(dir string) { V017Repo(t, dir, "acme_app", SmallShape) })
 	auth := s.Seed(s.Remote("github.com/acme/auth"), func(dir string) { V017Repo(t, dir, "auth", SmallShape) })
 	cto := s.Person(cCTO.Name, cCTO.Email)
 	var cs, ca *teamharness.Clone
 	var refsSync, refsAuth string
 
 	s.Step("week1/clone-and-read", func() {
-		cs, ca = cto.Clone(syncGo, "acme_app"), cto.Clone(auth, "auth")
-		refsSync, refsAuth = s.RefsOf(syncGo), s.RefsOf(auth)
+		cs, ca = cto.Clone(acmeApp, "acme_app"), cto.Clone(auth, "auth")
+		refsSync, refsAuth = s.RefsOf(acmeApp), s.RefsOf(auth)
 		for _, c := range []*teamharness.Clone{cs, ca} {
 			if n := cListCount(t, cto.LoreIn(c, "task", "list", "--all", "--json").OK(t)); n != SmallShape["tasks"] {
 				t.Errorf("task list in %s shows %d tasks, want the %d lore 0.1.17 wrote", filepath.Base(c.Dir), n, SmallShape["tasks"])
@@ -152,14 +152,14 @@ func TestStoryCMixedFormat(t *testing.T) {
 				t.Errorf("new-lore commands changed tracked files in format-1 %s (a 0.1.17 teammate's pull would trip):\n%s", filepath.Base(c.Dir), st)
 			}
 		}
-		s.NoPushSince(t, syncGo, refsSync, "render, doctor --fix, fix and sync in a format-1 repo")
+		s.NoPushSince(t, acmeApp, refsSync, "render, doctor --fix, fix and sync in a format-1 repo")
 		s.NoPushSince(t, auth, refsAuth, "render, doctor --fix, fix and sync in a format-1 repo")
 	})
 
 	s.Step("week2/migrate-run-once", func() {
 		s.AdvanceDays(7)
 		cMigrate(t, s, cto, cs)
-		s.NoPushSince(t, syncGo, refsSync, "lore migrate run and the person's commit (D-8: no refs/lore/signals or branch pushed)")
+		s.NoPushSince(t, acmeApp, refsSync, "lore migrate run and the person's commit (D-8: no refs/lore/signals or branch pushed)")
 		if bad := NewFormatFiles(t, ca.Dir); len(bad) != 0 {
 			t.Errorf("migrating acme_app raised auth's format too: %v", bad[:min(3, len(bad))])
 		}
@@ -261,13 +261,13 @@ func TestStoryCCI(t *testing.T) {
 func TestStoryCScaleFleet(t *testing.T) {
 	s := New(t, "C")
 	hub := s.Seed(s.Remote("github.com/acme/hub"), func(dir string) { V017Repo(t, dir, "hub", HubShape) })
-	syncGo := s.Seed(s.Remote("github.com/acme/acme_app"), func(dir string) { V017Repo(t, dir, "acme_app", SmallShape) })
+	acmeApp := s.Seed(s.Remote("github.com/acme/acme_app"), func(dir string) { V017Repo(t, dir, "acme_app", SmallShape) })
 	brick := s.Seed(s.Remote("github.com/acme/brick"), func(dir string) { PlainRepo(t, dir) })
 	cto := s.Person(cCTO.Name, cCTO.Email)
 	var ch, cs, cb *teamharness.Clone
 
 	s.Step("day1/hub-reads-in-time", func() {
-		ch, cs, cb = cto.Clone(hub, "hub"), cto.Clone(syncGo, "acme_app"), cto.Clone(brick, "brick")
+		ch, cs, cb = cto.Clone(hub, "hub"), cto.Clone(acmeApp, "acme_app"), cto.Clone(brick, "brick")
 		limit := 30 * time.Second
 		if n := cListCount(t, cTimed(t, cto, ch, limit, "task", "list", "--all", "--json").OK(t)); n != HubShape["tasks"] {
 			t.Errorf("hub task list shows %d tasks, want %d", n, HubShape["tasks"])
@@ -287,7 +287,7 @@ func TestStoryCScaleFleet(t *testing.T) {
 	s.Step("day1/fleet", func() {
 		dirs := filepath.Dir(cb.Dir)
 		brickTree := TreeOf(t, cb.Dir)
-		refs := map[*teamharness.Remote]string{hub: s.RefsOf(hub), syncGo: s.RefsOf(syncGo), brick: s.RefsOf(brick)}
+		refs := map[*teamharness.Remote]string{hub: s.RefsOf(hub), acmeApp: s.RefsOf(acmeApp), brick: s.RefsOf(brick)}
 		d := cTimed(t, cto, cs, 120*time.Second, "doctor", "--all")
 		f := cTimed(t, cto, cs, 300*time.Second, "fix", "--all", "--dirs", dirs, "--yes")
 		f.Says(t, "hub", "acme_app", "lore migrate run")
