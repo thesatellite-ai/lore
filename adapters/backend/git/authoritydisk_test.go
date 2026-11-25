@@ -96,9 +96,13 @@ func authorityNow(t *testing.T, b *Backend) *authority {
 // TestAuthorityKeptOnDisk: a new process at a HEAD the replay already
 // reached replays no commit (it reads the replay kept in the clone's git
 // folder); after a plain commit it replays that commit only; after a
-// merge it replays the whole history. Every time the result is the full
-// replay's: the same holds, credits and admins (devco:D-797: a 5,000-row
-// store paid a full replay, 0.3 s, on every command).
+// merge onto the saved HEAD (the merge a sync makes) it replays only the
+// merged side and the merge (devco:D-999: it replayed the whole history);
+// after a fast-forward to a merge that reaches the saved HEAD only
+// through its other side it replays the whole history. Every time the
+// result is the full replay's: the same holds, credits and admins
+// (devco:D-797: a 5,000-row store paid a full replay, 0.3 s, on every
+// command).
 func TestAuthorityKeptOnDisk(t *testing.T) {
 	o := newOrgTeam(t)
 	spoof, roster := mustID[ids.Memory](t), mustID[ids.ActorPeriod](t)
@@ -133,7 +137,7 @@ func TestAuthorityKeptOnDisk(t *testing.T) {
 	}
 	sameAuthority(t, next, fullReplay(t, b))
 
-	// a merge: the whole history replays, and still matches
+	// a merge onto the saved HEAD: the side commit and the merge replay
 	side := mustID[ids.Memory](t)
 	gitT(t, b.work, "checkout", "--quiet", "-b", "side", "HEAD~1")
 	commitIn(t, b.work, o.boss.email, orgPath("memories", side), stampedRow(side, o.boss.actor, "2026-01-05T00:00:00.000Z", "side"))
@@ -142,14 +146,30 @@ func TestAuthorityKeptOnDisk(t *testing.T) {
 	forgetAuthority(b)
 	before = replayCount()
 	merged := authorityNow(t, b)
-	all, err := b.replayCommits(context.Background(), merged.head)
+	if n := replayCount() - before; n != 2 {
+		t.Errorf("after a merge onto the saved HEAD %d commit(s) were replayed, want 2 (the side commit and the merge)", n)
+	}
+	sameAuthority(t, merged, fullReplay(t, b))
+
+	// a fast-forward to a teammate's merge whose first parent is not the
+	// saved HEAD: the order of the history changed, so all of it replays
+	other := mustID[ids.Memory](t)
+	gitT(t, b.work, "checkout", "--quiet", "-b", "theirs", "HEAD~1")
+	commitIn(t, b.work, o.boss.email, orgPath("memories", other), stampedRow(other, o.boss.actor, "2026-01-06T00:00:00.000Z", "theirs"))
+	gitT(t, b.work, "-c", "user.name=x", "-c", "user.email="+o.boss.email, "merge", "--quiet", "--no-ff", "--no-edit", testBranch)
+	gitT(t, b.work, "checkout", "--quiet", testBranch)
+	gitT(t, b.work, "merge", "--quiet", "--ff-only", "theirs")
+	forgetAuthority(b)
+	before = replayCount()
+	again = authorityNow(t, b)
+	all, err := b.replayCommits(context.Background(), again.head)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n := replayCount() - before; n != int64(len(all)) {
-		t.Errorf("after a merge %d commit(s) were replayed, want the whole history (%d)", n, len(all))
+		t.Errorf("after a fast-forward to a merge off the saved HEAD's line %d commit(s) were replayed, want the whole history (%d)", n, len(all))
 	}
-	sameAuthority(t, merged, fullReplay(t, b))
+	sameAuthority(t, again, fullReplay(t, b))
 }
 
 // TestAuthorityOnDiskOfAnotherLoreIsNotUsed: a replay file written by

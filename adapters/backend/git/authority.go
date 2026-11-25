@@ -62,10 +62,16 @@ package git
 // --batch` of every row version, once per clone; the result is kept in
 // memory for the process and on disk in the clone's git folder
 // (authoritydisk.go), keyed by HEAD, the org roster's HEAD and the lore
-// binary. A later process at the same HEAD reads it back; a HEAD that
-// moved on by plain commits (a write, a fast-forward pull) replays only
-// the new commits; a merge, a rewrite or a new org roster replays it all
-// (devco:D-797: a 5,000-row folder paid 0.3 s on every command).
+// binary. A later process at the same HEAD reads it back; a HEAD whose
+// first-parent line holds the saved HEAD (a write, a fast-forward pull,
+// the merge a sync makes) replays only the new commits, in the order a
+// full replay would (replayRangeAfter); a rewrite, a HEAD that reaches the
+// saved one only through a merge's other side, or a new org roster
+// replays it all (devco:D-797: a 5,000-row folder paid 0.3 s on every
+// command; devco:D-999: every sync merge paid a full replay). The replay
+// also records each change to the org file (lore-org.yaml), so the org
+// file check reads them from here (OrgFileChanges), never with a walk of
+// its own.
 //
 // While the roster has no admin yet (a personal store, or an org's first
 // commits) every change is accepted. Git authorship can be forged by
@@ -504,7 +510,7 @@ type fileChange struct {
 // replayCommit is one non-merge commit of the replay.
 type replayCommit struct {
 	id      string
-	parents []string // its parents' commit ids (linearCommitsAfter)
+	parents []string // its parents' commit ids (replayRangeAfter)
 	author  string
 	changes []fileChange
 	// merge marks a merge commit: changes are then only the files whose
@@ -532,6 +538,28 @@ type authority struct {
 	// commits after head goes on from them (replayOver)
 	accepted map[string]string
 	snap     *adminSet
+	// orgFile is every change to an org file (lore-org.yaml) in the
+	// replay's order, merges included: the org file check of
+	// adapters/orgcfg judges them from here (OrgFileChanges) instead of
+	// walking the whole history with its own git log on every open
+	// (devco:D-999, store growth item 5)
+	orgFile []orgFileChange
+}
+
+// orgFileName is the base name of an org's config file (lore-org.yaml;
+// adapters/orgcfg.OrgFile): the replay records every change to a file of
+// that name, wherever it is kept (an org folder, the store root, the old
+// .lore/ place).
+const orgFileName = "lore-org.yaml"
+
+// orgFileChange is one change to an org file the replay saw.
+type orgFileChange struct {
+	commit string
+	parent string // the commit's first parent ("" for a root commit)
+	author string // the commit's git author email
+	path   string
+	blob   string // the file's version after the commit (zero = removed)
+	merge  bool   // a merge whose version neither parent had (git log -c)
 }
 
 // credit is one row version read with its commit's author credited as
@@ -583,24 +611,101 @@ func AdminAt(ctx context.Context, dir, rev, email string) (admin, decided bool) 
 	if dir == "" || rev == "" || email == "" {
 		return false, false
 	}
-	bin, err := lookGit(DefaultBinary)
-	if err != nil {
+	_, a := cloneAuthority(ctx, dir)
+	if a == nil {
 		return false, false
 	}
-	b := &Backend{git: runner{bin: bin}, work: dir, mode: modeClone}
-	h, err := b.head(ctx)
-	if err != nil || h == "" {
-		return false, false
-	}
-	a, err := b.authorityOf(ctx, h)
-	if err != nil || a == nil {
-		return false, false
-	}
+	return a.adminAt(rev, email)
+}
+
+// adminAt is AdminAt read from the replay a.
+func (a *authority) adminAt(rev, email string) (admin, decided bool) {
 	set, ok := a.admins[rev]
 	if !ok || !set.anyAdmin {
 		return false, false
 	}
 	return set.emails[strings.ToLower(strings.TrimSpace(email))], true
+}
+
+// cloneAuthority is the roster replay of the store clone at dir at its
+// HEAD (nil when git or the replay fails): the one this process holds or
+// the one kept on disk, carried on over the new commits (authorityOf),
+// with the backend that read it.
+func cloneAuthority(ctx context.Context, dir string) (*Backend, *authority) {
+	bin, err := lookGit(DefaultBinary)
+	if err != nil {
+		return nil, nil
+	}
+	b := &Backend{git: runner{bin: bin}, work: dir, mode: modeClone}
+	h, err := b.head(ctx)
+	if err != nil || h == "" {
+		return nil, nil
+	}
+	a, err := b.authorityOf(ctx, h)
+	if err != nil || a == nil {
+		return nil, nil
+	}
+	return b, a
+}
+
+// OrgFileChange is one change to an org file (lore-org.yaml) in a store
+// clone's history, in the order the roster replay decides commits, with
+// whether its author was an admin at the commit's first parent by the
+// trusted roster. Why exported: the org file check (adapters/orgcfg)
+// judges each change from these instead of a `git log` of the whole
+// history on every open, and a merge that brings a version neither
+// parent had is judged like any other commit (devco:D-999).
+type OrgFileChange struct {
+	// Commit is the full commit id; Parent its first parent ("" for a
+	// root commit).
+	Commit, Parent string
+	// Email is the commit's git author email (lower case).
+	Email string
+	// Path is the file, slash separated from the store's top.
+	Path string
+	// Blob is the file's version after the commit; Removed is true when
+	// the commit removed the file.
+	Blob    string
+	Removed bool
+	// Merge marks a merge commit (its version is neither parent's).
+	Merge bool
+	// Admin is whether Email is an admin of the org at Parent; Decided
+	// is false when the roster names no admin there (the caller's own
+	// rule applies, as with AdminAt).
+	Admin, Decided bool
+}
+
+// OrgFileChanges lists every change to an org file in the history of the
+// store clone at dir up to tip, oldest first in the replay's order. ok
+// is false when tip is not the clone's HEAD or the replay fails: the
+// caller reads the history itself then.
+func OrgFileChanges(ctx context.Context, dir, tip string) (changes []OrgFileChange, ok bool) {
+	if dir == "" || tip == "" {
+		return nil, false
+	}
+	b, a := cloneAuthority(ctx, dir)
+	if a == nil {
+		return nil, false
+	}
+	if tip != a.head && !commitIDPattern.MatchString(tip) {
+		// a ref (HEAD, a branch): the commit it names
+		if id, err := b.resolve(ctx, dir, tip); err == nil {
+			tip = id
+		}
+	}
+	if tip != a.head {
+		return nil, false
+	}
+	out := make([]OrgFileChange, 0, len(a.orgFile))
+	for _, c := range a.orgFile {
+		admin, decided := false, false
+		if c.parent != "" {
+			admin, decided = a.adminAt(c.parent, c.author)
+		}
+		out = append(out, OrgFileChange{Commit: c.commit, Parent: c.parent, Email: c.author, Path: c.path, Blob: c.blob, Removed: zeroBlob(c.blob),
+			Merge: c.merge, Admin: admin, Decided: decided})
+	}
+	return out, true
 }
 
 // authorityCache keeps the last replay per clone (folders of one clone share it).
@@ -699,7 +804,7 @@ func (b *Backend) replayOverHeld(ctx context.Context, held *authority, head, org
 	if held == nil || held.orgHead != orgHead || held.head == "" {
 		return nil, nil
 	}
-	commits, ok := b.linearCommitsAfter(ctx, held.head, head)
+	commits, ok := b.replayRangeAfter(ctx, held.head, head)
 	if !ok {
 		return nil, nil
 	}
@@ -726,13 +831,14 @@ func (a *authority) clone() *authority {
 		st.stamps[p] = m
 	}
 	return &authority{head: a.head, orgHead: a.orgHead, state: st, held: maps.Clone(a.held), trusted: maps.Clone(a.trusted), refused: maps.Clone(a.refused),
-		credited: maps.Clone(a.credited), admins: maps.Clone(a.admins), accepted: maps.Clone(a.accepted), snap: a.snap}
+		credited: maps.Clone(a.credited), admins: maps.Clone(a.admins), accepted: maps.Clone(a.accepted), snap: a.snap, orgFile: slices.Clip(a.orgFile)}
 }
 
 // replayFromDisk is the replay at head from the one kept on disk
 // (loadAuthority): as is when it was made at head, or carried on over the
-// commits after it when head only added plain commits on top
-// (linearCommitsAfter); nil when neither (a full replay is due).
+// commits after it when the saved head is on head's first-parent line
+// (replayRangeAfter: plain commits and merges alike); nil when neither (a
+// full replay is due).
 func (b *Backend) replayFromDisk(ctx context.Context, head, orgHead string) (*authority, error) {
 	a := b.loadAuthority()
 	if a == nil || a.orgHead != orgHead {
@@ -741,7 +847,7 @@ func (b *Backend) replayFromDisk(ctx context.Context, head, orgHead string) (*au
 	if a.head == head {
 		return a, nil
 	}
-	commits, ok := b.linearCommitsAfter(ctx, a.head, head)
+	commits, ok := b.replayRangeAfter(ctx, a.head, head)
 	if !ok {
 		return nil, nil
 	}
@@ -753,28 +859,53 @@ func (b *Backend) replayFromDisk(ctx context.Context, head, orgHead string) (*au
 	return a, nil
 }
 
-// linearCommitsAfter lists the commits from (exclusive) to to, oldest first,
-// when they are one line of plain commits on top of from: each has one
-// parent, the one before it (from for the first). Only then is replaying
-// them after from's replay the same as replaying to's whole history (git
-// lists every commit of from's history first). ok is false otherwise (a
-// merge, a rewrite, from not under to, a git failure).
-func (b *Backend) linearCommitsAfter(ctx context.Context, from, to string) ([]replayCommit, bool) {
+// replayRangeAfter lists the commits from (exclusive) to to in the order a
+// full replay of to decides them, when replaying them after from's replay
+// is the same as replaying to's whole history: from is on to's
+// first-parent line (each commit's first parent, from to back, reaches
+// from). Then git's reverse topological order of to's history is from's
+// whole history first, then from..to in the order `git log --reverse
+// --topo-order from..to` gives (git lists a merge's other side before
+// its first parent's line, so in reverse the first-parent line, which
+// holds from, comes first), and the replay of from goes on over exactly
+// those commits. That covers a write, a fast-forward and the merge a
+// sync makes (its first parent is the clone's own HEAD): before
+// devco:D-999 every merge replayed the whole history and read every row
+// version again. ok is false otherwise (from only reached through a
+// merge's other parent, a rewrite, from not under to, a git failure): a
+// full replay is due, never a guess.
+func (b *Backend) replayRangeAfter(ctx context.Context, from, to string) ([]replayCommit, bool) {
 	if commits, ok := ownCommitsAfter(b.work, from, to); ok {
 		return commits, true // this process made them and listed each (noteCommitted)
+	}
+	if from == "" || to == "" || from == to {
+		return nil, false
 	}
 	commits, err := b.replayCommits(ctx, from+".."+to)
 	if err != nil || len(commits) == 0 || commits[len(commits)-1].id != to {
 		return nil, false
 	}
-	prev := from
-	for _, c := range commits {
-		if len(c.parents) != 1 || c.parents[0] != prev {
-			return nil, false
-		}
-		prev = c.id
+	return commits, onFirstParentLine(commits, from, to)
+}
+
+// onFirstParentLine reports whether following first parents from to
+// through commits (from..to) reaches from. A rewritten history, or from
+// reached only through a merge's other side, leaves the listed commits
+// first: false.
+func onFirstParentLine(commits []replayCommit, from, to string) bool {
+	byID := make(map[string]*replayCommit, len(commits))
+	for i := range commits {
+		byID[commits[i].id] = &commits[i]
 	}
-	return commits, true
+	for id := to; id != from; {
+		c, ok := byID[id]
+		if !ok || len(c.parents) == 0 {
+			return false
+		}
+		delete(byID, id) // each commit once: a broken listing cannot loop
+		id = c.parents[0]
+	}
+	return true
 }
 
 // commitMark starts each commit's record in replayCommits' log output.
@@ -897,6 +1028,13 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 		}
 		actor := st.authorActor(c, docOf)
 		for _, f := range c.changes {
+			if path.Base(f.path) == orgFileName {
+				parent := ""
+				if len(c.parents) > 0 {
+					parent = c.parents[0]
+				}
+				a.orgFile = append(a.orgFile, orgFileChange{commit: c.id, parent: parent, author: c.author, path: f.path, blob: f.newBlob, merge: c.merge})
+			}
 			if !isRowFile(f.path) {
 				continue
 			}

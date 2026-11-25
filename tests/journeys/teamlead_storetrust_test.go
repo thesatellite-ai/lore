@@ -107,6 +107,68 @@ func TestJourneyTeamLeadStoreListAdminOnly(t *testing.T) {
 
 }
 
+// TestJourneyTeamLeadStoreListMergeAdminOnly: devco R-7 through a merge
+// (devco:D-999). The threat: a member who may not change the org's store
+// list hides the change in a hand-made merge, resolving it with a
+// lore-org.yaml neither side had (here: a store on another host). The org
+// file check read the history without merges, so the planted store
+// stood on every teammate's lore. Now the roster replay, which already
+// reads every commit once and keeps its result, lists that merge's
+// change and the check holds it back like a plain commit, naming the
+// merge and a revert git accepts (git revert -m 1). Lee's lore carries
+// its saved replay over the merge instead of reading the whole history.
+func TestJourneyTeamLeadStoreListMergeAdminOnly(t *testing.T) {
+	t.Parallel()
+	tt, lee, ann := stTeam(t)
+	w := tt.w
+	outside := w.Remote("github.com/outside-co/notes")
+	w.Step("day2/a-member-plants-a-store-in-a-merge", func() {
+		w.AdvanceDays(1)
+		c := ann.Clone(tt.store, "store-merge")
+		c.Git("checkout", "-q", "main")
+		rel := ""
+		for _, f := range strings.Fields(c.Git("ls-files")) {
+			if filepath.Base(f) == "lore-org.yaml" {
+				rel = f
+			}
+		}
+		if rel == "" {
+			t.Fatalf("the store holds no lore-org.yaml: %s", c.Git("ls-files"))
+		}
+		write := func(name, body string) {
+			if err := os.WriteFile(filepath.Join(c.Dir, name), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		c.Git("checkout", "-q", "-b", "side")
+		write("side.txt", "side\n")
+		c.Git("add", "side.txt")
+		c.Git("commit", "-q", "--no-verify", "-m", "side notes")
+		c.Git("checkout", "-q", "main")
+		write("main.txt", "main\n")
+		c.Git("add", "main.txt")
+		c.Git("commit", "-q", "--no-verify", "-m", "main notes")
+		c.Git("merge", "-q", "--no-ff", "--no-commit", "side")
+		p := filepath.Join(c.Dir, rel)
+		body := strings.Replace(jRead(t, p), "stores:\n", "stores:\n    - url: "+outside.SSHURL()+"\n", 1)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		c.Git("add", rel)
+		c.Git("commit", "-q", "--no-verify", "-m", "merge side")
+		c.Git("push", "-q", "origin", "HEAD:main")
+	})
+	w.Step("day2/the-admin-keeps-the-store-list", func() {
+		tt.lore(tlLee, "sync").Says(t, "lore-org.yaml", "held back", tlAnn.Name, "not an admin", "git revert -m 1")
+		tt.lore(tlLee, "store", "list").OK(t).Never(t, outside.SSHURL(), "outside-co")
+		if clones := lee.StoreClones(t); strings.Contains(strings.Join(clones, " "), "outside-co") {
+			t.Fatalf("lore cloned the outside repo: %v", clones)
+		}
+		tt.lore(tlAnn, "sync")
+		tt.lore(tlAnn, "store", "list").OK(t).Never(t, outside.SSHURL())
+	})
+}
+
 // TestJourneyTeamLeadStrayFilesInStore: devco R-2.
 func TestJourneyTeamLeadStrayFilesInStore(t *testing.T) {
 	t.Parallel()

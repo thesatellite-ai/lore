@@ -184,7 +184,22 @@ func benchSize(t *testing.T, bin string, n, repeat int) Run {
 		authCold.add(w.lore("sync"))
 		authWarm.add(w.lore("sync"))
 	}
-	run.Samples = append(run.Samples, authCold, authWarm)
+	// the merge a sync makes: a teammate's commit merged onto the clone's
+	// HEAD (devco:D-999 carries the saved replay over the merged commits;
+	// before, every merge replayed the whole history)
+	authMerge := Sample{Name: "Authority after a sync merge (lore sync)", Note: "a side commit merged --no-ff onto the clone's HEAD by plain git, then `lore sync` (judges HEAD, pushes the 2 commits)"}
+	for i := range repeat {
+		side := fmt.Sprintf("bench-side-%d", i)
+		w.git(w.clone, "checkout", "-q", "-b", side, "HEAD~1")
+		mustWrite(t, filepath.Join(w.clone, "bench", side+".txt"), side+"\n")
+		w.git(w.clone, "add", "bench")
+		w.git(w.clone, "-c", "user.name=Bench", "-c", "user.email=bench@example.invalid", "commit", "-q", "--no-verify", "-m", side)
+		w.git(w.clone, "checkout", "-q", "main")
+		w.git(w.clone, "-c", "user.name=Bench", "-c", "user.email=bench@example.invalid", "merge", "-q", "--no-ff", "--no-edit", side)
+		w.git(w.clone, "branch", "-q", "-D", side)
+		authMerge.add(w.lore("sync"))
+	}
+	run.Samples = append(run.Samples, authCold, authWarm, authMerge)
 	org := Sample{Name: "Org file log (proxy for acceptedOrgFile)", Note: "the path-limited full-history `git log` it runs on every core open"}
 	for range repeat {
 		org.add(w.timeGit(w.clone, "log", "--format=%H", "main", "--", "org/lore-org.yaml"))

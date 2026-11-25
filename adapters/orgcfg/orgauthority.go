@@ -6,9 +6,12 @@ package orgcfg
 // repo every member can push to, so a reader never trusts the file at the
 // branch tip as it stands: it replays the file's history and accepts each
 // change only from a commit whose git author is an admin of the org in
-// the roster at that commit's parent.
+// the roster at that commit's parent. The changes come from the store
+// clone's roster replay, kept on disk and carried on over new commits
+// (gitbackend.OrgFileChanges), so an open walks no history (devco:D-999).
 //
-//	commits touching the org file, oldest first (no merges)
+//	commits touching the org file, in the roster replay's order (a
+//	merge counts when its version is neither parent's)
 //	  └─ doc at C equals the accepted doc (a move, reformat) ─▶ accepted
 //	  └─ first version, or author is an admin at C^          ─▶ accepted
 //	  └─ otherwise                                           ─▶ held back
@@ -35,6 +38,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/schema"
@@ -69,6 +73,7 @@ const unreadOrgWhy = "the version of %s at commit %s is not in this store clone 
 // orgFileCommit is one commit of the org file's history.
 type orgFileCommit struct {
 	sha, parent, author, email, subject string
+	merge                               bool
 }
 
 // acceptedOrgFile replays the history of the org file of folder up to tip
@@ -78,8 +83,117 @@ type orgFileCommit struct {
 // the tip's file stands. A history git cannot list is read as accepted
 // (best effort: never brick a store over a log error).
 func acceptedOrgFile(ctx context.Context, dir, tip, folder string) (string, []HeldOrgChange) {
+	if at, held, ok := acceptedOrgFileIndexed(ctx, dir, tip, folder); ok {
+		return at, held
+	}
+	return acceptedOrgFileLog(ctx, dir, tip, folder)
+}
+
+// acceptedOrgFileIndexed is acceptedOrgFile read from the store clone's
+// roster replay (gitbackend.OrgFileChanges): the replay already lists
+// every change to the org file, in its own order, with whether the author
+// was an admin at the commit's parent, and it is kept on disk and carried
+// on over new commits only. Why (devco:D-999, store growth item 5): the
+// path-limited `git log` of acceptedOrgFileLog walked the whole history
+// on every core open, and skipped merges, so a merge commit that brought
+// a version of lore-org.yaml neither parent had (a hand-made merge by a
+// member) stood unchecked. ok is false when the replay cannot answer for
+// tip (tip is not the clone's HEAD: a fetched tip read before lore sync
+// merges it).
+func acceptedOrgFileIndexed(ctx context.Context, dir, tip, folder string) (string, []HeldOrgChange, bool) {
+	changes, ok := gitbackend.OrgFileChanges(ctx, dir, tip)
+	if !ok {
+		return "", nil, false
+	}
 	paths := orgFilePaths(folder)
-	args := append([]string{"-C", dir, "log", "--reverse", "--topo-order", "--no-merges", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%s", tip, "--"}, paths...)
+	var held []HeldOrgChange
+	accepted := "" // the commit whose file is accepted so far
+	var acceptedDoc *OrgFileDoc
+	hold := func(c gitbackend.OrgFileChange, unread bool) {
+		short := shortCommit(c.Commit)
+		name, subject := commitNameSubject(ctx, dir, c.Commit)
+		why := fmt.Sprintf(unreadOrgWhy, c.Path, short)
+		switch {
+		case unread:
+		case c.Merge:
+			// a merge is reverted against its first parent: the plain
+			// `git revert <merge>` git refuses
+			why = fmt.Sprintf(heldOrgWhy, name, "-m 1 "+short)
+		default:
+			why = fmt.Sprintf(heldOrgWhy, name, short)
+		}
+		held = append(held, HeldOrgChange{Commit: short, Author: name, Email: c.Email, Subject: subject, Path: c.Path, Why: why})
+	}
+	for _, c := range changes {
+		if !slices.Contains(paths, c.Path) || c.Removed {
+			continue // another folder's org file, or the commit removed it
+		}
+		raw, rerr := gitRun(ctx, "-C", dir, "cat-file", "blob", c.Blob)
+		if rerr != nil {
+			// not in this clone (offline, a damaged clone): held back,
+			// never accepted (fail closed, devco:D-997)
+			hold(c, true)
+			continue
+		}
+		doc, perr := parseOrgFileDoc(raw)
+		if perr != nil {
+			continue // unreadable: the tip read names it if it is still there
+		}
+		admin := c.Admin
+		if !c.Decided && c.Parent != "" {
+			admin = isOrgAdminAt(ctx, dir, c.Parent, folder, c.Email)
+		}
+		switch {
+		case acceptedDoc != nil && sameOrgDoc(*acceptedDoc, doc):
+		case acceptedDoc == nil && c.Parent == "":
+		case admin:
+		default:
+			hold(c, false)
+			continue
+		}
+		d := doc
+		accepted, acceptedDoc = c.Commit, &d
+	}
+	if len(held) == 0 {
+		return "", nil, true
+	}
+	return accepted, held, true
+}
+
+// orgLogWalks counts the history walks of acceptedOrgFileLog in this
+// process: the tests' proof that an open at a clone's HEAD walks none
+// (devco:D-999).
+var orgLogWalks atomic.Int64
+
+// shortCommit is the 7-character form of a commit id lore prints.
+func shortCommit(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
+}
+
+// commitNameSubject is the git author name and the subject of commit
+// (both "" when git cannot read it): only a held change prints them.
+func commitNameSubject(ctx context.Context, dir, commit string) (name, subject string) {
+	out, err := gitRun(ctx, "-C", dir, "show", "-s", "--format=%an%x00%s", commit)
+	if err != nil {
+		return "", ""
+	}
+	name, subject, _ = strings.Cut(strings.TrimRight(out, "\n"), "\x00")
+	return name, subject
+}
+
+// acceptedOrgFileLog is acceptedOrgFile from a path-limited `git log` of
+// tip's whole history: the way for a tip the clone's roster replay does
+// not reach (acceptedOrgFileIndexed).
+func acceptedOrgFileLog(ctx context.Context, dir, tip, folder string) (string, []HeldOrgChange) {
+	orgLogWalks.Add(1)
+	paths := orgFilePaths(folder)
+	// merges too: git's path-limited log keeps a merge only when its
+	// version is neither parent's (a hand-made merge), the one a member
+	// could slip a change in by (devco:D-999)
+	args := append([]string{"-C", dir, "log", "--reverse", "--topo-order", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%s", tip, "--"}, paths...)
 	out, err := gitRun(ctx, args...)
 	if err != nil {
 		return "", nil
@@ -90,8 +204,8 @@ func acceptedOrgFile(ctx context.Context, dir, tip, folder string) (string, []He
 		if len(f) != 5 {
 			continue
 		}
-		parent, _, _ := strings.Cut(f[1], " ")
-		commits = append(commits, orgFileCommit{sha: f[0], parent: parent, author: f[2], email: f[3], subject: f[4]})
+		parent, _, merge := strings.Cut(f[1], " ")
+		commits = append(commits, orgFileCommit{sha: f[0], parent: parent, author: f[2], email: f[3], subject: f[4], merge: merge})
 	}
 	var held []HeldOrgChange
 	accepted := "" // the commit whose file is accepted so far
@@ -126,8 +240,12 @@ func acceptedOrgFile(ctx context.Context, dir, tip, folder string) (string, []He
 			if len(short) > 7 {
 				short = short[:7]
 			}
+			revert := short
+			if c.merge {
+				revert = "-m 1 " + short
+			}
 			held = append(held, HeldOrgChange{Commit: short, Author: c.author, Email: c.email, Subject: c.subject, Path: p,
-				Why: fmt.Sprintf(heldOrgWhy, c.author, short)})
+				Why: fmt.Sprintf(heldOrgWhy, c.author, revert)})
 			continue
 		}
 		d := doc

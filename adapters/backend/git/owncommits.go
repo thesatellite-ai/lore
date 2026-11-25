@@ -10,7 +10,7 @@ package git
 // commit again: one more git process per write to a store. noteCommitted
 // now lists the commit in the replay's own form and keeps it here, so
 //
-//	linearCommitsAfter(from, to)
+//	replayRangeAfter(from, to)
 //	  every commit from to back to from is one this process listed ─▶ them
 //	  anything else (a pull, another process's commit, a merge)     ─▶ git log
 //
@@ -50,7 +50,7 @@ func noteOwnCommit(work string, c replayCommit) {
 	m[c.id] = c
 }
 
-// ownCommitsAfter is linearCommitsAfter answered from the commits kept:
+// ownCommitsAfter is replayRangeAfter answered from the commits kept:
 // the line of single-parent commits from (exclusive) to to, oldest first,
 // when every one of them is kept; ok is false otherwise.
 func ownCommitsAfter(work, from, to string) ([]replayCommit, bool) {

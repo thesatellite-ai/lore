@@ -56,8 +56,9 @@ const authorityDirMode = 0o700
 const authorityHashLen = 8
 
 // authorityFormat is the layout of authorityFile: bump it when
-// savedAuthority changes shape (2: the clone path, devco:D-812).
-const authorityFormat = 2
+// savedAuthority changes shape (2: the clone path, devco:D-812; 3: the
+// org file's changes, devco:D-999).
+const authorityFormat = 3
 
 // authorityFiles maps a clone folder to the replay file its open chose
 // (authorityFileFor), so a Backend made without an open uses the same
@@ -87,6 +88,14 @@ type savedAuthority struct {
 	Admins   map[string]int
 	Snap     int
 	Accepted map[string]string
+	// OrgFile is every change to an org file, in the replay's order
+	OrgFile []savedOrgChange
+}
+
+// savedOrgChange is an orgFileChange.
+type savedOrgChange struct {
+	Commit, Parent, Author, Path, Blob string
+	Merge                              bool
 }
 
 // savedDoc is a rosterDoc with its content key.
@@ -242,6 +251,9 @@ func (s savedAuthority) authority() *authority {
 		}
 		a.admins[id] = snaps[i]
 	}
+	for _, c := range s.OrgFile {
+		a.orgFile = append(a.orgFile, orgFileChange{commit: c.Commit, parent: c.Parent, author: c.Author, path: c.Path, blob: c.Blob, merge: c.Merge})
+	}
 	return a
 }
 
@@ -373,6 +385,9 @@ func (a *authority) saved(bin string) (savedAuthority, bool) {
 	}
 	for p, c := range a.credited {
 		s.Credited[p] = savedCredit{Actor: c.actor, Claimed: c.claimed, HLC: c.hlc, Created: c.created, Commit: c.commit}
+	}
+	for _, c := range a.orgFile {
+		s.OrgFile = append(s.OrgFile, savedOrgChange{Commit: c.commit, Parent: c.parent, Author: c.author, Path: c.path, Blob: c.blob, Merge: c.merge})
 	}
 	index := map[*adminSet]int{}
 	at := func(set *adminSet) int {
