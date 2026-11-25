@@ -70,6 +70,14 @@ type match struct {
 	whole bool
 }
 
+// named says the question names the resource: its name or an alias said
+// whole, not a typo of one. Why (devco D-975, bug hunt H-234): a typo is
+// found by distance, and a common question word (webhook) is one letter
+// off a code_repo named webhooks; a resource so found only touches the
+// question (its card prints as one line under the rows, the rows need not
+// be about it), unless the question asks everything about it.
+func (m match) named() bool { return m.whole && m.how != MatchTypo }
+
 // nameKey is a resource name as the question's tokens read it (aliasKey):
 // widget_api is "widget api", since a question word never holds an
 // underscore; alice-ng stays alice-ng.

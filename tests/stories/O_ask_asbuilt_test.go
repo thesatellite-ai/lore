@@ -164,4 +164,42 @@ func TestStoryOAskAsBuiltNotesFirst(t *testing.T) {
 			t.Errorf("[O D-969] the printed `lore show --id %s` does not print the note whole:\n%s", id, show)
 		}
 	})
+
+	// devco D-975 (bug hunt H-234, Sync benchmark set 6, S6-19): code_repos
+	// a question word is one letter off (webhook: webhooks) counted as named,
+	// so only rows naming them answered: the memory and the task saying
+	// "receiver ... not mounted" were left out and full cards printed. Now
+	// a typo, a part of a name or a field value only touches a resource:
+	// the rows answer by their words, the cards take one short line.
+	s.Step("D-975/cards-never-push-out-rows", func() {
+		long := strings.Repeat("records every event with its signature, retries and run id; ", 28)
+		for _, n := range []string{"webhooks", "receivers"} {
+			ada.Lore(pc.Dir, "resource", "add", "--kind", "code_repo", "--name", n,
+				"--set", "purpose=Payment events service: "+long,
+				"--set", "url=https://git.example.test/"+n, "--to", company, "--yes").OK(t)
+		}
+		ada.Lore(pc.Dir, "architecturenote", "add", "--title", "As built: payment webhooks", "--body", "Payment webhooks from Paygate arrive at the separate hookrcv service, not the API server; it verifies the signature and enqueues a job.", "--yes").OK(t)
+		ada.Lore(pc.Dir, "memory", "add", "--body", "The receiver is not mounted in the API on purpose: it runs as its own binary built from Dockerfile.hookrcv.", "--yes").OK(t)
+		ada.Lore(pc.Dir, "memory", "add", "--body", "Mount the Paygate receiver behind the gateway once the API splits.", "--yes").OK(t)
+		r := ada.Lore(pc.Dir, "ask", "--query", "why is the Paygate webhook receiver not mounted").OK(t)
+		out := r.Out()
+		card := strings.Index(out, "code_repo ")
+		for _, want := range []string{"As built: payment webhooks", "Dockerfile.hookrcv", "behind the gateway"} {
+			if at := strings.Index(out, want); at < 0 || card >= 0 && card < at {
+				t.Errorf("[O D-975] %q is not shown before the code_repo lines:\n%s", want, r)
+			}
+		}
+		cards := 0
+		for l := range strings.SplitSeq(out, "\n") {
+			if strings.HasPrefix(l, "code_repo ") {
+				cards++
+				if len(l) > 220 {
+					t.Errorf("[O D-975] a card the question only touches prints whole: %q", l)
+				}
+			}
+		}
+		if cards > 1 {
+			t.Errorf("[O D-975] %d code_repo lines; want at most one:\n%s", cards, r)
+		}
+	})
 }

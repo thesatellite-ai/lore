@@ -410,7 +410,13 @@ func build(q question, d data, top, maxChars int) Out {
 	q.about = !identity && len(ms) > 0 && (isAbout(q.text) || bareName(q, ms))
 	out.identity, out.asked = identity, q.tokens
 	for _, m := range ms {
-		out.Resources = append(out.Resources, resourceOf(m, d.resources, q.owe != oweNone))
+		r := resourceOf(m, d.resources, q.owe != oweNone)
+		if q.about && m.whole {
+			// everything about a typo of a name ("alise-ng"): the card
+			// leads, whole
+			r.touched = false
+		}
+		out.Resources = append(out.Resources, r)
 	}
 	if !identity {
 		out.Tasks = tasksFor(q, ms, d.tasks)
@@ -661,7 +667,7 @@ func isIdentity(text string) bool {
 // owns). brief keeps only the name line (a debt question).
 func resourceOf(m match, all []resourceRow, brief bool) Resource {
 	r := m.res
-	out := Resource{ID: r.ID, Kind: r.Kind, Name: r.Name, Place: r.Place, Match: m.how, Aliases: r.Aliases, Fields: []Field{}, Linked: []Linked{}, touched: !m.whole, parts: len(m.said)}
+	out := Resource{ID: r.ID, Kind: r.Kind, Name: r.Name, Place: r.Place, Match: m.how, Aliases: r.Aliases, Fields: []Field{}, Linked: []Linked{}, touched: !m.named(), parts: len(m.said)}
 	if brief {
 		return out
 	}
@@ -704,6 +710,44 @@ func resourceOf(m match, all []resourceRow, brief bool) Resource {
 		}
 	}
 	return out
+}
+
+// keepBestRow makes room for the best row of order when cap kept none:
+// the resource and task cards printed before it are dropped from the end
+// until the row fits, cut to its best sections. Why (devco D-975, Sync
+// benchmark set 6, S6-19): the full cards of three code_repos filled the
+// cap and the answer was the cards alone while rows matched; a card says
+// what a thing is, the row what the question asks.
+func (o *Out) keepBestRow(order []Ranked, rowIdx map[string]int, maxChars int) {
+	at := slices.IndexFunc(order, func(r Ranked) bool { return r.Kind == KindRow })
+	if at < 0 || slices.ContainsFunc(o.Ranked, func(r Ranked) bool { return r.Kind == KindRow }) {
+		return
+	}
+	best := order[at]
+	o.Left-- // best was left out; it is printed now
+	for len(o.Ranked) > 0 {
+		o.Ranked = o.Ranked[:len(o.Ranked)-1]
+		o.Left++
+		if o.fitsWith(best, rowIdx[best.ID], maxChars) {
+			return
+		}
+	}
+	if !o.fitsWith(best, rowIdx[best.ID], maxChars) {
+		// not even cut to one section: it stands alone, as cap's first
+		// item does
+		o.Ranked = append(o.Ranked, best)
+	}
+}
+
+// fitsWith adds row r (at index i of o.Rows) to the answer when it fits
+// in maxChars, cut to its best sections if need be.
+func (o *Out) fitsWith(r Ranked, i, maxChars int) bool {
+	o.Ranked = append(o.Ranked, r)
+	if len(o.body()) <= maxChars || o.cutRow(i, maxChars) {
+		return true
+	}
+	o.Ranked = o.Ranked[:len(o.Ranked)-1]
+	return false
 }
 
 // dayOf is the YYYY-MM-DD of an RFC 3339 time, or s itself.
@@ -782,6 +826,23 @@ func subjectOf(r *textRow, toks map[string]bool, ms []match) bool {
 	return false
 }
 
+// touchedBonus is what a row about a resource the question only touches
+// (a typo of its name, a part of it, a field value) scores for being
+// about it: one question word, as a row holding the word scores.
+const touchedBonus = 3
+
+// namesWhole reports whether the question names one of ms by its name or
+// an alias, said whole: the rows must then be about them. A typo, a part
+// of a name or a field value only touches a resource. Why (devco D-975,
+// Sync benchmark set 6, S6-19): "why is the <payment> webhook receiver
+// not mounted" found code_repos by a typo of their name (webhooks) or a
+// part of it, kept only the rows naming them, so the memory and task
+// saying "receiver ... not mounted" were left out, and three code_repo
+// cards answered.
+func namesWhole(ms []match) bool {
+	return slices.ContainsFunc(ms, func(m match) bool { return m.named() })
+}
+
 // allWords reports whether every word of name (one, or an alias's
 // several) is in toks.
 func allWords(toks map[string]bool, name string) bool {
@@ -835,11 +896,28 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	var first map[string]bool // the title and first line's words, built at the first topic hit
 	s := scored{row: r}
 	cmts := map[string]bool{} // the comments holding a word of q (D-942)
+	// sm are the resources whose words are their name, not question
+	// words, for r
+	sm := ms
+	loose := false // r is not about the resources the question touches
 	if len(ms) > 0 {
-		if !subjectOf(r, toks, ms) {
+		switch {
+		case !namesWhole(ms):
+			// devco D-975 (bug hunt H-234): no resource is named by its
+			// name or an alias, so the question is not about them: a row
+			// about one counts the word that found it once, as one
+			// question word; any other row answers by its words, each
+			// word counted (two or more, below)
+			if subjectOf(r, toks, ms) {
+				s.score += touchedBonus
+			} else {
+				sm, loose = nil, true
+			}
+		case !subjectOf(r, toks, ms):
 			return s, false
+		default:
+			s.score += 10
 		}
-		s.score += 10
 	}
 	for _, t := range q.topics {
 		for _, w := range t.row {
@@ -858,12 +936,12 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	}
 	// devco D-972: a long row counts the words of its best section (and
 	// title), not every word its whole text holds (longsec.go)
-	sec := bestSection(q, ms, r)
+	sec := bestSection(q, sm, r)
 	if sec != nil {
 		s.heads = sec.heldHeads
 	}
 	for _, w := range q.words {
-		if namesResource(w, ms) {
+		if namesResource(w, sm) {
 			continue
 		}
 		if hasWord(toks, w) || identWord(q, toks, w) {
@@ -911,9 +989,14 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	if len(ms) == 0 && len(s.matched) == 0 && !s.meaning {
 		return s, false
 	}
+	if loose && len(s.matched) < 2 {
+		// one shared word ("money" for a budget row of another project)
+		// is no match, as in build's no-row fallback (devco D-949)
+		return s, false
+	}
 	// H-230: the row naming the asked thing in one identifier
 	// (ErrGroupNameTaken for "reserved role key") ranks as a phrase
-	s.score += identBonus(q, ms, r)
+	s.score += identBonus(q, sm, r)
 	// a row dated in (or near) the question's window ranks up (prior.go);
 	// it never makes a row answer on its own
 	s.score += timeBonus(q, r)
@@ -1317,6 +1400,7 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 		o.Ranked = append(o.Ranked, order[0])
 		o.Left--
 	}
+	o.keepBestRow(order, rowIdx, maxChars)
 	kept := map[Ranked]bool{}
 	for _, r := range o.Ranked {
 		kept[r] = true
