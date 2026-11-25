@@ -710,6 +710,18 @@ tasks:
         LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^TestBenchTraps$' -timeout $({{.TEST_TIME}} 60m) -v {{.CLI_ARGS}} ./tests/bench/coding/; traps=$?
         exit $(( recall | traps ))
 
+  # Store growth (spec item 1, devco D-989): a synthetic team store of the real shape (seeded by a
+  # real lore: org, roster, one row per table; then N commits through git fast-import) and the time
+  # of every store path on it. Manual only (never in task check or on push); heavy sizes run under
+  # testlock and the machine limits. Sizes and settings: tests/bench/storegrowth/README.md.
+  bench:store:
+    desc: "Store growth bench (tests/bench/storegrowth, tag bench): generate a synthetic team store of STOREGROWTH_COMMITS commits (default 1000; comma list, e.g. 1000,100000) and time first clone, fetch of 100 new commits, write + push, ask and search cold and warm, the authority replay cold and warm, the org file log, a 50-row batch apply and undo, task history --git, trash list --from-history and the clone's disk; asserts the planted non-admin org file change and self-promotion stay held; report tmp/bench/storegrowth-<commits>-<sha>.md and .json. Extra go test flags after --"
+    vars:
+      BENCH_BIN: "{{.BIN_DIR}}/lore-bench"
+    cmds:
+      - CGO_ENABLED=0 go build -o {{.BENCH_BIN}} ./cmd/lore
+      - "LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^TestBenchStoreGrowth$' -timeout $({{.TEST_TIME}} 180m) -v {{.CLI_ARGS}} ./tests/bench/storegrowth/"
+
   bench:coding:
     desc: "Coding-agent context gate (tests/bench/coding, tag bench): 30 coding tasks (a file and what to change) on a synthetic repo whose store holds rules, hotfixes, decisions, patterns and memories; lore context --for-file + --for-prompt and lore ask must show every must-rule and critical hotfix that applies (recall 100%) with at least 80% of what they show applying; report tmp/bench/coding.md, non-zero exit naming every miss. Settings: tests/bench/coding/README.md. Extra go test flags after --"
     vars:
