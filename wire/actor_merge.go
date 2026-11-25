@@ -186,6 +186,9 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	for _, e := range edits {
 		perTable[string(e.ref.Table)]++
 		perStore[e.ref.Store]++
+		if e.del {
+			out.Folded++
+		}
 	}
 	out.Rows = len(edits)
 	for _, tb := range slices.Sorted(maps.Keys(perTable)) {
@@ -203,12 +206,18 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 		})
 		edited := map[store.Source]int{}
 		for _, e := range edits {
-			if b.update(e.ref, e.patch) {
+			if e.stage(b) {
 				edited[e.ref.Store]++
 			}
 		}
-		marked := a.markMerged(ctx, st, b, fromCopies, into)
-		marked += a.rosterTombstone(ctx, st, b, fromCopies, into)
+		// devco:D-993: <from> is marked merged only when every row
+		// naming it was staged: a merge that left a row keeps <from>
+		// as it was, so nothing reads half-merged and the rerun finishes
+		marked := 0
+		if len(b.failed) == 0 {
+			marked = a.markMerged(ctx, st, b, fromCopies, into)
+			marked += a.rosterTombstone(ctx, st, b, fromCopies, into)
+		}
 		return b, edited, marked, b.commit()
 	}
 	if in.DryRun {
@@ -367,10 +376,22 @@ func actorCopies(ctx context.Context, st *state, from, into ids.AnyID) ([]actorC
 	return f, t, nil
 }
 
-// actorEdit is one row a merge edits.
+// actorEdit is one row a merge edits: patch written, or (del) the row
+// deleted because it was folded into foldedInto, a live row that already
+// held its new natural key (devco:D-993, actor_merge_fold.go).
 type actorEdit struct {
-	ref   engine.Ref
-	patch map[string]value.Value
+	ref        engine.Ref
+	patch      map[string]value.Value
+	del        bool
+	foldedInto ids.AnyID
+}
+
+// stage writes e into b; false when the row could not be written.
+func (e actorEdit) stage(b *bulkWrite) bool {
+	if e.del {
+		return b.delete(e.ref)
+	}
+	return b.update(e.ref, e.patch)
 }
 
 // actorRefEdits lists the edits that make every live row of st's
@@ -404,6 +425,7 @@ func actorRefEdits(ctx context.Context, st *state, m map[string]ids.AnyID, skip 
 			if err != nil {
 				return nil, nil, err
 			}
+			var tableEdits []actorEdit
 			for _, r := range rows {
 				if r.Deleted || (def.Name == schema.TableActors && skip[r.ID]) {
 					continue
@@ -418,8 +440,12 @@ func actorRefEdits(ctx context.Context, st *state, m map[string]ids.AnyID, skip 
 					}
 					continue
 				}
-				out = append(out, actorEdit{ref: engine.Ref{Store: src, Table: def.Name, ID: r.ID}, patch: p})
+				tableEdits = append(tableEdits, actorEdit{ref: engine.Ref{Store: src, Table: def.Name, ID: r.ID}, patch: p})
 			}
+			// devco:D-993: an edit landing on a key the kept actor's row
+			// holds (a stint starting the same day, the same contact)
+			// folds into that row instead of failing E_NAME_TAKEN
+			out = append(out, foldActorEdits(def, rows, tableEdits)...)
 		}
 	}
 	slices.SortFunc(out, func(x, y actorEdit) int {
@@ -824,7 +850,7 @@ func (a *App) migrateActorKeys(ctx context.Context, dryRun bool) ([]string, int,
 		verb = "mapped"
 		b := a.bulk(ctx, "migrate "+StepActors, nil) // one store commit for the step's rows
 		for _, e := range edits {
-			b.update(e.ref, e.patch)
+			e.stage(b)
 		}
 		for _, r := range live {
 			if to, ok := m[r.ID.String()]; ok {

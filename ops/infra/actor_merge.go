@@ -81,6 +81,10 @@ type ActorMergeOut struct {
 	// read-only here: those rows are left; merge again where they are
 	// writable.
 	ReadOnly []string `json:"read_only,omitempty"`
+	// Folded counts the rows naming From that the kept actor already had
+	// (a stint starting the same day, the same contact): each was folded
+	// into Into's row and deleted instead of edited (devco:D-993).
+	Folded int `json:"folded,omitempty"`
 	// Marked counts the copies of From's actor row marked merged_into.
 	Marked int  `json:"marked"`
 	DryRun bool `json:"dry_run,omitempty"`
@@ -116,6 +120,13 @@ func (o ActorMergeOut) Text() string {
 		}
 		b.WriteString("    " + w.Store + ": " + strconv.Itoa(w.Rows) + verb + "\n")
 	}
+	if o.Folded > 0 {
+		verb := " folded into "
+		if o.DryRun {
+			verb = " would fold into "
+		}
+		b.WriteString("  " + strconv.Itoa(o.Folded) + " of them" + verb + o.Into + "'s matching row (the same stint start, contact or membership): its fields merged, the duplicate deleted\n")
+	}
 	b.WriteString("  stores read: " + strings.Join(o.Stores, ", ") + "\n")
 	if !o.DryRun {
 		b.WriteString("  " + o.From + " keeps its row with merged_into " + o.Into + " (inactive; actors are never deleted)\n")
@@ -140,7 +151,7 @@ func (o ops) actorMergeOps() []op.Entry {
 	if !ok {
 		return nil
 	}
-	return []op.Entry{op.Define(op.Spec{Name: OpActorMerge, Summary: "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other; its row stays, marked merged_into; asks first; a row a write refuses is named and the rest are merged (a rerun finishes)",
+	return []op.Entry{op.Define(op.Spec{Name: OpActorMerge, Summary: "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other (a row the other already has, such as a stint starting the same day, is folded into it); its row stays, marked merged_into once every row is moved; asks first; a row a write refuses is named and the rest are merged (a rerun finishes)",
 		Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.Refused}, writeErrors...),
 		Confirm: op.ConfirmRule{MayAsk: true},
 		Examples: []op.Example{

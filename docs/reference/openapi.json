@@ -2275,7 +2275,7 @@
     "/v1/actors/merge": {
       "post": {
         "operationId": "actor.merge",
-        "summary": "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other; its row stays, marked merged_into; asks first; a row a write refuses is named and the rest are merged (a rerun finishes)",
+        "summary": "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other (a row the other already has, such as a stint starting the same day, is folded into it); its row stays, marked merged_into once every row is moved; asks first; a row a write refuses is named and the rest are merged (a rerun finishes)",
         "tags": [
           "actor"
         ],
@@ -2326,6 +2326,9 @@
                   "properties": {
                     "dry_run": {
                       "type": "boolean"
+                    },
+                    "folded": {
+                      "type": "integer"
                     },
                     "from": {
                       "type": "string"

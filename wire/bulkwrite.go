@@ -126,6 +126,32 @@ func (b *bulkWrite) update(ref engine.Ref, patch map[string]value.Value) bool {
 	return true
 }
 
+// delete stages the delete of one row (its tombstone keeps the history);
+// false when it could not be written (recorded in failed). An actor merge
+// deletes a row it folded into the kept actor's (devco:D-993).
+func (b *bulkWrite) delete(ref engine.Ref) bool {
+	if st, err := b.a.state(b.ctx); err == nil {
+		if src := b.target(st, ref.Table, ref.Store); src != "" {
+			ref.Store = src
+		}
+	}
+	_, err := b.a.Delete(b.stage(ref.Store), ref)
+	if errors.Is(err, store.ErrBatch) {
+		// the stage already writes this row: land it, then delete afresh
+		if cerr := b.commitStore(ref.Store); cerr == nil {
+			_, err = b.a.Delete(b.stage(ref.Store), ref)
+		}
+	}
+	f := bulkFailure{Store: string(ref.Store), Table: string(ref.Table), ID: ref.ID.String()}
+	if err != nil {
+		b.fail(f, err, ref)
+		return false
+	}
+	b.pending[ref.Store]++
+	b.staged[ref.Store] = append(b.staged[ref.Store], f)
+	return true
+}
+
 // create stages a new row with a pinned id in src; false when it could
 // not be written (recorded in failed).
 func (b *bulkWrite) create(src store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) bool {
