@@ -49,8 +49,8 @@ func TestJourneyAskAnswersInOneCall(t *testing.T) {
 		lap.LoreIn(code, "ask", "--store", "me", "--query", "what was the reasoning behind orbit's pick").OK(t).
 			Says(t, "we chose hetzner over aws because the bill is 30 percent smaller")
 		status := lap.LoreIn(code, "ask", "--store", "me", "--query", "what is the status of orbit").OK(t).
-			Says(t, "live in production with 9 customers", "project orbit").Out()
-		if strings.Index(status, "live in production") > strings.Index(status, "project orbit") {
+			Says(t, "live in production with 9 customers", " (project) orbit").Out() // H-245: a candidate line
+		if strings.Index(status, "live in production") > strings.Index(status, " (project) orbit") {
 			t.Errorf("the project is printed before its status update:\n%s", status)
 		}
 		// the task line names the person: no card of them under it (devco D-827)

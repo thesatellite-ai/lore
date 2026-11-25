@@ -154,6 +154,15 @@ type Answer struct {
 		Kind string `json:"kind"`
 		ID   string `json:"id"`
 	} `json:"ranked"`
+	// Candidates are the one-line items after the full ones (H-245): an
+	// answer there counts as shown, after every full item, and as enough
+	// when its line holds the answer sentence.
+	Candidates []struct {
+		ID    string `json:"id"`
+		Kind  string `json:"kind"`
+		Title string `json:"title"`
+		Line  string `json:"line"`
+	} `json:"candidates"`
 }
 
 // ParseAnswer reads lore ask --json output.
@@ -176,7 +185,7 @@ type Result struct {
 	Enough bool
 	Shown  bool // the answering row or card is in the answer at all
 	Top1   bool // it is the first item of the answer
-	Rank   int  // its place in the answer, 1-based; 0 when not shown
+	Rank   int  // its place in the answer, 1-based (a candidate line after every full item); 0 when not shown
 	// CardsWhenFull: ask printed a code_repo card although knowledge rows
 	// filled the first Slots places (and the answer is not a card).
 	CardsWhenFull bool
@@ -216,6 +225,22 @@ func Score(q Question, a Answer, keyOf map[string]string, s *Store) Result {
 		if k == q.AnswerKey && res.Rank == 0 {
 			res.Rank, res.Shown = i+1, true
 			res.Enough = contains(printed(a, it.Kind, it.ID), q.AnswerSentence)
+		}
+	}
+	for i, c := range a.Candidates {
+		if res.Rank != 0 {
+			break
+		}
+		k := keyOf[c.ID]
+		if c.Kind == "resource" {
+			k = "resource:" + c.Title
+			if _, ok := s.Card("card-" + c.Title); ok {
+				k = "card-" + c.Title
+			}
+		}
+		if k == q.AnswerKey {
+			res.Rank, res.Shown = len(a.Ranked)+i+1, true
+			res.Enough = contains(c.Title+"\n"+c.Line, q.AnswerSentence)
 		}
 	}
 	res.Top1 = res.Rank == 1

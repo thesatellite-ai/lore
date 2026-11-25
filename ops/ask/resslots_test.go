@@ -6,9 +6,8 @@ package ask
 // the rows after D-963, and stood before the rows when the best row had
 // changed (the resources then lead), so the hotfix that answered was left
 // out. Now a resource the question only touches never stands before a
-// matching row of any kind, and such resources take one item at the
-// default cap (one more per default cap above it); a resource the
-// question names keeps its place.
+// matching row of any kind; since H-245 (devco D-998) no card is a full
+// item while a row answers: the cards are lines of the candidate list.
 
 import (
 	"fmt"
@@ -46,7 +45,8 @@ func shopFixture() data {
 	}
 }
 
-// touchedLines counts the code_repo lines of an answer's text.
+// touchedLines counts the code_repo lines of an answer's text printed as
+// full items (a candidate line is "  <id> (code_repo) <name>: …").
 func touchedLines(text string) int {
 	n := 0
 	for l := range strings.SplitSeq(text, "\n") {
@@ -57,10 +57,21 @@ func touchedLines(text string) int {
 	return n
 }
 
+// cardLines counts the candidate lines of code_repo cards.
+func cardLines(o Out) int {
+	n := 0
+	for _, c := range o.Candidates {
+		if c.Kind == KindResource && c.Table == "code_repo" {
+			n++
+		}
+	}
+	return n
+}
+
 // TestTouchedResourcesTakeOneSlot: on product questions the resources the
-// question only touches take one item, after every row; --max-chars twice
-// the cap prints one more (the printed next step works); a resource the
-// question names whole keeps its full line before the rows it is about.
+// question only touches are never a full item (H-245): they are lines of
+// the candidate list after the rows, the list within --max-chars; a
+// resource the question names whole is the list's first line.
 func TestTouchedResourcesTakeOneSlot(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -82,11 +93,8 @@ func TestTouchedResourcesTakeOneSlot(t *testing.T) {
 		q.home = "kb/app"
 		o := build(q, d, 0, 0)
 		text := o.Text()
-		if n := touchedLines(text); n != 1 || o.leftBrief == 0 {
-			t.Errorf("%q (changed %v): %d code_repo lines (left %d); want one, the rest left out:\n%s", tc.q, tc.changed, n, o.leftBrief, text)
-		}
-		if !strings.Contains(text, "--max-chars 8000 prints more") {
-			t.Errorf("%q: the left-out line does not say how to print more:\n%s", tc.q, text)
+		if n, c := touchedLines(text), cardLines(o); n != 0 || c == 0 || len(o.Candidates) > maxCandidates || len(o.body()) > DefaultMaxChars {
+			t.Errorf("%q (changed %v): %d code_repo full items, %d card candidate lines; want none full, cards in the list within the cap:\n%s", tc.q, tc.changed, n, c, text)
 		}
 		row := false
 		for i := len(o.Ranked) - 1; i >= 0; i-- {
@@ -100,13 +108,16 @@ func TestTouchedResourcesTakeOneSlot(t *testing.T) {
 		if !strings.Contains(text, tc.want) && !strings.Contains(strings.Join(o.Cited, " "), tc.want) {
 			t.Errorf("%q (changed %v): the answering row %s is not shown:\n%s", tc.q, tc.changed, tc.want, text)
 		}
-		if more := build(q, d, 0, 2*DefaultMaxChars); touchedLines(more.Text()) != 2 {
-			t.Errorf("%q: --max-chars %d prints %d code_repo lines, want 2:\n%s", tc.q, 2*DefaultMaxChars, touchedLines(more.Text()), more.Text())
+		if more := build(q, d, 0, 2*DefaultMaxChars); touchedLines(more.Text()) != 0 {
+			t.Errorf("%q: --max-chars %d prints %d code_repo full items, want none:\n%s", tc.q, 2*DefaultMaxChars, touchedLines(more.Text()), more.Text())
 		}
 	}
-	// named whole: the question is about it, its full line leads
+	// named whole: the question is about it: it leads as a full item when
+	// no row answers, else it is the first candidate line
 	named := build(parseQuestion("what does shop_import_worker import", now), shopFixture(), 0, 0)
-	if len(named.Ranked) == 0 || named.Ranked[0] != (Ranked{KindResource, "res_1"}) && !strings.Contains(named.Text(), "code_repo shop_import_worker: purpose") {
-		t.Errorf("a resource the question names whole lost its place or fields: %+v\n%s", named.Ranked, named.Text())
+	leads := len(named.Ranked) > 0 && named.Ranked[0] == (Ranked{KindResource, "res_1"})
+	first := len(named.Candidates) > 0 && named.Candidates[0].ID == "res_1" && strings.HasPrefix(named.Candidates[0].Line, "purpose: ")
+	if !leads && !first {
+		t.Errorf("a resource the question names whole lost its place: %+v %+v\n%s", named.Ranked, named.Candidates, named.Text())
 	}
 }

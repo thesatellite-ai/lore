@@ -225,10 +225,10 @@ func TestRankedAnswerFirst(t *testing.T) {
 		q    string
 		want []string // the first ids of Ranked, in order
 	}{
-		{"what is the status of lumen", []string{"mem_s3", "mem_s2", "mem_s1", "res_lumen"}},
+		{"what is the status of lumen", []string{"mem_s3", "mem_s2", "mem_s1"}},
 		{"what is the status of lumne", []string{"mem_s3"}},
 		{"how far along is lumen these days", []string{"mem_s3"}},
-		{"what did we decide for lumen and why", []string{"mem_d1", "res_lumen"}},
+		{"what did we decide for lumen and why", []string{"mem_d1"}},
 		{"how much money can lumen spend now", []string{"mem_b2"}},
 		{"what do I owe Bobby", []string{"tsk_3"}},
 		{"what does robert-kim owe me", []string{"tsk_2"}},
@@ -258,6 +258,14 @@ func TestRankedAnswerFirst(t *testing.T) {
 			last = i
 		}
 	}
+	// H-245: a row answers, so the project's card is a candidate line
+	// after the full rows, never a full item among them
+	for _, q := range []string{"what is the status of lumen", "what did we decide for lumen and why"} {
+		o, text := ask(t, q)
+		if slices.ContainsFunc(o.Ranked, func(r Ranked) bool { return r.Kind == KindResource }) || len(o.Candidates) == 0 || o.Candidates[0].ID != "res_lumen" {
+			t.Errorf("%q: ranked %v candidates %+v, want res_lumen first in the candidate list alone\n%s", q, o.Ranked, o.Candidates, text)
+		}
+	}
 	_, text := ask(t, "everything about alice-ng")
 	for _, h := range []string{"\nlatest (the newest row of each folder and the newest decision, status, budget and meeting row, word for word):\n", "open tasks (1):", "\nmore rows (word for word):\n"} {
 		if !strings.Contains(text, h) {
@@ -267,11 +275,12 @@ func TestRankedAnswerFirst(t *testing.T) {
 }
 
 // TestCapKeepsReadingOrder: --max-chars leaves out what ranks lowest, so
-// a tight status answer keeps the status row and drops the project.
+// a tight status answer keeps the status row; the project is a candidate
+// line (H-245), printed only when it fits.
 func TestCapKeepsReadingOrder(t *testing.T) {
 	t.Parallel()
 	o := build(parseQuestion("what is the status of lumen", now), fixture(t), 1, 100)
-	if len(o.Rows) != 1 || o.Rows[0].ID != "mem_s3" || len(o.Resources) != 0 || o.Left != 1 {
+	if len(o.Rows) != 1 || o.Rows[0].ID != "mem_s3" || len(o.Resources) != 0 || len(o.body()) > 100 {
 		t.Fatalf("capped status answer: rows %v resources %v left %d\n%s", o.Rows, o.Resources, o.Left, o.Text())
 	}
 	if len(o.Ranked) != 1 || o.Ranked[0] != (Ranked{KindRow, "mem_s3"}) {

@@ -6859,6 +6859,46 @@
                         ]
                       }
                     },
+                    "candidates": {
+                      "type": "array",
+                      "description": "after the items printed in full, the next 5-7 candidates in search's order, one line each (id, kind, table, title and the line of it that holds the most words of the question); when a row answers the question, resource cards (code_repo and other resources) stand here, never among the full items; lore show --id \u003cid\u003e prints one in full",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "description": "row or resource: the kind of item"
+                          },
+                          "line": {
+                            "type": "string",
+                            "description": "the one line of it that holds the most words of the question (a resource's field as name: value)"
+                          },
+                          "place": {
+                            "type": "string",
+                            "description": "where it is stored (\u003cstore\u003e/\u003cfolder\u003e)"
+                          },
+                          "table": {
+                            "type": "string",
+                            "description": "a row's table (memories, decisions …) or a resource's kind (code_repo, person …)"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "a row's title (else its first line) or a resource's name"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "table",
+                          "place",
+                          "title",
+                          "line"
+                        ]
+                      }
+                    },
                     "cited": {
                       "type": "array",
                       "description": "the id of every item in the answer, in reading order",
@@ -7298,7 +7338,8 @@
                     "tasks",
                     "rows",
                     "ranked",
-                    "cited"
+                    "cited",
+                    "candidates"
                   ]
                 }
               }

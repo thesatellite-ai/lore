@@ -113,6 +113,10 @@ type Out struct {
 	Ranked []Ranked `json:"ranked" desc:"every item of the answer in reading order, the one that answers the question first: a status or decision row before its project, the owed tasks before the person, the person then the newest row of each folder for everything about X"`
 	Cited  []string `json:"cited" desc:"the id of every item in the answer, in reading order"`
 	Left   int      `json:"left,omitempty" desc:"how many items were left out to stay under --max-chars"`
+	// Candidates are search's next items after the full ones, one line
+	// each, and the resource cards when a row answers (candidates.go,
+	// bug hunt H-245): the agent reads one with lore show --id.
+	Candidates []Candidate `json:"candidates" desc:"after the items printed in full, the next 5-7 candidates in search's order, one line each (id, kind, table, title and the line of it that holds the most words of the question); when a row answers the question, resource cards (code_repo and other resources) stand here, never among the full items; lore show --id <id> prints one in full"`
 	// File, Applies and Context answer a question that names a file
 	// (file.go, devco D-815): what lore context --for-file --for-prompt
 	// picks for it, printed before the ranked items.
@@ -130,9 +134,6 @@ type Out struct {
 	// taking the first.
 	Conflicts []Conflict `json:"conflicts,omitempty" desc:"set when two rows the answer prints state different values for the same named field (a snake, kebab or dotted key, a camelCase name, a --flag or a word in backticks: X = V, X: V, X defaults to V, no default for X, X is V ms; units compared after normalising, 5 s = 5000 ms), at most 3; check which is current with lore show --id <id> and fix or supersede the other"`
 	maxChars  int
-	// leftBrief is how many of Left are resources the question only
-	// touches, left out by their share of the cap (devco D-963).
-	leftBrief int
 	note      string
 	// lead is how many of Rows (the first ones) are an everything-about
 	// answer's newest row of each folder, printed one line each (devco

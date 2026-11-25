@@ -19,6 +19,7 @@ package stories
 // D-969: a long note ranks by its section.
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -79,14 +80,14 @@ func TestStoryOAskAsBuiltNotesFirst(t *testing.T) {
 				}
 			}
 		}
-		// devco D-968: one item at the default cap, not a fifth of it
-		if cards > 1 || !strings.Contains(out, "more resources that only share a word with the question left out; --max-chars 8000 prints more") {
-			t.Errorf("[O D-963/D-968] %d cards; want at most one and the line saying the rest were left out:\n%s", cards, r)
+		// devco D-968, then H-245 (D-998): no card is a full item while
+		// a row answers; the cards are lines of the candidate list
+		if cards > 0 || !strings.Contains(out, " (code_repo) ") {
+			t.Errorf("[O D-963/D-998] %d full cards; want none, the cards as candidate lines:\n%s", cards, r)
 		}
-		// the printed next step runs where printed and prints more cards
 		more := ada.Lore(pc.Dir, "ask", "--query", "how does the feed import pipeline work", "--max-chars", "8000").OK(t)
-		if strings.Count(more.Out(), "\ncode_repo ") <= cards {
-			t.Errorf("[O D-963] --max-chars 8000 prints no more cards:\n%s", more)
+		if strings.Count(more.Out(), "\ncode_repo ") != 0 {
+			t.Errorf("[O D-998] --max-chars 8000 prints full cards:\n%s", more)
 		}
 	})
 
@@ -109,10 +110,10 @@ func TestStoryOAskAsBuiltNotesFirst(t *testing.T) {
 		if hotfix < 0 || card >= 0 && card < hotfix || strings.Count(out, "\ncode_repo ") > 1 {
 			t.Errorf("[O D-968] the hotfix is not shown before at most one code_repo line:\n%s", r)
 		}
-		// the printed next step runs where printed and prints one more
+		// H-245 (D-998): a bigger cap prints no full card either
 		more := ada.Lore(pc.Dir, "ask", "--query", q, "--max-chars", "8000").OK(t)
-		if strings.Count(more.Out(), "\ncode_repo ") != 2 {
-			t.Errorf("[O D-968] --max-chars 8000 does not print one more code_repo line:\n%s", more)
+		if strings.Count(more.Out(), "\ncode_repo ") != 0 {
+			t.Errorf("[O D-998] --max-chars 8000 prints a full code_repo card:\n%s", more)
 		}
 		// named whole: the question is about it and its card stays
 		named := ada.Lore(pc.Dir, "ask", "--query", "what does shop_import_worker do").OK(t)
@@ -200,6 +201,52 @@ func TestStoryOAskAsBuiltNotesFirst(t *testing.T) {
 		}
 		if cards > 1 {
 			t.Errorf("[O D-975] %d code_repo lines; want at most one:\n%s", cards, r)
+		}
+	})
+
+	s.Step("D-998/next-candidates-after-the-full-rows", func() {
+		// bug hunt H-245 (owner decision 2026-11-25 item 3): after the
+		// full rows the next 5-7 candidates, one line each, the cards only
+		// there; every id printed reads with the printed lore show --id
+		q := "why is the Paygate webhook receiver not mounted"
+		r := ada.Lore(pc.Dir, "ask", "--query", q, "--json").OK(t)
+		var a struct {
+			Ranked []struct {
+				Kind string `json:"kind"`
+			} `json:"ranked"`
+			Candidates []struct {
+				ID, Kind, Table, Title, Line string
+			} `json:"candidates"`
+		}
+		if err := json.Unmarshal([]byte(r.Out()), &a); err != nil {
+			t.Fatalf("[O D-998] ask --json: %v\n%s", err, r)
+		}
+		for _, it := range a.Ranked {
+			if it.Kind == "resource" {
+				t.Errorf("[O D-998] a resource card is a full item while rows answer:\n%s", r)
+			}
+		}
+		if len(a.Candidates) == 0 || len(a.Candidates) > 7 {
+			t.Fatalf("[O D-998] %d candidates; want 1-7:\n%s", len(a.Candidates), r)
+		}
+		cards := 0
+		for _, c := range a.Candidates {
+			if c.ID == "" || c.Title == "" || c.Line == "" {
+				t.Errorf("[O D-998] a candidate lacks a field: %+v", c)
+			}
+			if c.Kind == "resource" {
+				cards++
+			}
+			// the printed next step works where printed, for rows and cards
+			ada.Lore(pc.Dir, "show", "--id", c.ID).OK(t)
+		}
+		if cards == 0 {
+			t.Errorf("[O D-998] no code_repo card in the candidate list:\n%s", r)
+		}
+		text := ada.Lore(pc.Dir, "ask", "--query", q).OK(t)
+		text.Says(t, "next candidates (lore show --id <id> prints one in full):")
+		if !strings.Contains(text.Out(), "  "+a.Candidates[0].ID+" ("+a.Candidates[0].Table+") ") {
+			t.Errorf("[O D-998] the text does not list %s:\n%s", a.Candidates[0].ID, text)
 		}
 	})
 }

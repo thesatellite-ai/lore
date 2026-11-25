@@ -72,15 +72,15 @@ func TestLongRowPrintsBestSections(t *testing.T) {
 // TestCompactAnswer (devco D-892): a rows answer prints one line per row
 // ("- <day> <folder>: <text>") with no per-row id, table or "best rows"
 // heading; the folder is said once when every row shares it, every id is
-// on the cited line in reading order, a resource under rows is one line,
-// and --json keeps every field.
+// on the cited line in reading order, a resource under rows is one
+// candidate line (H-245), and --json keeps every field.
 func TestCompactAnswer(t *testing.T) {
 	t.Parallel()
 	o, text := ask(t, "what is the status of lumen")
 	if strings.Contains(text, "best rows") || strings.Contains(text, "memories mem_") || strings.Contains(text, "\n\n") {
 		t.Errorf("not compact:\n%s", text)
 	}
-	if len(o.Rows) == 0 || len(o.Resources) == 0 {
+	if len(o.Rows) == 0 || len(o.Candidates) == 0 {
 		t.Fatalf("rows %v resources %v\n%s", o.Rows, o.Resources, text)
 	}
 	r := o.Rows[0]
@@ -90,8 +90,8 @@ func TestCompactAnswer(t *testing.T) {
 	if !strings.Contains(text, "\n- 2026-05-01 me/work: Status update lumen: kickoff held with 10 people.  [history: ") {
 		t.Errorf("an older row is not one line with its history:\n%s", text)
 	}
-	if !strings.Contains(text, "\nproject lumen: company acme-co, owner alice-ng\n") {
-		t.Errorf("the project under the rows is not one line:\n%s", text)
+	if !strings.Contains(text, "\n"+CandidatesHeading+"\n  res_lumen (project) lumen: ") {
+		t.Errorf("the project under the rows is not one candidate line (H-245):\n%s", text)
 	}
 	if !strings.HasSuffix(text, "cited: "+strings.Join(o.Cited, " ")+"\n") || len(o.Cited) != len(o.Ranked) {
 		t.Errorf("cited line does not name every id:\n%s", text)

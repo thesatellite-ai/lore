@@ -418,7 +418,8 @@ func build(q question, d data, top, maxChars int) Out {
 	if maxChars <= 0 {
 		maxChars = DefaultMaxChars
 	}
-	out := Out{Query: q.text, When: q.when, Resources: []Resource{}, Tasks: []Task{}, Rows: []Row{}, Ranked: []Ranked{}, Cited: []string{}}
+	out := Out{Query: q.text, When: q.when, Resources: []Resource{}, Tasks: []Task{}, Rows: []Row{}, Ranked: []Ranked{}, Cited: []string{}, Candidates: []Candidate{}}
+	var more []Row // the rows past top, for the candidate list
 	ms := matchResources(q, d.resources)
 	identity := isIdentity(q.text) && len(ms) > 0
 	q.about = !identity && len(ms) > 0 && (isAbout(q.text) || bareName(q, ms))
@@ -464,7 +465,8 @@ func build(q question, d data, top, maxChars int) Out {
 		out.Rows = slices.DeleteFunc(rows, func(r Row) bool { return len(r.Matched) < 2 })
 		lead = len(out.Rows)
 	default:
-		out.Rows, lead = topRows(q, ms, d.rows, d.view, top)
+		out.Rows, lead = topRows(q, ms, d.rows, d.view, top+maxCandidates)
+		out.Rows, more, lead = pastTop(out.Rows, top, lead)
 		if len(out.Rows) == 0 && len(ms) > 0 && !q.about {
 			// no row is about the resources it names: the rows holding
 			// two or more of its words and topics answer, the resources
@@ -473,15 +475,18 @@ func build(q question, d data, top, maxChars int) Out {
 			// ("money" for a budget row of another project) is no match:
 			// "who handles the money at birchwood-co" stays the company
 			// and the people its fields link.
-			rows, _ := topRows(q, nil, d.rows, d.view, top)
-			out.Rows = slices.DeleteFunc(rows, func(r Row) bool { return len(r.Matched) < 2 })
+			rows, _ := topRows(q, nil, d.rows, d.view, top+maxCandidates)
+			rows = slices.DeleteFunc(rows, func(r Row) bool { return len(r.Matched) < 2 })
+			out.Rows, more, _ = pastTop(rows, top, 0)
 			lead = 0
 		}
 	}
 	names := nameIndex(d.resources)
-	for i := range out.Rows {
-		r := &out.Rows[i]
-		r.readTitle, r.readBody = readable(r.Title, names), readable(r.Body, names)
+	for _, rs := range [][]Row{out.Rows, more} {
+		for i := range rs {
+			r := &rs[i]
+			r.readTitle, r.readBody = readable(r.Title, names), readable(r.Body, names)
+		}
 	}
 	if q.file == "" && q.owe == oweNone && !identity {
 		out.Abstain = abstainOf(q, ms, d.rows) // abstain.go
@@ -490,7 +495,10 @@ func build(q question, d data, top, maxChars int) Out {
 		out.lead = lead
 	}
 	out.chunkLong()
-	out.cap(out.rank(q, identity, lead), maxChars)
+	// H-245: cards stand in the candidate list when a row answers, and the
+	// list counts in maxChars (candidates.go)
+	order, cards := out.splitCards(out.rank(q, identity, lead))
+	out.fitCandidates(order, maxChars, more, cards)
 	// H-239: only the rows printed, after the cap cut them
 	out.Conflicts = out.conflictsOf()
 	comments := map[string][]Comment{}
@@ -1442,38 +1450,17 @@ func rowOf(r *textRow, matched []string) Row {
 func (o *Out) cap(order []Ranked, maxChars int) {
 	o.maxChars = maxChars
 	o.Ranked = []Ranked{}
-	o.Left, o.leftBrief = 0, 0
+	o.Left = 0
 	rowIdx := map[string]int{}
 	for i, r := range o.Rows {
 		rowIdx[r.ID] = i
 	}
 	bestRow := true // no row of order seen yet
-	resIdx := map[string]int{}
-	for i, r := range o.Resources {
-		resIdx[r.ID] = i
-	}
-	// devco D-963 (Sync benchmark set 4): resources the question only
-	// touches (a part of their name or a field value) print under the
-	// rows as one short line each and share at most a fifth of the cap,
-	// so ten code_repo cards whose purpose repeats the question's words
-	// never push out the rows that answer it. devco D-968 (set 5): a
-	// fifth of the cap still held six such lines, so they also take at
-	// most resSlots(maxChars) of the answer's items: one at the default
-	// cap, one more per default cap above it (the printed --max-chars
-	// <twice> prints more of them)
-	underRows := slices.ContainsFunc(order, func(r Ranked) bool { return r.Kind == KindRow })
-	briefRoom, slots := maxChars/resShare, resSlots(maxChars)
+	// devco D-963/D-968 gave the resources a question only touches a
+	// share of the cap under rows; since H-245 (devco D-998) they never
+	// reach cap while a row answers: they are candidate lines
+	// (candidates.go, splitCards)
 	for _, r := range order {
-		if r.Kind == KindResource && underRows && o.Resources[resIdx[r.ID]].touched {
-			n := len(o.Resources[resIdx[r.ID]].brief())
-			if n > briefRoom || slots == 0 {
-				o.Left++
-				o.leftBrief++
-				continue
-			}
-			briefRoom -= n
-			slots--
-		}
 		if r.Kind == KindRow && o.unchunked(rowIdx[r.ID]) {
 			if !bestRow && maxChars-len(o.body()) < minCut {
 				// no cut of it fits what is left (chunkLong)
@@ -1596,12 +1583,8 @@ func (o Out) Text() string {
 		b.WriteString(NoAnswer + "\n")
 	}
 	b.WriteString(o.conflictText())
-	if n := o.Left - o.leftBrief; n > 0 {
-		fmt.Fprintf(&b, "\n%s left out to stay under %d characters; --max-chars %d prints more\n", plural.Count(n, "more item"), o.maxChars, o.maxChars*2)
-	}
-	if o.leftBrief > 0 {
-		// devco D-963: left out by their share of the cap, not the cap
-		fmt.Fprintf(&b, "\n%s that only share a word with the question left out; --max-chars %d prints more\n", plural.Count(o.leftBrief, "more resource"), o.maxChars*2)
+	if o.Left > 0 {
+		fmt.Fprintf(&b, "\n%s left out to stay under %d characters; --max-chars %d prints more\n", plural.Count(o.Left, "more item"), o.maxChars, o.maxChars*2)
 	}
 	b.WriteString(o.reverifyText())
 	if cited := o.textCited(); len(cited) > 0 {
@@ -1663,11 +1646,14 @@ func (o Out) textCited() []string {
 // an alias).
 func (o Out) cards() bool { return o.identity && o.answer == leadResources || o.answer == leadTasks }
 
-// body is the header and the items of o.Ranked in that order: a run of
+// body is the header, the items of o.Ranked in that order: a run of
 // tasks under one "open tasks" heading, a run of rows under one rows
 // heading (a second run of rows, after the tasks of an everything-about
-// answer, under "more rows").
-func (o Out) body() string {
+// answer, under "more rows"), then the candidate list (candidates.go).
+func (o Out) body() string { return o.items() + candText(o.Candidates) }
+
+// items is body without the candidate list.
+func (o Out) items() string {
 	res, tsk, rows := map[string]Resource{}, map[string]Task{}, map[string]Row{}
 	for _, r := range o.Resources {
 		res[r.ID] = r

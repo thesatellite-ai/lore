@@ -153,8 +153,9 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		}
 		text := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "what is the status of orbit")
 		text.OK(t)
-		if st, pr := strings.Index(text.Out(), "Status update orbit"), strings.Index(text.Out(), "project orbit"); st < 0 || pr < 0 || st > pr {
-			t.Errorf("[O D-818] the text prints the project before its status:\n%s", text)
+		// H-245 (D-998): the project is a line of the candidate list
+		if st, pr := strings.Index(text.Out(), "Status update orbit"), strings.Index(text.Out(), " (project) orbit"); st < 0 || pr < 0 || st > pr {
+			t.Errorf("[O D-818/D-998] the text prints the project before its status, or not as a candidate line:\n%s", text)
 		}
 	})
 	s.Step("personal-store/stale-facts-are-history", func() {

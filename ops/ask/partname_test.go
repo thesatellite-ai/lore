@@ -67,8 +67,10 @@ func TestPartOfNameRowsAnswer(t *testing.T) {
 func TestSplitNameIsWhole(t *testing.T) {
 	t.Parallel()
 	o := build(parseQuestion("when does widget_web deploy", now), partFixture(), 0, 0)
-	if len(o.Resources) != 1 || o.Resources[0].Name != "widget_web" || o.Resources[0].Match != MatchName {
-		t.Errorf("resources %+v: want widget_web alone, by name", o.Resources)
+	// H-245: a row answers, so widget_web is the first candidate line
+	if len(o.Resources) != 0 || len(o.Candidates) == 0 || o.Candidates[0].Title != "widget_web" || o.Candidates[0].Kind != KindResource ||
+		slices.ContainsFunc(o.Candidates[1:], func(c Candidate) bool { return c.Kind == KindResource }) {
+		t.Errorf("resources %+v candidates %+v: want widget_web alone, by name, as the first candidate", o.Resources, o.Candidates)
 	}
 	if ids := rowIDs(o.Rows); !slices.Equal(ids, []string{"mem_3"}) {
 		t.Errorf("rows %v: want mem_3, the row that writes widget_web\n%s", ids, o.Text())
@@ -136,7 +138,8 @@ func TestLoadTypedNamesClosedValues(t *testing.T) {
 // TestNamedResourceRowsStillAnswer (devco D-949, owner addendum to public
 // issue #157): a question naming a resource by its whole name, where no
 // row says that name, is answered by the rows holding its other words,
-// first, and the resource after them; never by the resource alone.
+// first, and the resource after them (a candidate line, H-245); never by
+// the resource alone.
 func TestNamedResourceRowsStillAnswer(t *testing.T) {
 	t.Parallel()
 	d := partFixture()
@@ -146,7 +149,7 @@ func TestNamedResourceRowsStillAnswer(t *testing.T) {
 	if len(o.Ranked) == 0 || o.Ranked[0].Kind != KindRow || o.Ranked[0].ID != "mem_4" {
 		t.Errorf("ranked %+v: want mem_4 first, the resource after it\n%s", o.Ranked, o.Text())
 	}
-	if len(o.Resources) != 1 || o.Resources[0].Name != "gizmo" {
-		t.Errorf("resources %+v: want gizmo as context", o.Resources)
+	if len(o.Candidates) == 0 || o.Candidates[0].Title != "gizmo" {
+		t.Errorf("candidates %+v: want gizmo as context, the first candidate line (H-245)", o.Candidates)
 	}
 }

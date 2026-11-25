@@ -88,9 +88,10 @@ func syncFixture() data {
 }
 
 // TestTouchedResourcesBriefUnderRows: ten cards found by a part of their
-// name (feed) print one short line each under the rows, within a fifth of
-// the cap, and the as-built note leads; a card the question names whole
-// keeps its full line.
+// name (feed) print one short candidate line each after the rows (H-245:
+// never a full item while a row answers), at most maxCandidates lines,
+// and the as-built note leads; a card the question names whole is the
+// first candidate line.
 func TestTouchedResourcesBriefUnderRows(t *testing.T) {
 	t.Parallel()
 	q := parseQuestion("how does the feed import pipeline work", now)
@@ -100,25 +101,25 @@ func TestTouchedResourcesBriefUnderRows(t *testing.T) {
 	if len(o.Ranked) == 0 || o.Ranked[0] != (Ranked{KindRow, "anr_1"}) {
 		t.Fatalf("the answer does not lead with the as-built note: %+v\n%s", o.Ranked, text)
 	}
+	if touchedLines(text) != 0 {
+		t.Errorf("a card is a full item while rows answer:\n%s", text)
+	}
 	cards := 0
 	for l := range strings.SplitSeq(text, "\n") {
-		if strings.HasPrefix(l, "code_repo ") {
+		if strings.Contains(l, " (code_repo) ") {
 			cards++
-			if len(l) > 220 || strings.Contains(l, "stack") {
-				t.Errorf("a card the question only touches prints more than one short line: %q", l)
+			if len(l) > 300 || strings.Contains(l, "stack") {
+				t.Errorf("a card prints more than one short line: %q", l)
 			}
 		}
 	}
-	if cards == 0 || cards*200 > DefaultMaxChars/resShare+200 || o.leftBrief == 0 {
-		t.Errorf("cards %d (left %d): want a few one-line cards within a fifth of the cap:\n%s", cards, o.leftBrief, text)
+	if cards == 0 || len(o.Candidates) > maxCandidates || strings.Contains(text, "to stay under 4000") {
+		t.Errorf("cards %d: want a few one-line card candidates, nothing left out by the cap:\n%s", cards, text)
 	}
-	if !strings.Contains(text, "more resources that only share a word with the question left out") || strings.Contains(text, "to stay under 4000") {
-		t.Errorf("the left-out line does not say why the cards were left out:\n%s", text)
-	}
-	// named whole: the question is about it, its full line stays
+	// named whole: the question is about it, the first candidate line
 	named := build(parseQuestion("how does feed_part3 import work", now), syncFixture(), 0, 0)
-	if !strings.Contains(named.Text(), "stack Go") {
-		t.Errorf("a card the question names whole lost its fields:\n%s", named.Text())
+	if len(named.Candidates) == 0 || named.Candidates[0].ID != "res_3" {
+		t.Errorf("a card the question names whole is not the first candidate:\n%s", named.Text())
 	}
 }
 

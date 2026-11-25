@@ -56,17 +56,25 @@ func TestBenchSet6CardsAlone(t *testing.T) {
 			misses = append(misses, fmt.Sprintf("%q: %d code_repo lines (want <= 1):\n%s", q, cards[q], out))
 		}
 	}
-	// the named resource keeps its card
+	// the named resource stays in the answer: its card, or (H-245, a row
+	// answers) the first line of the candidate list
 	out, _ := linkedRun(t, env, app, bin, "ask", "--query", set6Named, "--json")
 	var a struct {
 		Resources []struct {
 			Name string `json:"name"`
 		} `json:"resources"`
+		Candidates []struct {
+			Kind  string `json:"kind"`
+			Title string `json:"title"`
+			Line  string `json:"line"`
+		} `json:"candidates"`
 	}
 	if err := json.Unmarshal([]byte(out), &a); err != nil {
 		t.Fatalf("%q: %v\n%s", set6Named, err, out)
 	}
-	if len(a.Resources) == 0 || a.Resources[0].Name != "hookrcv_ops" {
+	card := len(a.Resources) > 0 && a.Resources[0].Name == "hookrcv_ops"
+	line := len(a.Candidates) > 0 && a.Candidates[0].Title == "hookrcv_ops" && !strings.HasSuffix(strings.TrimSpace(a.Candidates[0].Line), ":")
+	if !card && !line {
 		misses = append(misses, fmt.Sprintf("%q: the resource it names is not in the answer:\n%s", set6Named, out))
 	}
 	total := 0
