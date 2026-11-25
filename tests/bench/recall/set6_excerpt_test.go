@@ -44,7 +44,7 @@ var set6Rows = []string{
 // of the note must print.
 var set6ExcerptCases = []struct{ query, want string }{
 	{"what does the job queue return for a duplicate key while the first run is still running", "A duplicate key while the earlier attempt is non-terminal gives back that attempt id"},
-	{"what stop reasons can a job run end with", "Done, Failed, Cancelled, TimedOut or Superseded"},
+	{"what end causes can a job run end with", "Done, Failed, Cancelled, TimedOut or Superseded"},
 	{"which write path moves ended runs to cold storage", "4. The archive sweep moves ended runs older than thirty days to cold storage."},
 }
 

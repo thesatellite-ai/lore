@@ -5,7 +5,7 @@ package recall
 // set6_shortexact_test.go — the recall gate's set-6 short-exact-row case
 // (bug hunt H-231, devco D-972; Sync benchmark set 6 item 1: S6-06, 09,
 // 10, 18, 24, 32, 33, 34): on a store of several-KB as-built notes that
-// each hold the store's common words (sync, cli, commands, workflow, run,
+// each hold the store's common words (tool, cli, commands, workflow, run,
 // key, file, worker) in sections of their own, the short memory or
 // hotfix naming the asked command, flag or error is ranked first by lore
 // search and must be in lore ask's top three. Before the fix a long note
@@ -34,7 +34,7 @@ type set6ExactCase struct {
 
 var set6ExactCases = []set6ExactCase{
 	{"S6-06", "which tool cli commands trigger, reconcile or schedule a workflow run", "wkf trigger / reconcile / schedule"},
-	{"S6-32", "which worker command requeues the mirror of a file stuck in the failed mirror state", "files resync"},
+	{"S6-32", "which worker command retries the mirror of a file stuck in the failed mirror state", "files resync"},
 	{"S6-34", "which command rotates the encryption key of stored credentials with vault-rekey and what guards it", "worker vault-rekey"},
 	{"S6-18", "what does the default category import seed do, is it set-when-blank", "set-when-blank"},
 }
@@ -169,7 +169,7 @@ func set6ExactRows(t *testing.T) string {
 	for _, c := range []string{
 		"The worker command logs each file it reads.", "A tool cli command prints the workflow run it started.",
 		"Each workflow run is stored in the run table with its key.", "The import worker reads the feed and logs each category.",
-		"The worker restarts when a command fails; the run is kept.", "The sync worker reads each workflow from the table.",
+		"The worker restarts when a command fails; the run is kept.", "The tool worker reads each workflow from the table.",
 		"The cli prints each stored key of the workspace.", "The category import command runs once per workspace.",
 	} {
 		line("memory add", map[string]any{"to": "kb/app", "body": c})
@@ -178,7 +178,7 @@ func set6ExactRows(t *testing.T) string {
 		line("memory add", map[string]any{"to": "kb/app", "body": fmt.Sprintf("Note %d: the dashboard lists each workspace with its plan, owner and the last deploy.", i)})
 	}
 	line("memory add", map[string]any{"to": "kb/app", "body": "tool cli wkf trigger / reconcile / schedule: trigger starts one workflow run now, reconcile re-checks stuck runs, schedule prints the next due run."})
-	line("memory add", map[string]any{"to": "kb/app", "body": "worker files resync --file <id> requeues the mirror job of one file stuck in the failed state."})
+	line("memory add", map[string]any{"to": "kb/app", "body": "worker files resync --file <id> retries the mirror job of one file stuck in the failed state."})
 	line("hotfix add", map[string]any{"to": "kb/app", "title": "vault-rekey re-encrypts stored credentials", "body": "worker vault-rekey re-encrypts every stored credential under the newest key version; it refuses to run without --confirm and while another rekey holds the lock."})
 	line("memory add", map[string]any{"to": "kb/app", "body": "The default category-import seed is set-when-blank: it writes the default categories only when the workspace has none."})
 	return b.String()

@@ -25,7 +25,7 @@ type set6Case struct {
 
 // set6Background is the store the set-6 questions are asked of: long
 // as-built notes and decisions that share the questions' common words
-// (file, job, worker, command, run, key, sync, store), and filler rows so
+// (file, job, worker, command, run, key, tool, store), and filler rows so
 // a word's spread reads like a real store's.
 func set6Background(at time.Time) []textRow {
 	// every as-built note also holds the store's common words in sections
@@ -94,7 +94,7 @@ func set6Background(at time.Time) []textRow {
 		"The worker restarts when a command fails; the run is kept.",
 		"Each feed import run writes a table row with the build time.",
 		"Uploads of a file keep their key in the file table.",
-		"The sync worker reads each workflow from the table.",
+		"The tool worker reads each workflow from the table.",
 		"The category import command runs once per workspace.",
 		"A stored file is read by the worker on each run.",
 	}
@@ -121,7 +121,7 @@ func set6Cases() []set6Case {
 	}
 	return []set6Case{
 		{name: "S6-06", q: "which tool cli commands trigger, reconcile or schedule a workflow run",
-			want: "mem_wfr", rows: []textRow{mem("mem_wfr", "tool cli wkf trigger / reconcile / schedule: trigger starts one workflow run now, reconcile re-checks stuck runs, schedule prints the next due run.")}},
+			want: "mem_wkf", rows: []textRow{mem("mem_wkf", "tool cli wkf trigger / reconcile / schedule: trigger starts one workflow run now, reconcile re-checks stuck runs, schedule prints the next due run.")}},
 		{name: "S6-09", q: "which callback hosts are disallowed for a workflow callback",
 			want: "mem_hosts", rows: []textRow{mem("mem_hosts", "Disallowed callback hosts: localhost, link-local and private ranges; registering one returns ErrCallbackHostDisallowed.")}},
 		{name: "S6-10", q: "what happens when the manifest build errors, is an empty manifest written",
@@ -130,8 +130,8 @@ func set6Cases() []set6Case {
 			want: "mem_seed", rows: []textRow{mem("mem_seed", "The default category-import seed is set-when-blank: it writes the default categories only when the workspace has none.")}},
 		{name: "S6-24", q: "what happens to a conflict between a feed import and a hand edit, is it a review item",
 			want: "mem_conflict", rows: []textRow{mem("mem_conflict", "Feed import conflicts are review items: a conflict between the feed and a hand edit opens a review item instead of overwriting.")}},
-		{name: "S6-32", q: "which worker command requeues the mirror of a file stuck in the failed mirror state",
-			want: "mem_requeue", rows: []textRow{mem("mem_requeue", "worker files resync --file <id> requeues the mirror job of one file stuck in the failed state.")}},
+		{name: "S6-32", q: "which worker command retries the mirror of a file stuck in the failed mirror state",
+			want: "mem_retry", rows: []textRow{mem("mem_retry", "worker files resync --file <id> retries the mirror job of one file stuck in the failed state.")}},
 		{name: "S6-33", q: "which worker is the single writer of the rollup table",
 			want: "hfx_rollup", rows: []textRow{hfx("hfx_rollup", "Rollup single writer", "Two workers wrote the rollup table at once and doubled counts; the rollup job is now its single writer and workers only append events.")}},
 		{name: "S6-34", q: "which command rotates the encryption key of stored credentials with vault-rekey and what guards it",

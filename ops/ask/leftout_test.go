@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// jobqNote is a long markdown note (over longRow) whose sentence about a
+// runqNote is a long markdown note (over longRow) whose sentence about a
 // duplicate enqueue sits in a section deep in it (Sync benchmark set 6
 // S6-01's shape, synthetic text).
-const jobqNote = `# runq: the background job queue
+const runqNote = `# runq: the background job queue
 
 ## Overview
 runq runs background jobs for the app. Workers poll the queue table, claim a job with a lease and heartbeat while they run it. Jobs are retried with backoff until max attempts, then parked as dead.
@@ -44,7 +44,7 @@ The queue keeps its runs in one table with an index on kind, state and run-at ti
 // row holds, and a name after "Dr.", still give the hint.
 func TestNotInMemoryHeldAsScoreReadsIt(t *testing.T) {
 	t.Parallel()
-	d := data{rows: []textRow{mem(t, "mem_q1", "acme/eng", "2026-11-20", jobqNote)}}
+	d := data{rows: []textRow{mem(t, "mem_q1", "acme/eng", "2026-11-20", runqNote)}}
 	for _, q := range []string{
 		"What does Queue.Enqueue return when EnqueueOptions.DedupKey matches a run that is not terminal?",
 		"what does runq do with a dedup key while the first run is not terminal? Explain the states.",
@@ -76,7 +76,7 @@ func TestNotInMemoryHeldAsScoreReadsIt(t *testing.T) {
 // printed text or named by the cut note (Row.LeftOut).
 func TestCutNoteNamesLeftOutWords(t *testing.T) {
 	t.Parallel()
-	d := data{rows: []textRow{mem(t, "mem_q1", "acme/eng", "2026-11-20", jobqNote)}}
+	d := data{rows: []textRow{mem(t, "mem_q1", "acme/eng", "2026-11-20", runqNote)}}
 	q := "how does the job queue handle a dedup key while the first run is not terminal"
 	sawLeftOut := false
 	for _, maxChars := range []int{0, 900, 600, 400} {

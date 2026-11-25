@@ -856,7 +856,7 @@ func allWords(toks map[string]bool, name string) bool {
 }
 
 // tokensOf is the word set of a row's text: each word, and the parts of
-// each code identifier (ErrGroupNameTaken holds role, key and reserved;
+// each code identifier (ErrGroupNameTaken holds group, name and taken;
 // idents.go, bug hunt H-230), so a question in plain words finds the row
 // that names the thing in code; and the stem of each word whose stem is
 // not the word (forms.go, bug hunt H-235), so hasWord finds the forms
@@ -1006,7 +1006,7 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 		return s, false
 	}
 	// H-230: the row naming the asked thing in one identifier
-	// (ErrGroupNameTaken for "reserved role key") ranks as a phrase
+	// (ErrGroupNameTaken for "taken group name") ranks as a phrase
 	s.score += identBonus(q, sm, r)
 	// a row dated in (or near) the question's window ranks up (prior.go);
 	// it never makes a row answer on its own

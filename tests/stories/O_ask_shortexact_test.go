@@ -6,7 +6,7 @@ package stories
 // set 6 item 1: S6-06, 09, 10, 18, 24, 32, 33, 34) on the owner-shaped
 // machine (story O): an own repo of the org linked to its folder keeps
 // several-KB as-built notes that each hold the folder's common words
-// (sync, cli, commands, workflow, run) in sections of their own, and the
+// (tool, cli, commands, workflow, run) in sections of their own, and the
 // short memory naming the asked command (wkf trigger / reconcile /
 // schedule). lore search lists the memory first; lore ask ranked three
 // notes above it (every word of a note's whole text counted, plus the
@@ -67,7 +67,7 @@ func TestStoryOAskShortExactRow(t *testing.T) {
 			}
 			line("architecturenote add", map[string]any{"title": n[0], "body": body.String(), "meta": []string{"fact_state=live", "fact_verified_at=2026-11-20"}})
 		}
-		for _, c := range []string{"A tool cli command prints the workflow run it started.", "Each workflow run is stored in the run table with its key.", "The worker restarts when a command fails; the run is kept.", "The sync worker reads each workflow from the table."} {
+		for _, c := range []string{"A tool cli command prints the workflow run it started.", "Each workflow run is stored in the run table with its key.", "The worker restarts when a command fails; the run is kept.", "The tool worker reads each workflow from the table."} {
 			line("memory add", map[string]any{"body": c})
 		}
 		for i := range 16 {

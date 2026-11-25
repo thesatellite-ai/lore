@@ -63,11 +63,11 @@ func TestStoryOMetaInputRules(t *testing.T) {
 	})
 
 	s.Step("D-922/value-not-snake-case-prints-the-corrected-flag", func() {
-		args := []string{"meta", "add", "--name", "feed_source", "--type", "text", "--strict", "--values", "pylon-feeds,raw", "--to", oOrg, "--yes"}
+		args := []string{"meta", "add", "--name", "feed_source", "--type", "text", "--strict", "--values", "atlas-feeds,raw", "--to", oOrg, "--yes"}
 		r := ada.LoreIn(pc, args...)
 		oCheck(t, "D-922/values-rule-and-fix", r.Code != 0 && strings.Contains(r.Out(), "a-z, 0-9 and _, starting with a letter") &&
-			strings.Contains(r.Out(), "use --values prism_feeds,raw"),
-			"meta add --values pylon-feeds did not say the rule and the fix:\n%s", r)
+			strings.Contains(r.Out(), "use --values atlas_feeds,raw"),
+			"meta add --values atlas-feeds did not say the rule and the fix:\n%s", r)
 		ada.LoreIn(pc, printedFlag("values", args, r.Out())...).OK(t)
 	})
 

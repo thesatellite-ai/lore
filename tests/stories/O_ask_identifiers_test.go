@@ -5,11 +5,11 @@ package stories
 // O_ask_identifiers_test.go — devco D-971 (bug hunt H-230, Sync benchmark
 // set 5 S5-06 and S5-11) on the owner-shaped machine (story O): an own
 // repo of the org linked to its folder keeps many short notes and a
-// decision sharing the question's common words (role, key, system; sync
+// decision sharing the question's common words (group, name, builtin; sync
 // workflow run), two memories naming the asked errors as code
 // identifiers (ErrGroupNameTaken, ErrBuiltinGroupLocked), an off-topic
 // hotfix and the hotfix naming JobTimeLimit. lore ask read
-// ErrGroupNameTaken as one word holding none of "reserved role key", so
+// ErrGroupNameTaken as one word holding none of "taken group name", so
 // the rows sharing only the common words filled the first places. Now
 // the memories naming the errors are in the top three and the on-topic
 // hotfix leads.
@@ -47,11 +47,11 @@ func TestStoryOAskIdentifiersRank(t *testing.T) {
 			b.WriteByte('\n')
 		}
 		for i := range 20 {
-			line("memory add", map[string]any{"body": fmt.Sprintf("Note %d: the workspace role screen lists each role, its key and the system flag; the sync workflow run page shows the client error for each run.", i)})
+			line("memory add", map[string]any{"body": fmt.Sprintf("Note %d: the workspace group screen lists each group, its name and the builtin flag; the sync workflow run page shows the client error for each run.", i)})
 		}
-		line("decision add", map[string]any{"title": "Workspace roles: system roles plus custom roles", "body": "Each workspace gets the system roles owner, admin and member when it is created; a custom role has its own key, unique in the workspace, and system roles are never deleted."})
-		line("memory add", map[string]any{"body": "role.Create returns ErrGroupNameTaken (409) when the new key collides with a seeded key (owner, admin, member)."})
-		line("memory add", map[string]any{"body": "role.Update and role.Delete return ErrBuiltinGroupLocked for a seeded role; only custom roles change."})
+		line("decision add", map[string]any{"title": "Workspace groups: builtin groups plus custom groups", "body": "Each workspace gets the builtin groups owner, admin and member when it is created; a custom group has its own name, unique in the workspace, and builtin groups are never deleted."})
+		line("memory add", map[string]any{"body": "group.Create returns ErrGroupNameTaken (409) when the new name collides with a seeded name (owner, admin, member)."})
+		line("memory add", map[string]any{"body": "group.Update and group.Delete return ErrBuiltinGroupLocked for a seeded group; only custom groups change."})
 		line("hotfix add", map[string]any{"title": "Workflow client error map", "body": "The sync workflow client maps each run error of the engine (cancelled, failed, timed out) to a typed sync error; a run that timed out was shown as an internal error until the map listed it."})
 		line("hotfix add", map[string]any{"title": "JobTimeLimit raised to 1 h", "body": "Long catalog imports hit the 30 min JobTimeLimit and stopped mid-batch; JobTimeLimit is now 1 h in the workflow options."})
 		batch := filepath.Join(t.TempDir(), "rows.jsonl")
@@ -80,11 +80,11 @@ func TestStoryOAskIdentifiersRank(t *testing.T) {
 			}
 			return sb.String()
 		}
-		q := "what happens when a custom role uses a reserved role key, and can someone edit a system role"
+		q := "what happens when a custom group uses a taken group name, and can someone edit a locked builtin group"
 		if got := top(q, 3); !strings.Contains(got, "ErrGroupNameTaken") || !strings.Contains(got, "ErrBuiltinGroupLocked") {
 			t.Errorf("[O D-971] the memories naming the asked errors are not in the top three of %q:\n%s\n%s", q, got, ada.Lore(pc.Dir, "ask", "--query", q).OK(t))
 		}
-		q = "what is the max run duration of a sync workflow run and why was it raised"
+		q = "what is the job time limit of a sync workflow run and why was it raised"
 		if got := top(q, 1); !strings.Contains(got, "JobTimeLimit raised") {
 			t.Errorf("[O D-971] the on-topic hotfix does not lead %q:\n%s\n%s", q, got, ada.Lore(pc.Dir, "ask", "--query", q).OK(t))
 		}

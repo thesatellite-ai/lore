@@ -3,17 +3,17 @@ package ask
 // idents.go — code identifiers and distinctive words in ask's ranking
 // (bug hunt H-230, devco D-971, Sync benchmark set 5 S5-06 and S5-11).
 //
-// A short memory that says "role.Create returns ErrGroupNameTaken" is
-// the answer to "what happens when a custom role uses a reserved role
-// key", but its words were one token, ErrGroupNameTaken, which holds
+// A short memory that says "group.Create returns ErrGroupNameTaken" is
+// the answer to "what happens when a custom group uses a taken group
+// name", but its words were one token, errgroupnametaken, which holds
 // none of the question's words; a decision and filler notes sharing the
-// common words (role, key, system) ranked above it, and the on-topic
+// common words (group, name, builtin) ranked above it, and the on-topic
 // hotfix naming JobTimeLimit lost to an off-topic hotfix sharing
 // "sync workflow run". Three parts fix the class:
 //
 //   - a row's word set also holds the parts of every code identifier it
-//     writes (ErrGroupNameTaken: err role key reserved; role.Create;
-//     max-run-duration); snake_case already splits at the underscore
+//     writes (ErrGroupNameTaken: err group name taken; group.Create;
+//     job-time-limit); snake_case already splits at the underscore
 //   - a row whose one identifier names two or more of the question's
 //     words names the asked thing (identBonus), as a phrase would
 //   - a question word few of the scored rows hold is distinctive and
@@ -22,7 +22,7 @@ package ask
 //     common ones
 //
 // A question that writes an identifier (JobTimeLimit) finds a row that
-// spells its parts out (the max run duration) the same way (identWord).
+// spells its parts out (the job time limit) the same way (identWord).
 
 import (
 	"slices"
@@ -32,7 +32,7 @@ import (
 
 // identParts is the lower-case parts of identifier w when it is one:
 // split at dots and hyphens and where the case changes (ErrGroupNameTaken,
-// role.Create, HTTPServer, max-run-duration), parts without a letter left
+// group.Create, HTTPServer, job-time-limit), parts without a letter left
 // out (v0.1.47 is no identifier of words); nil for a plain word, a word
 // with an apostrophe, or when fewer than two parts are left.
 func identParts(w string) []string {
@@ -140,7 +140,7 @@ func (r *textRow) idents() [][]string {
 
 // identStep is what each question word past the first that one of a
 // row's identifiers names adds to its score: ErrGroupNameTaken naming
-// "reserved role key" adds 4, more than one shared common word (3), so
+// "taken group name" adds 4, more than one shared common word (3), so
 // the row naming the asked thing beats a row holding one more common
 // word.
 const identStep = 2
@@ -186,7 +186,7 @@ func identBonus(q question, ms []match, r *textRow) int {
 
 // identWord reports whether toks hold every part of question word w when
 // the question wrote it as an identifier (JobTimeLimit, q.parts): the
-// row that spells out "the max run duration" answers it.
+// row that spells out "the job time limit" answers it.
 func identWord(q question, toks map[string]bool, w string) bool {
 	ps := q.parts[w]
 	if len(ps) < 2 {
@@ -206,8 +206,8 @@ const rareFloor = 8
 
 // distinctBonus adds a point to each scored row for each question word
 // it holds that at most a quarter of the scored rows hold: the
-// distinctive words (reserved, duration) say more than the common ones
-// every row shares (role, workflow). Less than one question word (3), so
+// distinctive words (taken, limit) say more than the common ones
+// every row shares (group, workflow). Less than one question word (3), so
 // a row holding one more of the question's words still wins (H-230).
 //
 // It also takes back the headWord a long row's best section heading

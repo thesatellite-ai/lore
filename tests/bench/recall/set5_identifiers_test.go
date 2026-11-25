@@ -9,10 +9,10 @@ package recall
 // a decision sharing the question's common words, an off-topic hotfix),
 // the short memories naming the asked errors as code identifiers
 // (ErrGroupNameTaken, ErrBuiltinGroupLocked) are in the top three rows, and
-// the hotfix naming JobTimeLimit leads the answer about the max run
-// duration. Before the fix, ask read ErrGroupNameTaken as one word that
-// holds none of "reserved role key", and the rows sharing only "role",
-// "key", "sync workflow run" won.
+// the hotfix naming JobTimeLimit leads the answer about the job time
+// limit. Before the fix, ask read ErrGroupNameTaken as one word that
+// holds none of "taken group name", and the rows sharing only "group",
+// "name", "sync workflow run" won.
 
 import (
 	"encoding/json"
@@ -35,8 +35,8 @@ type set5IdentCase struct {
 
 // set5IdentCases are S5-06 (top three) and S5-11 (first).
 var set5IdentCases = []set5IdentCase{
-	{"S5-06", "what happens when a custom role uses a reserved role key, and can someone edit a system role", []string{"ErrGroupNameTaken", "ErrBuiltinGroupLocked"}, 3},
-	{"S5-11", "what is the max run duration of a sync workflow run and why was it raised", []string{"JobTimeLimit raised"}, 1},
+	{"S5-06", "what happens when a custom group uses a taken group name, and can someone edit a locked builtin group", []string{"ErrGroupNameTaken", "ErrBuiltinGroupLocked"}, 3},
+	{"S5-11", "what is the job time limit of a sync workflow run and why was it raised", []string{"JobTimeLimit raised"}, 1},
 }
 
 // TestBenchSet5Identifiers writes the set-5 identifier shape and asks
@@ -92,29 +92,29 @@ func TestBenchSet5Identifiers(t *testing.T) {
 	}
 	for i := 1; i <= 20; i++ {
 		line("resource add", map[string]any{"kind": "code_repo", "name": fmt.Sprintf("gizmo_svc_%02d", i), "to": "kb/org",
-			"set": []string{fmt.Sprintf("purpose=The gizmo service %d: workspace roles, sync workflow runs, the workflow client and admin screens", i)}})
+			"set": []string{fmt.Sprintf("purpose=The gizmo service %d: workspace groups, sync workflow runs, the workflow client and admin screens", i)}})
 	}
 	// a long as-built note sharing the common words, holding no answer
 	var arch strings.Builder
-	for s, head := range []string{"Workspaces", "Roles", "Sync workflows", "Workflow client", "Admin screens", "Audit"} {
+	for s, head := range []string{"Workspaces", "Groups", "Sync workflows", "Workflow client", "Admin screens", "Audit"} {
 		fmt.Fprintf(&arch, "## %s\n\n", head)
 		for p := range 6 {
-			fmt.Fprintf(&arch, "Section %d part %d: each workspace keeps its roles and keys in the role table; the sync workflow run is started by the workflow client, which records every run and its error for the admin screens. ", s, p)
+			fmt.Fprintf(&arch, "Section %d part %d: each workspace keeps its groups and names in the group table; the sync workflow run is started by the workflow client, which records every run and its error for the admin screens. ", s, p)
 		}
 		arch.WriteString("\n\n")
 	}
-	line("architecturenote add", map[string]any{"to": "kb/app", "title": "As built: workspaces, roles and sync workflows", "body": arch.String()})
+	line("architecturenote add", map[string]any{"to": "kb/app", "title": "As built: workspaces, groups and sync workflows", "body": arch.String()})
 	for i := 1; i <= 60; i++ {
-		body := fmt.Sprintf("Note %d: the workspace role screen lists each role, its key and the system flag; the sync workflow run page shows the client error for each run.", i)
+		body := fmt.Sprintf("Note %d: the workspace group screen lists each group, its name and the builtin flag; the sync workflow run page shows the client error for each run.", i)
 		if i%3 == 0 {
-			line("decision add", map[string]any{"to": "kb/app", "title": fmt.Sprintf("Decision %d: role screens and workflow runs", i), "body": body})
+			line("decision add", map[string]any{"to": "kb/app", "title": fmt.Sprintf("Decision %d: group screens and workflow runs", i), "body": body})
 			continue
 		}
 		line("memory add", map[string]any{"to": "kb/app", "body": body})
 	}
-	line("decision add", map[string]any{"to": "kb/app", "title": "Workspace roles: system roles plus custom roles", "body": "Each workspace gets the system roles owner, admin and member when it is created; a custom role has its own key, unique in the workspace, and system roles are never deleted. We chose this because every workspace needs the same base roles."})
-	line("memory add", map[string]any{"to": "kb/app", "body": "role.Create returns ErrGroupNameTaken (409) when the new key collides with a seeded key (owner, admin, member)."})
-	line("memory add", map[string]any{"to": "kb/app", "body": "role.Update and role.Delete return ErrBuiltinGroupLocked for a seeded role; only custom roles change."})
+	line("decision add", map[string]any{"to": "kb/app", "title": "Workspace groups: builtin groups plus custom groups", "body": "Each workspace gets the builtin groups owner, admin and member when it is created; a custom group has its own name, unique in the workspace, and builtin groups are never deleted. We chose this because every workspace needs the same base roles."})
+	line("memory add", map[string]any{"to": "kb/app", "body": "group.Create returns ErrGroupNameTaken (409) when the new name collides with a seeded name (owner, admin, member)."})
+	line("memory add", map[string]any{"to": "kb/app", "body": "group.Update and group.Delete return ErrBuiltinGroupLocked for a seeded group; only custom groups change."})
 	line("hotfix add", map[string]any{"to": "kb/app", "title": "Workflow client error map", "body": "The sync workflow client maps each run error of the engine (cancelled, failed, timed out) to a typed sync error; a run that timed out was shown as an internal error until the map listed it."})
 	line("hotfix add", map[string]any{"to": "kb/app", "title": "JobTimeLimit raised to 1 h", "body": "Long catalog imports hit the 30 min JobTimeLimit and stopped mid-batch; JobTimeLimit is now 1 h in the workflow options."})
 	batch := filepath.Join(dir, "rows.jsonl")

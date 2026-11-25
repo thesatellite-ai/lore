@@ -51,7 +51,7 @@ type question struct {
 	// near it (prior.go: timeBonus); 0 without a window.
 	fuzz float64
 	// parts are the parts of each question word written as a code
-	// identifier (JobTimeLimit: max run duration; idents.go, bug hunt
+	// identifier (JobTimeLimit: job time limit; idents.go, bug hunt
 	// H-230): a row spelling them all out holds the word.
 	parts map[string][]string
 }

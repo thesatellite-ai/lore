@@ -38,14 +38,14 @@ func TestMetaInputRulesSaid(t *testing.T) {
 	}
 	h.MustYes(settings.OpMetaAdd, `{"name":"item_state","type":"text"}`) // the suggested name passes
 
-	_, err = h.RunYes(settings.OpMetaAdd, `{"name":"feed_source","type":"text","values":"pylon-feeds,raw,Daily Feed"}`)
-	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), `"pylon-feeds", "Daily Feed" is not snake_case: a-z, 0-9 and _, starting with a letter`) {
+	_, err = h.RunYes(settings.OpMetaAdd, `{"name":"feed_source","type":"text","values":"atlas-feeds,raw,Daily Feed"}`)
+	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), `"atlas-feeds", "Daily Feed" is not snake_case: a-z, 0-9 and _, starting with a letter`) {
 		t.Fatalf("not snake_case: %v", err)
 	}
-	if got := hintOf(err); got != "use --values prism_feeds,raw,daily_feed" {
+	if got := hintOf(err); got != "use --values atlas_feeds,raw,daily_feed" {
 		t.Fatalf("not snake_case hint %q", got)
 	}
-	h.MustYes(settings.OpMetaAdd, `{"name":"feed_source","type":"text","values":"prism_feeds,raw,daily_feed"}`)
+	h.MustYes(settings.OpMetaAdd, `{"name":"feed_source","type":"text","values":"atlas_feeds,raw,daily_feed"}`)
 	_, err = h.RunYes(settings.OpMetaValueAdd, `{"key":"feed_source","value":"night-feed"}`)
 	if got := hintOf(err); got != "use --value night_feed" {
 		t.Fatalf("value add hint %q (%v)", got, err)

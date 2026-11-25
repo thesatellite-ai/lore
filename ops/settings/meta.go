@@ -294,7 +294,7 @@ const snakeRule = "snake_case: a-z, 0-9 and _, starting with a letter"
 // checkMetaValues refuses allowed values that are not snake_case (3.5).
 // flag is the flag that gave them (--values, --value, --new-value): the
 // refusal names the rule and the whole flag corrected, so the next run
-// works as printed (devco:D-922: "pylon-feeds" was refused with no rule
+// works as printed (devco:D-922: "atlas-feeds" was refused with no rule
 // and no fix, one value at a time).
 func checkMetaValues(flag string, vals []string) error {
 	if len(vals) > maxMetaValues {

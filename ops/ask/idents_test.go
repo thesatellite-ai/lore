@@ -18,18 +18,18 @@ import (
 func TestIdentParts(t *testing.T) {
 	t.Parallel()
 	for w, want := range map[string][]string{
-		"ErrGroupNameTaken": {"err", "role", "key", "reserved"},
-		"JobTimeLimit":     {"max", "run", "duration"},
-		"role.Create":        {"role", "create"},
-		"HTTPServer":         {"http", "server"},
-		"max-run-duration":   {"max", "run", "duration"},
-		"parseV2Feed":        {"parse", "v2", "feed"},
-		"role":               nil,
-		"Role":               nil,
-		"ROLE":               nil,
-		"v0.1.47":            nil,
-		"2026-11-02":         nil,
-		"falcon's":           nil,
+		"ErrGroupNameTaken": {"err", "group", "name", "taken"},
+		"JobTimeLimit":      {"job", "time", "limit"},
+		"group.Create":      {"group", "create"},
+		"HTTPServer":        {"http", "server"},
+		"job-time-limit":    {"job", "time", "limit"},
+		"parseV2Feed":       {"parse", "v2", "feed"},
+		"group":             nil,
+		"Group":             nil,
+		"GROUP":             nil,
+		"v0.1.47":           nil,
+		"2026-11-02":        nil,
+		"falcon's":          nil,
 	} {
 		if got := identParts(w); !slices.Equal(got, want) {
 			t.Errorf("identParts(%q) = %q, want %q", w, got, want)
@@ -37,15 +37,15 @@ func TestIdentParts(t *testing.T) {
 	}
 	for text, want := range map[string]int{
 		"Plain prose. Ends here, with a well known word": 0,
-		"role.Create returns ErrGroupNameTaken":         2,
-		"the HTTPServer and max-run-duration":            2,
+		"group.Create returns ErrGroupNameTaken":         2,
+		"the HTTPServer and job-time-limit":              2,
 	} {
 		if got := len(identsOf(text)); got != want {
 			t.Errorf("identsOf(%q) holds %d identifiers, want %d", text, got, want)
 		}
 	}
-	toks := tokensOf("role.Create returns ErrGroupNameTaken")
-	for _, w := range []string{"ErrGroupNameTaken", "reserved", "key", "role", "create", "role.create"} {
+	toks := tokensOf("group.Create returns ErrGroupNameTaken")
+	for _, w := range []string{"errgroupnametaken", "taken", "name", "group", "create", "group.create"} {
 		if !toks[w] {
 			t.Errorf("tokensOf holds no %q: %v", w, toks)
 		}
@@ -61,18 +61,18 @@ func set5Rows() data {
 	var rows []textRow
 	for i := range 30 {
 		rows = append(rows, textRow{Table: "memories", ID: fmt.Sprintf("mem_n%02d", i), Place: "kb/app", At: at.Add(time.Duration(i) * time.Minute),
-			Body: fmt.Sprintf("Note %d: the workspace role screen lists each role, its key and the system flag; the sync workflow run page shows the client error for each run.", i)})
+			Body: fmt.Sprintf("Note %d: the workspace group screen lists each group, its name and the builtin flag; the sync workflow run page shows the client error for each run.", i)})
 	}
 	rows = append(rows,
-		textRow{Table: "decisions", ID: "dec_roles", Place: "kb/app", At: at.Add(time.Hour), Title: "Workspace roles: system roles plus custom roles",
-			Body: "Each workspace gets the system roles owner, admin and member when it is created; a custom role has its own key, unique in the workspace, and system roles are never deleted."},
+		textRow{Table: "decisions", ID: "dec_groups", Place: "kb/app", At: at.Add(time.Hour), Title: "Workspace groups: builtin groups plus custom groups",
+			Body: "Each workspace gets the builtin groups owner, admin and member when it is created; a custom group has its own name, unique in the workspace, and builtin groups are never deleted."},
 		textRow{Table: "memories", ID: "mem_reserved", Place: "kb/app", At: at,
-			Body: "role.Create returns ErrGroupNameTaken (409) when the new key collides with a seeded key (owner, admin, member)."},
+			Body: "group.Create returns ErrGroupNameTaken (409) when the new name collides with a seeded name (owner, admin, member)."},
 		textRow{Table: "memories", ID: "mem_sysedit", Place: "kb/app", At: at,
-			Body: "role.Update and role.Delete return ErrBuiltinGroupLocked for a seeded role; only custom roles change."},
+			Body: "group.Update and group.Delete return ErrBuiltinGroupLocked for a seeded group; only custom groups change."},
 		textRow{Table: "hotfixes", ID: "hfx_errmap", Place: "kb/app", At: at.Add(time.Hour), Title: "Workflow client error map",
 			Body: "The sync workflow client maps each run error of the engine (cancelled, failed, timed out) to a typed sync error; a run that timed out was shown as an internal error until the map listed it."},
-		textRow{Table: "hotfixes", ID: "hfx_duration", Place: "kb/app", At: at, Title: "JobTimeLimit raised to 1 h",
+		textRow{Table: "hotfixes", ID: "hfx_limit", Place: "kb/app", At: at, Title: "JobTimeLimit raised to 1 h",
 			Body: "Long catalog imports hit the 30 min JobTimeLimit and stopped mid-batch; JobTimeLimit is now 1 h in the workflow options."},
 	)
 	return data{rows: rows}
@@ -82,7 +82,7 @@ func set5Rows() data {
 // are in the top three, above the decision sharing more common words.
 func TestIdentifierRowsRank(t *testing.T) {
 	t.Parallel()
-	q := parseQuestion("what happens when a custom role uses a reserved role key or someone edits a system role", now)
+	q := parseQuestion("what happens when a custom group uses a taken group name or someone edits a locked builtin group", now)
 	ids := rowIDs(build(q, set5Rows(), 3, 0).Rows)
 	if len(ids) < 2 || !slices.Contains(ids[:2], "mem_reserved") || !slices.Contains(ids[:2], "mem_sysedit") {
 		t.Errorf("top rows %v: want mem_reserved and mem_sysedit first", ids)
@@ -90,13 +90,13 @@ func TestIdentifierRowsRank(t *testing.T) {
 }
 
 // TestOnTopicHotfixFirst (S5-11): the hotfix naming JobTimeLimit leads
-// the answer about the max run duration, above the off-topic hotfix and
+// the answer about the job time limit, above the off-topic hotfix and
 // the notes sharing "sync workflow run".
 func TestOnTopicHotfixFirst(t *testing.T) {
 	t.Parallel()
-	q := parseQuestion("what is the max run duration of a sync workflow run", now)
-	if ids := rowIDs(build(q, set5Rows(), 3, 0).Rows); len(ids) == 0 || ids[0] != "hfx_duration" {
-		t.Errorf("top rows %v: want hfx_duration first", ids)
+	q := parseQuestion("what is the job time limit of a sync workflow run", now)
+	if ids := rowIDs(build(q, set5Rows(), 3, 0).Rows); len(ids) == 0 || ids[0] != "hfx_limit" {
+		t.Errorf("top rows %v: want hfx_limit first", ids)
 	}
 }
 
@@ -107,7 +107,7 @@ func TestQuestionIdentifierFindsSpelledRow(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
 	d := data{rows: []textRow{
-		{Table: "memories", ID: "mem_spelled", Place: "kb/app", At: at, Body: "The max run duration of an import is one hour."},
+		{Table: "memories", ID: "mem_spelled", Place: "kb/app", At: at, Body: "The job time limit of an import is one hour."},
 		{Table: "memories", ID: "mem_other", Place: "kb/app", At: at, Body: "An import run writes a report."},
 	}}
 	ids := rowIDs(build(parseQuestion("what is JobTimeLimit", now), d, 0, 0).Rows)
