@@ -68,11 +68,11 @@ func splitSections(title, body string) []rowSection {
 	own := tokensOf(title)
 	out := make([]rowSection, 0, len(secs))
 	for _, s := range secs {
-		head := tokensOf(s.path)
+		head := wordsOf(s.path)
 		for w := range own {
 			delete(head, w)
 		}
-		out = append(out, rowSection{head: head, words: tokensOf(s.path + "\n" + s.text)})
+		out = append(out, rowSection{head: addStems(head), words: tokensOf(s.path + "\n" + s.text)})
 	}
 	return out
 }

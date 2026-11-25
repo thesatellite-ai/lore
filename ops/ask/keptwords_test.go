@@ -65,7 +65,7 @@ func fullRestates(newer, older *textRow) bool {
 	nt := newer.tokens()
 	total, held := 0, 0
 	for w := range older.tokens() {
-		if skipWords[w] {
+		if skipWords[w] || isStemKey(w) {
 			continue
 		}
 		total++

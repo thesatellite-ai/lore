@@ -342,7 +342,7 @@ func contentOf(r *textRow) []string {
 		r.content = shareSplit(r.split, func(s *rowSplit) *splitSlot[[]string] { return &s.content }, func() []string {
 			out := make([]string, 0, len(r.tokens()))
 			for w := range r.tokens() {
-				if !skipWords[w] {
+				if !skipWords[w] && !isStemKey(w) {
 					out = append(out, w)
 				}
 			}
@@ -858,8 +858,16 @@ func allWords(toks map[string]bool, name string) bool {
 // tokensOf is the word set of a row's text: each word, and the parts of
 // each code identifier (ErrGroupNameTaken holds role, key and reserved;
 // idents.go, bug hunt H-230), so a question in plain words finds the row
-// that names the thing in code.
+// that names the thing in code; and the stem of each word whose stem is
+// not the word (forms.go, bug hunt H-235), so hasWord finds the forms
+// lore search finds (validation for validate, job for jobs).
 func tokensOf(s string) map[string]bool {
+	return addStems(wordsOf(s))
+}
+
+// wordsOf is tokensOf without the stems: the words and identifier parts
+// of s.
+func wordsOf(s string) map[string]bool {
 	out := map[string]bool{}
 	for _, w := range reWord.FindAllString(s, -1) {
 		out[strings.TrimSuffix(strings.ToLower(w), "'s")] = true
@@ -871,9 +879,12 @@ func tokensOf(s string) map[string]bool {
 }
 
 // hasWord reports whether toks holds w or a form of it (appointment for
-// appointments, budgets for budget).
+// appointments, budgets for budget): a word three letters or fewer
+// longer or shorter, or a word with the same stem as lore search stems
+// it (validation for validate, job for jobs, enqueue for enqueuing;
+// forms.go, bug hunt H-235).
 func hasWord(toks map[string]bool, w string) bool {
-	if toks[w] {
+	if toks[w] || sameStem(toks, w) {
 		return true
 	}
 	if len(w) < 4 {

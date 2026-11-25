@@ -73,7 +73,7 @@ func heldByAny(rows []textRow, w string) bool {
 			return true
 		}
 		for t := range toks {
-			if len(t) >= 4 && osa(t, w) <= typoBudget(w) {
+			if len(t) >= 4 && !isStemKey(t) && osa(t, w) <= typoBudget(w) {
 				return true
 			}
 		}

@@ -256,10 +256,20 @@ func addTerm(dst []string, w string) []string {
 	if w == "" {
 		return dst
 	}
+	return append(dst, Stem(w))
+}
+
+// Stem is the index term of one folded (lower-case) token: its Porter
+// stem when it is 3..64 bytes of ASCII, else the token itself, as
+// lore's full-text index stems it. Why exported (bug hunt H-235): lore
+// ask matches a question word to a row word by this stem too, so
+// "validate" finds the row writing "validation" and "jobs" the one
+// writing "job", as lore search does.
+func Stem(w string) string {
 	if len(w) >= 3 && len(w) <= 64 && isASCII(w) {
-		w = porter.StemString(w)
+		return porter.StemString(w)
 	}
-	return append(dst, w)
+	return w
 }
 
 // isASCII reports whether s is all ASCII.
