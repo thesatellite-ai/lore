@@ -7084,6 +7084,13 @@
                           "id": {
                             "type": "string"
                           },
+                          "left_out": {
+                            "type": "array",
+                            "description": "set with full_chars when the part of the row left out holds words of the question the printed part does not (at most 6, in the question's order): the answer may be in the part not printed; lore show --id \u003cid\u003e prints it whole",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "matched": {
                             "type": "array",
                             "description": "the topics and words of the question it holds",

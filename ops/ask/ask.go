@@ -140,6 +140,9 @@ type Out struct {
 	identity bool
 	answer   answerFirst
 	asked    []string
+	// q is the question asked: the cut note names the words of it a cut
+	// row left out (leftout.go).
+	q question
 	// prior is a date question with words besides the date: its rows are
 	// the best rows, those dated near the window ranked up (prior.go),
 	// not the window's rows oldest first.
@@ -234,6 +237,10 @@ type Row struct {
 	// FullChars is the whole body's length (lore show --id prints it).
 	FullChars int    `json:"full_chars,omitempty" desc:"set when the row was cut to the part that answers the question: a row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, best first, each after a line § <heading path>, the first marked (matching section)) or else its best paragraph (… marking text left out), and a row longer than --max-chars the same within the room left; this is the whole body's length; lore show --id <id> prints it whole"`
 	History   string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
+	// LeftOut is set with FullChars when the part of the row left out
+	// holds question words the printed part does not (leftout.go, devco
+	// D-974): the answer may be there, lore show --id prints it.
+	LeftOut []string `json:"left_out,omitempty" desc:"set with full_chars when the part of the row left out holds words of the question the printed part does not (at most 6, in the question's order): the answer may be in the part not printed; lore show --id <id> prints it whole"`
 	// Comments are the comments on the row that hold a word of the
 	// question (devco D-942): history, printed under the row, never an
 	// answer of their own.

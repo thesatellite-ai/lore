@@ -14,10 +14,22 @@ package ask
 // question word in no row" caught 13 of 30 but was wrong on 52. The rows
 // read are every row holding a question word (loadRows), so a name no
 // row read holds is in no row of the stores read.
+//
+// Held means what score means by it (devco D-974, bug hunt H-233, Sync
+// benchmark set 6 S6-01): a code identifier the question writes
+// (Queue.Enqueue, EnqueueOptions.DedupKey) is held by a row holding each
+// of its parts (identWord), as score matches it. Before, the hint said
+// "no row holds queue.enqueue" above the very row that answered, and a
+// word starting the question's second sentence ("… run? Explain …") read
+// as a name. The hint is read from each row's whole text, never from the
+// excerpt the answer prints: a long row cut to its best sections still
+// holds what was cut (the cut note names the question's words left out,
+// Row.LeftOut).
 
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Abstain is the "not in memory" verdict of an answer.
@@ -49,7 +61,7 @@ func abstainOf(q question, ms []match, rows []textRow) Abstain {
 		if !names[w] {
 			continue
 		}
-		if !heldByAny(rows, w) {
+		if !heldByAny(q, rows, w) {
 			missing = append(missing, w)
 		}
 	}
@@ -61,15 +73,16 @@ func abstainOf(q question, ms []match, rows []textRow) Abstain {
 
 // heldByAny reports whether a row of rows holds name w, read leniently
 // (a false "not in memory" would make an agent deny what the memory
-// holds): the word or a form of it (hasWord), a typo of it within the
+// holds): the word or a form of it (hasWord), each part of it when q
+// writes it as a code identifier (identWord), a typo of it within the
 // budget resource names get (typoBudget: "Kyto" for Kyoto), or its
 // letters and digits inside the row's ("Wi-Fi" in "wifi", "eu-west" in
 // "euwest").
-func heldByAny(rows []textRow, w string) bool {
+func heldByAny(q question, rows []textRow, w string) bool {
 	bare := squeeze(w)
 	for i := range rows {
 		toks := rows[i].tokens()
-		if hasWord(toks, w) {
+		if hasWord(toks, w) || identWord(q, toks, w) {
 			return true
 		}
 		for t := range toks {
@@ -104,17 +117,36 @@ var notNames = map[string]bool{
 }
 
 // capitalised is the set of words (lower case) text writes with a
-// capital letter, its first word and dates left out: the names it asks
-// about.
+// capital letter, the first word of each sentence and dates left out:
+// the names it asks about.
 func capitalised(text string) map[string]bool {
 	out := map[string]bool{}
-	for i, w := range reWord.FindAllString(text, -1) {
-		w = strings.TrimSuffix(strings.TrimSuffix(w, "'s"), "’s")
+	for _, at := range reWord.FindAllStringIndex(text, -1) {
+		w := strings.TrimSuffix(strings.TrimSuffix(text[at[0]:at[1]], "'s"), "’s")
 		low := strings.ToLower(w)
-		if i == 0 || low == w || notNames[low] || low == "i" {
+		if low == w || notNames[low] || low == "i" || startsSentence(text[:at[0]]) {
 			continue
 		}
 		out[low] = true
 	}
 	return out
+}
+
+// startsSentence reports whether a word after before starts a sentence,
+// so its capital says nothing: nothing before it, or a line break, ? or !
+// before it, or a full stop after a word of three or more letters ("…
+// not terminal. Explain"; never "Dr. Okafor" or "e.g. Lisbon").
+func startsSentence(before string) bool {
+	t := strings.TrimRightFunc(before, func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '"' || r == '\'' || r == '(' || r == '“' || r == '‘'
+	})
+	if t == "" || strings.ContainsRune("?!\n\r", rune(t[len(t)-1])) {
+		return true
+	}
+	if !strings.HasSuffix(t, ".") {
+		return false
+	}
+	prev := strings.TrimSuffix(t, ".")
+	word := prev[strings.LastIndexFunc(prev, func(r rune) bool { return !unicode.IsLetter(r) })+1:]
+	return utf8.RuneCountInString(word) >= 3
 }

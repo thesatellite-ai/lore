@@ -54,6 +54,7 @@ func (o *Out) chunkLong() {
 			read, _ = cutBody(r.readBody, words, longRoom, r.subject)
 		}
 		r.FullChars, r.Body, r.readBody = len(r.Body), body, read
+		r.LeftOut = leftOutOf(o.q, r.Matched, r.Title, r.Body, r.Comments) // leftout.go
 	}
 }
 

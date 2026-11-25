@@ -408,7 +408,7 @@ func build(q question, d data, top, maxChars int) Out {
 	ms := matchResources(q, d.resources)
 	identity := isIdentity(q.text) && len(ms) > 0
 	q.about = !identity && len(ms) > 0 && (isAbout(q.text) || bareName(q, ms))
-	out.identity, out.asked = identity, q.tokens
+	out.identity, out.asked, out.q = identity, q.tokens, q
 	for _, m := range ms {
 		r := resourceOf(m, d.resources, q.owe != oweNone)
 		if q.about && m.whole {
@@ -1456,6 +1456,7 @@ func (o *Out) cutRow(i, maxChars int) bool {
 	if wholeRead != "" {
 		r.readBody = text
 	}
+	r.LeftOut = leftOutOf(o.q, r.Matched, r.Title, r.Body, r.Comments) // leftout.go
 	return true
 }
 
@@ -1852,6 +1853,10 @@ func (r Row) text(i int) string {
 // cutNote says a row was cut (to fit --max-chars, or a long markdown row
 // to its best sections, chunkLong) and how long it is whole.
 func (r Row) cutNote() string {
+	if len(r.LeftOut) > 0 {
+		// devco D-974: the part not printed holds words of the question
+		return fmt.Sprintf("cut to the part that answers the question; the whole row is %d characters and the part left out holds %s", r.FullChars, strings.Join(r.LeftOut, ", "))
+	}
 	return fmt.Sprintf("cut to the part that answers the question; the whole row is %d characters", r.FullChars)
 }
 
