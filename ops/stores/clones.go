@@ -549,9 +549,10 @@ type OutsideNamer interface {
 // storeURLForm is the url form of each command storeNamed serves, with
 // its flag (U-4: a hint never gives a value by position).
 var storeURLForm = map[string]string{
-	"open":   "lore store open --url <url>",
-	"forget": "lore store forget --url <url>",
-	"push":   "lore store push --store <url>",
+	"open":     "lore store open --url <url>",
+	"forget":   "lore store forget --url <url>",
+	"push":     "lore store push --store <url>",
+	"maintain": "lore store maintain --store <url>",
 }
 
 // cloneOps are the clone commands bound to m.

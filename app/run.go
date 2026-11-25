@@ -370,6 +370,12 @@ func run(ctx context.Context, args []string) int {
 	if !isDryRun(args) && !isHelpOrVersionCall(args) && !wire.CacheAutoPruneSkips(commandName(args)) {
 		app.CacheAutoPrune(ctx)
 	}
+	// Once a day each store clone is packed (store growth SG-2,
+	// devco:D-996): a detached `lore store maintain --all --due` child, so
+	// no command waits on it (wire.StoreAutoMaintain).
+	if !isDryRun(args) && !isHelpOrVersionCall(args) && !wire.StoreAutoMaintainSkips(commandName(args)) {
+		app.StoreAutoMaintain(ctx)
+	}
 	// Once-a-day new-release notice (or opt-in auto_upgrade) after the
 	// command's output, on stderr; quiet in CI, without a tty, for --json
 	// (FORMAT_EVOLUTION 8.6, 8.7; wire.UpgradeNotice).

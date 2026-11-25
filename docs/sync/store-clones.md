@@ -110,6 +110,7 @@ $ ls .git/lore
 fetch-stamp
 identity
 lock
+maint-stamp
 remote-tip
 state
 $ head -12 README.md
@@ -184,6 +185,16 @@ $ lore store use --default notes --yes
 - **It never touches your global git config.** The identity, merge driver and hook lore needs are written into the clone's own `.git/config`, `.git/info/attributes` and `.git/hooks/pre-commit`, each announced the first time ([Plain git in the store](editing-by-hand.md#plain-git-in-the-store)).
 - **The clone's git identity is always a person.** lore writes your name and email (in an org store, your identity in that org) as the clone's `user.name` and `user.email`, never an agent's. When an agent writes for you, lore's commit names only you (author, committer and message); the agent is credited on the rows it writes. `lore doctor` warns (`agent_commits`) about commits an older lore signed as an agent and prints how to rewrite them. `lore doctor` flags a clone whose identity is not yours (`store_identity`) with the exact command, and `lore fix` corrects it.
 - **It never deletes a file of yours.** Files that are not rows are reported by `lore doctor` (`store_files`) and left alone.
+
+## Lore keeps the clone packed
+
+Each write is one commit, and git stores every new commit, folder tree and row as its own small file until something packs them; git's own automatic clean-up waits for thousands of those files, so a busy store's clone used to grow to many times the size of its rows. Lore now packs its clones itself:
+
+- **At most once a day, in the background.** After any command, when a clone's last pass is older than `store.maintenance_every` (default `24h`), lore starts one `lore store maintain --all --due` in the background and the command you ran ends as usual. The pass packs the loose objects (and rolls small packs into bigger ones), removes unreachable objects older than two weeks, and writes git's commit-graph with changed-path filters, which makes per-row history (`lore task history --id <id> --git`) and lore's checks of who changed what faster. A clone lore just made is packed already; its first pass is a day later, and a small clone with nothing to pack is only marked as done.
+- **It never makes a command wait.** A second pass on the same clone skips at once; the pass never waits for the store lock (when a command holds it, the pass still packs and leaves the ref tidy-up for the next day). It changes no row, no branch and nothing on the remote, and runs with one pack thread.
+- **Git's own auto clean-up is off in the clone** (`gc.auto=0`, `maintenance.auto=false`), so git never starts one in the middle of a lore write.
+- **Run it now:** `lore store maintain --all` packs every clone and prints each one's size before and after; `lore store maintain --store <name>` packs one (a store name, its url, or its folder under `~/.lore/stores`, such as `acme/notes`). `lore doctor` shows a `store_maintenance` note for a clone whose `.git` is over twice the size of its packs (its size, packs, loose objects and last pass), with that command.
+- **Turn it off** for this machine with `store: {maintenance: off}` in `~/.lore/config.yaml` ([config](../reference/config.md)); a person's own clone (`lore store use`) is packed only when named with `--store`.
 
 ## Every store at once, from anywhere
 

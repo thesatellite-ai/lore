@@ -227,7 +227,54 @@ func benchSize(t *testing.T, bin string, n, repeat int) Run {
 	}
 	run.Samples = append(run.Samples, hist, trash)
 	run.Samples = append(run.Samples, w.disk("Clone disk at the end")...)
+	run.Samples = append(run.Samples, w.maintenance(repeat)...)
 	return run
+}
+
+// maintenance times store growth SG-2 (devco:D-996): the pass on the clone
+// as the run left it, the clone's disk after it, the path-limited reads
+// the commit-graph's changed-path filters speed up, and a write while a
+// pass runs beside it (the pass must never slow a command by more than 5%).
+func (w *world) maintenance(repeat int) []Sample {
+	var out []Sample
+	pass := Sample{Name: "Maintenance pass (lore store maintain --all)", Note: "repack of the loose objects and small packs, prune, commit-graph with changed-path filters"}
+	r := w.lore("store", "maintain", "--all")
+	pass.add(r)
+	pass.Value = firstLine(r.out)
+	out = append(out, pass)
+	out = append(out, w.disk("Clone disk after the pass")...)
+	hist := Sample{Name: "lore task history --git after the pass"}
+	if id := w.editedTask(); id != "" {
+		for range repeat {
+			hist.add(w.lore("task", "history", "--id", id, "--git"))
+		}
+	}
+	org := Sample{Name: "Org file log after the pass"}
+	auth := Sample{Name: "Authority cold after the pass"}
+	for range repeat {
+		org.add(w.timeGit(w.clone, "log", "--format=%H", "main", "--", "org/lore-org.yaml"))
+		w.dropAuthority()
+		auth.add(w.lore("sync"))
+	}
+	out = append(out, hist, org, auth)
+	// a write alone, then a write while a full pass runs (the commit-graph
+	// is dropped first so the pass rewrites it for every commit)
+	alone, beside := Sample{Name: "Write alone (lore memory add)"}, Sample{Name: "Write while a pass runs"}
+	for i := range repeat {
+		alone.add(w.lore("memory", "add", "--body", fmt.Sprintf("maint alone %d: the export cron", i), "--to", "agency", "--yes"))
+		if err := os.RemoveAll(filepath.Join(w.clone, ".git", "objects", "info", "commit-graphs")); err != nil {
+			w.t.Fatal(err)
+		}
+		cmd := exec.Command(w.loreBin(), "store", "maintain", "--all")
+		cmd.Dir, cmd.Env = w.app, w.env
+		if err := cmd.Start(); err != nil {
+			w.t.Fatal(err)
+		}
+		time.Sleep(200 * time.Millisecond) // the pass has its lock and is writing
+		beside.add(w.lore("memory", "add", "--body", fmt.Sprintf("maint beside %d: the export cron", i), "--to", "agency", "--yes"))
+		_ = cmd.Wait() // its own result is the pass sample above
+	}
+	return append(out, alone, beside)
 }
 
 // result is one timed command.
@@ -474,9 +521,15 @@ func (w *world) timeGit(dir string, args ...string) result {
 }
 
 // timed runs name in dir with the world's environment, at most Limit.
+// lore is the world's own binary by its path: exec resolves a bare name
+// with this test process's PATH, not cmd.Env's, so a bare "lore" ran the
+// lore installed on the machine instead of the build under test.
 func (w *world) timed(dir, name string, args ...string) result {
 	ctx, cancel := context.WithTimeout(context.Background(), Limit)
 	defer cancel()
+	if name == "lore" {
+		name = w.loreBin()
+	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir, cmd.Env = dir, w.env
 	t0 := time.Now()
@@ -552,4 +605,25 @@ func (w *world) read(path string) []byte {
 		w.t.Fatal(err)
 	}
 	return b
+}
+
+// loreBin is the world's lore (the build under test, linked into its bin
+// folder), by path.
+func (w *world) loreBin() string { return filepath.Join(w.bin, "lore") }
+
+// TestBenchRunsTheBuildUnderTest: the harness runs the world's own lore
+// (LORE_BENCH_BIN, linked into its bin folder), never the lore on the
+// caller's PATH: exec resolves a bare name with the test process's PATH,
+// so every timing was of the installed release (devco:D-996).
+func TestBenchRunsTheBuildUnderTest(t *testing.T) {
+	stub := filepath.Join(t.TempDir(), "stub")
+	mustWrite(t, stub, "#!/bin/sh\necho build-under-test \"$@\"\n")
+	if err := os.Chmod(stub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	w := newWorld(t, stub)
+	r := w.lore("version")
+	if r.err != nil || strings.TrimSpace(r.out) != "build-under-test version" {
+		t.Fatalf("w.lore ran %q (%v), want the world's binary", r.out, r.err)
+	}
 }

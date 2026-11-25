@@ -130,6 +130,8 @@ $ lore config check
 | `cache.max_age` | `14d` | a cache file under `~/.lore/cache` that nothing used for this long is removed by the daily cache sweep (rebuilt from the row files if a repo needs it again); at least `1h` |
 | `cache.max_size` | `2GB` | above this size the daily cache sweep removes the least recently used cache files first, never one used in the last day; a number with `KB`, `MB`, `GB` or `TB` (powers of 1024), at least `100MB` |
 | `cache.auto_prune` | `true` | `false` turns the daily cache sweep off; `lore cache prune` still works by hand |
+| `store.maintenance` | `auto` | `off` stops lore packing its store clones by itself once a day; `lore store maintain --all` still works by hand (see [Lore keeps the clone packed](../sync/store-clones.md#lore-keeps-the-clone-packed)) |
+| `store.maintenance_every` | `24h` | how old a clone's last pass may get before the next command starts one in the background; a duration from `1h` to `720h` |
 | `read_server` | `true` | `false` turns off the local read server, so every command runs in its own process (see [The local read server](../operations/where-lore-keeps-things.md#the-local-read-server)) |
 | `policies.<key>` | none | a stricter limit for this machine only, for any key `lore policy show` lists (see below) |
 | `context.profiles` | none | your own tool profiles for `lore render`, added after the built-in ones (see below) |

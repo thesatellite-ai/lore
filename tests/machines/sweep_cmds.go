@@ -161,6 +161,9 @@ var reads = []sweepStep{
 	{Cmd: "store folder list", In: inBoth},
 	{Cmd: "store show", In: inRepo},
 	{Cmd: "store doctor", In: inRepo},
+	// store maintain packs this machine's store clones (local only, no row,
+	// no ref of the store, no network; devco:D-996)
+	{Cmd: "store maintain", Args: []string{"--all"}, In: inBoth},
 	// The code repo is never a push-mode store: both answer E_REFUSED with
 	// a hint, and neither changes a file (a real set or compaction runs in
 	// the store push tests).

@@ -139,7 +139,12 @@ func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 		// compares, never text to convert. Git for Windows defaults to
 		// autocrlf=true, which checked rows out with CRLF, so a second
 		// clone read other bytes than the first wrote.
-		args = append([]string{"-c", "commit.gpgsign=false", "-c", "core.hooksPath=" + r.noHooks, "-c", "core.autocrlf=false", "-c", ownDriverOff}, args...)
+		//
+		// gc.auto=0 and maintenance.auto=false (devco:D-996): lore packs
+		// its clones in its own pass (maintain.go), never git's detached
+		// auto gc in the middle of a write; clones made before the clone
+		// config held both get them here.
+		args = append([]string{"-c", "commit.gpgsign=false", "-c", "core.hooksPath=" + r.noHooks, "-c", "core.autocrlf=false", "-c", ownDriverOff, "-c", "gc.auto=0", "-c", "maintenance.auto=false"}, args...)
 	}
 	if len(r.routeArgs) > 0 {
 		args = append(append([]string(nil), r.routeArgs...), args...)

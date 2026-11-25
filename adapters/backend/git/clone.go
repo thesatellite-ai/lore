@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
@@ -401,6 +402,14 @@ func (b *Backend) initClone(ctx context.Context, remote string) error {
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"remote", "add", "--", RemoteName, remote}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: add the store remote", err)
 	}
+	// devco:D-996: git's own auto gc stays off in the clone (lore's pass,
+	// maintain.go, packs it), and a new clone's first pass is a day away
+	setGitAutoOff(ctx, b.git, b.work)
+	now := time.Now
+	if b.cfg.now != nil { // a sharedBackend (PrepareClone) carries no clock
+		now = b.cfg.now
+	}
+	MarkMaintained(b.work, now())
 	return nil
 }
 

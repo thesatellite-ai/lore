@@ -100,6 +100,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckCacheSize, a.DoctorCacheSize},                                                                               // cache_prune.go (public issue #178)
 		{DoctorCheckOldRepoCache, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorOldRepoCache(c, fix) }},     // doctor_oldrepocache.go (owner item 16)
 		{DoctorCheckOldClones, a.DoctorOldClones},                                                                               // doctor_oldclones.go (plain files 1.6)
+		{DoctorCheckStoreMaintenance, a.DoctorStoreMaintenance},                                                                 // storemaint.go (devco:D-996)
 	}
 	// A repo linked to a store folder by its remote opens without making
 	// anything (its rows live in the folder), so the store checks run

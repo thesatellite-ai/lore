@@ -67,6 +67,8 @@ store clones:
       the user.email lore wrote into this clone's .git/config, so lore keeps only its own value current and never changes one you set
   ~/.lore/stores/acme/notes/.git/lore/lock (store git@github.com:acme/notes)
       the store lock (holds no data)
+  ~/.lore/stores/acme/notes/.git/lore/maint-stamp (store git@github.com:acme/notes)
+      when lore last packed this clone (lore store maintain; at most once a day by itself)
   ~/.lore/stores/acme/notes/.git/lore/remote-tip (store git@github.com:acme/notes)
       the store branch's tip on the remote when lore last saw it, so a store repo deleted and made again is noticed, never refilled
   ~/.lore/stores/acme/notes/.git/lore/state (store git@github.com:acme/notes)

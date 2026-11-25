@@ -31,6 +31,10 @@ import (
 	"testing"
 )
 
+// wwlValueRe finds the policy row's value 400 (the JSON field, quoted or
+// not), never the same digits inside an id or a stamp.
+var wwlValueRe = regexp.MustCompile(`("value"\s*:\s*"?)400\b`)
+
 // Names of the label cells (made up).
 const (
 	wwlAPI = "api"
@@ -154,7 +158,13 @@ func TestStoryWWLabelCells(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(dst, []byte(strings.ReplaceAll(string(b), "400", "30")), 0o644); err != nil {
+		// only the value field: a blanket "400" replace also hit a random
+		// id holding those digits (pol_…69400ead), and the row stopped being one
+		dup := wwlValueRe.ReplaceAllString(string(b), "${1}30")
+		if dup == string(b) {
+			t.Fatalf("the policy row has no value 400 to change:\n%s", b)
+		}
+		if err := os.WriteFile(dst, []byte(dup), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		s.Git(root, "add", "-A")

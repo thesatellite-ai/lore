@@ -40,6 +40,9 @@ var behaviourBounds = []behaviourBound{
 	{"adapters/live/live_cov_test.go", "time.Since(got) > time.Minute", "a signature is stamped with the current time (a clock check)"},
 	{"wire/settings_refresh_test.go", "d > time.Minute", "a refresh is stamped with the current time (a clock check)"},
 	{"tests/teame2e/teamharness/deadline_test.go", "time.Since(start) > 2*time.Second+cmdKillGrace", "runWithDeadline's own kill deadline"},
+	{"adapters/backend/git/maintain_test.go", "time.Since(last) > time.Minute", "a new clone's maintenance stamp is the current time (a clock check)"},
+	{"adapters/backend/git/maintain_test.go", "took > time.Second", "a second maintenance pass skips at once instead of waiting for the running one (a try-lock)"},
+	{"adapters/backend/git/maintain_test.go", "took > 5*time.Second", "the pass never waits the 10 s store lock timeout (a try-lock)"},
 }
 
 // isBehaviourBound reports whether code (a line of file rel) is listed.

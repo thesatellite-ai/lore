@@ -218,6 +218,7 @@ func TestAnswersMatchGit(t *testing.T) {
 		{work, []string{"diff", "--cached", "--quiet", "HEAD", "--", "top.txt"}, ""},
 		{work, []string{"diff", "--cached", "--quiet", "HEAD", "--", "org"}, ""},
 		{work, []string{"-c", "commit.gpgsign=false", "-c", "core.autocrlf=false", "rev-parse", "--verify", "--quiet", "refs/heads/main^{commit}"}, ""},
+		{work, []string{"-c", "gc.auto=0", "-c", "maintenance.auto=false", "rev-parse", "--verify", "--quiet", "refs/heads/main^{commit}"}, ""}, // devco:D-996
 	}
 	for _, c := range cases {
 		s := New()

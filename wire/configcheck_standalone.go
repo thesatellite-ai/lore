@@ -46,7 +46,9 @@ type configKeys struct {
 	orgconf.Config `yaml:",inline"`
 	Policies       map[string]yaml.Node `yaml:"policies,omitempty"`
 	Store          struct {
-		LockTimeout string `yaml:"lock_timeout,omitempty"`
+		LockTimeout      string `yaml:"lock_timeout,omitempty"`
+		Maintenance      string `yaml:"maintenance,omitempty"`       // storemaint.go (devco:D-996)
+		MaintenanceEvery string `yaml:"maintenance_every,omitempty"` // storemaint.go
 	} `yaml:"store,omitempty"`
 	// The onboarding keys (ONBOARDING_DESIGN 3.2, 7.3; config_setups.go).
 	Setups []yaml.Node `yaml:"setups,omitempty"`

@@ -34,6 +34,8 @@ func harmlessConfig(kv string) bool {
 	switch {
 	case k == "commit.gpgsign", k == "core.autocrlf", k == "core.quotepath", k == "core.hookspath":
 		return true
+	case k == "gc.auto", k == "maintenance.auto": // store clones: git's own auto gc off (devco:D-996)
+		return true
 	case strings.HasPrefix(k, "merge.") && strings.HasSuffix(k, ".driver"):
 		return true
 	}
