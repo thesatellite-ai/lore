@@ -131,8 +131,7 @@ func (ix *Index) BM25(words []string) []float64 {
 			if len(ps) == 0 {
 				continue
 			}
-			df := float64(len(ps))
-			idf := math.Log(1 + (n-df+0.5)/(df+0.5))
+			idf := IDF(len(ix.lens), len(ps))
 			for _, p := range ps {
 				f := float64(p.tf)
 				out[p.doc] += idf * f * (k1 + 1) / (f + k1*(1-b+b*float64(ix.lens[p.doc])/ix.avg))
@@ -140,6 +139,37 @@ func (ix *Index) BM25(words []string) []float64 {
 		}
 	}
 	return out
+}
+
+// IDF is the weight BM25 gives a term df of n texts hold (Lucene's
+// ln(1 + (n-df+0.5)/(df+0.5)), never negative): a term few texts hold
+// weighs much, one every text holds almost nothing.
+//
+// Why exported (devco D-985, hunt H-244): lore ask picks the sections and
+// sentences of a long row it prints by how rare the question's words
+// are; it reads that rarity with this same function, from the same index
+// its rows were scored with (Index.TermIDF) and within the row, so the
+// excerpt and the ranking agree on which words name the subject instead
+// of keeping a second, differently tuned copy.
+func IDF(n, df int) float64 {
+	if n <= 0 || df <= 0 {
+		return 0
+	}
+	fn, fd := float64(n), float64(min(df, n))
+	return math.Log(1 + (fn-fd+0.5)/(fd+0.5))
+}
+
+// TermIDF is IDF of word w over the index's texts, w analysed as the
+// index reads text (its heaviest term when it splits into several); 0
+// when no text holds it.
+func (ix *Index) TermIDF(w string) float64 {
+	best := 0.0
+	for _, t := range Terms(nil, w) {
+		if ps := ix.post[t]; len(ps) > 0 {
+			best = max(best, IDF(len(ix.lens), len(ps)))
+		}
+	}
+	return best
 }
 
 // Cosine scores every text against the question's vector (0 for a text

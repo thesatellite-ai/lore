@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/dates"
+	"github.com/thesatellite-ai/lore/logic/hybrid"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/schema"
@@ -1103,8 +1104,6 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 		}
 	}
 	distinctBonus(q, all) // idents.go: the distinctive words count more (H-230, D-972)
-	// subject.go: the words a cut row keeps first (H-232)
-	subject := subjectTermsOf(all)
 	// an everything-about answer leads with the newest row of each folder
 	// and topic (lore's structure): the fused order stays out of it
 	if !q.about {
@@ -1113,6 +1112,13 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 		}
 		fuseScores(q, all, v)
 	}
+	// subject.go: the words a cut row keeps first (H-232), weighed with the
+	// IDF of the index the rows were scored with (H-244)
+	var ix *hybrid.Index
+	if v != nil && v.ci != nil {
+		ix = v.ci.ix
+	}
+	subject := subjectTermsOf(all, ix)
 	slices.SortStableFunc(all, func(a, b scored) int {
 		if c := cmp.Compare(b.score, a.score); c != 0 {
 			return c

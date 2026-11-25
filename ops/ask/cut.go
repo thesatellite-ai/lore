@@ -2,7 +2,7 @@ package ask
 
 import (
 	"cmp"
-	"math"
+	"maps"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -363,12 +363,12 @@ func bestSections(body string, words []string, room int, st *subjectTerms) (stri
 	for i, s := range secs {
 		toks[i], heads[i] = tokensOf(s.path+"\n"+s.text), tokensOf(s.path)
 	}
+	idents := identWords(body, words)
 	score := make([]float64, len(secs))
 	// subj[i]: section i holds a word of the question's subject (a word
 	// rare in the store, subject.go) that at most half the note's
 	// sections hold; one most sections hold names the note, not a section
 	subj, anySubj := make([]bool, len(secs)), false
-	n := float64(len(secs))
 	for _, w := range words {
 		var hold []int
 		for i := range secs {
@@ -384,8 +384,10 @@ func bestSections(body string, words []string, room int, st *subjectTerms) (stri
 			subj[i] = subj[i] || picks
 			anySubj = anySubj || picks
 			// devco D-973: times the word's spread across the store, so a
-			// word most rows hold (run, first) never outweighs the subject
-			wt := math.Log(1+n/float64(len(hold))) * st.of(w)
+			// word most rows hold (run, first) never outweighs the subject;
+			// devco D-985: the scorer's IDF, an identifier the row names
+			// counting identWeight times (cutWeight, as sentences do)
+			wt := cutWeight(len(secs), len(hold), w, st, idents[strings.ToLower(w)])
 			if hasWord(heads[i], strings.ToLower(w)) {
 				wt *= 2 // devco D-969: a heading naming the word counts twice (longsec.go)
 			}
@@ -405,6 +407,7 @@ func bestSections(body string, words []string, room int, st *subjectTerms) (stri
 	slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(score[b], score[a]) })
 	var parts []string
 	used := 0
+	printed := map[string]bool{} // the printed sections' words (fillLeftOut)
 	for _, i := range order {
 		if anySubj && len(parts) > 0 && !subj[i] {
 			// devco D-973 (S6-39): under a section holding the question's
@@ -422,14 +425,120 @@ func bestSections(body string, words []string, room int, st *subjectTerms) (stri
 			sep = 2 // the blank line between two sections
 		}
 		left := room - used - sep - len(head)
+		got := toks[i]
 		if len(text) > left {
 			if len(parts) > 0 {
 				continue // a lower section that fits may still follow
 			}
 			text = cutText(text, words, max(left, 1), st)
+			got = tokensOf(secs[i].path + "\n" + text)
 		}
+		maps.Copy(printed, got)
 		parts = append(parts, head+text)
 		used += sep + len(head) + len(text)
 	}
+	parts = fillLeftOut(secs, toks, printed, parts, words, room-used, st, anySubj)
 	return strings.Join(parts, "\n\n"), true
 }
+
+// fillLeftOut adds to parts (a cut row's printed sections), while room
+// bytes are left, the best sentence of secs holding each question word
+// of words that a section holds and parts do not, heaviest word first
+// (cutWeight over the sentences of the sections holding such a word),
+// each under its section's path and after the sentence leading into it
+// when it is a list item; one sentence can hold several such words. It
+// stops when every such word is printed or no sentence holding one fits.
+// With onlyRare (the printed sections hold the question's subject) only
+// its rare words are filled: a sentence holding only words most rows of
+// the store hold answers another question (devco D-973), as the sections
+// left out did. toks are the sections' words and printed the words of
+// parts (bestSections'); printed gains the words of what is added.
+//
+// Why (devco D-985, hunt H-244, owner decision 2026-11-25 item 2): the
+// sections that score best can all miss a word the question asks about
+// (the cut note then named it as left out); one sentence holding it costs
+// far less than its whole section and says what the row answers.
+func fillLeftOut(secs []section, toks []map[string]bool, printed map[string]bool, parts, words []string, room int, st *subjectTerms, onlyRare bool) []string {
+	if room <= 0 || len(words) == 0 {
+		return parts
+	}
+	var want []string
+	for _, w := range words {
+		if onlyRare && !st.isRare(w) {
+			continue
+		}
+		if lw := strings.ToLower(w); !hasWord(printed, lw) && !slices.Contains(want, lw) {
+			want = append(want, lw)
+		}
+	}
+	if len(want) == 0 {
+		return parts
+	}
+	// the sentences of the sections holding a wanted word, each with its
+	// section and its index in that section's sentences (a list item's
+	// lead-in is looked up there, never across sections)
+	type cand struct{ sec, at int }
+	var (
+		ss    []sentence
+		where []cand
+		per   = map[int][]sentence{}
+	)
+	for i := range secs {
+		if !slices.ContainsFunc(want, func(w string) bool { return hasWord(toks[i], w) }) {
+			continue
+		}
+		per[i] = sentencesOf(secs[i].text)
+		for k, s := range per[i] {
+			ss = append(ss, s)
+			where = append(where, cand{i, k})
+		}
+	}
+	if len(ss) == 0 {
+		return parts
+	}
+	var text strings.Builder
+	for _, s := range ss {
+		text.WriteString(s.text + "\n")
+	}
+	score, _, hold, wt := sentenceScores(ss, text.String(), want, st)
+	ks := make([]int, 0, len(want))
+	for k := range want {
+		if len(hold[k]) > 0 {
+			ks = append(ks, k)
+		}
+	}
+	// heaviest first; a tie keeps the question's order (a word every
+	// sentence holds weighs 0 and comes last)
+	slices.SortStableFunc(ks, func(a, b int) int { return cmp.Compare(wt[b], wt[a]) })
+	for _, k := range ks {
+		if hasWord(printed, want[k]) {
+			continue // a sentence added for an earlier word holds it
+		}
+		cands := slices.Clone(hold[k])
+		slices.SortStableFunc(cands, func(a, b int) int { return cmp.Compare(score[b], score[a]) })
+		for _, i := range cands {
+			if isFenceLine(ss[i].text) {
+				continue
+			}
+			c := where[i]
+			line := ss[i].text
+			if l := leadIn(per[c.sec], c.at); l >= 0 {
+				line = per[c.sec][l].text + "\n" + line
+			}
+			part := sectionMark + secs[c.sec].path + "\n" + elision + "\n" + line
+			if len(part)+2 > room {
+				continue
+			}
+			parts = append(parts, part)
+			room -= len(part) + 2
+			for t := range tokensOf(part) {
+				printed[t] = true
+			}
+			break
+		}
+	}
+	return parts
+}
+
+// isFenceLine reports a code fence line ("```go").
+func isFenceLine(t string) bool { return fenceOf(strings.TrimSpace(t)) != "" }

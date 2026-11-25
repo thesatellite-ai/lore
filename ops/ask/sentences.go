@@ -18,10 +18,13 @@ package ask
 // error name) the question names picks it most.
 
 import (
-	"math"
+	"bytes"
+	"cmp"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/hybrid"
 )
 
 // identWeight is how many plain words an identifier-shaped question word
@@ -29,12 +32,6 @@ import (
 // ErrStaleSnapshot, MAX_RUN): the question names the thing it asks about,
 // so the sentence naming it goes first.
 const identWeight = 4
-
-// reIdent finds identifier-shaped tokens in a text: names with an inner
-// capital (applyLevelDelta, ErrStale), an underscore (stock_inbox,
-// MAX_RUN), letters next to digits (v2Client) or a dotted path
-// (jobs.Reconcile).
-var reIdent = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*`)
 
 // isIdentShape reports whether token t reads as a code name rather than a
 // word: an underscore, a dot, a digit, or a lower-case letter followed by
@@ -174,62 +171,146 @@ func firstOfLine(ss []sentence, j int) sentence {
 	return ss[j]
 }
 
-// sentenceScores rates each sentence by the question's words it holds:
-// a word held by df of the n sentences weighs ln(1 + n/df), times
-// identWeight when text writes it as an identifier; a word every sentence
-// holds weighs nothing. top is the heaviest word some sentence holds.
-func sentenceScores(ss []sentence, text string, words []string, st *subjectTerms) (score []float64, top string) {
-	idents := map[string]bool{}
-	for _, t := range reIdent.FindAllString(text, -1) {
-		if isIdentShape(t) {
-			idents[strings.ToLower(t)] = true
+// identWords is the words of words (lower-case) that text writes as a
+// whole identifier-shaped token somewhere (isIdentShape: a name with an
+// inner capital, an underscore, a digit or a dotted path, equal to the
+// word ignoring case). It scans for each word instead of running an
+// identifier regexp over the whole row on every cut (devco D-985: that
+// regexp over a 13,000-character note cost more than the rest of its
+// cut).
+func identWords(text string, words []string) map[string]bool {
+	out := map[string]bool{}
+	var lower []byte
+	for _, w := range words {
+		w = strings.ToLower(w)
+		if w == "" || out[w] {
+			continue
+		}
+		if lower == nil {
+			lower = asciiLower(text)
+		}
+		if identAt(text, lower, w) {
+			out[w] = true
 		}
 	}
+	return out
+}
+
+// asciiLower is text with its ASCII letters lower-cased, every byte at
+// its offset (identifiers are ASCII; other bytes stay as they are).
+func asciiLower(text string) []byte {
+	b := []byte(text)
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return b
+}
+
+// identAt reports whether text (lower: asciiLower of it) holds w as a
+// whole identifier-shaped token.
+func identAt(text string, lower []byte, w string) bool {
+	for from := 0; from < len(lower); {
+		k := bytes.Index(lower[from:], []byte(w))
+		if k < 0 {
+			return false
+		}
+		a := from + k
+		b := a + len(w)
+		from = a + 1
+		for a > 0 && isIdentByte(text[a-1]) {
+			a--
+		}
+		for b < len(text) && isIdentByte(text[b]) {
+			b++
+		}
+		tok := strings.TrimRight(text[a:b], ".")
+		if strings.EqualFold(tok, w) && isIdentShape(tok) {
+			return true
+		}
+	}
+	return false
+}
+
+// isIdentByte reports a byte of an identifier token (letters, digits,
+// '_' and the '.' of a dotted path).
+func isIdentByte(c byte) bool {
+	return c == '_' || c == '.' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+// cutWeight is how much question word w counts toward the parts of a
+// row an excerpt keeps when hold of the row's n parts (sections or
+// sentences) hold it: the scorer's IDF within the row (hybrid.IDF, a word
+// every part repeats weighs almost nothing) times its IDF across the
+// store (subjectTerms), times identWeight when the row writes it as an
+// identifier. One weight for sections and sentences alike (devco D-985,
+// hunt H-244).
+func cutWeight(n, hold int, w string, st *subjectTerms, ident bool) float64 {
+	wt := hybrid.IDF(n, hold) * st.of(w)
+	if ident {
+		wt *= identWeight
+	}
+	return wt
+}
+
+// sentenceScores rates each sentence by the question's words it holds,
+// each word weighing cutWeight; a word every sentence holds weighs
+// nothing. top is the heaviest word some sentence holds; hold[k] lists
+// the sentences holding words[k] and wt[k] is its weight (0 when it picks
+// none).
+func sentenceScores(ss []sentence, text string, words []string, st *subjectTerms) (score []float64, top string, hold [][]int, wt []float64) {
+	idents := identWords(text, words)
 	toks := make([]map[string]bool, len(ss))
 	for i, s := range ss {
 		toks[i] = tokensOf(s.text)
 	}
 	score = make([]float64, len(ss))
-	n := float64(len(ss))
+	hold, wt = make([][]int, len(words)), make([]float64, len(words))
 	heaviest := 0.0
-	for _, w := range words {
+	for k, w := range words {
 		w = strings.ToLower(w)
-		var hold []int
 		for i := range ss {
 			if hasWord(toks[i], w) {
-				hold = append(hold, i)
+				hold[k] = append(hold[k], i)
 			}
 		}
-		if len(hold) == 0 || (len(hold) == len(ss) && len(ss) > 1) {
+		if len(hold[k]) == 0 || (len(hold[k]) == len(ss) && len(ss) > 1) {
 			continue
 		}
-		wt := math.Log(1+n/float64(len(hold))) * st.of(w) // devco D-973: the store's spread too (subject.go)
-		if idents[w] {
-			wt *= identWeight
+		wt[k] = cutWeight(len(ss), len(hold[k]), w, st, idents[w]) // devco D-973: the store's spread too (subject.go)
+		if wt[k] > heaviest {
+			heaviest, top = wt[k], w
 		}
-		if wt > heaviest {
-			heaviest, top = wt, w
-		}
-		for _, i := range hold {
-			score[i] += wt
+		for _, i := range hold[k] {
+			score[i] += wt[k]
 		}
 	}
-	return score, top
+	return score, top, hold, wt
 }
 
-// keepSentences is text cut to room bytes by sentence: the sentences that
-// hold the question's words, best first (sentenceScores) while they fit,
-// printed in text order, each under its heading lines, with an elision
-// mark ("…") on its own line where text was left out; then, while room is
-// left, the opening sentences. A best sentence longer than room is cut
-// around the heaviest word it holds. ok is false when no sentence holds a
-// word that tells the sentences apart (the caller cuts by paragraph then).
+// keepSentences is text cut to room bytes by sentence: the best sentence
+// (sentenceScores), then while a question word the text holds is not yet
+// kept and room is left, the best sentence holding the heaviest such word
+// (coverWords), then the other sentences holding the question's words,
+// best first, while they fit; printed in text order, each under its
+// heading lines, a list item after the sentence leading into it, with an
+// elision mark ("…") on its own line where text was left out; then,
+// while room is left, the opening sentences. A best sentence longer than
+// room is cut around the heaviest word it holds. ok is false when no
+// sentence holds a word that tells the sentences apart (the caller cuts
+// by paragraph then).
+//
+// Why the cover step (devco D-985, hunt H-244, owner decision 2026-11-25
+// item 2): best first alone spent the room on sentences repeating the
+// words the first one already held, and the cut note then said the part
+// left out holds a question word the row answers with.
 func keepSentences(text string, words []string, room int, st *subjectTerms) (string, bool) {
 	ss := sentencesOf(text)
 	if len(ss) == 0 || len(words) == 0 {
 		return "", false
 	}
-	score, top := sentenceScores(ss, text, words, st)
+	score, top, hold, wt := sentenceScores(ss, text, words, st)
 	order := make([]int, 0, len(ss))
 	for i := range ss {
 		if score[i] > 0 {
@@ -276,7 +357,11 @@ func keepSentences(text string, words []string, room int, st *subjectTerms) (str
 	if l := leadIn(ss, order[0]); l >= 0 {
 		try(l)
 	}
+	coverWords(ss, keep, score, hold, wt, try)
 	for _, i := range order[1:] {
+		if keep[i] {
+			continue
+		}
 		if try(i) {
 			if l := leadIn(ss, i); l >= 0 {
 				try(l)
@@ -290,6 +375,39 @@ func keepSentences(text string, words []string, room int, st *subjectTerms) (str
 		}
 	}
 	return renderKept(ss, keep), true
+}
+
+// coverWords adds to keep, through try (which keeps a sentence only
+// when the cut still fits), the best sentence (by score) holding each
+// question word no kept sentence holds yet, heaviest word first, with the
+// sentence leading into it when it is a list item; it stops when every
+// word some sentence holds is kept or none of the rest fits. hold and wt
+// are sentenceScores' per-word sentences and weights (a word of weight 0
+// picks no sentence and is skipped).
+func coverWords(ss []sentence, keep map[int]bool, score []float64, hold [][]int, wt []float64, try func(int) bool) {
+	ks := make([]int, 0, len(wt))
+	for k := range wt {
+		if wt[k] > 0 {
+			ks = append(ks, k)
+		}
+	}
+	// heaviest first; a tie keeps the question's order
+	slices.SortStableFunc(ks, func(a, b int) int { return cmp.Compare(wt[b], wt[a]) })
+	for _, k := range ks {
+		if slices.ContainsFunc(hold[k], func(i int) bool { return keep[i] }) {
+			continue // a kept sentence already holds it
+		}
+		cand := slices.Clone(hold[k])
+		slices.SortStableFunc(cand, func(a, b int) int { return cmp.Compare(score[b], score[a]) })
+		for _, i := range cand {
+			if try(i) {
+				if l := leadIn(ss, i); l >= 0 {
+					try(l)
+				}
+				break
+			}
+		}
+	}
 }
 
 // renderKept prints the kept sentences of ss in text order: two kept

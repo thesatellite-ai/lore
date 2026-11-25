@@ -48,7 +48,7 @@ func subjectStore() []scored {
 // the section repeating the common words led and the subject section was
 // left out.
 func TestBestSectionsPicksSubjectSection(t *testing.T) {
-	st := subjectTermsOf(subjectStore())
+	st := subjectTermsOf(subjectStore(), nil)
 	if st == nil || !st.isRare("duplicate") || st.isRare("run") || st.of("key") <= st.of("first") {
 		t.Fatalf("subject terms: %+v", st)
 	}
@@ -64,7 +64,7 @@ func TestBestSectionsPicksSubjectSection(t *testing.T) {
 	}
 	// with no store spread (fewer than rareFloor scored rows) the note's
 	// own spread decides, as before
-	if subjectTermsOf(subjectStore()[:rareFloor-1]) != nil {
+	if subjectTermsOf(subjectStore()[:rareFloor-1], nil) != nil {
 		t.Error("subject terms below rareFloor scored rows")
 	}
 }
@@ -74,7 +74,7 @@ func TestBestSectionsPicksSubjectSection(t *testing.T) {
 // words over the one repeating the common ones.
 func TestKeepSentencesSubjectSentence(t *testing.T) {
 	text := "Workers renew the lease while the run is still running, and the first run returns to the queue while it is still running. A duplicate key gives back the first attempt id. Operators watch the queue."
-	out, ok := keepSentences(text, subjectQuestion, 60, subjectTermsOf(subjectStore()))
+	out, ok := keepSentences(text, subjectQuestion, 60, subjectTermsOf(subjectStore(), nil))
 	if !ok || !strings.Contains(out, "A duplicate key gives back the first attempt id.") {
 		t.Errorf("the sentence holding the subject was dropped:\n%s", out)
 	}

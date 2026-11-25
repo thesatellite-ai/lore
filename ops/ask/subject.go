@@ -18,33 +18,49 @@ package ask
 // distinctBonus ranks rows by, read once per ask.
 
 import (
-	"math"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/hybrid"
 )
 
 // subjectTerms is how much each question word a row matched says about
-// the question's subject across the store: weight is ln(1 + n/df) for a
-// word df of the n scored rows hold, and rare holds the words at most a
-// quarter of them hold (distinctBonus's distinctive words). Shared by every
-// row of one answer; nil (every word 1, none rare) when fewer than
-// rareFloor rows scored, where every word is rare.
+// the question's subject across the store: weight is the word's BM25 IDF
+// (hybrid.IDF) over the index the rows were scored with, and rare holds
+// the words at most a quarter of its texts hold (distinctBonus's
+// distinctive words). Shared by every row of one answer; nil (every word
+// 1, none rare) when fewer than rareFloor rows scored, where every word is
+// rare.
+//
+// Why the index's IDF (devco D-985, hunt H-244, owner decision
+// 2026-11-25 item 2): the excerpt picks a long row's sections and
+// sentences by these weights; read from the same index and the same
+// function the ranking scores rows with, the excerpt keeps the words that
+// made the row rank instead of a second count over the scored rows.
 type subjectTerms struct {
 	weight map[string]float64
 	rare   map[string]bool
 }
 
-// subjectTermsOf is the subject terms of q's words and topics among the scored
-// rows all (wordSpread); nil below rareFloor rows.
-func subjectTermsOf(all []scored) *subjectTerms {
+// subjectTermsOf is the subject terms of q's words and topics among the
+// scored rows all (wordSpread), weighed over ix (the answer's word index;
+// over all itself when nil, or for a word ix does not hold); nil below
+// rareFloor rows.
+func subjectTermsOf(all []scored, ix *hybrid.Index) *subjectTerms {
 	if len(all) < rareFloor {
 		return nil
 	}
 	df := wordSpread(all)
 	st := &subjectTerms{weight: make(map[string]float64, len(df)), rare: map[string]bool{}}
-	n := float64(len(all))
 	for w, d := range df {
-		st.weight[w] = math.Log(1 + n/float64(d))
-		if d*4 <= len(all) {
+		n, wt := len(all), 0.0
+		if ix != nil {
+			n, wt = ix.Len(), ix.TermIDF(w)
+		}
+		if wt == 0 {
+			n, wt = len(all), hybrid.IDF(len(all), d)
+		}
+		st.weight[w] = wt
+		if wt >= hybrid.IDF(n, max(n/4, 1)) {
 			st.rare[w] = true
 		}
 	}
