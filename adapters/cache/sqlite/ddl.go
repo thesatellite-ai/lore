@@ -405,6 +405,11 @@ func (p *plan) addFTS() error {
 	p.sql.ftsDeleteID = "DELETE FROM " + fq + " WHERE rowid = (" + typedRowid + ")"
 	p.sql.ftsClearSource = "DELETE FROM " + fq + ` WHERE rowid IN (SELECT ` + typedRowidCol + ` FROM ` + tq + ` WHERE "` + colSource + `" = ?)`
 	rank := "bm25(" + fq + ", " + strings.Join(weights, ", ") + ")"
+	// devco:D-979 (bug hunt H-238): rows with one bm25 are ordered by id,
+	// not by the order they went into the cache (an edit or a sync
+	// re-inserts a row, a rebuilt cache writes them in file order), so a
+	// search, and the ask that prints its rows, answer the same each run
+	// and the LIMIT cuts the same rows
 	// I-6: FTS5's snippet() and highlight() cost about (matches in the row)
 	// x (tokens in the row), so a 1 MB body holding the word thousands of
 	// times took seconds per search. A row whose full-text fields are longer
@@ -420,9 +425,9 @@ func (p *plan) addFTS() error {
 	}
 	small := "(" + strings.Join(lens, " + ") + ") <= " + strconv.Itoa(snippetMaxChars)
 	p.sql.search = `SELECT "` + colID + `", ` + rank + ", CASE WHEN " + small + " THEN " + snip(fq) + " END, rowid FROM " + fq +
-		" WHERE " + fq + " MATCH ? ORDER BY " + rank + " LIMIT ?"
+		" WHERE " + fq + " MATCH ? ORDER BY " + rank + `, "` + colID + `" LIMIT ?`
 	p.sql.searchBare = `SELECT "` + colID + `", ` + rank + ", NULL, rowid FROM " + fq +
-		" WHERE " + fq + " MATCH ? ORDER BY " + rank + " LIMIT ?"
+		" WHERE " + fq + " MATCH ? ORDER BY " + rank + `, "` + colID + `" LIMIT ?`
 	p.sql.bigText = make([]string, len(fcols))
 	for i, fc := range fcols {
 		p.sql.bigText[i] = "SELECT " + fc + " FROM " + fq + " WHERE rowid = ?"

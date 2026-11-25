@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 2312 |
+| fixed | 2313 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -1295,6 +1295,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-981 | finding | bug hunt H-246: real client, company and people names sat in tests and docs of the public tree, and nothing stopped one coming back | fixed | TestNoListedNamesInTrackedFiles, TestNamesGuardFiles, TestNamesGuardCommits, TestPrePushRefusesListedWord | the hits now use made-up names; tests/lib/names-guard.sh reads the private list from the machine and checks tracked text files and paths, commit authors and messages, added lines and stdin (file:line or the commit, never the word); .githooks/pre-push runs it on every pushed commit, internal/repoguard on the tree |
 | devco:D-982 | finding | bug hunt H-247: the D-981 guard committed a list of sha256 hashes of the denied words, and a hash of a short lowercase name is reversed in seconds, so the public repo re-published the private list | fixed | TestNamesGuardWithoutList, TestNamesGuardStdin, TestNamesGuardAllowFileIsGeneric, TestNamesGuardFiles | the hash list and its script are gone; the generic tests/lib/names-guard.sh reads the list from $NAMES_GUARD_FILE or ~/.config/names-guard/terms.txt on the machine (nothing derived from it in the repo), prints one skip line and passes where no list exists, and drops the generic words of tests/lib/names-guard-allow.txt |
 | devco:D-986 | finding | bug hunt H-249 (issue #177): in an org's own repo linked to a store folder, every write to the repo store failed with "staged batch writes act_… twice" once the agent's actor row there had an older lore's shape (no stable_key) and identity.agent_display renamed it: the key back-fill and the rename each updated the same row in one staged batch (and a stale-copy refresh in the same batch was silently dropped) | fixed | TestEnsureActorUpkeepIsOneStagedWrite, TestJourneyAgentDisplayOldRowInOrgRepo | wire/actor.go upkeepOwnRow: the key back-fill, the agent rename and the SOURCE_OF_TRUTH refresh of the caller's existing actor row are one update (the refresh still best effort), so a staged write commits all three |
+| devco:D-979 | finding | bug hunt H-238 (Sync benchmark set 7 item 3): `lore ask` was not deterministic: the same store and question showed a note on one run and not on a re-run minutes later, because every tie in its ranking fell back to the order the cache handed its lines in (the cache's insert order, which an edit, a sync or a rebuilt cache changes), the resources a question names by alias came in Go map order, tasks of one second and a fact's evidence came in line order; `lore search` cut and ordered rows with one bm25 by the same insert order | fixed | TestAskSameAnswerAnyLineOrder | ops/ask order.go canonicalLines: the typed and text lines in one order fixed by their ids (stably: the copies of a row keep nearest store first) before anything reads them; match.go walks the aliases in sorted order; tasks of one created_at by id; factSQL ORDER BY entity_id, key_name, item_idx; adapters/cache/sqlite search and searchBare ORDER BY bm25, id. Break-verified (the unit test fails without canonicalLines and the sorted aliases) |
 
 ## lore-adoptfix
 

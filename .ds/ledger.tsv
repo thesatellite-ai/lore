@@ -1,4 +1,4 @@
-# docsync ledger format=2 extract=5 repo=lore commit=a326356 scanned_at=2026-11-25T15:08:23Z
+# docsync ledger format=2 extract=5 repo=lore commit=c54be6f scanned_at=2026-11-25T15:50:37Z
 id	repo	kind	file	symbol	lines	hash	owner	stability	env	args
 doctor-statuses-y89guvyz	lore	const	ops/doctor/doctor.go	StatusHealthy	65-73	2d5f2e0bffe01762cdd9ae2543938cf8595bce7f30ef69e1fcd38d4bec33ebd0	@khanakia	stable		desc=lore%20doctor%20statuses%20and%20their%20exit%20codes%20(healthy%200,%20degraded%201,%20broken%202) id=doctor-statuses-y89guvyz owner=@khanakia stability=stable
 env-ollama-host-hj0y341b	lore	func	adapters/llmcall/llmcall.go	ollamaHostOrDefault	128-137	a4ea1e909fccd266be865d6a25e0ad9789578da991cddc5283bd2de7d95328bb	@khanakia	stable		desc=OLLAMA_HOST%20and%20its%20default%20for%20local%20models id=env-ollama-host-hj0y341b owner=@khanakia stability=stable

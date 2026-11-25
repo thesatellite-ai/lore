@@ -405,6 +405,7 @@ func loadTyped(ctx context.Context, run Query) ([]resourceRow, []taskRow, error)
 	if err != nil {
 		return nil, nil, err
 	}
+	res.Rows = canonicalLines(res.Rows, typedLineKey) // devco:D-979: not the cache's insert order
 	var rs []resourceRow
 	var ts []taskRow
 	at := map[string]int{}
@@ -526,7 +527,7 @@ func rawText(r json.RawMessage) string {
 // time.
 func sortFields(fs []fieldValue) {
 	for i := 1; i < len(fs); i++ {
-		for j := i; j > 0 && fs[j].Name < fs[j-1].Name; j-- {
+		for j := i; j > 0 && (fs[j].Name < fs[j-1].Name || fs[j].Name == fs[j-1].Name && fs[j].Value < fs[j-1].Value); j-- {
 			fs[j], fs[j-1] = fs[j-1], fs[j]
 		}
 	}
@@ -775,7 +776,8 @@ func loadRows(ctx context.Context, run Query, q question, ms []match, keeps bool
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	notes, err := loadComments(ctx, run) // D-942: comments make their row answer
+	res.Rows = canonicalLines(res.Rows, textLineKey) // devco:D-979: not the cache's insert order
+	notes, err := loadComments(ctx, run)             // D-942: comments make their row answer
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -278,6 +278,8 @@ func likeOracle(t *testing.T, run Query, q question, ms []match) []textRow {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// in the order ask reads every line (devco:D-979: not the cache's)
+	res.Rows = canonicalLines(res.Rows, textLineKey)
 	refs := map[string][]string{}
 	for _, row := range res.Rows {
 		if cell(row[colKind]) == "ref" {

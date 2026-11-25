@@ -793,7 +793,7 @@ func tasksFor(q question, ms []match, ts []taskRow) []Task {
 			out = append(out, Task{ID: t.ID, Title: t.Title, Status: t.Status, Place: t.Place, OwedBy: t.OwedBy, OwedTo: t.OwedTo, Created: t.Created})
 		}
 	}
-	slices.SortStableFunc(out, func(a, b Task) int { return cmp.Compare(b.Created, a.Created) })
+	slices.SortStableFunc(out, func(a, b Task) int { return byIDLast(cmp.Compare(b.Created, a.Created), a.ID, b.ID) })
 	if q.owe == oweNone && len(out) > maxSideTasks {
 		out = out[:maxSideTasks]
 	}

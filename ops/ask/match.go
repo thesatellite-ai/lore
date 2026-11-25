@@ -1,6 +1,7 @@
 package ask
 
 import (
+	"maps"
 	"slices"
 	"strings"
 
@@ -143,11 +144,13 @@ func matchResources(q question, rs []resourceRow) []match {
 			add(&rs[i], MatchName, "", "")
 		}
 	}
-	for k, owners := range byAlias {
+	// sorted: a map's order changes from run to run, and the first match
+	// leads the answer (devco:D-979, bug hunt H-238)
+	for _, k := range slices.Sorted(maps.Keys(byAlias)) {
 		if k == "" || skipWords[k] || !strings.Contains(said, " "+k+" ") {
 			continue
 		}
-		for _, r := range owners {
+		for _, r := range byAlias[k] {
 			add(r, MatchAlias, "", "")
 		}
 	}

@@ -28,7 +28,7 @@ type FactEnv interface {
 
 // factSQL reads the fact keys of every row, one line per item: clock-free
 // and input-free, so the read server keeps its answer (FileOnly).
-const factSQL = "SELECT entity_id, key_name, value_text FROM row_meta_all WHERE key_name IN ('" + meta.KeyFactEvidence + "', '" + meta.KeyFactVerifiedAt + "', '" + meta.KeyFactState + "') AND item_idx >= 0 AND path = ''"
+const factSQL = "SELECT entity_id, key_name, value_text FROM row_meta_all WHERE key_name IN ('" + meta.KeyFactEvidence + "', '" + meta.KeyFactVerifiedAt + "', '" + meta.KeyFactState + "') AND item_idx >= 0 AND path = '' ORDER BY entity_id, key_name, item_idx"
 
 // factItems is one row's fact keys as the cache holds them.
 type factItems struct {
