@@ -197,7 +197,20 @@ func openFile(ctx context.Context, path string, reg *schema.Registry, exp Expand
 // immediate transactions). The
 // path is made absolute and URI-escaped, so a '?' or '#' in a folder name
 // cannot be read as DSN options.
-func fileDSN(path string) (string, error) {
+func fileDSN(path string) (string, error) { return fileDSNMode(path, false) }
+
+// fileDSNExisting is fileDSN for a file that must already exist: the open
+// fails (SQLITE_CANTOPEN) instead of creating an empty database at path.
+// Why (devco:D-990, public issue #178): restamp opens a cache again after
+// its handle closed, and the daily cache sweep may have removed the file
+// in between (the read server holds a deleted repo copy's cache until it
+// exits); the plain DSN re-created an empty 4 KB file at the swept path,
+// which then waited a day for the next sweep.
+func fileDSNExisting(path string) (string, error) { return fileDSNMode(path, true) }
+
+// fileDSNMode builds fileDSN's DSN; existing adds mode=rw (read-write,
+// never create).
+func fileDSNMode(path string, existing bool) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", errs.Wrap(errs.BadPath, "sqlite cache: bad path", err)
@@ -207,6 +220,9 @@ func fileDSN(path string) (string, error) {
 	}
 	u := url.URL{Scheme: fileuri.Scheme, Path: fileuri.URLPath(abs)} // file:///C:/... on Windows, never C: as a host
 	q := url.Values{}
+	if existing {
+		q.Add("mode", "rw")
+	}
 	// busy_timeout first: the pragmas run in order on every new
 	// connection, and switching a fresh file to WAL needs a lock another
 	// process may hold; set after it, the switch failed at once with

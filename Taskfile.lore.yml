@@ -239,7 +239,7 @@ tasks:
     desc: "Regenerate docs/reference/cli-commands.md and openapi.json from the 0.1.18 operation registry (the wire drift test fails until this is run). Runs the binary from a temp folder so it never touches this repo's hooks"
     deps: [build]
     cmds:
-      - cd "$(mktemp -d)" && {{.LORE_BIN}} spec docs --out {{.ROOT_DIR}}/docs/reference && {{.LORE_BIN}} spec openapi --out {{.ROOT_DIR}}/docs/reference
+      - T="$(mktemp -d)"; (cd "$T" && export HOME="$T" && unset LORE_HOME && {{.LORE_BIN}} spec docs --out {{.ROOT_DIR}}/docs/reference && {{.LORE_BIN}} spec openapi --out {{.ROOT_DIR}}/docs/reference); rc=$?; rm -rf "$T"; exit $rc
 
   build:debug:
     desc: "Build lore (./cmd/lore) with debug symbols"
@@ -1153,12 +1153,17 @@ tasks:
         fi
         export LORE={{.LORE_BIN}}
         TMP=$(mktemp -d)
+        # a temp HOME: the bench never writes the person's ~/.lore (its cache
+        # entries outlived the temp repo, public issue #178, devco:D-990)
+        export HOME="$TMP/home" LORE_HOME="$TMP/home/.lore"; mkdir -p "$HOME"
+        git config --global user.name bench; git config --global user.email bench@example.com
         cd $TMP && git init -q
         $LORE init --non-interactive --name=benchproj
         for i in $(seq 1 100); do $LORE memory add "memory $i tag $((i%10))"; done
         hyperfine --warmup 3 --export-json bench.json '$LORE memory search "memory" --limit=10'
         # TODO: gate via tools/bench-check
         cat bench.json | jq -r '.results[0].mean'
+        cd / && rm -rf "$TMP"
       - echo "bench complete"
 
   

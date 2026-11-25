@@ -225,14 +225,16 @@ var restamps atomic.Int64
 // seen or makes the two looks differ (no stamp). A file in another layout
 // (an older lore wrote it since) gets no stamp. Only a handle that
 // committed calls it (Cache.committed), and only when the close changed
-// the file since its last stamp (stampHolds).
+// the file since its last stamp (stampHolds). A file removed meanwhile (the
+// cache sweep, `lore cache prune`) is never opened again, so never
+// re-created: its stamp went with it (devco:D-990).
 func (c *Cache) restamp(ctx context.Context) {
 	restamps.Add(1)
 	path := c.writes.path
 	if path == "" || exeID() == "" {
 		return
 	}
-	dsn, err := fileDSN(path)
+	dsn, err := fileDSNExisting(path) // a swept file stays gone (devco:D-990)
 	if err != nil {
 		return
 	}

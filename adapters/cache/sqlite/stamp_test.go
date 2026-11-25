@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/schema"
@@ -331,5 +332,71 @@ func TestStampReadAdoptsOtherBinarysStamp(t *testing.T) {
 	}
 	if got, err := os.ReadFile(stampPath(path)); err != nil || !bytes.Equal(got, want) {
 		t.Fatalf("a read restamped a file that changed since its stamp (err %v)", err)
+	}
+}
+
+// TestStampCloseKeepsSweptFileGone (devco:D-990, public issue #178): the
+// cache sweep removes a cache file that a long-lived process (the read
+// server) still holds; when that handle, which committed, closes, its
+// restamp must not open the gone path again: the plain DSN created an
+// empty 4 KB database there, which waited a day for the next sweep.
+func TestStampCloseKeepsSweptFileGone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("an open file cannot be removed on windows")
+	}
+	f := newFixture(t)
+	path := filepath.Join(f.dir, "a.db")
+	c := f.open("a.db")
+	f.apply(c, "s1", "c1", f.memory(newMem(), newPrj(), "swept"))
+	for _, p := range append([]string{path}, path+"-wal", path+"-shm", stampPath(path)) {
+		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			t.Fatal(err)
+		}
+	}
+	n := restamps.Load()
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if restamps.Load() == n {
+		t.Fatal("the close did not try to restamp: the test no longer covers the reopen")
+	}
+	for _, p := range []string{path, stampPath(path)} {
+		if fi, err := os.Stat(p); err == nil {
+			t.Fatalf("the close re-created %s (%d bytes) after the sweep removed it", filepath.Base(p), fi.Size())
+		}
+	}
+}
+
+// TestFileDSNExistingNeverCreates: the no-create DSN fails on a missing
+// file and opens an existing one read-write.
+func TestFileDSNExistingNeverCreates(t *testing.T) {
+	f := newFixture(t)
+	path := filepath.Join(f.dir, "missing.db")
+	dsn, err := fileDSNExisting(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open(driverName, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := db.PingContext(f.ctx); err == nil {
+		t.Fatal("the no-create DSN opened a missing file")
+	}
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("the no-create DSN created %s: %v", path, err)
+	}
+	c := f.open("missing.db")
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db2, err := sql.Open(driverName, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db2.Close() }()
+	if _, err := db2.ExecContext(f.ctx, `UPDATE "`+tblCursors+`" SET cursor = cursor`); err != nil {
+		t.Fatalf("the no-create DSN cannot write an existing file: %v", err)
 	}
 }
