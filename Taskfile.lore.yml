@@ -674,6 +674,23 @@ tasks:
       - CGO_ENABLED=0 go build -o {{.BENCH_BIN}} ./cmd/lore
       - "LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^(TestBenchRecall|TestBenchLinkedStoresAsk|TestBenchSet5.*|TestSet5.*|TestBenchSet6.*|TestSet6.*)$' -timeout $({{.TEST_TIME}} 60m) -v {{.CLI_ARGS}} ./tests/bench/recall/"
 
+  # The held-out evaluation of lore ask (bug hunt H-237, devco D-978; Sync benchmark set 7, owner
+  # 2026-11-25: stop fitting single questions): a synthetic store of the benchmark's shape from a fixed
+  # seed, questions written by someone who saw only its dump, scored on "ask alone enough". Report-only:
+  # it fails on a bad question file or a broken setup, never on the score (tests/bench/heldout/README.md).
+  bench:heldout:
+    desc: "Held-out evaluation of lore ask (tests/bench/heldout, tag bench): writes the synthetic store of the benchmark's shape (12 long as-built notes, ~150 short memories, hotfixes and decisions, 20 code_repo cards, another client's folder) and asks every question of HELDOUT_FILE (default tests/bench/heldout/tune.jsonl) with lore ask --query; report tmp/bench/heldout.md: ask alone enough (answer row shown and its answer sentence in what ask printed), answer shown, answer first, code_repo cards while rows fill the first three places, warm ms; per-question misses with what was shown instead. Extra go test flags after --"
+    vars:
+      BENCH_BIN: "{{.BIN_DIR}}/lore-bench"
+    cmds:
+      - CGO_ENABLED=0 go build -o {{.BENCH_BIN}} ./cmd/lore
+      - "LORE_BENCH_BIN={{.BENCH_BIN}} LORE_HELDOUT_FILE={{.HELDOUT_FILE}} go test -tags bench -count=1 -run '^TestBenchHeldout$' -timeout $({{.TEST_TIME}} 30m) -v {{.CLI_ARGS}} ./tests/bench/heldout/"
+
+  bench:heldout:dump:
+    desc: "Dump the held-out store for a question writer: one markdown file per row and card (bench_key, kind, folder, title, meta, body) plus _FORMAT.md (the question file format) into HELDOUT_DUMP (default tmp/bench/heldout-dump); the writer sees only this dump"
+    cmds:
+      - "LORE_HELDOUT_DUMP={{if .HELDOUT_DUMP}}{{.HELDOUT_DUMP}}{{else}}{{.ROOT_DIR}}/tmp/bench/heldout-dump{{end}} go test -tags bench -count=1 -run '^TestHeldoutDump$' -timeout $({{.TEST_TIME}} 10m) -v ./tests/bench/heldout/"
+
   # The blind agent run of the recall gate (owner 2026-11-21, accuracy first, devco D-816): every gate
   # question asked of a lore agent (skills/SKILL.md, the lore command only) and a grep agent (rg/cat over
   # the markdown tree) on one small model, both graded against the ground truth they never see; tokens

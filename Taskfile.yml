@@ -42,6 +42,16 @@ tasks:
     cmds:
       - task: lore:bench:agent
 
+  bench:heldout:
+    desc: alias → lore:bench:heldout — the held-out evaluation of lore ask (HELDOUT_FILE, default tests/bench/heldout/tune.jsonl; report tmp/bench/heldout.md)
+    cmds:
+      - task: lore:bench:heldout
+
+  bench:heldout:dump:
+    desc: alias → lore:bench:heldout:dump — the held-out store as one markdown file per row for a question writer (HELDOUT_DUMP)
+    cmds:
+      - task: lore:bench:heldout:dump
+
   bench:coding:
     desc: alias → lore:bench:coding — the coding-agent context gate (report tmp/bench/coding.md)
     cmds:
