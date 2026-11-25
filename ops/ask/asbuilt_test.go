@@ -13,6 +13,7 @@ package ask
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -78,7 +79,9 @@ func syncFixture() data {
 		resources: rs,
 		rows: []textRow{
 			{Table: "architecture_notes", ID: "anr_1", Place: "kb/app", Title: "As built: feed import pipeline", Body: "The feed import runs in two steps: fetch the bulk file, then parse_and_ingest writes rows in batches of 500.", At: at, FactState: "live", Verified: "2026-11-20"},
-			{Table: "memories", ID: "mem_plan", Place: "kb/app", Body: "Plan: the feed import pipeline work.", At: at.Add(3 * time.Hour), FactState: "planned"},
+			// devco D-984: as many of the question's words as the as-built
+			// note (search's order lets one more word win: "work" would)
+			{Table: "memories", ID: "mem_plan", Place: "kb/app", Body: "Plan: the feed import pipeline moves to a scheduler.", At: at.Add(3 * time.Hour), FactState: "planned"},
 			{Table: "memories", ID: "mem_b", Place: "kb/other", Body: "Client B: their feed import pipeline runs nightly, after the backups, the cache warmers, the report jobs and the long tail of cleanup tasks of their old platform.", At: at.Add(2 * time.Hour)},
 		},
 	}
@@ -119,8 +122,11 @@ func TestTouchedResourcesBriefUnderRows(t *testing.T) {
 	}
 }
 
-// TestHomeAndFactStateRank: with the same words, the repo's own folder
-// ranks above another client's, and a live fact above a planned one.
+// TestHomeAndFactStateRank: with the same words, a live fact ranks above
+// a planned one whatever their age, and a row of the repo's linked folder
+// above another folder's or client's (both inputs of search's order,
+// devco D-963 kept by D-984: the folder is the owner's set-4 scoping
+// rule); with no linked folder the rows keep search's order.
 func TestHomeAndFactStateRank(t *testing.T) {
 	t.Parallel()
 	d := syncFixture()
@@ -128,34 +134,62 @@ func TestHomeAndFactStateRank(t *testing.T) {
 	d.rows[0].Table, d.rows[0].Title = "memories", "" // same shape as the others
 	d.rows[0].Body = "The feed import pipeline fetches the bulk file, then writes rows in batches."
 	q := parseQuestion("how does the feed import pipeline work", now)
-	// a live fact first, a planned one last, whatever their age
 	ids := rowIDs(build(q, d, 0, 0).Rows)
-	t.Logf("first %v", ids)
 	if len(ids) != 3 || ids[0] != "anr_1" || ids[2] != "mem_plan" {
 		t.Errorf("rows %v: want the live fact first and the planned one last", ids)
 	}
-	// no fact states: the repo's folder (kb/app) before another client's
-	// newer row
 	for i := range d.rows {
 		d.rows[i].FactState, d.rows[i].Verified = "", ""
 	}
+	plain := rowIDs(build(q, d, 0, 0).Rows)
+	for _, home := range []string{"kb/app", "kb/other"} {
+		q.home = home
+		got := rowIDs(build(q, d, 0, 0).Rows)
+		if len(got) != len(plain) {
+			t.Fatalf("home %s: rows %v, want the rows %v", home, got, plain)
+		}
+		// the linked folder's rows first, each part in search's order
+		var want []string
+		for _, own := range []bool{true, false} {
+			for _, id := range plain {
+				if i := slices.IndexFunc(d.rows, func(r textRow) bool { return r.ID == id }); (d.rows[i].Place == home) == own {
+					want = append(want, id)
+				}
+			}
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("home %s: rows %v, want %v (the linked folder's rows first)", home, got, want)
+		}
+	}
 	q.home = "kb/app"
-	ids = rowIDs(build(q, d, 0, 0).Rows)
-	if len(ids) != 3 || ids[2] != "mem_b" {
+	if ids := rowIDs(build(q, d, 0, 0).Rows); len(ids) != 3 || ids[2] != "mem_b" {
 		t.Errorf("rows %v: want both rows of the repo's folder before another client's", ids)
 	}
 }
 
-// TestVerifiedBreaksTies: of two rows with the same match, the one
-// verified more recently comes first.
-func TestVerifiedBreaksTies(t *testing.T) {
+// TestVerifiedDoesNotReorder: of two rows with the same match, the date
+// each was last verified does not change search's order (the verified
+// tie-break, devco D-963, removed by D-984: no gate case and the held-out
+// set did better without it); a stale fact still goes after a fresh one.
+func TestVerifiedDoesNotReorder(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
-	d := data{rows: []textRow{
-		{Table: "memories", ID: "mem_old", Place: "kb/app", Body: "The feed import retries each batch.", At: at, Verified: "2026-10-01"},
-		{Table: "memories", ID: "mem_new", Place: "kb/app", Body: "Each batch of the feed import retries.", At: at, Verified: "2026-11-20"},
-	}}
-	if ids := rowIDs(build(parseQuestion("does the feed import retry", now), d, 0, 0).Rows); len(ids) == 0 || ids[0] != "mem_new" {
-		t.Errorf("rows %v: want the more recently verified row first", ids)
+	rows := func(oldV, newV string) data {
+		return data{rows: []textRow{
+			{Table: "memories", ID: "mem_old", Place: "kb/app", Body: "The feed import retries each batch.", At: at, Verified: oldV},
+			{Table: "memories", ID: "mem_new", Place: "kb/app", Body: "Each batch of the feed import retries.", At: at, Verified: newV},
+		}}
+	}
+	q := parseQuestion("does the feed import retry", now)
+	a := rowIDs(build(q, rows("2026-10-01", "2026-11-20"), 0, 0).Rows)
+	b := rowIDs(build(q, rows("2026-11-20", "2026-10-01"), 0, 0).Rows)
+	if len(a) != 2 || !slices.Equal(a, b) {
+		t.Errorf("rows %v and %v: want one order whichever row was verified last", a, b)
+	}
+	stale := rows("", "")
+	first := slices.IndexFunc(stale.rows, func(r textRow) bool { return r.ID == a[0] })
+	stale.rows[first].Stale = "evidence changed"
+	if got := rowIDs(build(q, stale, 0, 0).Rows); len(got) != 2 || got[0] != a[1] {
+		t.Errorf("rows %v: want the fresh row %s before the stale %s", got, a[1], a[0])
 	}
 }

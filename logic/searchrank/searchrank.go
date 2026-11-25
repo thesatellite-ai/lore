@@ -210,12 +210,25 @@ var formSuffixes = []string{"", "e", "s", "es", "ed", "ing", "ment", "er", "ly"}
 // but deploy and deploys as "deploi". Whole forms, not a prefix: "stor*"
 // for stored would find storm.
 func wordForms(term string) string {
-	if len(term) < minFormWord {
+	forms := Forms(term)
+	if len(forms) < 2 {
 		return ""
+	}
+	return "(" + strings.Join(QuoteEach(forms), " OR ") + ")"
+}
+
+// Forms is every word one topic word is searched by: the word, then its
+// stem plus each formSuffixes ending for an ASCII word of minFormWord
+// letters or more, else the word alone. Why exported (devco D-984):
+// lore ask orders its rows as search does, so a row holds a topic word
+// for ask exactly when search's match of that word finds it.
+func Forms(term string) []string {
+	if len(term) < minFormWord {
+		return []string{term}
 	}
 	for _, r := range term {
 		if r > 0x7f || !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
-			return ""
+			return []string{term}
 		}
 	}
 	stem := querywords.Stem(term)
@@ -228,7 +241,7 @@ func wordForms(term string) string {
 			forms = append(forms, f)
 		}
 	}
-	return "(" + strings.Join(QuoteEach(forms), " OR ") + ")"
+	return forms
 }
 
 // termMatch is the FTS5 text of one topic word: any of its forms

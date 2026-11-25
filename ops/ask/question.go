@@ -43,6 +43,11 @@ type question struct {
 	// none: its rows rank above another folder's with the same match
 	// (devco D-963).
 	home string
+	// order is lore search's ranking of the rows for the question (row id
+	// to its place, searchOrder), set by topRows; nil when the question
+	// has no word search ranks by (devco D-984: ask prints search's top
+	// rows in search's order).
+	order map[string]int
 	// about is an everything-about-X question: the words say so
 	// ("everything about hollow"), or the question is only the name of a
 	// resource ("hollow"). Set by build once the resources are matched.

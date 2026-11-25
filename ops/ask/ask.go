@@ -152,6 +152,9 @@ type Out struct {
 	// the best rows, those dated near the window ranked up (prior.go),
 	// not the window's rows oldest first.
 	prior bool
+	// chunk says long rows are cut to their best sections when cap
+	// reaches them (chunkLong, chunkRow), not all before it
+	chunk bool
 }
 
 // Ranked names one item of an answer: which list holds it and its id.

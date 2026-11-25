@@ -95,6 +95,11 @@ type textRow struct {
 	// longsec.go), built once when sectioned is set.
 	secs      []rowSection
 	sectioned bool
+	// best is bestSection's answer for the question and resources named
+	// by bestFor (bestSectionOf): the scorer and search's order ask it of
+	// the same row in one call (devco D-984)
+	best    *bestSec
+	bestFor string
 }
 
 // tokens is the word set of r's title and body (tokensOf), built on the
@@ -316,6 +321,14 @@ func sameThing(s *scored) []string {
 func restates(newer, older *textRow) bool {
 	if sameLabel(newer, older) {
 		return true
+	}
+	if la, lo := labelOf(newer), labelOf(older); len(la) >= 2 && len(lo) >= 2 {
+		// devco D-984: two rows that each carry a label of their own
+		// ("As built: hookwire (webhook sender)", "As built: gaterate
+		// (rate limiter)") are two things; two long notes sharing a
+		// store's common words held half of each other's words, so every
+		// as-built note but the newest was printed as history
+		return false
 	}
 	nt := newer.tokens()
 	content := contentOf(older)
@@ -745,6 +758,9 @@ func (o *Out) keepBestRow(order []Ranked, rowIdx map[string]int, maxChars int) {
 // fitsWith adds row r (at index i of o.Rows) to the answer when it fits
 // in maxChars, cut to its best sections if need be.
 func (o *Out) fitsWith(r Ranked, i, maxChars int) bool {
+	if r.Kind == KindRow {
+		o.chunkRow(i)
+	}
 	o.Ranked = append(o.Ranked, r)
 	if len(o.body()) <= maxChars || o.cutRow(i, maxChars) {
 		return true
@@ -950,7 +966,7 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	}
 	// devco D-972: a long row counts the words of its best section (and
 	// title), not every word its whole text holds (longsec.go)
-	sec := bestSection(q, sm, r)
+	sec := bestSectionOf(q, sm, r)
 	if sec != nil {
 		s.heads = sec.heldHeads
 	}
@@ -1137,6 +1153,14 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 		}
 		return strings.Compare(b.row.ID, a.row.ID)
 	})
+	// devco D-984: the rows in lore search's order (searchorder.go)
+	if !q.about && q.window.IsZero() && q.file == "" {
+		q.order = searchOrder(q, ms, rows, v)
+	}
+	searched := q.order != nil
+	if searched {
+		all = searchOrdered(q, rows, all, len(ms) == 0)
+	}
 	if len(all) == 0 {
 		return []Row{}, 0
 	}
@@ -1163,6 +1187,9 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 	// history reads as a timeline, newest first: the fused order is for
 	// choosing the current answer, not for what came before it
 	slices.SortStableFunc(hist, func(a, b scored) int {
+		if searched {
+			return cmp.Compare(searchPlace(q, a, len(all)), searchPlace(q, b, len(all)))
+		}
 		if c := cmp.Compare(b.score, a.score); c != 0 {
 			return c
 		}
@@ -1179,7 +1206,9 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 	taken := map[string]bool{}
 	places := map[string]bool{}
 	for _, s := range all {
-		if s.score < all[0].score || len(pick) >= top {
+		if searched || s.score < all[0].score || len(pick) >= top {
+			// devco D-984: in search's order the first rows are search's
+			// first rows, not the best row of each folder
 			break
 		}
 		if !places[s.row.Place] {
@@ -1212,8 +1241,10 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 		}
 		return b.row.At.Compare(a.row.At)
 	}
-	slices.SortStableFunc(pick[:lead], byScoreThenNewest)
-	slices.SortStableFunc(pick[lead:], byScoreThenNewest)
+	if !searched {
+		slices.SortStableFunc(pick[:lead], byScoreThenNewest)
+		slices.SortStableFunc(pick[lead:], byScoreThenNewest)
+	}
 	if !q.about && q.file == "" {
 		pick, hist = wasSecond(pick, hist, top)
 	}
@@ -1244,6 +1275,54 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 		out = append(out, r)
 	}
 	return out, lead
+}
+
+// searchOrdered is all in lore search's order for q (q.order, devco
+// D-984): every row search ranked comes first, in search's order, with
+// addRanked also one ask's own scorer did not take (it gets the words it
+// holds, so its excerpt is cut around them); the rows only ask found (by
+// meaning, by a topic word) follow in ask's order.
+func searchOrdered(q question, rows []textRow, all []scored, addRanked bool) []scored {
+	have := make(map[string]bool, len(all))
+	for _, s := range all {
+		have[s.row.ID] = true
+	}
+	// a question naming a resource (by name, alias or a typo of it) keeps
+	// only the rows about it: search, which reads words, finds rows that
+	// share the other words and is not about the resource at all
+	for i := 0; addRanked && i < len(rows); i++ {
+		r := &rows[i]
+		if _, ok := q.order[r.ID]; !ok || have[r.ID] {
+			continue
+		}
+		s, _ := score(q, nil, r)
+		s.row = r
+		have[r.ID] = true
+		all = append(all, s)
+	}
+	n := len(all)
+	place := make(map[string]int, n)
+	for i, s := range all {
+		place[s.row.ID] = i
+	}
+	slices.SortStableFunc(all, func(a, b scored) int {
+		pa, pb := searchPlace(q, a, n), searchPlace(q, b, n)
+		if pa != pb {
+			return cmp.Compare(pa, pb)
+		}
+		return cmp.Compare(place[a.row.ID], place[b.row.ID])
+	})
+
+	return all
+}
+
+// searchPlace is s's place in search's hits, after (n past) every hit
+// for a row search did not rank.
+func searchPlace(q question, s scored, n int) int {
+	if p, ok := q.order[s.row.ID]; ok {
+		return p
+	}
+	return len(q.order) + n
 }
 
 // topicPicks is, for an everything-about answer, the newest row of each
@@ -1395,6 +1474,17 @@ func (o *Out) cap(order []Ranked, maxChars int) {
 			briefRoom -= n
 			slots--
 		}
+		if r.Kind == KindRow && o.unchunked(rowIdx[r.ID]) {
+			if !bestRow && maxChars-len(o.body()) < minCut {
+				// no cut of it fits what is left (chunkLong)
+				o.Left++
+				if rowIdx[r.ID] < o.lead {
+					o.lead--
+				}
+				continue
+			}
+			o.chunkRow(rowIdx[r.ID])
+		}
 		o.Ranked = append(o.Ranked, r)
 		fits := len(o.body()) <= maxChars
 		if !fits && r.Kind == KindRow && bestRow {
@@ -1460,7 +1550,11 @@ func (o *Out) cutRow(i, maxChars int) bool {
 		*r = whole
 		return alone
 	}
-	r.Body, _ = cutBody(whole.Body, words, room, r.subject)
+	if wholeRead == "" || wholeRead == whole.Body {
+		r.Body = text // the same text: cut once (devco D-984)
+	} else {
+		r.Body, _ = cutBody(whole.Body, words, room, r.subject)
+	}
 	if wholeRead != "" {
 		r.readBody = text
 	}

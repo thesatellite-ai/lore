@@ -95,6 +95,20 @@ func (b *bestSec) holds(q question, r *textRow, w string) bool {
 	return hasWord(first, w) || identWord(q, first, w)
 }
 
+// bestSectionOf is bestSection, kept on r for q and ms: score and
+// searchOrder ask it of the same row in one call, and a warm ask's
+// budget has no room for reading a long note's sections twice.
+func bestSectionOf(q question, ms []match, r *textRow) *bestSec {
+	key := q.text
+	for _, m := range ms {
+		key += "\x00" + m.res.Name
+	}
+	if r.bestFor != key {
+		r.best, r.bestFor = bestSection(q, ms, r), key
+	}
+	return r.best
+}
+
 // bestSection is the section r ranks by for q, nil for a row that is not
 // long (sectionsOf): the one holding the most of the question's words and
 // topics in its heading path and text, a heading word counting twice;

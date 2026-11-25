@@ -38,24 +38,41 @@ const (
 // S5-04): an architecture note of ~3,900 characters whose sections all
 // repeated the question's words stayed whole and was the only row of the
 // 4,000-character answer; the memory that answered was left out.
+//
+// It only marks the answer: cap cuts each long row when it reaches it
+// (chunkRow), and leaves out one it reaches with less than minCut of room,
+// which no cut could print. Why lazy (devco D-984): cutting all ten rows
+// before cap took ~10 ms of a warm ask once search's order put more long
+// notes among them, while at most three or four fit the cap.
 func (o *Out) chunkLong() {
-	if o.When != "" && !o.prior {
+	o.chunk = o.When == "" || o.prior
+}
+
+// unchunked reports whether row i is a long row chunkLong left for cap to
+// cut.
+func (o *Out) unchunked(i int) bool {
+	r := &o.Rows[i]
+	return o.chunk && len(r.Body) > longRow && r.FullChars == 0
+}
+
+// chunkRow cuts long row i to its best sections (chunkLong).
+func (o *Out) chunkRow(i int) {
+	if !o.unchunked(i) {
 		return
 	}
-	for i := range o.Rows {
-		r := &o.Rows[i]
-		if len(r.Body) <= longRow || r.FullChars > 0 {
-			continue
-		}
-		words := cutWords(r.Matched, o.asked)
-		body, _ := cutBody(r.Body, words, longRoom, r.subject)
-		read := ""
-		if r.readBody != "" {
-			read, _ = cutBody(r.readBody, words, longRoom, r.subject)
-		}
-		r.FullChars, r.Body, r.readBody = len(r.Body), body, read
-		r.LeftOut = leftOutOf(o.q, r.Matched, r.Title, r.Body, r.Comments) // leftout.go
+	r := &o.Rows[i]
+	words := cutWords(r.Matched, o.asked)
+	body, _ := cutBody(r.Body, words, longRoom, r.subject)
+	read := ""
+	switch r.readBody {
+	case "":
+	case r.Body:
+		read = body // no reference to name: the same text, cut once (D-984)
+	default:
+		read, _ = cutBody(r.readBody, words, longRoom, r.subject)
 	}
+	r.FullChars, r.Body, r.readBody = len(r.Body), body, read
+	r.LeftOut = leftOutOf(o.q, r.Matched, r.Title, r.Body, r.Comments) // leftout.go
 }
 
 // compactBody is body() in its compact form (devco D-892, pick list item
