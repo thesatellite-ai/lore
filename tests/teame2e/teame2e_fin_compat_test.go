@@ -37,6 +37,11 @@ const (
 	envOldBin = "LORE_OLD_BIN"
 	// oldLoreTag is the last release before the 0.1.18 format.
 	oldLoreTag = "v0.1.17"
+	// oldLoreRef is that release's commit. The version tags before v0.1.50
+	// were removed from the repository when its history was rewritten on
+	// 2026-11-25, so the build exports the commit (reachable from dev; the
+	// gate checks out the full history) rather than the tag.
+	oldLoreRef = "407f0d0cb680c1284dd410632dd6aec36eaec441"
 	// oldLoreMain is v0.1.17's release main package (its .goreleaser.yml
 	// builds.main), built inside the tag's go.work.
 	oldLoreMain = "./saas/cmd/cli"
@@ -82,7 +87,7 @@ func oldLore(t *testing.T) string {
 	return oldBinPath
 }
 
-// buildOldLore exports the tag with git archive into a temp dir (the
+// buildOldLore exports the release commit (oldLoreRef) with git archive into a temp dir (the
 // checkout is not touched) and builds it the way its release did:
 // CGO_ENABLED=0 with the tag's go.work active.
 func buildOldLore() (string, error) {
@@ -106,7 +111,7 @@ func buildOldLore() (string, error) {
 		return "", errors.New("find the repo top level: " + err.Error())
 	}
 	var arch, errb bytes.Buffer
-	archive := exec.Command("git", "archive", "--format=tar", oldLoreTag)
+	archive := exec.Command("git", "archive", "--format=tar", oldLoreRef)
 	archive.Dir = string(bytes.TrimSpace(top))
 	archive.Stdout, archive.Stderr = &arch, &errb
 	if err := archive.Run(); err != nil {
