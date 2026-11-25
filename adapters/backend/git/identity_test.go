@@ -193,3 +193,29 @@ func TestHandEditAuthoredByPerson(t *testing.T) {
 		t.Errorf("author.email: commit by %q, want %q", got, want)
 	}
 }
+
+// devco:D-983 (H-248): a clone whose git config still holds an agent
+// identity from an older lore ("<person> via <tool>" <…@lore.invalid>)
+// signs nothing: lore's commit is the person's (the lore identity), and an
+// agent signature handed in as the lore identity or the explicit signer is
+// never used either.
+func TestAgentGitIdentityNeverSigns(t *testing.T) {
+	noGitIdentity(t)
+	person := Signature{Name: "Mira Lore", Email: "mira@example.invalid"}
+	b, g := clone(t, newRemote(t, true), WithIdentity(func(context.Context) Signature { return person })), newGen(t)
+	gitT(t, b.Dir(), "config", "user.name", "Mira Lore via codex")
+	gitT(t, b.Dir(), "config", "user.email", "agent.auto/codex/abc123@lore.invalid")
+	write(t, b, store.Change{Row: g.row(newID(t), "a", hlc.HLC{})})
+	if got, want := gitT(t, b.Dir(), "log", "-1", "--format=%an|%ae|%cn|%ce"), "Mira Lore|mira@example.invalid|Mira Lore|mira@example.invalid"; got != want {
+		t.Fatalf("signed %q under an agent git identity, want the person %q", got, want)
+	}
+	agent := Signature{Name: "Mira Lore via codex", Email: "agent.auto/codex/abc123@lore.invalid"}
+	c, g2 := clone(t, newRemote(t, true), WithIdentity(func(context.Context) Signature { return agent })), newGen(t)
+	write(t, c, store.Change{Row: g2.row(newID(t), "a", hlc.HLC{})})
+	if got, want := gitT(t, c.Dir(), "log", "-1", "--format=%an|%ae"), DefaultAuthor.Name+"|"+DefaultAuthor.Email; got != want {
+		t.Fatalf("an agent lore identity signed %q, want %q", got, want)
+	}
+	if _, err := c.identityEnv(t.Context(), agent); err == nil {
+		t.Fatal("an explicit agent signature was accepted")
+	}
+}

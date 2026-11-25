@@ -38,7 +38,9 @@ func TestLiveCommitSignature(t *testing.T) {
 		{name: "git identity wins over the lore identity", gitName: "Repo Person", signer: sigSigner("Ada", "ada@example.com", true), want: "Repo Person <repo@example.com>"},
 		{name: "git identity, no signer", gitName: "Repo Person", want: "Repo Person <repo@example.com>"},
 		{name: "no git identity: lore identity", signer: sigSigner("Ada", "ada@example.com", true), want: "Ada <ada@example.com>"},
-		{name: "no git identity: agent lore identity", signer: sigSigner("CI", "agent.ci@lore.invalid", true), want: "CI <agent.ci@lore.invalid>"},
+		{name: "no git identity: agent lore identity", signer: sigSigner("CI", "agent.ci@lore.invalid", true), want: fallback}, // devco:D-983
+		{name: "no git identity: agent display name", signer: sigSigner("Ada via codex", "ada@example.com", true), want: fallback},
+		{name: "agent git identity", gitName: "Repo Person via codex", signer: sigSigner("Ada", "ada@example.com", true), want: "Ada <ada@example.com>"},
 		{name: "no git identity, no signer", want: fallback},
 		{name: "no git identity, identity unresolved", signer: sigSigner("", "", false), want: fallback},
 		{name: "no git identity, empty e-mail", signer: sigSigner("Ada", "", true), want: fallback},

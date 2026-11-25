@@ -6,7 +6,6 @@ package identity
 
 import (
 	"context"
-	"strings"
 	"testing"
 )
 
@@ -35,15 +34,6 @@ func TestAgentDisplayModes(t *testing.T) {
 		}
 		if r.HidesTool() != mode.HidesTool() {
 			t.Errorf("mode %q: HidesTool %v", mode, r.HidesTool())
-		}
-		label, tk := AgentTrailerParts(r)
-		if mode.HidesTool() {
-			id, _ := r.ActorID()
-			if label != "" || tk != id.String() || strings.Contains(tk, "codex") {
-				t.Errorf("mode %q: trailer parts %q %q name the tool", mode, label, tk)
-			}
-		} else if label != "codex" || tk != key {
-			t.Errorf("mode %q: trailer parts %q %q", mode, label, tk)
 		}
 		// the collision rule's widened key keeps the mode
 		if w, ok, err := WidenAgentKey(r); err != nil || !ok || w.DisplayName != name {

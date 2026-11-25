@@ -569,3 +569,24 @@ func TestMergeParents(t *testing.T) {
 		}
 	}
 }
+
+// devco:D-983 (H-248): the last guard of every lore commit on a ref: a
+// commit asked to be signed as an agent is refused, nothing is written.
+func TestMakeCommitRefusesAgentSignature(t *testing.T) {
+	ctx := context.Background()
+	r := newRepo(t, kindNormal)
+	refsBefore := git(t, r.Dir(), "for-each-ref")
+	for _, sig := range []Signature{
+		{Name: "Lore Test via codex", Email: "lore@example.test", When: testSig.When},
+		{Name: "Lore Test", Email: "agent.auto/codex/abc123@lore.invalid", When: testSig.When},
+	} {
+		_, err := r.MakeCommit(ctx, CommitRequest{Base: "main", Message: "claim", Signature: sig,
+			Changes: Changes{Put: map[string][]byte{"claims/t.json": []byte("{}\n")}}})
+		if !errors.Is(err, ErrAgentSignature) {
+			t.Fatalf("%s <%s>: err = %v, want ErrAgentSignature", sig.Name, sig.Email, err)
+		}
+	}
+	if git(t, r.Dir(), "for-each-ref") != refsBefore {
+		t.Fatal("a refused commit moved a ref")
+	}
+}

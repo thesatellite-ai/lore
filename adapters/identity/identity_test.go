@@ -168,8 +168,9 @@ func TestCommitSignature(t *testing.T) {
 	}{
 		{Resolved{StableKey: "human:alice@example.com", DisplayName: "Alice"}, "Alice", "alice@example.com"},
 		{Resolved{StableKey: "human:alice@example.com"}, "alice@example.com", "alice@example.com"},
-		{Resolved{StableKey: "agent:ci", DisplayName: "CI"}, "CI", "agent.ci@lore.invalid"},
-		{Resolved{StableKey: "human:bob"}, "bob", "human.bob@lore.invalid"},
+		{Resolved{StableKey: "agent:ci", DisplayName: "CI"}, "", ""}, // devco:D-983: never a made-up address
+		{Resolved{StableKey: "human:bob"}, "", ""},
+		{Resolved{StableKey: "agent:auto/codex/abc123", DisplayName: "Alice via codex", Owner: &Resolved{StableKey: "human:alice@example.com", DisplayName: "Alice"}}, "", ""},
 		{Resolved{StableKey: "carol@example.com"}, "carol@example.com", "carol@example.com"},
 		{Resolved{}, "", ""},
 	} {

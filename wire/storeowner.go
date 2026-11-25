@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -111,7 +112,7 @@ func personalStoreIdentity(ctx context.Context, home, dir, storeURL string) (per
 func personalOf(id onboard.SetupIdentity, why string) (personalIdentity, bool) {
 	r := identity.Resolved{StableKey: strings.TrimSpace(id.Key), DisplayName: strings.TrimSpace(id.Name), Aliases: id.Aliases}
 	name, email := r.CommitSignature()
-	if !strings.Contains(email, "@") || strings.HasSuffix(strings.ToLower(email), "@"+identity.CommitEmailDomain) {
+	if !strings.Contains(email, "@") || gitcommit.IsAgentSignature(name, email) {
 		return personalIdentity{}, false
 	}
 	emails := r.PersonEmails()

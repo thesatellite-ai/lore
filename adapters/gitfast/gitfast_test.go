@@ -198,6 +198,10 @@ func TestAnswersMatchGit(t *testing.T) {
 		{work, []string{"log", "-1", "--format=%B", "HEAD"}, ""},
 		{work, []string{"log", "-1", "--format=%ct%x09%an", "refs/heads/main", "--"}, ""},
 		{work, []string{"log", "-n", "1", "--format=%H %T %P%n%ae %ce %at", "side"}, ""},
+		// every commit of a line: doctor's agent_commits read (devco:D-983)
+		{work, []string{"log", "--format=%an\x1f%ae\x1f%cn\x1f%ce\x1f%B\x1e", "refs/lore/live/main", "--"}, ""},
+		{work, []string{"log", "--format=%H %P%n%an %ct", "HEAD"}, ""},
+		{work, []string{"log", "--pretty=tformat:%H", "side", "--"}, ""},
 		{work, []string{"rev-list", "-1", "HEAD", "--not", "--remotes"}, ""},
 		{work, []string{"rev-list", "-1", "HEAD~2", "--not", "--remotes"}, ""},
 		// the commit and push hooks' leak checks (devco:D-780)
@@ -254,6 +258,8 @@ func TestFallsBack(t *testing.T) {
 		{"status", "--porcelain"},
 		{"ls-files", "--error-unmatch", "--", "nope/"}, // a directory form: git matches it more strictly
 		{"log", "-1"},
+		{"log", "--pretty=format:%H", "HEAD"},  // a separator between commits, none after the last
+		{"log", "--format=%H", "HEAD", "side"}, // two tips
 		{"ls-tree", "HEAD", "--", "org"},
 		{"-c", "user.name=x", "rev-parse", "HEAD"},
 		{"for-each-ref", "--sort=-refname"},
@@ -607,6 +613,72 @@ func TestLsFilesUnmatchedMatchesGit(t *testing.T) {
 		}
 		if !bytes.Equal(rep.Out, stdout.Bytes()) || rep.Code != code || rep.Stderr != strings.TrimSpace(stderr.String()) {
 			t.Errorf("git %v\n gitfast: exit %d %q stderr %q\n git:     exit %d %q stderr %q", c.args, rep.Code, rep.Out, rep.Stderr, code, stdout.Bytes(), strings.TrimSpace(stderr.String()))
+		}
+	}
+}
+
+// TestLogWholeLineOnly: a full `log --format=<F> <rev>` is answered only
+// for a line; across a merge git orders the two sides by commit date, so
+// that history runs git (devco:D-983).
+func TestLogWholeLineOnly(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	dir := t.TempDir()
+	gitT(t, dir, "init", "-q", "-b", "main")
+	gitT(t, dir, "config", "user.name", "Alice Example")
+	gitT(t, dir, "config", "user.email", "alice@example.com")
+	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "base")
+	gitT(t, dir, "branch", "other")
+	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "on main")
+	gitT(t, dir, "checkout", "-q", "other")
+	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "on other")
+	gitT(t, dir, "checkout", "-q", "main")
+	gitT(t, dir, "merge", "-q", "--no-edit", "other")
+	s := New()
+	defer s.Close()
+	ctx := context.Background()
+	if _, ok := s.Answer(ctx, dir, []string{"log", "--format=%H", "main", "--"}, nil, nil); ok {
+		t.Error("a full log across a merge was answered in-process; it must run git")
+	}
+	args := []string{"log", "--format=%H %an%n%B", "main~1", "--"}
+	rep, ok := s.Answer(ctx, dir, args, nil, nil)
+	if !ok {
+		t.Fatal("a full log of a line was not answered in-process")
+	}
+	if out, code := realGit(t, dir, args, nil); !bytes.Equal(rep.Out, out) || code != 0 {
+		t.Errorf("gitfast %q, git %q (exit %d)", rep.Out, out, code)
+	}
+	if rep, ok := s.Answer(ctx, dir, []string{"log", "-1", "--format=%H", "main"}, nil, nil); !ok || len(rep.Out) != 41 {
+		t.Errorf("log -1 of a merge commit: answered %v, %q", ok, rep.Out)
+	}
+	// lore writes its ref commits with no final newline in the message
+	tree := gitT(t, dir, "rev-parse", "main^{tree}")
+	tip := ""
+	for _, msg := range []string{"lore: live 2 rows", "lore: one\n\nbody, no newline"} {
+		cmd := exec.Command("git", "commit-tree", tree)
+		if tip != "" {
+			cmd.Args = append(cmd.Args, "-p", tip)
+		}
+		cmd.Dir, cmd.Stdin = dir, strings.NewReader(msg)
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tip = strings.TrimSpace(string(out))
+	}
+	gitT(t, dir, "update-ref", "refs/lore/live", tip)
+	for _, args := range [][]string{
+		{"log", "--format=%an\x1f%ae\x1f%cn\x1f%ce\x1f%B\x1e", "refs/lore/live", "--"},
+		{"log", "-1", "--format=%B", "refs/lore/live"},
+	} {
+		rep, ok := s.Answer(ctx, dir, args, nil, nil)
+		if !ok {
+			t.Errorf("git %v over messages with no final newline was not answered in-process", args)
+			continue
+		}
+		if out, code := realGit(t, dir, args, nil); !bytes.Equal(rep.Out, out) || code != 0 {
+			t.Errorf("git %v\n gitfast %q\n git     %q (exit %d)", args, rep.Out, out, code)
 		}
 	}
 }

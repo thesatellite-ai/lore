@@ -11,7 +11,7 @@ package wire
 //	setup apply identity / personal_store / join / team, org create
 //	   ─▶ detection finds a tool ─▶ one line: what is credited to whom
 //	   ─▶ the App reopens person-only: rows, actor copies and commits
-//	      name the person; no agent actor, no Lore-Agent trailer
+//	      name the person; no agent actor
 //	   ─▶ the detected tool stays on ctx (creditedAgent) for this
 //	      machine's agents.may_manage_people check (agentMayCreateTeam)
 //
@@ -76,7 +76,7 @@ func (a *App) creditPerson(ctx context.Context, verb, person string, say func(st
 	}
 	if say != nil {
 		say(verb + ": run through " + tool + "; this step's rows and store commits are credited to " + person +
-			" (no agent actor, no Lore-Agent trailer). An agent of yours writes as itself after `lore agent start --label <label>`")
+			" (no agent actor). An agent of yours writes as itself after `lore agent start --label <label>`")
 	}
 	return context.WithValue(ctx, creditedAgentKey{}, who.Agent)
 }

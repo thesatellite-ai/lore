@@ -3,6 +3,8 @@ package gitref
 import (
 	"context"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 )
 
 // identityKeys matches git's user.name and user.email (one
@@ -16,7 +18,8 @@ const (
 // GitIdentity is the identity git itself would sign a commit in this repo
 // with (`git config user.name` / `user.email`, which also read the
 // GIT_CONFIG_* layers and includes). ok is false when either is unset, so
-// the caller falls back to its own signer.
+// the caller falls back to its own signer; also when they name an agent
+// (gitcommit.IsAgentSignature), which no lore commit is signed with.
 //
 // FLAG4 (owner): a commit lore makes on a person's behalf follows "git
 // identity wins": the person's own git identity when git has one, else the
@@ -39,8 +42,8 @@ func (r *Repo) GitIdentity(ctx context.Context) (Signature, bool) {
 			e = strings.TrimSpace(v)
 		}
 	}
-	if n == "" || e == "" || strings.ContainsAny(n+e, "\n\r<>") {
-		return Signature{}, false
+	if n == "" || e == "" || strings.ContainsAny(n+e, "\n\r<>") || gitcommit.IsAgentSignature(n, e) {
+		return Signature{}, false // devco:D-983: an old agent identity in a clone's config signs nothing
 	}
 	return Signature{Name: n, Email: e}, true
 }

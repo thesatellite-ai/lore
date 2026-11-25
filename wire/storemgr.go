@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -19,7 +18,6 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitcommit"
-	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
@@ -400,50 +398,27 @@ func storeIdentityFunc(opts Options) storeSigner { return storeSigner{opts: opts
 
 // fallback answers the lore identity (`lore whoami`: display name + the
 // identity key's e-mail) as a commit signature: always the PERSON's, the
-// owner of a detected agent rather than "<person> via <tool>
+// owner of a detected agent, never "<person> via <tool>
 // <agent.auto/…@lore.invalid>" (owner bug 12: that went into a store
-// clone's .git/config and doctor then demanded it); the agent goes into
-// the Lore-Agent trailer (agentTrailers). FLAG4: it is used only
-// when git has no user.name/user.email for the clone, an existing git
-// identity always wins, and git config is never changed (it is passed as
+// clone's .git/config; devco:D-983: and into commits on public remotes).
+// The agent is named in no commit (author, committer or message); it stays
+// in the rows' own provenance. FLAG4: it is used only when git has no
+// user.name/user.email for the clone, an existing git identity always
+// wins, and git config is never changed (it is passed as
 // GIT_AUTHOR_*/GIT_COMMITTER_* on that one call). It resolves lazily, so a
-// machine where git knows the person never pays for the resolution; a
-// failed resolution leaves git.DefaultAuthor rather than failing the write.
+// machine where git knows the person never pays for the resolution; an
+// identity with no address or a failed resolution leaves git.DefaultAuthor
+// rather than failing the write.
 func (s storeSigner) fallback(ctx context.Context) git.Signature {
 	who, err := resolveIdentity(ctx, s.opts)
 	if err != nil {
 		return git.Signature{}
 	}
 	name, email := who.Person().CommitSignature()
-	return git.Signature{Name: name, Email: email}
-}
-
-// agentTrailers is the Lore-Agent trailer of lore's own commits when an
-// agent writes for its person (none for the person, the CI actor, or an
-// unresolvable identity). It resolves the identity with the write's ctx,
-// as the row's actor is resolved (devco:D-695): a write from the home
-// folder that `--to <org>/<folder>` routed to the org's setup credits the
-// row to the setup's agent (its key), and the trailer named the home
-// folder's fallback agent (another key) because it resolved without the
-// setup ctx carries. Resolved once per setup choice (op.SetupOf), at the
-// first commit made with it.
-func (s storeSigner) agentTrailers() func(context.Context) []string {
-	var mu sync.Mutex
-	done := map[string][]string{}
-	return func(ctx context.Context) []string {
-		key := op.SetupOf(ctx)
-		mu.Lock()
-		defer mu.Unlock()
-		if out, ok := done[key]; ok {
-			return out
-		}
-		var out []string
-		if who, err := resolveIdentity(ctx, s.opts); err == nil && who.Agent != "" {
-			out = []string{gitcommit.AgentTrailer(identity.AgentTrailerParts(who))}
-		}
-		done[key] = out
-		return out
+	if gitcommit.IsAgentSignature(name, email) {
+		return git.Signature{}
 	}
+	return git.Signature{Name: name, Email: email}
 }
 
 // LoreSignature is the lore identity as a commit signature, the same
@@ -610,7 +585,7 @@ func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options)
 	if opts.Wall != nil {
 		clock = git.WithClock(opts.Wall)
 	}
-	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), git.WithCloneIdentity(who.cloneIdentity), cloneIdentitySay(opts.Notice), trailers, git.WithTrailerFunc(who.agentTrailers()), route, clock, handGitOption(opts.Notice)), who.owner, who.identityFor, opts.Notice)
+	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), git.WithCloneIdentity(who.cloneIdentity), cloneIdentitySay(opts.Notice), trailers, route, clock, handGitOption(opts.Notice)), who.owner, who.identityFor, opts.Notice)
 }
 
 // openStore opens the store at a canonical url with this App's backends.

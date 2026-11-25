@@ -251,7 +251,7 @@ Every commit lore makes in a store clone (a note, a merge, a marker, an adopt, a
 
 lore gives an org store's clone that same identity as its own `user.name` and `user.email` (in the clone's `.git/config`, never your global git config) when it clones the store, finds no `user.email` there or commits org settings there (a store added with `lore org store add` too), announces it in one line, and later changes only the value it wrote itself ([Plain git in the store](../sync/editing-by-hand.md#plain-git-in-the-store)), so a commit you make by hand in the clone carries it too. If you set another `user.name` in the clone (your git handle beside the org email), your hand commits carry that name while lore's own commits still carry your org identity, so `lore doctor` flags it (`store_identity` names both, the clone's and your org identity) and prints the `git -C <clone> config …` line that sets both; `lore doctor --fix` writes them.
 
-When a coding agent writes for you, the commit is still signed as the table above says, never as the agent: the agent is named in a `Lore-Agent:` trailer of the commit message.
+When a coding agent writes for you, the commit is still signed as the table above says, never as the agent, and its message does not name the agent either; the agent is credited on the rows it writes.
 
 ## Admins-only stores
 

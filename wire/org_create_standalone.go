@@ -99,7 +99,7 @@ func (r orgRegistrar) register(ctx context.Context, entry, orgFolder string, wal
 	}
 	line := strings.TrimRight(out.Text(), "\n")
 	if tool := detectedTool(ctx, StandaloneOptions(r.repoDir, r.home, r.workDir, r.version)); tool != "" {
-		line += "\norg create: run through " + tool + "; the roster row and store commits are credited to you, the person (no agent actor, no Lore-Agent trailer)"
+		line += "\norg create: run through " + tool + "; the roster row and store commits are credited to you, the person (no agent actor)"
 	}
 	// The creator is the org's admin (devco P-5): the open stint with org
 	// role admin the admin setup step writes, so `lore member add` works

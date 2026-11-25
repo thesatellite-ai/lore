@@ -73,8 +73,9 @@ const (
 	// KeyBranchesDefaultMode: step 4, isolate (strictest) | share.
 	KeyBranchesDefaultMode Key = "branches.default_mode"
 	// KeyIdentityAgentDisplay: how a detected agent's coding tool shows in
-	// the files lore writes (actor display_name, migrated_via, the
-	// Lore-Agent trailer; issue #113): person (strictest) | agent | tool.
+	// the files lore writes (actor display_name, migrated_via; issue #113;
+	// no git commit names the agent at all, devco:D-983): person
+	// (strictest) | agent | tool.
 	// The values mirror identity.AgentDisplays (this package imports no
 	// adapter).
 	KeyIdentityAgentDisplay Key = "identity.agent_display"

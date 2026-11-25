@@ -253,8 +253,8 @@ type Store struct {
 	// Signature returns the commit author for a write at t.
 	Signature func(t time.Time) gitref.Signature
 	// Trailers are git trailer lines appended to every signals commit
-	// message (devco:D-581: an agent writing for its person is named in a
-	// Lore-Agent trailer, never in the author); nil = the bare message.
+	// message; nil = the bare message. They never name an agent: a signals
+	// commit is the person's in author, committer and message (devco:D-983).
 	Trailers []string
 	// Autopush false makes every write fail closed without network.
 	Autopush bool

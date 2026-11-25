@@ -2,9 +2,9 @@ package identity
 
 // agentdisplay.go — how much of a detected agent's coding tool reaches the
 // files lore writes (issue #113, devco:D-900). A detected agent's actor row
-// (display_name), `lore migrate run`'s migrated_via in _meta.json and the
-// Lore-Agent trailer of lore's own store commits used to name the tool
-// always. Some owners allow no tool attribution in repo content, so the
+// (display_name) and `lore migrate run`'s migrated_via in _meta.json used
+// to name the tool always. No git commit names the agent at all (no author,
+// committer or trailer, devco:D-983): commits are the person's. Some owners allow no tool attribution in repo content, so the
 // prose part is a setting decided BEFORE anything is written:
 //
 //	tool    "<person> via <tool>"   (default, today's text)
@@ -15,7 +15,7 @@ package identity
 // mode: it is an id the actor id is hashed from, never written into a row
 // (the row carries only the hash), and changing it would split every
 // existing agent's history into a new actor. What changes is the prose:
-// display_name, migrated_via and the trailer. An agent named on purpose
+// display_name and migrated_via. An agent named on purpose
 // (LORE_ACTOR=agent:<label>, `lore agent start --label`) keeps its label:
 // the person chose that text.
 
@@ -107,7 +107,7 @@ func (m AgentDisplay) HidesTool() bool {
 }
 
 // HidesTool reports whether r is a detected agent whose mode keeps the
-// tool out of written prose (migrated_via, the Lore-Agent trailer).
+// tool out of written prose (display_name, migrated_via).
 func (r Resolved) HidesTool() bool {
 	return r.Step == StepDetected && r.AgentDisplay.HidesTool()
 }
@@ -123,20 +123,4 @@ func agentDisplayName(person, tool string, mode AgentDisplay) string {
 	default:
 		return person + " via " + tool
 	}
-}
-
-// AgentTrailerParts is the label and key the Lore-Agent trailer of a
-// commit lore makes as r carries: the tool label and the stable key, or,
-// when r's mode hides the tool, no label and r's actor id in place of the
-// key (the key holds the tool slug; the id still finds the actor row, so
-// the commit stays traceable). key is "" for anyone but an agent.
-func AgentTrailerParts(r Resolved) (label, key string) {
-	if r.Agent == "" || !r.HidesTool() {
-		return r.Label, r.Agent
-	}
-	id, err := r.ActorID()
-	if err != nil {
-		return "", ""
-	}
-	return "", id.String()
 }

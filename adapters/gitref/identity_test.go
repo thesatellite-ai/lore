@@ -29,6 +29,9 @@ func TestGitIdentityMatrix(t *testing.T) {
 		{"neither", "", "", Signature{}, false},
 		{"blank name", "   ", "dev1@example.test", Signature{}, false},
 		{"angle bracket in email", "Dev", "a<b>@example.test", Signature{}, false},
+		// devco:D-983: an older lore's agent identity in the config signs nothing
+		{"agent name", "Dev One via codex", "dev1@example.test", Signature{}, false},
+		{"agent email", "Dev One", "agent.auto/codex/abc123@lore.invalid", Signature{}, false},
 	}
 	for _, kind := range []repoKind{kindNormal, kindBare} {
 		for _, tc := range cases {

@@ -4,8 +4,8 @@ package wire
 // #113, devco:D-900; the modes are in adapters/identity/agentdisplay.go).
 //
 // It is decided inside resolveIdentity, the one place every command gets
-// its identity from, so the actor row, migrated_via and the Lore-Agent
-// trailer can never disagree. Identity resolves before any store is
+// its identity from, so the actor row and migrated_via can never
+// disagree (no git commit names the agent at all, devco:D-983). Identity resolves before any store is
 // opened (the cache path and the engine depend on it), so the mode is read
 // the way branchmode.go reads its policy: straight from the files, no
 // cache, no git, no fetch. The sources, resolved by policy.Resolve
@@ -22,8 +22,8 @@ package wire
 // Once the engine exists, applyAgentDisplayPolicy reads the key from the
 // engine's full policy set (every level), renames the caller's identity
 // when it hides more, and raises the App's floor, so every later
-// resolveIdentity of this command (the row's actor copy, migrated_via, the
-// Lore-Agent trailer of its commits) gives the same answer.
+// resolveIdentity of this command (the row's actor copy, migrated_via)
+// gives the same answer.
 
 import (
 	"context"

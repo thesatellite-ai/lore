@@ -23,7 +23,7 @@ const (
 	// probeIdentity signs the write test's empty commit; it never leaves
 	// the machine (dry run: no objects are sent).
 	probeName  = "lore probe"
-	probeEmail = "probe@lore.invalid"
+	probeEmail = "probe@localhost"
 	// headRef is the remote's default branch for the marker fetch.
 	headRef = "HEAD"
 )

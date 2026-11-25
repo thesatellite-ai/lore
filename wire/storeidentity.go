@@ -26,9 +26,8 @@ package wire
 import (
 	"context"
 	"os"
-	"strings"
 
-	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
@@ -92,12 +91,11 @@ func (s storeSigner) ownedByOrg(ctx context.Context, remote string) bool {
 }
 
 // agentSignature reports a git identity that names an agent rather than
-// a person: an address at lore's non-routable domain
-// (agent.auto/<tool>/…@lore.invalid) or a "<person> via <tool>" name.
-// lore never writes one into a store clone and doctor flags it (owner bug
-// 12).
+// a person (gitcommit.IsAgentSignature, the one test every signer uses).
+// lore never writes one into a store clone or a commit and doctor flags
+// it (owner bug 12, devco:D-983).
 func agentSignature(name, email string) bool {
-	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(email)), "@"+identity.CommitEmailDomain) || strings.Contains(name, viaTool)
+	return gitcommit.IsAgentSignature(name, email)
 }
 
 // cloneIdentityLine is the one short line said when a store clone got

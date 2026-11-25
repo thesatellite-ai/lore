@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -61,6 +62,9 @@ const configNotFound = 1
 // returned, else the opener's author is passed.
 func (b *Backend) identityEnv(ctx context.Context, explicit Signature) ([]string, error) {
 	if !explicit.IsZero() {
+		if gitcommit.IsAgentSignature(explicit.Name, explicit.Email) {
+			return nil, errs.New(errs.Internal, "git: a commit is never signed as an agent ("+explicit.Name+" <"+explicit.Email+">), devco:D-983")
+		}
 		return signatureEnv(explicit), nil
 	}
 	// An org store (owner signature): the org identity signs, whatever the
@@ -101,9 +105,10 @@ func (c config) ownerSigner() (Signature, bool) {
 }
 
 // validSignature reports whether s names a name and an e-mail git can
-// write into an ident line.
+// write into an ident line, and is a person's: an agent signature
+// (gitcommit.IsAgentSignature) signs no commit (devco:D-983).
 func validSignature(s Signature) bool {
-	return s.Name != "" && s.Email != "" && !strings.ContainsAny(s.Name+s.Email, forbiddenSignature)
+	return s.Name != "" && s.Email != "" && !strings.ContainsAny(s.Name+s.Email, forbiddenSignature) && !gitcommit.IsAgentSignature(s.Name, s.Email)
 }
 
 // SignerEnv is the identity environment of a commit lore makes itself
@@ -152,11 +157,11 @@ func (b *Backend) gitHasIdentity(ctx context.Context) (bool, error) {
 // does not count: on most machines it is refused ("unable to auto-detect
 // email address") or names an address nobody reads.
 func hasIdentity(ctx context.Context, r runner, dir string) (bool, error) {
-	name := os.Getenv(envCommitterName) != ""
-	email := os.Getenv(envCommitterEmail) != "" || os.Getenv(envEmail) != ""
-	if name && email {
-		return true, nil
+	envName, envMail := os.Getenv(envCommitterName), cmp.Or(os.Getenv(envCommitterEmail), os.Getenv(envEmail))
+	if envName != "" && envMail != "" {
+		return !gitcommit.IsAgentSignature(envName, envMail), nil
 	}
+	var name, email string
 	out, err := r.run(ctx, call{dir: dir, args: []string{"config", "--get-regexp", identityConfigKeys}})
 	if err != nil {
 		if code, ran := exitCode(err); ran && code == configNotFound {
@@ -166,17 +171,21 @@ func hasIdentity(ctx context.Context, r runner, dir string) (bool, error) {
 	}
 	for line := range strings.SplitSeq(string(out), "\n") {
 		key, value, _ := strings.Cut(line, " ")
-		if strings.TrimSpace(value) == "" {
+		if value = strings.TrimSpace(value); value == "" {
 			continue
 		}
 		switch {
 		case strings.HasSuffix(key, ".name"):
-			name = true
+			name = value
 		case strings.HasSuffix(key, ".email"):
-			email = true
+			email = value
 		}
 	}
-	return name && email, nil
+	// devco:D-983: an old agent identity in the clone's config ("<person>
+	// via <tool>" <…@lore.invalid>, owner bug 12) is no identity: the
+	// caller passes the person's instead, so git never signs with it.
+	name, email = cmp.Or(envName, name), cmp.Or(envMail, email)
+	return name != "" && email != "" && !gitcommit.IsAgentSignature(name, email), nil
 }
 
 // IdentityEnv is the FLAG4 identity environment for a commit lore makes

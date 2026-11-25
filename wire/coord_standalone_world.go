@@ -31,7 +31,6 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
-	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -55,15 +54,14 @@ import (
 // Machine-state file and coordination defaults (LORE_TEAM_SPEC §1, the
 // v0.1.17 lorecfg defaults).
 const (
-	heldFile               = "held.json" // <git dir>/lore/held.json
-	defaultLeasePushRetry  = 5
-	defaultMaxClaims       = 1
-	defaultMaxAttempts     = 3
-	envLiveAutopushSwitch  = "LORE_LIVE_AUTOPUSH" // "0" = coordination writes fail closed (rule 11)
-	envValueOff            = "0"
-	humanSessionSeparator  = "@"
-	signatureInvalidDomain = "@lore.invalid"
-	fallbackDefaultBranch  = "main"
+	heldFile              = "held.json" // <git dir>/lore/held.json
+	defaultLeasePushRetry = 5
+	defaultMaxClaims      = 1
+	defaultMaxAttempts    = 3
+	envLiveAutopushSwitch = "LORE_LIVE_AUTOPUSH" // "0" = coordination writes fail closed (rule 11)
+	envValueOff           = "0"
+	humanSessionSeparator = "@"
+	fallbackDefaultBranch = "main"
 )
 
 // coordWorld is one command's view of the machine for coordination.
@@ -660,7 +658,6 @@ func (w *coordWorld) signalsStore(ctx context.Context) *signals.Store {
 		Signature: func(at time.Time) gitref.Signature {
 			return gitref.Signature{Name: sig.Name, Email: sig.Email, When: at}
 		},
-		Trailers: w.signalsTrailers(),
 		Autopush: autopush, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
 		Trace: signalsTrace(os.Stderr),
 		// FORMAT_EVOLUTION rule 2 (OV48): no claim, renew or release on a
@@ -705,45 +702,31 @@ func signalsTrace(w io.Writer) func(string) {
 	return func(line string) { _, _ = fmt.Fprintln(w, "trace: "+line) } // stderr gone: nothing left to report to
 }
 
-// signalsSignature is who signs a signals commit (devco:D-581): on a
-// linked store's ref the identity every other commit of that store uses
-// (storeSigner.identityFor: the org identity for an org store), on a code
-// repo's own ref the person (the owner of a detected agent). It was
-// "<person> via <tool> <agent.auto/…@lore.invalid>", an author no store
-// commit may carry; the agent goes into the Lore-Agent trailer
-// (signalsTrailers). A caller with no person (the CI actor) keeps the
-// v0.1.17 non-routable address.
+// signalsSignature is who signs a signals commit (devco:D-581,
+// devco:D-983): always a person, never the agent. On a linked store's ref
+// the identity every other commit of that store uses
+// (storeSigner.identityFor: the org identity for an org store); on a code
+// repo's own ref git's identity of the repo (FLAG4: git identity wins, as
+// on refs/lore/live), else the person (the owner of a detected agent).
+// It was "<person> via <tool>" <agent.auto/…@lore.invalid> when the
+// person's key held no address, and that author reached public remotes.
+// With no person address anywhere it is git.DefaultAuthor (lore itself),
+// never a made-up one. The agent is named nowhere in the commit.
 func (w *coordWorld) signalsSignature(ctx context.Context) gitref.Signature {
 	if w.spot.store && w.spot.url != "" {
 		if s := storeIdentityFunc(w.a.opts).identityFor(ctx, w.spot.url); s.Name != "" && s.Email != "" && !agentSignature(s.Name, s.Email) {
 			return gitref.Signature{Name: s.Name, Email: s.Email}
 		}
 	}
+	if w.spot.repo != nil {
+		if s, ok := w.spot.repo.GitIdentity(ctx); ok {
+			return s
+		}
+	}
 	if name, email := w.who.Person().CommitSignature(); name != "" && email != "" && !agentSignature(name, email) {
 		return gitref.Signature{Name: name, Email: email}
 	}
-	return gitref.Signature{Name: w.who.DisplayName, Email: signatureEmail(w.who.StableKey)}
-}
-
-// signalsTrailers names the agent that wrote a signals commit for its
-// person (Lore-Agent trailer, devco:D-581); none for a person or CI.
-func (w *coordWorld) signalsTrailers() []string {
-	if !w.isAgent() || w.who.Agent == "" {
-		return nil
-	}
-	if t := gitcommit.AgentTrailer(identity.AgentTrailerParts(w.who)); t != "" {
-		return []string{t}
-	}
-	return nil
-}
-
-// signatureEmail turns a stable key into a commit e-mail; agents get a
-// non-routable address (v0.1.17 signatureEmail).
-func signatureEmail(stableKey string) string {
-	if v, ok := strings.CutPrefix(stableKey, identity.KindHuman+":"); ok && strings.Contains(v, "@") {
-		return v
-	}
-	return strings.ReplaceAll(stableKey, ":", ".") + signatureInvalidDomain
+	return gitref.Signature{Name: gitbackend.DefaultAuthor.Name, Email: gitbackend.DefaultAuthor.Email}
 }
 
 // env is the coord.Env of this repo.

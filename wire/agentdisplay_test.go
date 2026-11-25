@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
-	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 )
 
@@ -64,10 +63,6 @@ func TestAgentDisplayDecidesTheWrittenName(t *testing.T) {
 			}
 			if _, via := migratedBy(who); via != migratedViaAgent {
 				t.Errorf("migrated_via %q names the tool", via)
-			}
-			tr := gitcommit.AgentTrailer(identity.AgentTrailerParts(who))
-			if strings.Contains(tr, who.Label) || strings.Contains(tr, "agent:auto/") || !strings.HasPrefix(tr, gitcommit.TrailerAgent+": act_") {
-				t.Errorf("trailer %q names the tool", tr)
 			}
 		})
 	}

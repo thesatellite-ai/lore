@@ -364,8 +364,9 @@ func TestStoryOOwnerShape(t *testing.T) {
 	// second org kite, both admin).
 	//   D-695: an agent's write from home `--to <org>/<folder>` credited the
 	//   row to the setup's agent while the commit's Lore-Agent trailer named
-	//   the home folder's fallback agent (another key); the trailer is the
-	//   same one a write from inside the setup's repo carries.
+	//   the home folder's fallback agent (another key). devco:D-983: no
+	//   commit names an agent any more; both commits are signed alike, by
+	//   the person, with no Lore-Agent trailer.
 	//   D-696: `task next --setup <second org's setup>` printed "(or lore
 	//   task claim --id … --push)" and that line, run as printed from home,
 	//   failed "no store named kite is set up for this folder … the stores
@@ -376,19 +377,21 @@ func TestStoryOOwnerShape(t *testing.T) {
 		agentEnv := []string{"LORE_HUMAN=", "LORE_NO_DETECT=0", "CLAUDE_CODE_CHILD_SESSION=1", "CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=o-d695"}
 		home := (&teamharness.Clone{A: ada.Actor, Dir: ada.Home}).With(agentEnv...)
 		top := oStoreClone(ada, oOwner, "lore-team")
-		trailer := func() string {
+		trailer := func() string { // author, committer and any Lore-Agent trailer of the newest commit
+			sig := s.Git(top, "log", "-1", "--format=%an <%ae> | %cn <%ce>")
 			for _, l := range strings.Split(s.Git(top, "log", "-1", "--format=%B"), "\n") {
 				if strings.HasPrefix(l, "Lore-Agent:") {
-					return l
+					sig += " " + l
 				}
 			}
-			return ""
+			return strings.TrimSpace(sig)
 		}
 		pc.With(agentEnv...).Lore("memory", "add", "--body", "agent note from the org repo", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
 		inRepo := trailer()
 		r := home.Lore("memory", "add", "--body", "agent note from home", "--to", oOrg+"/"+oFolder, "--yes")
 		fromHome := trailer()
-		oCheck(t, "D-695/trailer", r.Code == 0 && inRepo != "" && fromHome == inRepo, "an agent's write from home names another agent in its commit trailer than the same write in the org's repo (repo %q, home %q):\n%s", inRepo, fromHome, r)
+		oCheck(t, "D-695/trailer", r.Code == 0 && inRepo != "" && fromHome == inRepo, "an agent's write from home is signed otherwise than the same write in the org's repo (repo %q, home %q):\n%s", inRepo, fromHome, r)
+		oCheck(t, "D-983/no-agent-in-commit", !strings.Contains(inRepo, "Lore-Agent:") && !strings.Contains(inRepo, " via ") && !strings.Contains(inRepo, "@lore.invalid"), "an agent's write names the agent in its commit, want the person only: %q", inRepo)
 
 		before := refs()
 		r = ada.Lore(ada.Home, "member", "add", "--email", "pat.home@acme.example", "--name", "Pat Home", "--yes")

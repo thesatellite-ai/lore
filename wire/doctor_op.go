@@ -78,6 +78,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckStoreReadme, a.DoctorStoreReadmes},                                                                          // doctor_storereadme.go
 		{DoctorCheckStoreFiles, a.DoctorStoreFiles},                                                                             // doctor_storefiles.go
 		{DoctorCheckStoreIdentity, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorStoreIdentities(c, fix) }}, // doctor_storeidentity.go
+		{DoctorCheckAgentCommits, a.DoctorAgentCommits},                                                                         // doctor_agentcommits.go (devco:D-983)
 		{DoctorCheckConfigStyle, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorConfigStyle(c, fix) }},       // doctor_configstyle.go
 		{DoctorCheckActorRoster, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorActorRoster(c, fix) }},       // doctor_roster.go
 		{DoctorCheckActorCopies, a.DoctorActorCopies},                                                                           // doctor_actorcopies.go (SOURCE_OF_TRUTH rows 2-3)

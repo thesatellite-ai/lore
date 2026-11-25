@@ -144,8 +144,10 @@ func TestJourneyStoreScope(t *testing.T) {
 		agent := jAgentsAs(&folder, &jClaude, "st-folder")
 		before = strings.TrimSpace(w.Git(annStore, "rev-parse", "HEAD"))
 		agent.Lore("task", "edit", "--id", syncTask, "--title", jssSyncTask+" again", "--yes").OK(t)
-		if msg := w.Git(annStore, "log", "-1", "--format=%B"); !strings.Contains(msg, "Lore-Agent:") {
-			t.Fatalf("the edit from the agent session was not credited to an agent: %s", msg)
+		// devco:D-983: the commit is the person's (author, committer,
+		// message); the agent is credited on its row only
+		if msg := w.Git(annStore, "log", "-1", "--format=%an <%ae> | %cn <%ce>%n%B"); strings.Contains(msg, "Lore-Agent:") || strings.Contains(msg, " via ") || strings.Contains(msg, "@lore.invalid") {
+			t.Fatalf("the edit from the agent session names the agent in its commit: %s", msg)
 		}
 		if got := strings.Fields(w.Git(annStore, "show", "--name-only", "--format=", "HEAD")); len(got) != 1 || got[0] != want {
 			t.Fatalf("agent task edit commit touches %v, want only %s", got, want)

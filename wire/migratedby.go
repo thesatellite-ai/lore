@@ -3,8 +3,8 @@ package wire
 // migratedby.go — who `lore migrate run` records as having raised a
 // project's format (T-1). It is the PERSON, never "<person> via <tool>
 // (agent:auto/…)": a detected agent acts for its person; the agent goes
-// into migrated_via only, the audit counterpart of the Lore-Agent commit
-// trailer (gitcommit.AgentTrailer).
+// into migrated_via only (no commit names the agent: devco:D-983 dropped
+// the Lore-Agent trailer older versions wrote).
 //
 // devco:D-705: the person is recorded by display NAME only, never "Name
 // <email>" and never an actor id. _meta.json is a committed file of the

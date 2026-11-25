@@ -89,12 +89,13 @@ func TestStoreSignerEnvForOrgStoreWorktree(t *testing.T) {
 // App's options (the signer a core store commit uses when git has no
 // identity), so the old binary's storeSignature, which calls it, names the
 // same signer as a core store commit. A human key with an e-mail signs with
-// that e-mail; an agent key signs with a synthetic address.
+// that e-mail; an agent key with no person has no signature at all
+// (devco:D-983: never a made-up agent address), and both say so alike.
 func TestLoreSignatureIsStoreFallback(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ actor, email string }{
 		{testEmail, "alice@example.com"},
-		{"agent:frontend_2", "agent.frontend_2@"},
+		{"agent:frontend_2", ""},
 	} {
 		t.Run(c.actor, func(t *testing.T) {
 			a, err := New(Options{RepoDir: gitRepo(t), Home: t.TempDir(), FlagActor: c.actor})
@@ -103,7 +104,7 @@ func TestLoreSignatureIsStoreFallback(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = a.Close() })
 			name, email, ok := a.LoreSignature(background())
-			if !ok || name == "" {
+			if ok != (c.email != "") || (ok && name == "") {
 				t.Fatalf("LoreSignature = %q %q %v", name, email, ok)
 			}
 			fb := storeIdentityFunc(a.opts).fallback(background())

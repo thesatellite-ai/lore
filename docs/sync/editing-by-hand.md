@@ -41,7 +41,7 @@ All valid changes of one folder become one commit authored by you: your git iden
 
 Several lore commands writing into one store clone at once (parallel `add --to <store>/<folder>` from a script or several agents) each commit their own rows: a command looks for hand edits only while it holds the clone's store lock, so another command's row that is written but not committed yet is never taken for a hand edit. `lore doctor` names a store lock held by another lore command, never one it holds itself.
 
-The author of a hand-edit commit is always a person, never an agent: when an agent ran the command that picked the edit up, it is named in a `Lore-Agent:` trailer.
+The author of a hand-edit commit is always a person, never an agent: when an agent ran the command that picked the edit up, the commit still names only you (author, committer and message).
 
 lore never changes the envelope fields from your file (`_hlc`, `created_by`, `updated_by`, `updated_at`, `_o`): the write stamps them anew. A row file that arrives with a secret in it (a teammate's commit made with the hooks off) is never printed or rendered with the secret: every read shows the match as `[redacted <rule>]`, render leaves the row out and names it, and `lore check leaks --rows` gives the allow line. Metadata (`meta`) changed by hand is refused; change it with lore's metadata commands.
 

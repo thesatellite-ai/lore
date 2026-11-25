@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/fsreason"
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/live"
@@ -238,16 +239,16 @@ func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top st
 
 // loreSignature signs live commits when git has no identity (FLAG4): the
 // lore identity from LiveConfig.Signer, else liveSignatureFallback (no
-// Signer, an unresolved identity, or a name/e-mail git would refuse or
-// mis-parse in an author line).
+// Signer, an unresolved identity, an agent's signature, or a name/e-mail
+// git would refuse or mis-parse in an author line).
 func (h *liveHost) loreSignature(ctx context.Context) gitref.Signature {
 	if h.cfg.Signer == nil {
 		return liveSignatureFallback
 	}
 	name, email, ok := h.cfg.Signer(ctx)
 	name, email = strings.TrimSpace(name), strings.TrimSpace(email)
-	if !ok || name == "" || email == "" || strings.ContainsAny(name+email, "\n\r<>") {
-		return liveSignatureFallback
+	if !ok || name == "" || email == "" || strings.ContainsAny(name+email, "\n\r<>") || gitcommit.IsAgentSignature(name, email) {
+		return liveSignatureFallback // devco:D-983: never an agent's
 	}
 	return gitref.Signature{Name: name, Email: email}
 }

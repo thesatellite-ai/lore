@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/model/tmpdir"
 	"os"
 	"path/filepath"
@@ -76,6 +78,13 @@ type CommitRequest struct {
 // HistoryReplace, or names a missing commit.
 var ErrBadParents = errors.New("gitref: merge parents need a base and HistoryAppend")
 
+// ErrAgentSignature means a commit was asked to be signed as an agent
+// ("<person> via <tool>" or an @lore.invalid address). Every lore commit
+// is authored and committed as a person (devco:D-983): the signers never
+// pick one, so this is the last guard, refusing the write rather than
+// putting an agent author on a ref that may reach a public remote.
+var ErrAgentSignature = errors.New("gitref: a commit is never signed as an agent")
+
 // Commit is the outcome of MakeCommit.
 type Commit struct {
 	// OID is the new commit, or the base commit when Changed is false
@@ -145,6 +154,9 @@ func (r *Repo) MakeCommit(ctx context.Context, req CommitRequest) (Commit, error
 	}
 	if tree == baseTree && len(merges) == 0 {
 		return Commit{OID: base, Tree: tree, Base: base}, nil
+	}
+	if gitcommit.IsAgentSignature(req.Signature.Name, req.Signature.Email) {
+		return Commit{}, fmt.Errorf("%w: %s <%s>", ErrAgentSignature, req.Signature.Name, req.Signature.Email)
 	}
 	args := []string{"commit-tree", tree}
 	if base != "" && req.History == HistoryAppend {

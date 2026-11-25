@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -43,8 +42,8 @@ func TestSetupTeamStepUnderAnAgentCreditsThePerson(t *testing.T) {
 		t.Fatalf("the team step under a coding agent: %v", err)
 	}
 	bare := filepath.Join(home, "stores", "agency", "team") // the clone: the commit waits there until lore sync
-	if logs := orgGit(t, bare, "log", "--all", "--format=%B"); strings.Contains(logs, gitcommit.TrailerAgent+":") {
-		t.Fatalf("the org store's commits carry a %s trailer:\n%s", gitcommit.TrailerAgent, logs)
+	if logs := orgGit(t, bare, "log", "--all", "--format=%B"); strings.Contains(logs, "Lore-Agent:") {
+		t.Fatalf("the org store's commits carry a Lore-Agent trailer:\n%s", logs)
 	}
 	if rows := orgGit(t, bare, "log", "--all", "-p"); strings.Contains(rows, "agent:auto/") || strings.Contains(rows, viaTool) {
 		t.Fatalf("the team step wrote an agent actor into the org store:\n%s", rows)
@@ -193,8 +192,8 @@ func TestOrgCreateUnderAnAgentCreditsThePerson(t *testing.T) {
 		t.Fatalf("org create under an agent must say whom it credits:\n%s", text)
 	}
 	clone := filepath.Join(mira, "stores", "agency", "notes")
-	if logs := orgGit(t, clone, "log", "--all", "--format=%B"); strings.Contains(logs, gitcommit.TrailerAgent+":") {
-		t.Fatalf("org create's commits carry a %s trailer:\n%s", gitcommit.TrailerAgent, logs)
+	if logs := orgGit(t, clone, "log", "--all", "--format=%B"); strings.Contains(logs, "Lore-Agent:") {
+		t.Fatalf("org create's commits carry a Lore-Agent trailer:\n%s", logs)
 	}
 	if rows := orgGit(t, clone, "log", "--all", "-p"); strings.Contains(rows, "agent:auto/") || strings.Contains(rows, viaTool) {
 		t.Fatalf("org create wrote an agent actor into the org store:\n%s", rows)

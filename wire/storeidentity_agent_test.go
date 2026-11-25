@@ -14,8 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 )
 
 // agentEnv makes this process look like Claude Code to agent detection
@@ -47,13 +45,8 @@ func TestStoreIdentityUnderAgentIsThePerson(t *testing.T) {
 	if id.Name != "Una Person" || id.Email != "una@example.test" || agentSignature(id.Name, id.Email) {
 		t.Fatalf("clone identity = %+v, want the person", id)
 	}
-	tr := s.agentTrailers()(ctx)
-	if len(tr) != 1 || !strings.HasPrefix(tr[0], gitcommit.TrailerAgent+": claude_code (agent:auto/claude_code/") {
-		t.Fatalf("trailers = %q, want Lore-Agent naming the agent", tr)
-	}
-
 	// lore's own commit in a clone with no git identity: author is the
-	// person, the agent is in the trailer
+	// person, and the agent is named nowhere in it (devco:D-983)
 	dir := t.TempDir()
 	gitT(t, dir, "init", "-q")
 	env, err := s.envFor(ctx, dir)

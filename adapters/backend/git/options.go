@@ -205,12 +205,10 @@ func WithTrailers(lines ...string) Option {
 }
 
 // WithTrailerFunc adds trailer lines asked for at each commit (f is
-// called then, with the write's ctx, so a caller can resolve them lazily):
-// wire names the agent a person's commits were made through (Lore-Agent)
-// here, because a clone's git identity is always the person (owner bug
-// 12). The ctx is the write's own (devco:D-695): a write from the home
-// folder routed to a setup by its --to credits the row through that
-// setup, and the trailer must name the same actor, not the folder's.
+// called then, with the write's ctx, so a caller can resolve them lazily).
+// The ctx is the write's own (devco:D-695). No trailer names an agent: a
+// lore commit is the person's in author, committer and message
+// (devco:D-983; older versions added a Lore-Agent trailer here).
 func WithTrailerFunc(f func(context.Context) []string) Option {
 	return func(c *config) {
 		if f != nil {

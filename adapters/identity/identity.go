@@ -275,21 +275,14 @@ func (r Resolved) PersonEmails() []string {
 	return out
 }
 
-// CommitEmailDomain is the non-routable domain of a commit e-mail lore
-// makes for a key that holds no address (an agent or CI key): such an
-// address in a store clone's git identity is never a person's.
-const CommitEmailDomain = commitEmailDomain
-
-// commitEmailDomain is the non-routable domain of a commit e-mail made for
-// a key that holds no address (agent:<label>, a machine key).
-const commitEmailDomain = "lore.invalid"
-
-// CommitSignature is the name and e-mail that sign a store commit as this
+// CommitSignature is the name and e-mail that sign a commit as this
 // identity when git has none of its own (FLAG4): the display name (the
-// key's value when unset) and the key's e-mail for a human:<email> key,
-// else the key made into a non-routable address (agent:ci becomes
-// agent.ci@lore.invalid, as v0.1.17's signatureEmail did). Both are ""
-// for an empty key.
+// key's value when unset) and the key's e-mail for a human:<email> key.
+// Both are "" for a key that holds no address (an agent or machine key,
+// a bare user name): lore never makes one up (devco:D-983; it was
+// agent.ci@lore.invalid, and an agent's "<person> via <tool>"
+// <agent.auto/…@lore.invalid> reached public remotes), so the caller falls
+// back to its next signer (Person() first for a detected agent).
 func (r Resolved) CommitSignature() (name, email string) {
 	if r.StableKey == "" {
 		return "", ""
@@ -302,10 +295,10 @@ func (r Resolved) CommitSignature() (name, email string) {
 	if name == "" {
 		name = value
 	}
-	if kind == KindHuman && strings.Contains(value, "@") {
-		return name, value
+	if kind != KindHuman || !strings.Contains(value, "@") {
+		return "", ""
 	}
-	return name, strings.ReplaceAll(r.StableKey, kindSep, ".") + "@" + commitEmailDomain
+	return name, value
 }
 
 // Inputs is everything Resolve reads; every field is a seam.

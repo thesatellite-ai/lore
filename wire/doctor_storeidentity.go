@@ -69,7 +69,7 @@ func (a *App) DoctorStoreIdentities(ctx context.Context, fix bool) ([]DoctorFind
 			msg = "the store clone " + dir + " commits as " + shown + " (git config user.name/user.email there), not as " + want.Name + " <" + want.Email + ">, " + want.Why + "; a commit made by hand there would carry " + shown + " while lore's own commits carry " + want.Name + " <" + want.Email + ">"
 		}
 		if agent {
-			msg = "the store clone " + dir + " commits as the agent identity " + gotName + " <" + got + "> (git config user.name/user.email there); a git identity in a clone is the person's (" + want.Name + " <" + want.Email + ">, " + want.Why + "), the agent goes into commit trailers only"
+			msg = "the store clone " + dir + " commits as the agent identity " + gotName + " <" + got + "> (git config user.name/user.email there); a git identity in a clone is the person's (" + want.Name + " <" + want.Email + ">, " + want.Why + "); no commit names the agent (devco:D-983)"
 		}
 		f := DoctorFinding{Check: DoctorCheckStoreIdentity, Level: DoctorWarning, Store: src,
 			Message: msg,

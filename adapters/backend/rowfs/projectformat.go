@@ -12,8 +12,8 @@ package rowfs
 //	                       a committed file; older builds wrote "Name
 //	                       <email>", read as is)
 //	"migrated_via": "…"    the agent the person ran it through, when one
-//	                       did ("claude_code (agent:auto/…)"); audit only,
-//	                       as the Lore-Agent trailer of a commit
+//	                       did ("claude_code (agent:auto/…)"); audit only
+//	                       (no git commit names the agent, devco:D-983)
 //	"migrated_at": "…"     when (RFC 3339, UTC)
 //
 // A _meta.json without "format" says it the older way: min_lore_version

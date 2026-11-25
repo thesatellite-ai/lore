@@ -4,6 +4,7 @@ package gitfast
 // questions the hooks and doctor ask on every run, without a git process:
 //
 //	log -1 --format=<F> <rev> [--]       one commit, a few atoms
+//	log --format=<F> <rev> [--]          every commit of a line (no merge)
 //	rev-list -1 <rev> --not --remotes    is <rev> unpushed (its id) or not ("")
 //	diff --cached --quiet <rev> [-- p]   does the index differ from <rev>'s tree
 
@@ -15,10 +16,16 @@ import (
 
 // logOne answers `log -1 --format=<F> <rev> [--]` (also -n1, -n 1,
 // --max-count=1) for the atoms %H %T %P %an %ae %cn %ce %ct %at %B %n %%
-// and %xNN. The Session has already refused configs that change log
-// output (log.showSignature, i18n.logOutputEncoding).
+// and %xNN. Without -1 it answers the whole history of rev when that
+// history is a line (no merge, at most maxWalk commits): git's order is
+// fixed then (rev first, then each parent), whatever the commit dates
+// say; a merge, a missing parent (shallow) or a longer history is left to
+// git. Why: doctor's agent_commits check (devco:D-983) reads every commit
+// of lore's own refs, and a process per ref was over doctor's git budget.
+// The Session has already refused configs that change log output
+// (log.showSignature, i18n.logOutputEncoding).
 func logOne(r *repo, args []string) (Reply, bool) {
-	one := false
+	one, sep := false, false
 	format := ""
 	rev := ""
 	for i := 0; i < len(args); i++ {
@@ -33,6 +40,7 @@ func logOne(r *repo, args []string) (Reply, bool) {
 			format = strings.TrimPrefix(a, "--format=")
 		case strings.HasPrefix(a, "--pretty=format:"), strings.HasPrefix(a, "--pretty=tformat:"):
 			format = a[strings.Index(a, ":")+1:]
+			sep = strings.HasPrefix(a, "--pretty=format:") // separator, not terminator, between commits
 		case a == "--":
 			if i != len(args)-1 {
 				return Reply{}, false // paths: git
@@ -45,7 +53,7 @@ func logOne(r *repo, args []string) (Reply, bool) {
 			return Reply{}, false
 		}
 	}
-	if !one || format == "" || rev == "" {
+	if format == "" || rev == "" || (!one && sep) {
 		return Reply{}, false
 	}
 	res := r.resolve(rev + "^{commit}")
@@ -56,15 +64,33 @@ func logOne(r *repo, args []string) (Reply, bool) {
 	if err != nil {
 		return Reply{}, false
 	}
-	o, err := objs.read(res.id)
-	if err != nil || o.typ != typeCommit {
-		return Reply{}, false
-	}
-	c, ok := parseCommit(res.id, o.data)
-	if !ok {
-		return Reply{}, false
-	}
 	var out bytes.Buffer
+	for id, n := res.id, 0; id != ""; n++ {
+		if n > maxWalk {
+			return Reply{}, false
+		}
+		o, err := objs.read(id)
+		if err != nil || o.typ != typeCommit {
+			return Reply{}, false
+		}
+		c, ok := parseCommit(id, o.data)
+		if !ok || (!one && len(c.parents) > 1) {
+			return Reply{}, false // a merge: git orders its sides by date
+		}
+		if !formatCommit(&out, format, c) {
+			return Reply{}, false
+		}
+		id = ""
+		if !one && len(c.parents) == 1 {
+			id = c.parents[0]
+		}
+	}
+	return Reply{Out: out.Bytes()}, true
+}
+
+// formatCommit writes c in format (the atoms logOne lists) and git's
+// terminating newline; false for an atom it does not know.
+func formatCommit(out *bytes.Buffer, format string, c commitInfo) bool {
 	for i := 0; i < len(format); i++ {
 		if format[i] != '%' {
 			out.WriteByte(format[i])
@@ -107,16 +133,16 @@ func logOne(r *repo, args []string) (Reply, bool) {
 		case len(rest) >= 3 && rest[0] == 'x':
 			v, err := strconv.ParseUint(rest[1:3], 16, 8)
 			if err != nil {
-				return Reply{}, false
+				return false
 			}
 			out.WriteByte(byte(v))
 			i += 3
 		default:
-			return Reply{}, false
+			return false
 		}
 	}
 	out.WriteByte('\n')
-	return Reply{Out: out.Bytes()}, true
+	return true
 }
 
 // person is an author or committer line.
@@ -133,7 +159,9 @@ type commitInfo struct {
 }
 
 // parseCommit splits a commit object. ok=false for an encoding header or
-// a message that does not end with a newline (git's output differs then).
+// an empty message. A message without a final newline (lore's own ref
+// commits) is fine: git prints a user format's %B verbatim and adds no
+// newline of its own (devco:D-983).
 func parseCommit(id string, data []byte) (commitInfo, bool) {
 	c := commitInfo{id: id}
 	head, msg, found := bytes.Cut(data, []byte("\n\n"))
@@ -161,7 +189,7 @@ func parseCommit(id string, data []byte) (commitInfo, bool) {
 			return c, false
 		}
 	}
-	if len(msg) == 0 || msg[len(msg)-1] != '\n' {
+	if len(msg) == 0 {
 		return c, false
 	}
 	c.message = string(msg)
