@@ -34798,7 +34798,7 @@
       },
       "patch": {
         "operationId": "member.edit",
-        "summary": "Change a person's name, @handle, GitHub login or org-level role",
+        "summary": "Change a person's name, @handle, email, GitHub login or org-level role",
         "tags": [
           "member"
         ],
@@ -34822,6 +34822,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "email": {
+                    "type": "string",
+                    "description": "new email: becomes their key and primary email on the same person (actor id, stints and teams kept); the old email stays theirs for past commits"
+                  },
                   "github": {
                     "type": "string",
                     "description": "new GitHub login: becomes their primary github contact; the old login stays theirs for past commits (the handle is unchanged unless --handle)"

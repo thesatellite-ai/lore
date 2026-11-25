@@ -32,6 +32,7 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/actorsource"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -729,6 +730,125 @@ func (w *writer) setGitHub(ctx context.Context, login string) (changed bool, err
 		}
 	}
 	return len(w.wrote) > before, nil
+}
+
+// memberEmail is email as the roster compares it (normalized), or
+// E_INVALID_INPUT when it is not an address.
+func memberEmail(email string) (string, error) {
+	norm, err := teamprofile.Normalize(schema.ContactKindEmail, strings.TrimSpace(email))
+	if err != nil || norm == "" {
+		return "", errs.New(errs.InvalidInput, work.Quote(strings.TrimSpace(email))+" is not an email address").WithHint("the person's address, as in name@example.com")
+	}
+	return norm, nil
+}
+
+// emailTaken refuses email for actor a when another actor of the roster
+// already has it (its key, an earlier key or an email identity contact):
+// E_CONTACT_TAKEN naming that person, since one address names one person
+// (devco D-995; a merge is the fix when they are one person).
+func emailTaken(ctx context.Context, r profilestore.Roster, a row.Row, email string) error {
+	norm, err := memberEmail(email)
+	if err != nil {
+		return err
+	}
+	other, ok := actorByEmail(ctx, r, norm)
+	if !ok {
+		// an earlier key of someone (their own email change) is theirs too
+		other, ok, err = actorByAlias(ctx, r, humanKeyPrefix+norm)
+		if err != nil {
+			return err
+		}
+	}
+	if !ok || other.ID == a.ID {
+		return nil
+	}
+	who := other.ID.String()
+	if n := fieldText(other, actorFieldName); n != "" {
+		who = n + " (" + who + ")"
+	}
+	return errs.New(errs.ContactTaken, "email "+norm+" belongs to "+who+"; one email names one person, nothing was written").
+		WithHint("lore member show --who " + norm + op.SetupFlag(ctx) + " shows them; if they are one person, lore actor merge --from " + other.ID.String() + " --into " + a.ID.String() + op.SetupFlag(ctx) + " --yes")
+}
+
+// actorByAlias is the roster actor whose key_aliases (earlier keys after
+// an email change) list key; ok false when none does.
+func actorByAlias(ctx context.Context, r profilestore.Roster, key string) (row.Row, bool, error) {
+	rows, err := r.List(ctx, schema.TableActors)
+	if err != nil {
+		return row.Row{}, false, err
+	}
+	for _, x := range rows {
+		if !x.Deleted && slices.Contains(actorsource.SplitAliases(fieldText(x, schema.FieldActorKeyAliases)), key) {
+			return x, true, nil
+		}
+	}
+	return row.Row{}, false, nil
+}
+
+// setEmail makes email the person's address and identity key (`lore
+// member edit --email`, devco D-995). The same actor row (its id, stints,
+// teams and memberships kept) takes stable_key human:<email>, and its
+// earlier key joins key_aliases (oldest first), so a machine that knows
+// only the new address finds this row (an email change keeps one person,
+// SOURCE_OF_TRUTH) and one that joined with the old address still is this
+// actor. The address becomes their primary email identity contact; every
+// earlier address stays an identity contact, not primary, so their past
+// commits still resolve to them. Callers refuse a taken address first
+// (emailTaken); a contact another actor holds as identity is still
+// E_CONTACT_TAKEN here (ensureContact).
+func (w *writer) setEmail(ctx context.Context, email string) error {
+	norm, err := memberEmail(email)
+	if err != nil {
+		return err
+	}
+	key := fieldText(w.actor, fieldStableKey)
+	old, isPerson := strings.CutPrefix(key, humanKeyPrefix)
+	if key != "" && !isPerson {
+		return errs.New(errs.InvalidInput, w.actor.ID.String()+" is keyed by "+key+", not by an email; only a person's email changes")
+	}
+	all, err := w.contacts(ctx)
+	if err != nil {
+		return err
+	}
+	if key != humanKeyPrefix+norm {
+		patch := map[string]value.Value{}
+		if patch[fieldStableKey], err = textValue("email", humanKeyPrefix+norm); err != nil {
+			return err
+		}
+		aliases := actorsource.SplitAliases(fieldText(w.actor, schema.FieldActorKeyAliases))
+		if key != "" && !slices.Contains(aliases, key) {
+			aliases = append(aliases, key)
+			if patch[schema.FieldActorKeyAliases], err = textValue("key_aliases", strings.Join(aliases, actorsource.AliasSep)); err != nil {
+				return err
+			}
+		}
+		a, uerr := w.r.Update(ctx, schema.TableActors, w.actor.ID, patch)
+		if uerr != nil {
+			return uerr
+		}
+		w.actor = a
+		w.note(a.ID)
+	}
+	// the earlier address stays theirs: an identity contact, not primary
+	// (written when the key had none, so a commit under it still resolves)
+	if oldNorm, nerr := teamprofile.Normalize(schema.ContactKindEmail, old); nerr == nil && oldNorm != "" && oldNorm != norm {
+		if err := w.ensureContact(ctx, all, teamprofile.ContactTypeEmail, old, oldNorm, false); err != nil {
+			return err
+		}
+	}
+	if err := w.ensureContact(ctx, all, teamprofile.ContactTypeEmail, strings.TrimSpace(email), norm, true); err != nil {
+		return err
+	}
+	me := w.actor.ID.String()
+	for _, c := range all {
+		if c.Actor == me && c.Type == teamprofile.ContactTypeEmail && c.Primary && c.Norm != norm {
+			if _, err := w.r.Update(ctx, schema.TableActorContacts, c.ID, map[string]value.Value{schema.FieldContactPrimary: value.BoolOf(false)}); err != nil {
+				return err
+			}
+			w.note(c.ID)
+		}
+	}
+	return nil
 }
 
 // GitHubLogin is login as the roster compares it (a leading @ dropped,

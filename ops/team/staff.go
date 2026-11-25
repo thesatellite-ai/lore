@@ -19,7 +19,7 @@ package team
 //	       same email is marked accepted (its teams and projects kept)
 //	member.list / member.show <who>   ──▶ people on the roster: email,
 //	       handle, org role, teams, status
-//	member.edit <who> [--name --handle --github --role]
+//	member.edit <who> [--name --handle --email --github --role]
 //	member.remove <who> [--reason]    ──▶ actor offboard (period ended,
 //	       memberships ended, status left)
 //
@@ -329,6 +329,11 @@ type StaffEditIn struct {
 	Who    string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 	Name   string `json:"name,omitempty" flag:"name" desc:"new display name"`
 	Handle string `json:"handle,omitempty" flag:"handle" desc:"new @handle"`
+	// Email changes the person's email, the key the roster knows them by
+	// (devco D-995): the same actor row takes the new key, the earlier
+	// one stays an alias and an identity contact so their past commits,
+	// rows and machines still resolve to them; stints and teams are kept.
+	Email string `json:"email,omitempty" flag:"email" desc:"new email: becomes their key and primary email on the same person (actor id, stints and teams kept); the old email stays theirs for past commits"`
 	// GitHub changes the person's GitHub login (devco D-959, issue #161):
 	// it becomes their primary github identity contact, the old login
 	// stays an identity contact so their past commits still resolve.
@@ -465,10 +470,11 @@ func (o ops) staffOps(base, writeErrs []errs.Code) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: base,
 			Examples: []op.Example{{Title: "by email", CLI: "lore member show --who mira@agency.example", Want: "email"}}},
 			func(ctx context.Context, in StaffShowIn) (StaffShowOut, error) { return o.staffShow(ctx, in) }),
-		op.Define(op.Spec{Name: OpStaffEdit, Summary: "Change a person's name, @handle, GitHub login or org-level role",
+		op.Define(op.Spec{Name: OpStaffEdit, Summary: "Change a person's name, @handle, email, GitHub login or org-level role",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(writeErrs), errs.ContactTaken),
 			Examples: []op.Example{{Title: "a new org role", CLI: "lore member edit --who mira@agency.example --role pm", Want: "updated"},
-				{Title: "a new GitHub login (the old one stays theirs for past commits)", CLI: "lore member edit --who mira@agency.example --github mira-work --yes", Want: "updated"}}},
+				{Title: "a new GitHub login (the old one stays theirs for past commits)", CLI: "lore member edit --who mira@agency.example --github mira-work --yes", Want: "updated"},
+				{Title: "a new email (the same person; the old address stays theirs for past commits)", CLI: "lore member edit --who mira@agency.example --email mira@agency.test --yes", Want: "updated"}}},
 			func(ctx context.Context, in StaffEditIn) (StaffWriteOut, error) { return o.staffEdit(ctx, in) }),
 		op.Define(asking(op.Spec{Name: OpStaffRemove, Summary: "Take a person off the org (actor offboard: their stint and memberships end; the row stays for history)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.StatusChange}, writeErrs...),
@@ -1264,8 +1270,13 @@ func (o ops) staffShow(ctx context.Context, in StaffShowIn) (StaffShowOut, error
 }
 
 func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, error) {
-	if in.Name == "" && in.Handle == "" && in.GitHub == "" && in.Role == "" && in.RowMetaFlags.Empty() {
-		return StaffWriteOut{}, errs.New(errs.InvalidInput, "member edit: nothing to change").WithHint("give --name, --handle, --github, --role or --meta key=value")
+	if in.Name == "" && in.Handle == "" && in.Email == "" && in.GitHub == "" && in.Role == "" && in.RowMetaFlags.Empty() {
+		return StaffWriteOut{}, errs.New(errs.InvalidInput, "member edit: nothing to change").WithHint("give --name, --handle, --email, --github, --role or --meta key=value")
+	}
+	if in.Email != "" {
+		if _, err := memberEmail(in.Email); err != nil {
+			return StaffWriteOut{}, errs.Prefix("member edit --email", err)
+		}
 	}
 	if in.GitHub != "" {
 		if _, err := GitHubLogin(in.GitHub); err != nil {
@@ -1302,6 +1313,12 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 			return StaffWriteOut{}, err
 		}
 	}
+	if in.Email != "" {
+		// refused before anything is staged: one address names one person
+		if err := emailTaken(ctx, r, a, in.Email); err != nil {
+			return StaffWriteOut{}, errs.Prefix("member edit --email", err)
+		}
+	}
 	// the actor row and the stint's role in ONE store commit (B1-21)
 	sctx := engine.Staging(store.WithCommitTitle(ctx, "member edit: "+in.Who))
 	if len(patch) > 0 || !in.RowMetaFlags.Empty() {
@@ -1311,13 +1328,22 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 			return StaffWriteOut{}, err
 		}
 	}
+	if in.Email != "" {
+		w := &writer{r: r, actor: a, today: r.Today()}
+		if err := w.setEmail(sctx, in.Email); err != nil {
+			engine.Discard(sctx)
+			return StaffWriteOut{}, errs.Prefix("member edit --email", err)
+		}
+		a = w.actor
+		note = joinNotes(note, emailEditNote(was, in, op.SetupFlag(ctx)))
+	}
 	if in.GitHub != "" {
 		w := &writer{r: r, actor: a, today: r.Today()}
 		if _, err := w.setGitHub(sctx, in.GitHub); err != nil {
 			engine.Discard(sctx)
 			return StaffWriteOut{}, errs.Prefix("member edit --github", err)
 		}
-		note = cmp.Or(note, githubEditNote(was, in, op.SetupFlag(ctx)))
+		note = joinNotes(note, githubEditNote(was, in, op.SetupFlag(ctx)))
 	}
 	if in.Role != "" {
 		w := &writer{r: r, actor: a, today: r.Today(), orgRole: in.Role}
@@ -1339,7 +1365,7 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 
 // staffEditFlags are the member edit flags whose name a --meta key may
 // take by mistake: such a key is a roster field, never a custom field.
-var staffEditFlags = []string{"github", "handle", "name", "role"}
+var staffEditFlags = []string{"email", "github", "handle", "name", "role"}
 
 // metaNamesAFlag refuses a --meta/--meta-json key that is one of member
 // edit's own fields (issue #161: `--meta github=<login>` was refused as a
@@ -1373,6 +1399,39 @@ func githubEditNote(was StaffRow, in StaffEditIn, setupFlag string) string {
 		n += "; the handle @" + strings.TrimPrefix(was.Handle, handleMark) + " is unchanged (lore member edit --who " + cmp.Or(was.Email, was.ID) + " --handle " + norm + setupFlag + " --yes changes it)"
 	}
 	return n
+}
+
+// emailEditNote says what an --email edit kept (devco D-995): the earlier
+// address stays theirs, so their past commits and a machine that joined
+// with it still resolve to the same person, and a handle that was the old
+// address's name part, with the command that changes it too.
+func emailEditNote(was StaffRow, in StaffEditIn, setupFlag string) string {
+	old := strings.TrimSpace(was.Email)
+	norm, _ := memberEmail(in.Email)
+	if old == "" || strings.EqualFold(old, norm) {
+		return ""
+	}
+	n := "the earlier email " + old + " stays theirs (not primary), so their past commits and a machine that joined with it still resolve to them; their actor id, stints and teams are unchanged"
+	h := strings.TrimPrefix(was.Handle, handleMark)
+	oldLocal, _, _ := strings.Cut(old, "@")
+	newLocal, _, _ := strings.Cut(norm, "@")
+	// the printed handle is one --handle takes as it is (printed commands run)
+	if nh, _, err := personHandle(newLocal); err == nil && nh != "" && in.Handle == "" && h != "" && strings.EqualFold(h, oldLocal) && !strings.EqualFold(h, nh) {
+		n += "; the handle @" + h + " is unchanged (lore member edit --who " + norm + " --handle " + nh + setupFlag + " --yes changes it)"
+	}
+	return n
+}
+
+// joinNotes is the notes of one member edit, in the order they were
+// made, "; "-joined (an edit of the email and the GitHub login says both).
+func joinNotes(notes ...string) string {
+	var out []string
+	for _, n := range notes {
+		if n != "" {
+			out = append(out, n)
+		}
+	}
+	return strings.Join(out, "; ")
 }
 
 func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, error) {
