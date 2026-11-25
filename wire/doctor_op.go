@@ -96,6 +96,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckRowFormat, a.DoctorRowFormat},                                                                               // doctor_rowformat.go
 		{DoctorCheckOldDBEdits, a.DoctorOldDBEdits},                                                                             // v017edits.go
 		{DoctorCheckHomeLeftovers, a.DoctorHomeLeftovers},                                                                       // hometidy.go
+		{DoctorCheckCacheSize, a.DoctorCacheSize},                                                                               // cache_prune.go (public issue #178)
 		{DoctorCheckOldRepoCache, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorOldRepoCache(c, fix) }},     // doctor_oldrepocache.go (owner item 16)
 		{DoctorCheckOldClones, a.DoctorOldClones},                                                                               // doctor_oldclones.go (plain files 1.6)
 	}

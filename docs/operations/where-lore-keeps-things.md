@@ -20,6 +20,8 @@ lore's home: ~/.lore
       this map of lore's home, written by lore and rewritten when the layout changes
   cache
       rebuildable caches: everything here is made again from the row files when deleted
+  cache/.auto-prune
+      when the daily cache sweep last ran (it removes caches of repo copies that are gone, unused for cache.max_age or past cache.max_size)
   cache/gitfast
       git answers kept between commands so an everyday command starts few git processes: each repo folder's git config with the files it came from, and the history and org checks of each store at one commit; an answer is dropped when a config file or git itself changes, and the oldest go past 256 files
   cache/machine-store.db
@@ -176,7 +178,7 @@ Store cache files are named by a store id, not by a store name: two repos that c
 | `config.yaml` | this machine's settings: setups, orgs, stores | you may edit it; deleting it forgets every setup, org and store on this machine |
 | `identity`, `machine.json` | your actor salt and this machine's id | deleting them makes you (or this machine) look new |
 | `state/` | machine-local state, never synced, not rebuildable: `machine.db` (agent sessions, runs, the audit chain, small local state), the audit logs, batch records, store clones not at their usual place | do not delete |
-| `cache/` | caches, all rebuilt from the row files: `machine-store.db`, `authority/` (the store history check of each store clone lore does not own, one file per clone, so a read never writes into your own clone), one file per store folder under `stores/<store id>/<branch>/`, `combined/` and `remote/` per repo, `repos/` (which caches each repo uses); lore 0.1.17's caches (`prj_….db`, `links-<org>.json` and the `stores/<host>/…` tree) are listed as such, and `lore cache prune` removes them (a project's `prj_….db` once its repo is migrated) | safe to delete |
+| `cache/` | caches, all rebuilt from the row files: `machine-store.db`, `authority/` (the store history check of each store clone lore does not own, one file per clone, so a read never writes into your own clone), one file per store folder under `stores/<store id>/<branch>/`, `combined/` and `remote/` per repo, `repos/` (which caches each repo uses); lore 0.1.17's caches (`prj_….db`, `links-<org>.json` and the `stores/<host>/…` tree) are listed as such, and `lore cache prune` removes them (a project's `prj_….db` once its repo is migrated). Once a day the first lore command cleans the folder by itself, silently and after its output: the caches of repo copies that are gone or moved, caches unused for `cache.max_age` (14 days), and past `cache.max_size` (2 GB) the least recently used ones; `lore doctor` notes the size and the stale part (`cache_size`), and `lore cache prune` removes the same set at once | safe to delete |
 | `stores/<owner>/<repo>/` | a plain git clone of each store; rows are JSON files you may open and edit | a clone with no unpushed work is safe to delete; `lore store forget` removes it cleanly |
 | `stores/_me/` | your personal store `me` when it is a plain folder (`file://`), not a git repo; the `_` keeps it apart from any owner folder | it holds your notes: do not delete it unless you mean to lose them |
 | `render/` | private context for repos, imported by their `CLAUDE.local.md` | rewritten by `lore render` |

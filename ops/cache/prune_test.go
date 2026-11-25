@@ -90,7 +90,7 @@ func exists(t *testing.T, root, rel string) bool {
 // repo's cache and an unclaimed v0.1.17 cache are listed (FLAG3).
 func TestPrunePlanKeepsAttachedCaches(t *testing.T) {
 	f := newFixture(t)
-	out, err := Prune(context.Background(), f.root, true, false)
+	out, err := Prune(context.Background(), f.root, testRules, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestPrunePlanKeepsAttachedCaches(t *testing.T) {
 // exactly the listed files and the dead record; a second run has nothing.
 func TestPruneAsksThenDeletes(t *testing.T) {
 	f := newFixture(t)
-	_, err := Prune(context.Background(), f.root, false, false)
+	_, err := Prune(context.Background(), f.root, testRules, false, false)
 	if !errs.Has(err, errs.NeedsConfirm) {
 		t.Fatalf("unconfirmed prune: %v, want E_NEEDS_CONFIRM", err)
 	}
@@ -139,7 +139,7 @@ func TestPruneAsksThenDeletes(t *testing.T) {
 	if !exists(t, f.root, f.orphan) {
 		t.Fatal("the refusal deleted a file")
 	}
-	out, err := Prune(context.Background(), f.root, false, true)
+	out, err := Prune(context.Background(), f.root, testRules, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestPruneAsksThenDeletes(t *testing.T) {
 			t.Fatalf("%s was deleted", rel)
 		}
 	}
-	again, err := Prune(context.Background(), f.root, false, false)
+	again, err := Prune(context.Background(), f.root, testRules, false, false)
 	if err != nil || again.Count != 0 || !strings.HasPrefix(again.Text(), lineNothing) {
 		t.Fatalf("second run: %+v %v", again, err)
 	}
@@ -176,7 +176,7 @@ func TestPruneUntrustedStoresYAMLKeeps(t *testing.T) {
 			t.Fatal("an unparsable stores.yaml must keep its committed caches")
 		}
 	}
-	out, err := Prune(context.Background(), filepath.Join(t.TempDir(), "none"), false, false)
+	out, err := Prune(context.Background(), filepath.Join(t.TempDir(), "none"), testRules, false, false)
 	if err != nil || out.Count != 0 {
 		t.Fatalf("missing root: %+v %v", out, err)
 	}
@@ -212,6 +212,9 @@ type homeEnv string
 
 func (h homeEnv) LoreHome() string { return string(h) }
 
+// CacheRules are the defaults (no config.yaml in a test home).
+func (h homeEnv) CacheRules() Rules { return testRules }
+
 // TestPruneMovedCheckoutRepoCache (B3-9): after a checkout moves, the repo
 // cache named from its old path is listed and removed with the old path's
 // record, the new path's cache stays, and the output never says "nothing to
@@ -229,7 +232,7 @@ func TestPruneMovedCheckoutRepoCache(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	out, err := Prune(context.Background(), root, false, true)
+	out, err := Prune(context.Background(), root, testRules, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +246,7 @@ func TestPruneMovedCheckoutRepoCache(t *testing.T) {
 	if err := sqlite.RecordUse(root, filepath.Join(home, "gone"), nil); err != nil {
 		t.Fatal(err)
 	}
-	only, err := Prune(context.Background(), root, false, false)
+	only, err := Prune(context.Background(), root, testRules, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +266,7 @@ func TestPruneRemovesV017StoreTree(t *testing.T) {
 	mustWrite(t, filepath.Join(old, ".lore", "data", "rules", "r.json"), "{}")
 	mustWrite(t, filepath.Join(old, ".lore", "state", "sync.lock"), "")
 	mustWrite(t, filepath.Join(root, "stores", "acme", "main", "web.db"), "db")
-	out, err := Prune(context.Background(), root, true, false)
+	out, err := Prune(context.Background(), root, testRules, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +282,7 @@ func TestPruneRemovesV017StoreTree(t *testing.T) {
 	if tree != 1 {
 		t.Fatalf("0.1.17 tree listed %d times:\n%s", tree, out.Text())
 	}
-	if _, err := Prune(context.Background(), root, false, true); err != nil {
+	if _, err := Prune(context.Background(), root, testRules, false, true); err != nil {
 		t.Fatal(err)
 	}
 	if exists(t, root, "stores/git.example") {
@@ -320,7 +323,7 @@ func TestPruneMigratedProjectV017Cache(t *testing.T) {
 func TestPruneV017LinkIndex(t *testing.T) {
 	root := filepath.Join(t.TempDir(), CacheDir)
 	mustWrite(t, filepath.Join(root, "links-acme.json"), "{}")
-	out, err := Prune(context.Background(), root, false, true)
+	out, err := Prune(context.Background(), root, testRules, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}

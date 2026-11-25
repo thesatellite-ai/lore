@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -68,7 +69,17 @@ const (
 // lore's merged-check memo (wire's mergedMemoSuffix, devco:Q-2) and the
 // open stamp (stamp.go, devco:D-826). They are part of the cache and go
 // with it, so a pruned cache leaves nothing.
-var cacheFileSidecars = []string{"-wal", "-shm", mergedMemoSuffix, stampSuffix}
+var cacheFileSidecars = []string{"-wal", "-shm", mergedMemoSuffix, stampSuffix, ignoredMemoSuffix}
+
+// memoSuffixes are the sidecars that are not SQLite's own: one left
+// without its cache is listed by the cache's name, so a prune takes it.
+var memoSuffixes = []string{mergedMemoSuffix, ignoredMemoSuffix}
+
+// ignoredMemoSuffix ends the memo the git host keeps beside a repo cache
+// (wire/host's privateIgnoreMemo: whether git ignores the repo's .lore/);
+// it must match that name. Without it every pruned repo cache left this
+// file behind (public issue #178).
+const ignoredMemoSuffix = ".lore-dir-ignored"
 
 // mergedMemoSuffix ends the merged-check memo wire writes beside a repo
 // cache (<name>.db.merged.json); it must match wire's mergedMemoSuffix.
@@ -205,6 +216,7 @@ func RecordUse(cacheRoot, repoTop string, uses []Use) error {
 	moveOldUsesDir(cacheRoot)
 	path := UseRecordPath(cacheRoot, repoTop)
 	if cur, rerr := os.ReadFile(filepath.Clean(path)); rerr == nil && string(cur) == string(body) {
+		touchUse(path, time.Now())
 		return nil
 	}
 	if mkErr := os.MkdirAll(filepath.Dir(path), useDirMode); mkErr != nil {
@@ -230,10 +242,29 @@ func RecordUse(cacheRoot, repoTop string, uses []Use) error {
 	return nil
 }
 
+// UseTouchEvery is how often an unchanged use record has its time moved
+// to now. Why (public issue #178): the record's time is when the repo last
+// used its caches, which the cache sweep (ops/cache) compares with
+// cache.max_age and orders by for cache.max_size; a read changes no cache
+// file, so without the touch a cache read every day looked unused. Once an
+// hour keeps an ordinary command at one stat of the record.
+const UseTouchEvery = time.Hour
+
+// touchUse moves path's time to now when it is older than UseTouchEvery.
+// Best effort: a record that cannot be touched only looks older.
+func touchUse(path string, now time.Time) {
+	if fi, err := os.Stat(path); err == nil && now.Sub(fi.ModTime()) >= UseTouchEvery {
+		_ = os.Chtimes(path, now, now)
+	}
+}
+
 // RecordFile is one use record as read from disk.
 type RecordFile struct {
 	// Path is the record file's absolute path.
 	Path string
+	// Used is the record file's time: when its repo last used its caches
+	// (RecordUse moves it at most once per UseTouchEvery).
+	Used time.Time
 	// Record is its content; Repo is "" when the file did not decode (a
 	// damaged record: the caller treats it as dead, it lists nothing).
 	Record UseRecord
@@ -258,6 +289,9 @@ func ReadUses(cacheRoot string) ([]RecordFile, error) {
 		}
 		p := filepath.Join(dir, e.Name())
 		rf := RecordFile{Path: p}
+		if fi, serr := os.Stat(p); serr == nil {
+			rf.Used = fi.ModTime()
+		}
 		if b, rerr := os.ReadFile(filepath.Clean(p)); rerr == nil {
 			if json.Unmarshal(b, &rf.Record) != nil {
 				rf.Record = UseRecord{}
@@ -328,7 +362,9 @@ func RepoCaches(cacheRoot string) ([]File, error) {
 		name := e.Name()
 		// devco:Q-2: a memo whose cache an older lore already pruned is
 		// listed by its cache name, so the next prune takes it too.
-		name = strings.TrimSuffix(name, mergedMemoSuffix)
+		for _, m := range memoSuffixes {
+			name = strings.TrimSuffix(name, m)
+		}
 		if e.IsDir() || !strings.HasSuffix(name, cacheFileExt) || seen[name] {
 			continue
 		}
@@ -349,6 +385,20 @@ func sizeWithSidecars(p string) int64 {
 		}
 	}
 	return n
+}
+
+// LastWrite is the newest time of the cache file rel (relative to
+// cacheRoot) and the files kept beside it (WAL, memo, stamp): when a lore
+// last wrote it. The zero time when none exists.
+func LastWrite(cacheRoot, rel string) time.Time {
+	p := filepath.Join(cacheRoot, filepath.FromSlash(rel))
+	var t time.Time
+	for _, s := range slices.Concat([]string{""}, cacheFileSidecars) {
+		if fi, err := os.Stat(p + s); err == nil && fi.ModTime().After(t) {
+			t = fi.ModTime()
+		}
+	}
+	return t
 }
 
 // RemoveCache deletes the cache file rel (relative to cacheRoot, as

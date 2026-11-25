@@ -19,6 +19,7 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	opscache "github.com/thesatellite-ai/lore/ops/cache"
 )
 
 // homeEntry is one kind of path in the lore home.
@@ -108,6 +109,8 @@ var homeLayout = []homeEntry{
 	{Pattern: "cache/remote/**", What: "a linked repo's cache", ByHand: byHandRebuilt},
 	{Pattern: "cache/uses", Dir: true, What: "one record per repo of the cache files it uses: uses/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)", ByHand: "deleting them lets `lore cache prune` remove caches a repo still uses (they are rebuilt)", Readme: true},
 	{Pattern: "cache/uses/**", What: "a repo's cache use record", ByHand: "safe to delete"},
+	{Pattern: "cache/" + opscache.AutoStampFile, What: "when the daily cache sweep last ran (it removes caches of repo copies that are gone, unused for cache.max_age or past cache.max_size)", ByHand: "safe to delete: the next command sweeps the cache again"},
+	{Pattern: "cache/" + opscache.AutoLockFile, What: "held while one lore sweeps the cache, so a second one skips", ByHand: byHandLock},
 	{Pattern: "cache/repos", Dir: true, What: "the cache use records as an older lore kept them; the next command moves them to cache/uses", ByHand: "safe to delete"},
 	{Pattern: "cache/repos/**", What: "a repo's cache use record (older layout)", ByHand: "safe to delete"},
 	// devco:D-418: git answers kept between commands (adapters/gitfast)

@@ -39,7 +39,7 @@ func TestPruneKeepsClientRepoCaches(t *testing.T) {
 			t.Errorf("RepoAlive(%s) = %v, want %v", top, got, want)
 		}
 	}
-	out, err := Prune(context.Background(), root, false, true)
+	out, err := Prune(context.Background(), root, testRules, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}

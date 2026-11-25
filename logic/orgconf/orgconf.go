@@ -92,6 +92,8 @@ type Config struct {
 	// other keys are validated.
 	Live      Live      `yaml:"live,omitempty"`
 	LinkIndex LinkIndex `yaml:"link_index,omitempty"`
+	// Cache is the `cache:` block (cache.go, public issue #178).
+	Cache Cache `yaml:"cache,omitempty"`
 	// Access is how this machine reaches canonical store urls (access.go).
 	Access []Access `yaml:"access,omitempty"`
 	// Settings are the machine's other keys, validated only (machine.go).

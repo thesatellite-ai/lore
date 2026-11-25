@@ -137,6 +137,8 @@ lore's home: ~/.lore
       this map of lore's home, written by lore and rewritten when the layout changes
   cache
       rebuildable caches: everything here is made again from the row files when deleted
+  cache/.auto-prune
+      when the daily cache sweep last ran (it removes caches of repo copies that are gone, unused for cache.max_age or past cache.max_size)
   cache/gitfast
       git answers kept between commands so an everyday command starts few git processes: each repo folder's git config with the files it came from, and the history and org checks of each store at one commit; an answer is dropped when a config file or git itself changes, and the oldest go past 256 files
   cache/machine-store.db

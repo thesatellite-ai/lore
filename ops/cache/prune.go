@@ -28,6 +28,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine/attach"
@@ -92,6 +93,9 @@ const byteStep = 1024
 type Env interface {
 	// LoreHome is the lore home (~/.lore) whose cache folder is pruned.
 	LoreHome() string
+	// CacheRules are cache.max_age and cache.max_size from config.yaml
+	// (their defaults when unset or unreadable).
+	CacheRules() Rules
 }
 
 // PruneIn is the input of cache.prune.
@@ -103,6 +107,10 @@ type PruneIn struct {
 type File struct {
 	Path string `json:"path" desc:"absolute path of the cache file"`
 	Size int64  `json:"size" desc:"bytes, WAL files included"`
+	// Reason is set for a cache a repo still attaches: "unused" (unused
+	// for longer than cache.max_age) or "over_size" (least recently used
+	// past cache.max_size); empty for a cache no repo attaches.
+	Reason string `json:"reason,omitempty" desc:"unused or over_size for a cache a repo still attaches; empty when no repo attaches it"`
 }
 
 // PruneOut is the output of cache.prune.
@@ -146,10 +154,21 @@ func listing(files []File, total int64) string {
 	var b strings.Builder
 	b.WriteString(lineHeader + "\n")
 	for _, f := range files {
-		fmt.Fprintf(&b, "  %s  %s\n", f.Path, HumanBytes(f.Size))
+		fmt.Fprintf(&b, "  %s  %s%s\n", f.Path, HumanBytes(f.Size), reasonNote(f.Reason))
 	}
 	fmt.Fprintf(&b, "%d file(s), %s\n", len(files), HumanBytes(total))
 	return b.String()
+}
+
+// reasonNote is the listing's note for a cache a repo still attaches.
+func reasonNote(r string) string {
+	switch Reason(r) {
+	case ReasonUnused:
+		return "  (unused for longer than cache.max_age)"
+	case ReasonOverSize:
+		return "  (least recently used, past cache.max_size)"
+	}
+	return ""
 }
 
 // Ops returns the cache operations bound to env, for op.NewRegistry.
@@ -164,7 +183,7 @@ func Ops(env Env) []op.Entry {
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "list what prune would delete", CLI: "lore cache prune --dry-run", Want: ""}},
 		}, func(ctx context.Context, in PruneIn) (PruneOut, error) {
-			return Prune(ctx, filepath.Join(env.LoreHome(), CacheDir), in.DryRun, op.Confirmed(ctx))
+			return Prune(ctx, filepath.Join(env.LoreHome(), CacheDir), env.CacheRules(), in.DryRun, op.Confirmed(ctx))
 		}),
 	}
 }
@@ -184,19 +203,30 @@ type Plan struct {
 	V017Trees []sqlite.File
 	// Dead are use records of repos that are gone (or unreadable).
 	Dead []sqlite.RecordFile
+	// Used is, for every cache file a live record keeps, the newest time
+	// a live repo used it (its record's time, public issue #178): the
+	// sweep's last-use clock beside the file's own write time.
+	Used map[string]time.Time
 }
 
 // Prune plans and, unless dryRun, deletes; without yes it refuses with
-// E_NEEDS_CONFIRM before deleting anything.
-func Prune(_ context.Context, root string, dryRun, yes bool) (PruneOut, error) {
-	plan, err := MakePlan(root)
+// E_NEEDS_CONFIRM before deleting anything. It removes what the automatic
+// pass removes (MakeSweep, public issue #178), with no grace for a cache
+// no repo attaches: a person asked for it now.
+func Prune(_ context.Context, root string, rules Rules, dryRun, yes bool) (PruneOut, error) {
+	rules.Grace, rules.ByHand = 0, true
+	sw, err := MakeSweep(root, rules, time.Now())
 	if err != nil {
 		return PruneOut{}, err
 	}
 	out := PruneOut{DryRun: dryRun, Files: []File{}}
-	for _, f := range slices.Concat(plan.Stores, plan.Repos, plan.V017, plan.V017Trees) {
-		out.Files = append(out.Files, File{Path: filepath.Join(root, filepath.FromSlash(f.Rel)), Size: f.Size})
-		out.Bytes += f.Size
+	for _, s := range sw.Stale {
+		f := File{Path: filepath.Join(root, filepath.FromSlash(s.Rel)), Size: s.Size}
+		if s.Reason != ReasonUnattached {
+			f.Reason = string(s.Reason)
+		}
+		out.Files = append(out.Files, f)
+		out.Bytes += s.Size
 	}
 	out.Count = len(out.Files)
 	if dryRun {
@@ -205,7 +235,7 @@ func Prune(_ context.Context, root string, dryRun, yes bool) (PruneOut, error) {
 	if out.Count == 0 {
 		// Nothing to ask about: a gone repo's record is lore's own
 		// bookkeeping and goes without asking (FLAG3 round 2).
-		n, derr := dropDead(root, plan.Dead)
+		n, derr := dropDead(root, sw.Dead)
 		out.Records = n
 		return out, derr
 	}
@@ -213,22 +243,12 @@ func Prune(_ context.Context, root string, dryRun, yes bool) (PruneOut, error) {
 		return PruneOut{}, errs.New(errs.NeedsConfirm, strings.TrimSuffix(listing(out.Files, out.Bytes), "\n")+"\n"+question).
 			WithQuestion(question).WithHint(confirmHint).WithNext("lore", "cache", "prune", "--yes")
 	}
-	for _, f := range slices.Concat(plan.Stores, plan.Repos) {
-		if rerr := sqlite.RemoveCache(root, f.Rel); rerr != nil {
+	for _, s := range sw.Stale {
+		if rerr := s.remove(root); rerr != nil {
 			return PruneOut{}, rerr
 		}
 	}
-	for _, f := range plan.V017 {
-		if rerr := removeV017Cache(root, f.Rel); rerr != nil {
-			return PruneOut{}, rerr
-		}
-	}
-	for _, f := range plan.V017Trees {
-		if rerr := removeV017Tree(root, f.Rel); rerr != nil {
-			return PruneOut{}, rerr
-		}
-	}
-	n, err := dropDead(root, plan.Dead)
+	n, err := dropDead(root, sw.Dead)
 	out.Records, out.Removed = n, err == nil
 	return out, err
 }
@@ -247,13 +267,19 @@ func Prune(_ context.Context, root string, dryRun, yes bool) (PruneOut, error) {
 // A v0.1.17 per-project cache stays while a live repo has that project id.
 // Everything else is derived data of a store nobody here uses.
 func MakePlan(root string) (Plan, error) {
-	var plan Plan
+	plan := Plan{Used: map[string]time.Time{}}
 	records, err := sqlite.ReadUses(root)
 	if err != nil {
 		return plan, err
 	}
 	keep := map[string]bool{}
 	keepProjects := map[string]bool{}
+	use := func(rel string, at time.Time) {
+		keep[rel] = true
+		if at.After(plan.Used[rel]) {
+			plan.Used[rel] = at
+		}
+	}
 	for _, rf := range records {
 		rec := rf.Record
 		if !RepoAlive(rec.Repo) {
@@ -265,9 +291,9 @@ func MakePlan(root string) (Plan, error) {
 			if u.Committed && trusted && !named[u.Store] {
 				continue
 			}
-			keep[u.Path] = true
+			use(u.Path, rf.Used)
 		}
-		keep[sqlite.RepoCacheRel(rec.Repo)] = true
+		use(sqlite.RepoCacheRel(rec.Repo), rf.Used)
 		if p := v017Project(rec.Repo); p != "" {
 			keepProjects[p] = true
 		}

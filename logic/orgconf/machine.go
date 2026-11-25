@@ -11,7 +11,7 @@
 // each setting keep their own defaults.
 //
 //	Config.Validate ──▶ validateSettings (default_branch, live, lease, agents,
-//	                    merge_check, link_index, untrusted_hosts,
+//	                    merge_check, link_index, cache, untrusted_hosts,
 //	                    context.profiles; upgrade_notice/auto_upgrade by type)
 //	Org.validate    ──▶ live, validateSettings (lease, agents, merge_check)
 
@@ -99,6 +99,7 @@ func (c *Config) validateSettings() []error {
 	all = append(all, prefixAll("lease", c.Lease.validate())...)
 	all = append(all, prefixAll("agents", c.Agents.validate())...)
 	all = append(all, prefixAll("merge_check", c.MergeCheck.validate())...)
+	all = append(all, prefixAll("cache", c.Cache.validate())...)
 	if c.LinkIndex.MaxAge != nil && c.LinkIndex.MaxAge.D() <= 0 {
 		add(errors.New("link_index.max_age: must be greater than zero"))
 	}

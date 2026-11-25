@@ -12531,6 +12531,10 @@
                             "type": "string",
                             "description": "absolute path of the cache file"
                           },
+                          "reason": {
+                            "type": "string",
+                            "description": "unused or over_size for a cache a repo still attaches; empty when no repo attaches it"
+                          },
                           "size": {
                             "type": "integer",
                             "description": "bytes, WAL files included"

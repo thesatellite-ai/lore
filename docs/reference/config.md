@@ -127,6 +127,9 @@ $ lore config check
 | `untrusted_hosts` | none | names of machines the client owns, such as `build-*.client.example`; `lore doctor` warns when your private stores are set up on one of them |
 | `upgrade_notice` | `true` | `false` turns off the once-a-day "a new lore release is out" line |
 | `auto_upgrade` | `false` | `true` upgrades lore instead of printing the notice, when lore was installed with Homebrew or the install script |
+| `cache.max_age` | `14d` | a cache file under `~/.lore/cache` that nothing used for this long is removed by the daily cache sweep (rebuilt from the row files if a repo needs it again); at least `1h` |
+| `cache.max_size` | `2GB` | above this size the daily cache sweep removes the least recently used cache files first, never one used in the last day; a number with `KB`, `MB`, `GB` or `TB` (powers of 1024), at least `100MB` |
+| `cache.auto_prune` | `true` | `false` turns the daily cache sweep off; `lore cache prune` still works by hand |
 | `read_server` | `true` | `false` turns off the local read server, so every command runs in its own process (see [The local read server](../operations/where-lore-keeps-things.md#the-local-read-server)) |
 | `policies.<key>` | none | a stricter limit for this machine only, for any key `lore policy show` lists (see below) |
 | `context.profiles` | none | your own tool profiles for `lore render`, added after the built-in ones (see below) |
