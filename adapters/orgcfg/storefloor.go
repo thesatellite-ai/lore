@@ -133,7 +133,11 @@ func orgFileFloorChange(ctx context.Context, repo *gitref.Repo, dir, tip, folder
 	if !found {
 		return p, nil, false, ErrNoOrgFile
 	}
-	body, changed, err = raiseOrgFileFloor(acceptedOrgRaw(ctx, dir, tip, folder, raw), floor)
+	accepted, aerr := acceptedOrgRaw(ctx, dir, tip, folder, raw)
+	if aerr != nil {
+		return p, nil, false, aerr
+	}
+	body, changed, err = raiseOrgFileFloor(accepted, floor)
 	return p, body, changed, err
 }
 

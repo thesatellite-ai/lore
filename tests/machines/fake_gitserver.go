@@ -37,7 +37,9 @@ func (tm lsTeam) rewrite(t *testing.T, m *Machine) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	if _, err := f.WriteString("[url \"file://" + tm.bare + "\"]\n\tinsteadOf = " + lsTeamURL + "\n"); err != nil {
+	// uploadpack: the bare repo serves partial (blobless) clones as GitHub
+	// does (store growth SG-3); upload-pack runs as this machine's user
+	if _, err := f.WriteString("[url \"file://" + tm.bare + "\"]\n\tinsteadOf = " + lsTeamURL + "\n[uploadpack]\n\tallowFilter = true\n\tallowAnySHA1InWant = true\n"); err != nil {
 		t.Fatal(err)
 	}
 }

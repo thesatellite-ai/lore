@@ -29,6 +29,12 @@ type repo struct {
 	rawGitDir string
 	common    string // the common dir (== gitDir unless a linked worktree)
 	bare      bool
+	// promisor: the repository is a partial clone (extensions.partialClone
+	// or a remote.<name>.promisor=true in its config). An object absent from
+	// its store may live on the promisor remote, which git fetches on
+	// demand, so this reader never answers "missing" for it: it falls back
+	// to git (store growth SG-3a, devco:D-997).
+	promisor bool
 	// indexFile is the index the index readers read ("" = gitDir/index):
 	// a hook's GIT_INDEX_FILE (withIndex)
 	indexFile string
@@ -56,12 +62,20 @@ func (r *repo) objects() (*objectStore, error) {
 	return r.objs, r.objErr
 }
 
+// absent reports whether err means the object is not in the repository,
+// the answer git would give. In a partial clone (r.promisor) an object
+// missing from the local store is not absent: git would fetch it from the
+// promisor remote, so the caller falls back to git instead.
+func (r *repo) absent(err error) bool {
+	return errors.Is(err, errMissing) && !r.promisor
+}
+
 // withIndex is r reading the index file index (absolute) instead of its
 // own: the temporary index `git commit -a` gives its hooks. It shares r's
 // object store; refs are read from the same files.
 func (r *repo) withIndex(index string) *repo {
 	objs, err := r.objects()
-	v := &repo{top: r.top, gitDir: r.gitDir, rawGitDir: r.rawGitDir, common: r.common, bare: r.bare, indexFile: index}
+	v := &repo{top: r.top, gitDir: r.gitDir, rawGitDir: r.rawGitDir, common: r.common, bare: r.bare, promisor: r.promisor, indexFile: index}
 	v.objOnce.Do(func() { v.objs, v.objErr = objs, err })
 	return v
 }

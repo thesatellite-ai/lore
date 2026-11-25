@@ -83,7 +83,10 @@ func TestOrgFileMemberChangeHeldBack(t *testing.T) {
 	if !strings.HasPrefix(bad, h.Commit) || h.Author != authMember || h.Email != authMembE || !strings.Contains(h.String(), "not an admin") {
 		t.Errorf("held change %q does not name the commit %s and its author", h, bad)
 	}
-	raw := acceptedOrgRaw(ctx, dir, "HEAD", "org", []byte("tip"))
+	raw, err := acceptedOrgRaw(ctx, dir, "HEAD", "org", []byte("tip"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(string(raw), "outside") || !strings.Contains(string(raw), "acme/team") {
 		t.Errorf("acceptedOrgRaw = %q, want the admin's version", raw)
 	}

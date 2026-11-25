@@ -1572,7 +1572,11 @@ func (b *Backend) CommitsBy(ctx context.Context, emails []string) ([]AuthoredCom
 		return nil, errs.Wrap(errs.Internal, "git: read the store's history", err)
 	}
 	held := map[string]bool{}
-	if a, aerr := b.authorityOf(ctx, h); aerr == nil && a != nil {
+	a, aerr := b.authorityOf(ctx, h)
+	if aerr != nil {
+		return nil, aerr // a held commit is never listed as accepted (devco:D-997)
+	}
+	if a != nil {
 		held = a.refused
 	}
 	var list []AuthoredCommit
@@ -1606,10 +1610,15 @@ const heldSeenFile = "lore-held-seen-"
 // the row in the cache. Why: a cache filled before the check existed, or before a later
 // roster change made a hold, still has the held version; it must never
 // stay readable. Runs only when the folder's hold set changed since the
-// last time it ran (one small file per folder in the git dir).
-func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, changed []string) (map[string]string, []store.Row) {
+// last time it ran (one small file per folder in the git dir). The caller
+// runs done once it has read every returned name: a read that fails (a
+// blob this clone lacks, offline) leaves the hold set unrecorded, so the
+// next read serves the holds again instead of keeping the held version
+// (fail closed, devco:D-997).
+func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, changed []string) (names map[string]string, tombs []store.Row, done func(), err error) {
+	done = func() {}
 	if a == nil {
-		return nil, nil
+		return nil, nil, done, nil
 	}
 	covered := make(map[string]bool, len(changed))
 	for _, p := range changed {
@@ -1630,13 +1639,12 @@ func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, ch
 	sig := strings.Join(keys, "\n")
 	seen := b.heldSeenPath(strings.NewReplacer("/", "_", ".", "_root").Replace(b.folder.Name()))
 	if seen == "" {
-		return nil, nil
+		return nil, nil, done, nil
 	}
-	if old, err := os.ReadFile(seen); (err == nil && string(old) == sig) || (err != nil && sig == "") {
-		return nil, nil
+	if old, rerr := os.ReadFile(seen); (rerr == nil && string(old) == sig) || (rerr != nil && sig == "") {
+		return nil, nil, done, nil
 	}
-	names := map[string]string{}
-	var tombs []store.Row
+	names = map[string]string{}
 	for p := range a.held {
 		rel, ok := b.folder.FileRel(p)
 		if !ok || covered[p] {
@@ -1646,9 +1654,9 @@ func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, ch
 			names[blob] = p
 			continue
 		}
-		docs, err := b.readBlobs(ctx, []string{head + ":" + p})
-		if err != nil {
-			continue
+		docs, rerr := b.readBlobs(ctx, []string{head + ":" + p})
+		if rerr != nil {
+			return nil, nil, done, rerr
 		}
 		r, err := rowfs.DecodeRowFile(rel, docs[head+":"+p])
 		if err != nil {
@@ -1668,10 +1676,12 @@ func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, ch
 			names[head+":"+p] = p // a cache that took the stated writer gets the committer
 		}
 	}
-	if os.MkdirAll(filepath.Dir(seen), authorityDirMode) == nil {
-		_ = os.WriteFile(seen, []byte(sig), 0o600) // best effort: the worst case is serving the holds again
+	done = func() {
+		if os.MkdirAll(filepath.Dir(seen), authorityDirMode) == nil {
+			_ = os.WriteFile(seen, []byte(sig), 0o600) // best effort: the worst case is serving the holds again
+		}
 	}
-	return names, tombs
+	return names, tombs, done, nil
 }
 
 // fieldCreatedByActorID is the content tables' creator field (schema

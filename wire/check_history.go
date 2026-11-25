@@ -279,6 +279,11 @@ func scanHistoryChunk(sc scan.Scanner, allows hookAllows, chunk []historyBlob, b
 func historyBlobs(ctx context.Context, top string, revs []string) ([]historyBlob, error) {
 	named, err := liveGit(ctx, top, append([]string{"rev-list", "--objects"}, revs...)...)
 	if err != nil {
+		if strings.Contains(err.Error(), "missing blob object") || strings.Contains(err.Error(), "missing tree object") {
+			// a partial clone offline (or a damaged clone): refused,
+			// never scanned without the versions (devco:D-997)
+			return nil, leakCannotCheckErr("a file version of the history is not in this clone; run it again online", err)
+		}
 		return nil, leakCannotCheckErr("the objects of the history", err)
 	}
 	paths := map[string]string{}
@@ -300,6 +305,12 @@ func historyBlobs(ctx context.Context, top string, revs []string) ([]historyBlob
 	var out []historyBlob
 	for _, l := range strings.Split(string(checked), "\n") {
 		f := strings.Fields(l)
+		if len(f) == 2 && f[1] == "missing" {
+			// a version the history names that this clone lacks (a
+			// partial clone offline, a damaged clone): never skipped as
+			// "nothing to scan" (fail closed, devco:D-997)
+			return nil, leakCannotCheckErr("file version "+f[0]+" of the history is not in this clone; run it again online", nil)
+		}
 		if len(f) != 3 || f[1] != "blob" {
 			continue
 		}

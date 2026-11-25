@@ -119,8 +119,11 @@ func (a *App) ProbeRows(ctx context.Context, src store.Source, refs []engine.Ref
 			damaged = probeWorkTree
 		}
 		for _, br := range branches {
-			doc, gerr := liveGit(ctx, dir, "cat-file", "blob", br+":./"+file)
+			doc, found, gerr := blobAt(ctx, dir, br+":./"+file)
 			if gerr != nil {
+				return out, gerr // a version this clone lacks is never counted absent (devco:D-997)
+			}
+			if !found {
 				out.AbsentOn[br]++ // OV64-SPLIT: per-ref count of absent rows
 				continue
 			}
@@ -165,12 +168,18 @@ func KeyLoosenings(ctx context.Context, dir, base, target string) (found []error
 		}
 		// diff names are relative to the top, and so is <rev>:<path>
 		// (":<path>" is the index), from a monorepo subfolder too.
-		head, herr := liveGit(ctx, dir, "show", base+":"+p)
+		head, hfound, herr := blobAt(ctx, dir, base+":"+p)
 		if herr != nil {
+			return nil, herr // a key check that cannot read a version refuses (devco:D-997)
+		}
+		if !hfound {
 			continue
 		}
-		now, nerr := liveGit(ctx, dir, "show", target+":"+p)
+		now, nfound, nerr := blobAt(ctx, dir, target+":"+p)
 		if nerr != nil {
+			return nil, nerr
+		}
+		if !nfound {
 			continue
 		}
 		if cerr := settings.CheckKeyLoosening(p, head, now); cerr != nil {

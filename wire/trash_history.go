@@ -152,7 +152,10 @@ func branchHistory(ctx context.Context, src store.Source, dir, data, unshallow s
 	// the history read is the way back to a purged row's text).
 	for _, c := range uncommittedChanges(ctx, dir, data) {
 		paths[c.path] = true
-		hr, keep := w.row(ctx, c)
+		hr, keep, rerr := w.row(ctx, c)
+		if rerr != nil {
+			return nil, rerr
+		}
 		if !keep || seen[histKey{src, hr.Table, hr.ID}] {
 			continue
 		}
@@ -164,7 +167,10 @@ func branchHistory(ctx context.Context, src store.Source, dir, data, unshallow s
 			continue
 		}
 		paths[c.path] = true
-		hr, keep := w.row(ctx, c)
+		hr, keep, rerr := w.row(ctx, c)
+		if rerr != nil {
+			return nil, rerr
+		}
 		if !keep || seen[histKey{src, hr.Table, hr.ID}] {
 			continue
 		}
@@ -283,17 +289,18 @@ func rowFileOf(rel string) (row.Table, string, bool) {
 
 // row builds one row of a branch walk, or keep=false when the path is
 // not a purged or removed row file (a live row, a side file, no content).
-func (w histWalk) row(ctx context.Context, c histChange) (opstrash.HistoryRow, bool) {
+// err: the version to bring back is not in this clone (devco:D-997).
+func (w histWalk) row(ctx context.Context, c histChange) (opstrash.HistoryRow, bool, error) {
 	dir := w.dir
 	tb, id, ok := rowFileOf(strings.TrimPrefix(c.path, w.data))
 	if !ok {
-		return opstrash.HistoryRow{}, false
+		return opstrash.HistoryRow{}, false, nil
 	}
 	hr := opstrash.HistoryRow{Store: w.src, Table: tb, ID: id, Commit: c.commit, CommitAt: c.at, Uncommitted: c.uncommitted}
 	cur, rerr := readUnder(dir, c.path) // P2-LINT-5: a git-listed path, read through os.Root (no escape)
 	switch {
 	case c.status == histDeleted && rerr == nil:
-		return hr, false // re-added since: not gone
+		return hr, false, nil // re-added since: not gone
 	case c.status == histDeleted:
 		// H-14: the file was removed by a commit (a git rm, or an older
 		// lore's hard delete), not purged: its commit's author removed it
@@ -305,11 +312,11 @@ func (w histWalk) row(ctx context.Context, c histChange) (opstrash.HistoryRow, b
 		}
 	case c.status == histModified:
 		if rerr != nil {
-			return hr, false
+			return hr, false, nil
 		}
 		r, derr := row.Decode(cur)
 		if derr != nil || !r.Deleted {
-			return hr, false // a live (or trashed) row: not purged
+			return hr, false, nil // a live (or trashed) row: not purged
 		}
 		hr.PurgedAt, hr.PurgedBy = r.UpdatedAt, r.UpdatedBy.String()
 	}
@@ -317,12 +324,15 @@ func (w histWalk) row(ctx context.Context, c histChange) (opstrash.HistoryRow, b
 	if c.uncommitted {
 		from = c.commit // the removal is not committed: the content is in HEAD itself
 	}
-	doc, gerr := gitRun{dir: dir, args: []string{"show", from + ":./" + c.path}}.output(ctx)
+	doc, found, gerr := blobAt(ctx, dir, from+":./"+c.path)
 	if gerr != nil {
-		return hr, false // the parent has no content (a root commit, or created and removed in one commit)
+		return hr, false, gerr // the version is not in this clone: never dropped (devco:D-997)
+	}
+	if !found {
+		return hr, false, nil // the parent has no content (a root commit, or created and removed in one commit)
 	}
 	hr.Doc = doc
-	return hr, true
+	return hr, true, nil
 }
 
 // liveHistory walks the live refs of one live source. A file removed from
@@ -393,8 +403,11 @@ func liveHistRow(ctx context.Context, b store.Backend, src liveSource, ref strin
 			hr.PurgedAt, hr.PurgedBy = t.UpdatedAt, t.UpdatedBy.String()
 		}
 	}
-	blob, berr := liveGit(ctx, src.dir, "cat-file", "blob", c.commit+"^:"+c.path)
+	blob, found, berr := blobAt(ctx, src.dir, c.commit+"^:"+c.path)
 	if berr != nil {
+		return hr, false, berr // the version is not in this clone: never dropped (devco:D-997)
+	}
+	if !found {
 		return hr, false, nil // created and removed in one commit, or a root commit
 	}
 	r, _, derr := decodeLiveRow(blob)

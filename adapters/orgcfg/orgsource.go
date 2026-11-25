@@ -138,7 +138,10 @@ func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, 
 	if at == "" {
 		at = tip
 	}
-	raw, ap, ok := readFirstBlob(ctx, dir, at, orgFilePaths(folder))
+	raw, ap, ok, rerr := readFirstBlob(ctx, dir, at, orgFilePaths(folder))
+	if rerr != nil {
+		return Suggestion{}, false, rerr
+	}
 	if !ok {
 		return Suggestion{}, false, nil
 	}
@@ -269,7 +272,10 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 			if !found {
 				return nil, fmt.Errorf("%w: %s@%s", ErrNoOrgFile, norm, branch)
 			}
-			old = acceptedOrgRaw(ctx, dir, tip, cur.Folder, old)
+			old, err = acceptedOrgRaw(ctx, dir, tip, cur.Folder, old)
+			if err != nil {
+				return nil, err
+			}
 			if _, perr := parseOrgFileDoc(string(old)); perr != nil {
 				return nil, orgFileError(path, norm, perr)
 			}

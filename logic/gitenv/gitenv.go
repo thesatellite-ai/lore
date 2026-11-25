@@ -83,6 +83,12 @@ func Clean(env []string) []string {
 		// refuses every transport, so no git lore starts reaches a remote
 		out = append(out, noTransport)
 	}
+	if NoFetch(env) {
+		// a partial clone fetches a missing object on demand; under either
+		// switch git must fail the read instead (the read then reports
+		// E_OFFLINE), never reach the remote (store growth SG-3a)
+		out = append(out, noLazyFetch)
+	}
 	return out
 }
 
@@ -97,7 +103,9 @@ func Clean(env []string) []string {
 //	                 GIT_ALLOW_PROTOCOL naming no transport, so a git started
 //	                 anywhere else refuses too.
 //	LORE_NO_FETCH=1  no fetch, ls-remote or pull from any remote; pushes
-//	                 and clones still run.
+//	                 and clones still run. Under either switch Clean also
+//	                 sets GIT_NO_LAZY_FETCH=1, so a partial clone's read of
+//	                 an object it lacks fails instead of fetching it.
 //	LORE_NO_STORE_FETCH=1  no fetch, ls-remote or pull of a STORE clone
 //	                 only (the store backend and the org link reader honour
 //	                 it, StoreNetRefused): the parent of lore fix --all
@@ -118,6 +126,11 @@ const (
 // has: git refuses ssh, https, file and local paths alike, before
 // connecting.
 const noTransport = "GIT_ALLOW_PROTOCOL=lore-offline"
+
+// noLazyFetch stops git's on-demand fetch of an object a partial clone
+// lacks (git 2.44+; older git refuses the transport under LORE_OFFLINE
+// anyway through noTransport).
+const noLazyFetch = "GIT_NO_LAZY_FETCH=1"
 
 // Offline reports LORE_OFFLINE=1 in env.
 func Offline(env []string) bool { return lookup(env, EnvOffline) == On }

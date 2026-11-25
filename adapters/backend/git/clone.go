@@ -974,7 +974,12 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	// trusted blobs and credits are all this read uses, so the saved row
 	// view serves it (devco:D-826: no decode of the whole replay when the
 	// cache is current)
-	auth, _ := b.rowAuthorityOf(ctx, h)
+	auth, err := b.rowAuthorityOf(ctx, h)
+	if err != nil {
+		// fail closed (devco:D-997): without the replay a held change
+		// would be read as accepted
+		return nil, "", err
+	}
 	for _, p := range paths {
 		if rel, ok := b.folder.FileRel(p); ok {
 			name := h + ":" + p
@@ -1011,8 +1016,13 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	// (rows cached before this check existed, or a hold a later roster
 	// change made) is served again as its accepted version, or hidden
 	var hidden []store.Row
+	heldDone := func() {}
 	if from != "" {
-		more, tombs := b.heldRecheck(ctx, auth, h, paths)
+		more, tombs, done, herr := b.heldRecheck(ctx, auth, h, paths)
+		if herr != nil {
+			return nil, "", herr
+		}
+		heldDone = done
 		for name, p := range more {
 			if rel, ok := b.folder.FileRel(p); ok {
 				names = append(names, name)
@@ -1025,6 +1035,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	if err != nil {
 		return nil, "", err
 	}
+	heldDone()
 	rows := make([]store.Row, 0, len(blobs)+len(hidden))
 	rows = append(rows, hidden...)
 	for _, name := range names {

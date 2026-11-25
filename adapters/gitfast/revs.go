@@ -8,7 +8,6 @@ package gitfast
 import (
 	"bytes"
 	"encoding/hex"
-	"errors"
 	"strconv"
 	"strings"
 )
@@ -122,7 +121,7 @@ func (r *repo) resolve(expr string) resolved {
 		id = ps[0]
 	}
 	o, err := objs.read(id)
-	if errors.Is(err, errMissing) {
+	if r.absent(err) {
 		return notFound
 	}
 	if err != nil {
@@ -135,7 +134,7 @@ func (r *repo) resolve(expr string) resolved {
 			want = typeTree // x:path, x^{commit}:path and x^{tree}:path all read x's tree
 		}
 		id, typ, o, err = peelTo(objs, id, o, want)
-		if errors.Is(err, errMissing) {
+		if r.absent(err) {
 			return notFound
 		}
 		if err != nil {

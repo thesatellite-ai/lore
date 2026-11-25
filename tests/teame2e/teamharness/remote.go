@@ -25,6 +25,11 @@ func (w *World) Remote(slug string) *Remote {
 	if _, err := os.Stat(dir); err != nil {
 		mustMkdir(w.T, filepath.Dir(dir))
 		w.Git(w.Root, "init", "-q", "--bare", "-b", "main", dir)
+		// a partial (blobless) clone works against it, as against GitHub
+		// (store growth SG-3): reached through file://, git honours the
+		// filter only when the server allows it
+		w.Git(dir, "config", "uploadpack.allowFilter", "true")
+		w.Git(dir, "config", "uploadpack.allowAnySHA1InWant", "true")
 	}
 	return &Remote{w: w, Slug: slug, Dir: dir}
 }

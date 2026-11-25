@@ -190,7 +190,11 @@ func (b *Backend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store
 			return b.rowAtHead(ctx, path, table, id)
 		}
 		if h, herr := b.headIfHeld(ctx, path); herr == nil && h != "" {
-			if auth, _ := b.rowAuthorityOf(ctx, h); auth != nil {
+			auth, aerr := b.rowAuthorityOf(ctx, h)
+			if aerr != nil {
+				return store.Row{}, aerr // fail closed: a held change is never read as accepted (devco:D-997)
+			}
+			if auth != nil {
 				var r store.Row
 				var err error
 				if blob, held := auth.heldBlob(path); held {
@@ -247,7 +251,12 @@ func (b *Backend) rowAtBlob(ctx context.Context, blob string, table row.Table, i
 	}
 	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "blob", blob}})
 	if err != nil {
-		return store.Row{}, store.ErrNotFound
+		if _, ran := exitCode(err); ran {
+			// the accepted version is in the history but not in this
+			// clone: an error, never "no such row" (devco:D-997)
+			return store.Row{}, MissingObject(blob)
+		}
+		return store.Row{}, errs.Wrap(errs.Internal, "git: read the accepted version", err)
 	}
 	return rowfs.DecodeRowFile(rowfs.RowPath(table, id), out)
 }

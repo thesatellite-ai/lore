@@ -39,11 +39,12 @@ func TestIsAgentSignature(t *testing.T) {
 // that signs commits another way must apply the same test and be added
 // here, or the guard fails.
 var signerFiles = []string{
-	"adapters/backend/git/backup.go",   // lore <lore@localhost>, local backup refs
-	"adapters/backend/git/identity.go", // validSignature, identityEnv, hasIdentity
-	"adapters/gitref/write.go",         // MakeCommit refuses ErrAgentSignature
-	"adapters/probe/git.go",            // a dry-run probe commit in a temp repo
-	"internal/opstest/gitcommit.go",    // test helper package
+	"adapters/backend/git/backup.go",        // lore <lore@localhost>, local backup refs
+	"adapters/backend/git/identity.go",      // validSignature, identityEnv, hasIdentity
+	"adapters/gitref/write.go",              // MakeCommit refuses ErrAgentSignature
+	"adapters/probe/git.go",                 // a dry-run probe commit in a temp repo
+	"internal/opstest/gitcommit.go",         // test helper package
+	"internal/partialclone/partialclone.go", // test helper package: blobless clones in temp dirs
 }
 
 // agentWordFiles may spell the agent markers in a string: this package,

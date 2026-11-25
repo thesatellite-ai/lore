@@ -53,7 +53,10 @@ func (g *GitLinks) RemoveOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (O
 			if !found {
 				return nil, fmt.Errorf("%w: %s has no %s", ErrNoOrgFile, norm, path)
 			}
-			raw = acceptedOrgRaw(ctx, dir, tip, a.OrgFolder, raw)
+			raw, err = acceptedOrgRaw(ctx, dir, tip, a.OrgFolder, raw)
+			if err != nil {
+				return nil, err
+			}
 			body, listed, derr := dropOrgFileStore(raw, want)
 			if derr != nil {
 				return nil, orgFileError(path, norm, derr)

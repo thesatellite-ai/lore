@@ -118,3 +118,51 @@ func TestOfflineGitReachesNoRemote(t *testing.T) {
 		t.Fatal("the marker script is not wired (the online fetch left no marker)")
 	}
 }
+
+// TestNoFetchStopsLazyFetch: under LORE_OFFLINE or LORE_NO_FETCH a partial
+// clone's read of a blob it lacks fails instead of fetching it from the
+// promisor remote; without a switch git fetches it (store growth SG-3a).
+func TestNoFetchStopsLazyFetch(t *testing.T) {
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git")
+	}
+	dir := t.TempDir()
+	base := append(Clean(os.Environ()), "GIT_CONFIG_NOSYSTEM=1", "HOME="+dir, "GIT_AUTHOR_NAME=Ann", "GIT_AUTHOR_EMAIL=ann@example.test", "GIT_COMMITTER_NAME=Ann", "GIT_COMMITTER_EMAIL=ann@example.test")
+	run := func(env []string, args ...string) (string, error) {
+		cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...), Dir: dir, Env: env}
+		out, err := cmd.CombinedOutput()
+		return strings.TrimSpace(string(out)), err
+	}
+	must := func(args ...string) string {
+		out, err := run(base, args...)
+		if err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+		return out
+	}
+	must("init", "-q", "-b", "main", "origin")
+	must("-C", "origin", "config", "uploadpack.allowFilter", "true")
+	must("-C", "origin", "config", "uploadpack.allowAnySHA1InWant", "true")
+	for _, v := range []string{"v1", "v2"} {
+		if err := os.WriteFile(filepath.Join(dir, "origin", "row.json"), []byte(v+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		must("-C", "origin", "add", "row.json")
+		must("-C", "origin", "commit", "-q", "-m", v)
+	}
+	old := must("-C", "origin", "rev-parse", "HEAD~1:row.json")
+	must("clone", "-q", "--filter=blob:none", "file://"+filepath.Join(dir, "origin"), "clone")
+	for _, sw := range []string{EnvOffline, EnvNoFetch} {
+		env := append(Clean(append(os.Environ(), sw+"=1")), "GIT_CONFIG_NOSYSTEM=1", "HOME="+dir)
+		if !slices.Contains(env, noLazyFetch) {
+			t.Fatalf("Clean under %s=1 does not set %s", sw, noLazyFetch)
+		}
+		if out, err := run(env, "-C", "clone", "cat-file", "blob", old); err == nil {
+			t.Errorf("under %s=1 a blob the partial clone lacks was read (%q): the lazy fetch reached the remote", sw, out)
+		}
+	}
+	if got := must("-C", "clone", "cat-file", "blob", old); got != "v1" {
+		t.Errorf("online lazy fetch = %q, want v1", got)
+	}
+}

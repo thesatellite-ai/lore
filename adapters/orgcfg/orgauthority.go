@@ -61,6 +61,11 @@ func (h HeldOrgChange) String() string {
 // heldOrgWhy is the reason of a change by a non-admin.
 const heldOrgWhy = "%s is not an admin of the org at that commit; only an admin changes the org's stores, own: and repos: (an admin makes the change with lore, e.g. lore org store add --org <org> --url <url>, or reverts the commit in the store clone: git revert %s, then lore sync)"
 
+// unreadOrgWhy is why a change to the org file is held back when its
+// version is not in this store clone (a partial clone offline, a damaged
+// clone): it cannot be judged, so it is not read (devco:D-997).
+const unreadOrgWhy = "the version of %s at commit %s is not in this store clone (offline, or the clone lacks it), so it cannot be checked and is held back; run lore sync online to fetch it"
+
 // orgFileCommit is one commit of the org file's history.
 type orgFileCommit struct {
 	sha, parent, author, email, subject string
@@ -92,7 +97,19 @@ func acceptedOrgFile(ctx context.Context, dir, tip, folder string) (string, []He
 	accepted := "" // the commit whose file is accepted so far
 	var acceptedDoc *OrgFileDoc
 	for _, c := range commits {
-		raw, p, ok := readFirstBlob(ctx, dir, c.sha, paths)
+		raw, p, ok, rerr := readFirstBlob(ctx, dir, c.sha, paths)
+		if rerr != nil {
+			// the version is in the history but not in this clone
+			// (offline, a damaged clone): a change no one can judge is
+			// held back, never accepted (fail closed, devco:D-997)
+			short := c.sha
+			if len(short) > 7 {
+				short = short[:7]
+			}
+			held = append(held, HeldOrgChange{Commit: short, Author: c.author, Email: c.email, Subject: c.subject, Path: p,
+				Why: fmt.Sprintf(unreadOrgWhy, p, short)})
+			continue
+		}
 		if !ok {
 			continue // the commit deleted the file: nothing to read from it
 		}
@@ -126,25 +143,40 @@ func acceptedOrgFile(ctx context.Context, dir, tip, folder string) (string, []He
 // to it were held back, its last accepted version: an admin's own edit
 // (a store added or moved) is made on what was accepted, so it never
 // carries a held-back change along under the admin's name.
-func acceptedOrgRaw(ctx context.Context, dir, tip, folder string, raw []byte) []byte {
+// An accepted version that is not in this clone is an error: the tip's
+// file would carry the held-back change along (devco:D-997).
+func acceptedOrgRaw(ctx context.Context, dir, tip, folder string, raw []byte) ([]byte, error) {
 	at, held := acceptedOrgFile(ctx, dir, tip, folder)
 	if len(held) == 0 || at == "" {
-		return raw
+		return raw, nil
 	}
-	if b, _, ok := readFirstBlob(ctx, dir, at, orgFilePaths(folder)); ok {
-		return []byte(b)
+	b, _, ok, err := readFirstBlob(ctx, dir, at, orgFilePaths(folder))
+	if err != nil {
+		return nil, err
 	}
-	return raw
+	if ok {
+		return []byte(b), nil
+	}
+	return raw, nil
 }
 
 // readFirstBlob is the first of paths that exists at rev, with its body.
-func readFirstBlob(ctx context.Context, dir, rev string, paths []string) (string, string, bool) {
+// found=false: no path is in rev's tree. err: a path is in rev's tree but
+// its blob is not in this clone (a partial clone offline, a damaged
+// clone): never read as "no file" (fail closed, devco:D-997).
+func readFirstBlob(ctx context.Context, dir, rev string, paths []string) (body, path string, found bool, err error) {
 	for _, p := range paths {
-		if raw, err := gitRun(ctx, "-C", dir, "cat-file", "blob", rev+":"+p); err == nil {
-			return raw, p, true
+		raw, cerr := gitRun(ctx, "-C", dir, "cat-file", "blob", rev+":"+p)
+		if cerr == nil {
+			return raw, p, true, nil
+		}
+		// the tree names the path (rev-parse reads trees only): the blob
+		// itself is missing
+		if _, rerr := gitRun(ctx, "-C", dir, "rev-parse", "--verify", "--quiet", rev+":"+p); rerr == nil {
+			return "", p, false, fmt.Errorf("orgcfg: %s at %s is not in this store clone (run lore sync online to fetch it): %w", p, rev, cerr)
 		}
 	}
-	return "", "", false
+	return "", "", false, nil
 }
 
 // sameOrgDoc reports whether two versions of the org file say the same

@@ -57,7 +57,10 @@ func (g *GitLinks) EditOrgFile(ctx context.Context, e OrgFileEdit) (OrgFileResul
 			if !found {
 				return nil, fmt.Errorf("%w: %s has no %s", ErrNoOrgFile, norm, path)
 			}
-			raw = acceptedOrgRaw(ctx, dir, tip, e.OrgFolder, raw)
+			raw, err = acceptedOrgRaw(ctx, dir, tip, e.OrgFolder, raw)
+			if err != nil {
+				return nil, err
+			}
 			body, changed, serr := setOrgFileList(raw, e.Key, e.Values)
 			if serr != nil {
 				return nil, orgFileError(path, norm, serr)

@@ -188,10 +188,17 @@ func (s *Session) repoFor(dir string) *repo {
 
 // objectsPlain reports whether the object store has none of the things
 // that make git read objects differently (replace refs, grafts, shallow).
+// It also marks a partial clone (r.promisor): reads stay in process, but an
+// object missing from the local store falls back to git, which fetches it.
 func (r *repo) objectsPlain() bool {
 	if fileExists(filepath.Join(r.common, "info", "grafts")) || fileExists(filepath.Join(r.common, "shallow")) {
 		return false
 	}
+	promisor, ok := partialClone(filepath.Join(r.common, "config"))
+	if !ok {
+		return false
+	}
+	r.promisor = promisor
 	if os.Getenv("GIT_NO_REPLACE_OBJECTS") == "" {
 		if entries, err := os.ReadDir(filepath.Join(r.common, "refs", "replace")); err == nil && len(entries) > 0 {
 			return false
@@ -207,6 +214,35 @@ func (r *repo) objectsPlain() bool {
 		}
 	}
 	return true
+}
+
+// partialClone reports whether the repository config at path makes the
+// repository a partial clone: extensions.partialClone set, or any
+// remote.<name>.promisor true. ok=false: the config does not parse the
+// plain way, so the caller leaves the repository to git.
+func partialClone(path string) (promisor, ok bool) {
+	entries, ok := parseLocalConfig(path)
+	if !ok {
+		return false, false
+	}
+	for _, e := range entries {
+		switch {
+		case e.key == "extensions.partialclone" && e.value != "":
+			return true, true
+		case strings.HasPrefix(e.key, "remote.") && strings.HasSuffix(e.key, ".promisor"):
+			if !e.hasValue {
+				return true, true // a bare key is true in git
+			}
+			switch strings.ToLower(e.value) {
+			case "true", "yes", "on", "1":
+				return true, true
+			case "false", "no", "off", "0", "":
+			default:
+				return false, false // another spelling of a bool (2, -1): ask git
+			}
+		}
+	}
+	return false, true
 }
 
 // Answer answers one git invocation without a process when it can.

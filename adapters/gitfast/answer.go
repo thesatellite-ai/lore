@@ -6,7 +6,6 @@ package gitfast
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -646,7 +645,7 @@ func catFile(r *repo, args []string, stdin []byte) (Reply, bool) {
 				continue
 			}
 			o, err := objs.read(res.id)
-			if errors.Is(err, errMissing) {
+			if r.absent(err) {
 				fmt.Fprintf(&out, "%s missing\n", line)
 				continue
 			}
