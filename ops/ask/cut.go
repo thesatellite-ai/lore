@@ -160,14 +160,14 @@ func cutWords(matched, asked []string) []string {
 // cut to its best sections (bestSections), anything else to its best
 // paragraph with an elision mark on the side where text was left out
 // (cutText).
-func cutBody(body string, words []string, room int) (string, bool) {
+func cutBody(body string, words []string, room int, st *subjectTerms) (string, bool) {
 	if len(body) <= room {
 		return body, false
 	}
-	if out, ok := bestSections(body, words, room); ok {
+	if out, ok := bestSections(body, words, room, st); ok {
 		return out, true
 	}
-	return cutText(body, words, room), true
+	return cutText(body, words, room, st), true
 }
 
 // cutText is body cut to room bytes: the sentences that hold the
@@ -176,11 +176,11 @@ func cutBody(body string, words []string, room int) (string, bool) {
 // excerpt (the start of body when no word matches), with an elision mark
 // on the side where text was left out. It is the one cut every printed
 // row, section and comment of an answer goes through.
-func cutText(body string, words []string, room int) string {
+func cutText(body string, words []string, room int, st *subjectTerms) string {
 	if len(body) <= room {
 		return body
 	}
-	if out, ok := keepSentences(body, words, room); ok {
+	if out, ok := keepSentences(body, words, room, st); ok {
 		return out
 	}
 	marks := 2 * (len(elision) + 1)
@@ -354,7 +354,7 @@ func setextLevel(line string) int {
 // 152 long-note questions answered); its heading ("Rollout plan") and
 // the words only one section holds name the right section, and the next
 // best sections of the same note follow while they fit.
-func bestSections(body string, words []string, room int) (string, bool) {
+func bestSections(body string, words []string, room int, st *subjectTerms) (string, bool) {
 	secs := sections(body)
 	if len(secs) < 2 || len(words) == 0 {
 		return "", false
@@ -364,6 +364,10 @@ func bestSections(body string, words []string, room int) (string, bool) {
 		toks[i], heads[i] = tokensOf(s.path+"\n"+s.text), tokensOf(s.path)
 	}
 	score := make([]float64, len(secs))
+	// subj[i]: section i holds a word of the question's subject (a word
+	// rare in the store, subject.go) that at most half the note's
+	// sections hold; one most sections hold names the note, not a section
+	subj, anySubj := make([]bool, len(secs)), false
 	n := float64(len(secs))
 	for _, w := range words {
 		var hold []int
@@ -375,8 +379,13 @@ func bestSections(body string, words []string, room int) (string, bool) {
 		if len(hold) == len(secs) {
 			continue // held by every section: it picks none of them
 		}
+		picks := st.isRare(w) && len(hold)*2 <= len(secs)
 		for _, i := range hold {
-			wt := math.Log(1 + n/float64(len(hold)))
+			subj[i] = subj[i] || picks
+			anySubj = anySubj || picks
+			// devco D-973: times the word's spread across the store, so a
+			// word most rows hold (run, first) never outweighs the subject
+			wt := math.Log(1+n/float64(len(hold))) * st.of(w)
 			if hasWord(heads[i], strings.ToLower(w)) {
 				wt *= 2 // devco D-969: a heading naming the word counts twice (longsec.go)
 			}
@@ -397,6 +406,12 @@ func bestSections(body string, words []string, room int) (string, bool) {
 	var parts []string
 	used := 0
 	for _, i := range order {
+		if anySubj && len(parts) > 0 && !subj[i] {
+			// devco D-973 (S6-39): under a section holding the question's
+			// subject, one holding only its common words answers another
+			// question; it is not printed
+			continue
+		}
 		head := sectionMark + secs[i].path + "\n"
 		if len(parts) == 0 {
 			head = sectionMark + secs[i].path + matchingMark + "\n" // devco D-969: the answer starts here
@@ -411,7 +426,7 @@ func bestSections(body string, words []string, room int) (string, bool) {
 			if len(parts) > 0 {
 				continue // a lower section that fits may still follow
 			}
-			text = cutText(text, words, max(left, 1))
+			text = cutText(text, words, max(left, 1), st)
 		}
 		parts = append(parts, head+text)
 		used += sep + len(head) + len(text)

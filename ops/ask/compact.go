@@ -48,10 +48,10 @@ func (o *Out) chunkLong() {
 			continue
 		}
 		words := cutWords(r.Matched, o.asked)
-		body, _ := cutBody(r.Body, words, longRoom)
+		body, _ := cutBody(r.Body, words, longRoom, r.subject)
 		read := ""
 		if r.readBody != "" {
-			read, _ = cutBody(r.readBody, words, longRoom)
+			read, _ = cutBody(r.readBody, words, longRoom, r.subject)
 		}
 		r.FullChars, r.Body, r.readBody = len(r.Body), body, read
 	}

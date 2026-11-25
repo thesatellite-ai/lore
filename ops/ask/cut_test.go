@@ -114,12 +114,12 @@ func TestExcerpt(t *testing.T) {
 	}
 	// devco D-970: the matching sentence under its heading path, then the
 	// opening; text left out is marked
-	if body := cutText(doc, words, 600); !strings.Contains(body, "## Operations\nThe nightly backup") || !strings.HasPrefix(body, "# Platform design notes\n") || !strings.Contains(body, "\n"+elision+"\n") || !strings.HasSuffix(body, "\n"+elision) || len(body) > 600 {
+	if body := cutText(doc, words, 600, nil); !strings.Contains(body, "## Operations\nThe nightly backup") || !strings.HasPrefix(body, "# Platform design notes\n") || !strings.Contains(body, "\n"+elision+"\n") || !strings.HasSuffix(body, "\n"+elision) || len(body) > 600 {
 		t.Errorf("cut body lost its heading path or elision marks: %q", body)
 	}
 	// a row with no heading is cut by paragraph, marked where text was left out
 	plain := strings.ReplaceAll(strings.ReplaceAll(doc, "# ", ""), "#", "")
-	if body, cut := cutBody(plain, words, 600); !cut || !strings.Contains(body, "vault-seven") || !strings.HasSuffix(body, "\n"+elision) || strings.Contains(body, sectionMark) {
+	if body, cut := cutBody(plain, words, 600, nil); !cut || !strings.Contains(body, "vault-seven") || !strings.HasSuffix(body, "\n"+elision) || strings.Contains(body, sectionMark) {
 		t.Errorf("a row with no heading: %q", body)
 	}
 }
@@ -157,7 +157,7 @@ func TestCutBodyBestSections(t *testing.T) {
 	doc := sectionNote()
 	words := cutWords([]string{"phase", "two", "orbit", "rollout", "start"}, nil)
 	for _, room := range []int{2000, 900, minCut} {
-		body, cut := cutBody(doc, words, room)
+		body, cut := cutBody(doc, words, room, nil)
 		first, _, _ := strings.Cut(body, "\n")
 		if !cut || first != sectionMark+"Orbit design notes > Rollout plan"+matchingMark || !strings.Contains(body, "starts on 2026-06-05") {
 			t.Errorf("room %d: the best section is not printed first:\n%s", room, body)
@@ -172,11 +172,11 @@ func TestCutBodyBestSections(t *testing.T) {
 	// the next best section follows while it fits (the Overview holds
 	// phase and two too); a section holding only words every section
 	// holds (rollout, orbit in the path) is not printed
-	body, _ := cutBody(doc, words, 2400)
+	body, _ := cutBody(doc, words, 2400, nil)
 	if !strings.Contains(body, "\n\n"+sectionMark+"Orbit design notes > Overview\n") || strings.Count(body, sectionMark) != 2 {
 		t.Errorf("the second best section does not follow alone:\n%s", body)
 	}
-	if body, _ := cutBody(doc, words, 2000); strings.Count(body, sectionMark) != 1 {
+	if body, _ := cutBody(doc, words, 2000, nil); strings.Count(body, sectionMark) != 1 {
 		t.Errorf("a section holding only common words is printed:\n%s", body)
 	}
 	// through the answer: the best row is printed as its best sections

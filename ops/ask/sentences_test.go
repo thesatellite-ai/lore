@@ -27,7 +27,7 @@ const callerSentence = "The only caller of applyLevelDelta is the nightly reconc
 func TestCutTextKeepsMatchingSentences(t *testing.T) {
 	t.Parallel()
 	words := []string{"calls", "applyleveldelta", "warehouse", "stock", "sync"}
-	out := cutText(stockWritePath, words, 1000)
+	out := cutText(stockWritePath, words, 1000, nil)
 	if !strings.Contains(out, callerSentence) || len(out) > 1000 {
 		t.Fatalf("the cut dropped the sentence naming the asked function (%d bytes):\n%s", len(out), out)
 	}
@@ -36,12 +36,12 @@ func TestCutTextKeepsMatchingSentences(t *testing.T) {
 	}
 	// a decision without headings or paragraphs (cut at --max-chars)
 	dec := "Decision: the order export retries a failed batch and never splits it. The order export sends orders to the accounting system in batches of 100, and a batch either lands whole or not at all. A failed batch is retried with backoff up to five times, then parked for an operator. Each batch reads from a snapshot taken when it starts; a snapshot older than the newest change ends the batch with ErrStaleSnapshot, and a new snapshot is taken before the next try. Operators see parked batches on the export dashboard."
-	out = cutText(dec, []string{"order", "export", "errstalesnapshot"}, 300)
+	out = cutText(dec, []string{"order", "export", "errstalesnapshot"}, 300, nil)
 	if !strings.Contains(out, "ends the batch with ErrStaleSnapshot") || len(out) > 300 {
 		t.Errorf("a plain decision cut dropped the ErrStaleSnapshot sentence:\n%s", out)
 	}
 	// an underscore identifier: its words are split, its sentence is found
-	out = cutText(strings.ReplaceAll(stockWritePath, "applyLevelDelta", "apply_level_delta"), []string{"calls", "apply", "level", "delta", "stock", "sync"}, 700)
+	out = cutText(strings.ReplaceAll(stockWritePath, "applyLevelDelta", "apply_level_delta"), []string{"calls", "apply", "level", "delta", "stock", "sync"}, 700, nil)
 	if !strings.Contains(out, "The only caller of apply_level_delta") {
 		t.Errorf("an underscore identifier's sentence is dropped:\n%s", out)
 	}
@@ -54,7 +54,7 @@ func TestCutTextKeepsMatchingSentences(t *testing.T) {
 func TestCutTextKeepsHeadingAndOpening(t *testing.T) {
 	t.Parallel()
 	note := "# As built: warehouse stock sync\n\n## Overview\n\nThe stock sync keeps stock in step with the warehouse.\n\n## Write path\n\n" + stockWritePath + "\n\n## Operations\n\nOperators watch the sync lag per warehouse on the dashboard."
-	out := cutText(note, []string{"applyleveldelta"}, 400)
+	out := cutText(note, []string{"applyleveldelta"}, 400, nil)
 	if !strings.Contains(out, "## Write path\n") || !strings.Contains(out, callerSentence) || len(out) > 400 {
 		t.Fatalf("the matching sentence lost its heading:\n%s", out)
 	}
@@ -64,12 +64,12 @@ func TestCutTextKeepsHeadingAndOpening(t *testing.T) {
 	if !strings.Contains(out, "\n"+elision+"\n") || !strings.HasSuffix(out, "\n"+elision) {
 		t.Errorf("gaps are not marked:\n%s", out)
 	}
-	if out := cutText(note, []string{"zebra"}, 300); !strings.HasPrefix(note, strings.TrimSuffix(out, "\n"+elision)) {
+	if out := cutText(note, []string{"zebra"}, 300, nil); !strings.HasPrefix(note, strings.TrimSuffix(out, "\n"+elision)) {
 		t.Errorf("no word matching: the cut is not the start:\n%s", out)
 	}
 	// one sentence longer than room: cut around the identifier
 	long := strings.Repeat("Filler words about the stock and the sync. ", 20) + "The " + strings.Repeat("very ", 80) + "long line names applyLevelDelta once and goes on " + strings.Repeat("and on ", 80) + "."
-	if out := cutText(long, []string{"applyleveldelta", "stock"}, 200); !strings.Contains(out, "applyLevelDelta") || len(out) > 200 {
+	if out := cutText(long, []string{"applyleveldelta", "stock"}, 200, nil); !strings.Contains(out, "applyLevelDelta") || len(out) > 200 {
 		t.Errorf("a sentence longer than room is not cut around the identifier (%d bytes):\n%s", len(out), out)
 	}
 }

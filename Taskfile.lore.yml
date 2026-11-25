@@ -672,7 +672,7 @@ tasks:
       BENCH_BIN: "{{.BIN_DIR}}/lore-bench"
     cmds:
       - CGO_ENABLED=0 go build -o {{.BENCH_BIN}} ./cmd/lore
-      - "LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^(TestBenchRecall|TestBenchLinkedStoresAsk|TestBenchSet5.*|TestSet5.*)$' -timeout $({{.TEST_TIME}} 60m) -v {{.CLI_ARGS}} ./tests/bench/recall/"
+      - "LORE_BENCH_BIN={{.BENCH_BIN}} go test -tags bench -count=1 -run '^(TestBenchRecall|TestBenchLinkedStoresAsk|TestBenchSet5.*|TestSet5.*|TestBenchSet6.*|TestSet6.*)$' -timeout $({{.TEST_TIME}} 60m) -v {{.CLI_ARGS}} ./tests/bench/recall/"
 
   # The blind agent run of the recall gate (owner 2026-11-21, accuracy first, devco D-816): every gate
   # question asked of a lore agent (skills/SKILL.md, the lore command only) and a grep agent (rg/cat over

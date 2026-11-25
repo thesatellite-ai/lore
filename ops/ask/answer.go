@@ -982,6 +982,8 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 		}
 	}
 	rareBonus(q, all) // idents.go: the distinctive words count more (H-230)
+	// subject.go: the words a cut row keeps first (H-232)
+	subject := subjectTermsOf(all)
 	// an everything-about answer leads with the newest row of each folder
 	// and topic (lore's structure): the fused order stays out of it
 	if !q.about {
@@ -1099,6 +1101,7 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 		r := rowOf(s.row, s.matched)
 		r.History = s.history
 		r.Comments = s.comments
+		r.subject = subject
 		// a fact that changed: the newest row on the same thing says
 		// which of the rows shown with it it replaces (the newest of them)
 		var last *textRow
@@ -1320,7 +1323,7 @@ func (o *Out) cutRow(i, maxChars int) bool {
 		room, alone = minCut, true
 	}
 	words := cutWords(r.Matched, o.asked)
-	text, cut := cutBody(cmp.Or(wholeRead, whole.Body), words, room)
+	text, cut := cutBody(cmp.Or(wholeRead, whole.Body), words, room, r.subject)
 	if !cut {
 		// its text fits: what is above it leaves no room, unless nothing
 		// is above it (a long row chunkLong already cut to its best
@@ -1329,7 +1332,7 @@ func (o *Out) cutRow(i, maxChars int) bool {
 		*r = whole
 		return alone
 	}
-	r.Body, _ = cutBody(whole.Body, words, room)
+	r.Body, _ = cutBody(whole.Body, words, room, r.subject)
 	if wholeRead != "" {
 		r.readBody = text
 	}

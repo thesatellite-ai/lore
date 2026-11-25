@@ -250,6 +250,10 @@ type Row struct {
 	// resource's name (refs.Readable, devco D-822). --json keeps the
 	// stored text.
 	readTitle, readBody string
+	// subject is the question's subject terms across the store
+	// (subject.go, devco D-973): the words a cut of this row's text keeps
+	// first. Nil when the row was not ranked among scored rows.
+	subject *subjectTerms
 	// replaces is the id of the older row on the same thing this newest
 	// row replaces (the id Note names), "" when none: the text answer
 	// leads with a "now:" line for it (devco D-836).

@@ -117,7 +117,7 @@ func (r Row) commentLines() string {
 		if len(text) > commentMax {
 			// the sentences holding the question's words first (D-970),
 			// on one line
-			text = strings.Join(strings.Fields(cutText(text, r.Matched, commentMax)), " ")
+			text = strings.Join(strings.Fields(cutText(text, r.Matched, commentMax, r.subject)), " ")
 		}
 		day := ""
 		if c.At != "" {

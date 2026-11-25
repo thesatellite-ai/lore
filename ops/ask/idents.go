@@ -207,14 +207,7 @@ func rareBonus(q question, all []scored) {
 	for _, w := range q.words {
 		asked[w] = true
 	}
-	df := map[string]int{}
-	for _, s := range all {
-		for _, w := range s.matched {
-			if asked[w] {
-				df[w]++
-			}
-		}
-	}
+	df := wordSpread(all) // subject.go: the same spread a cut row's excerpt weighs words by
 	for i := range all {
 		for _, w := range all[i].matched {
 			if asked[w] && df[w]*4 <= len(all) {

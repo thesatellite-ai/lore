@@ -113,14 +113,15 @@ func sentencesOf(text string) []sentence {
 }
 
 // splitSentences splits one line after each ". ", "? " or "! " (the mark
-// stays with its sentence).
+// stays with its sentence), never after a list item's number ("6. The
+// importer ...": devco D-973, S6-26 printed the item without its "6.").
 func splitSentences(line string) []string {
 	var out []string
 	start := 0
 	for i := 0; i+1 < len(line); i++ {
 		switch line[i] {
 		case '.', '?', '!':
-			if line[i+1] == ' ' {
+			if line[i+1] == ' ' && !(start == 0 && i > 0 && allDigits(line[:i])) {
 				if s := strings.TrimSpace(line[start : i+1]); s != "" {
 					out = append(out, s)
 				}
@@ -134,11 +135,50 @@ func splitSentences(line string) []string {
 	return out
 }
 
+// allDigits reports whether s is a number (a list item's "12").
+func allDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
+}
+
+// reListItem matches a markdown list item line: "- ", "* ", "+ ", "6. ",
+// "6) " or "(6) " first.
+var reListItem = regexp.MustCompile(`^(?:[-*+]|\d+[.)]|\(\d+\))\s`)
+
+// leadIn is the index of the sentence that introduces list item i of ss
+// (the last sentence of the line above the list, "The six write paths
+// are:"), -1 when ss[i] is no list item or none is above it in its
+// paragraph. Why (devco D-973, S6-26): an item kept alone ("(6) the bulk
+// importer") does not say what it is an item of.
+func leadIn(ss []sentence, i int) int {
+	if !reListItem.MatchString(ss[i].text) {
+		return -1
+	}
+	for j := i - 1; j >= 0 && ss[j].para == ss[i].para; j-- {
+		if ss[j].line != ss[i].line && !reListItem.MatchString(firstOfLine(ss, j).text) {
+			return j
+		}
+	}
+	return -1
+}
+
+// firstOfLine is the first sentence of the line sentence j sits on.
+func firstOfLine(ss []sentence, j int) sentence {
+	for j > 0 && ss[j-1].line == ss[j].line {
+		j--
+	}
+	return ss[j]
+}
+
 // sentenceScores rates each sentence by the question's words it holds:
 // a word held by df of the n sentences weighs ln(1 + n/df), times
 // identWeight when text writes it as an identifier; a word every sentence
 // holds weighs nothing. top is the heaviest word some sentence holds.
-func sentenceScores(ss []sentence, text string, words []string) (score []float64, top string) {
+func sentenceScores(ss []sentence, text string, words []string, st *subjectTerms) (score []float64, top string) {
 	idents := map[string]bool{}
 	for _, t := range reIdent.FindAllString(text, -1) {
 		if isIdentShape(t) {
@@ -163,7 +203,7 @@ func sentenceScores(ss []sentence, text string, words []string) (score []float64
 		if len(hold) == 0 || (len(hold) == len(ss) && len(ss) > 1) {
 			continue
 		}
-		wt := math.Log(1 + n/float64(len(hold)))
+		wt := math.Log(1+n/float64(len(hold))) * st.of(w) // devco D-973: the store's spread too (subject.go)
 		if idents[w] {
 			wt *= identWeight
 		}
@@ -184,12 +224,12 @@ func sentenceScores(ss []sentence, text string, words []string) (score []float64
 // left, the opening sentences. A best sentence longer than room is cut
 // around the heaviest word it holds. ok is false when no sentence holds a
 // word that tells the sentences apart (the caller cuts by paragraph then).
-func keepSentences(text string, words []string, room int) (string, bool) {
+func keepSentences(text string, words []string, room int, st *subjectTerms) (string, bool) {
 	ss := sentencesOf(text)
 	if len(ss) == 0 || len(words) == 0 {
 		return "", false
 	}
-	score, top := sentenceScores(ss, text, words)
+	score, top := sentenceScores(ss, text, words, st)
 	order := make([]int, 0, len(ss))
 	for i := range ss {
 		if score[i] > 0 {
@@ -233,8 +273,15 @@ func keepSentences(text string, words []string, room int) (string, bool) {
 		}
 		return elision + "\n" + head + window(best.text, []string{top}, max(room-marks-len(head), 1)) + "\n" + elision, true
 	}
+	if l := leadIn(ss, order[0]); l >= 0 {
+		try(l)
+	}
 	for _, i := range order[1:] {
-		try(i)
+		if try(i) {
+			if l := leadIn(ss, i); l >= 0 {
+				try(l)
+			}
+		}
 	}
 	// fill with the opening while it fits
 	for i := range ss {
