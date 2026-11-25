@@ -128,7 +128,7 @@ func TestRareWordsCount(t *testing.T) {
 	}
 	all = append(all, scored{row: &textRow{ID: "mem_rare"}, score: 6, matched: []string{"export", "throttled"}})
 	small := slices.Clone(all[len(all)-rareFloor+1:])
-	rareBonus(q, all)
+	distinctBonus(q, all)
 	for _, s := range all {
 		want := 6
 		if s.row.ID == "mem_rare" {
@@ -138,7 +138,7 @@ func TestRareWordsCount(t *testing.T) {
 			t.Errorf("%s: score %d, want %d", s.row.ID, s.score, want)
 		}
 	}
-	rareBonus(q, small)
+	distinctBonus(q, small)
 	for _, s := range small {
 		if s.score != 6 {
 			t.Errorf("%s among %d rows: score %d, want 6", s.row.ID, len(small), s.score)

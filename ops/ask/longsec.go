@@ -5,10 +5,13 @@ import "slices"
 // Long rows rank by their best section (devco D-969, bug hunt H-228, Sync
 // benchmark set 5 asks 2 and 4). A row longer than longRow characters
 // with two or more markdown sections (sections: heading-bounded parts)
-// is printed by section (chunkLong), so it is ranked by section too: its
-// score gains headWord for each question word the heading path of its best
-// section holds beyond the row's title, the way a short row's title
-// already names what it is about. The best section is the one holding
+// is printed by section (chunkLong), so it is ranked by section too: a
+// question word counts fully only when its best section or its title
+// holds it (devco D-972; one its other sections hold counts a point), and
+// its score gains headWord for each question word the heading path of its
+// best section holds beyond the row's title, the way a short row's title
+// already names what it is about, unless more than a quarter of the
+// scored rows hold that word (distinctBonus). The best section is the one holding
 // the most of the question's words and topics in its heading path and
 // text, a heading word counting twice. The threshold is chunkLong's: a
 // row that prints whole ranks whole, one that prints by section ranks by
@@ -74,38 +77,67 @@ func splitSections(title, body string) []rowSection {
 	return out
 }
 
-// headBonus is what r's best section adds to its score for q: headWord
-// for each question word and topic its heading holds (sections above), 0
-// for a row that is not long or whose best section's heading holds none.
-func headBonus(q question, ms []match, r *textRow) int {
+// bestSec is the section a long row ranks by for one question
+// (bestSection): its word set, and the question words and topic names
+// its heading path holds.
+type bestSec struct {
+	words     map[string]bool
+	heldHeads []string
+}
+
+// holds reports whether the best section, or r's title and first line,
+// hold question word w (or spell out the identifier q wrote for it).
+func (b *bestSec) holds(q question, r *textRow, w string) bool {
+	if hasWord(b.words, w) || identWord(q, b.words, w) {
+		return true
+	}
+	first := r.firstTokens()
+	return hasWord(first, w) || identWord(q, first, w)
+}
+
+// bestSection is the section r ranks by for q, nil for a row that is not
+// long (sectionsOf): the one holding the most of the question's words and
+// topics in its heading path and text, a heading word counting twice;
+// the first such section on a tie. Its heading words add headWord each
+// (score); distinctBonus takes back the ones most scored rows hold.
+//
+// Why only the best section's words count (devco D-972, bug hunt H-231,
+// Sync benchmark set 6 item 1): a several-KB note holds most of a
+// question's common words somewhere (file, worker, command, run) and
+// ranked by all of them, plus its heading, above the short memory naming
+// the asked command (files resync, vault-rekey) that lore search
+// ranks first. A section answers by what it holds itself.
+func bestSection(q question, ms []match, r *textRow) *bestSec {
 	secs := r.sectionsOf()
 	if len(secs) == 0 {
-		return 0
+		return nil
 	}
-	best, bestHeads := -1, 0
-	for _, s := range secs {
-		held, heads := 0, 0
-		hold := func(ws []string) {
+	best, at := -1, 0
+	var heads, bestHeads []string
+	for k, s := range secs {
+		held := 0
+		heads = heads[:0]
+		hold := func(name string, ws []string) {
 			if slices.ContainsFunc(ws, func(w string) bool { return hasWord(s.words, w) }) {
 				held++
 				if slices.ContainsFunc(ws, func(w string) bool { return hasWord(s.head, w) }) {
-					heads++
+					heads = append(heads, name)
 				}
 			}
 		}
 		for _, t := range q.topics {
-			hold(t.row)
+			hold(t.name, t.row)
 		}
 		for _, w := range q.words {
 			if !namesResource(w, ms) {
-				hold([]string{w})
+				hold(w, []string{w})
 			}
 		}
-		if n := held + heads; n > best {
-			best, bestHeads = n, heads
+		if n := held + len(heads); n > best {
+			best, at, bestHeads = n, k, slices.Clone(heads)
 		}
 	}
-	return headWord * bestHeads
+	return &bestSec{words: secs[at].words, heldHeads: bestHeads}
 }
 
 // matchingMark follows the heading path of the section a long row prints

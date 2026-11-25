@@ -223,6 +223,14 @@ type scored struct {
 	// comments are the row's comments holding a word of the question
 	// (devco D-942), printed under it as history.
 	comments []Comment
+	// heads are the question words and topic names the heading of a long
+	// row's best section holds (longsec.go, devco D-969), each adding
+	// headWord; distinctBonus takes back the common ones (D-972).
+	heads []string
+	// outside are the question words a long row holds only outside its
+	// best section (devco D-972): matched, but at a point each, and never
+	// distinctive.
+	outside []string
 }
 
 // staleNote says why row r is no longer the current answer as lore
@@ -848,11 +856,25 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 			}
 		}
 	}
+	// devco D-972: a long row counts the words of its best section (and
+	// title), not every word its whole text holds (longsec.go)
+	sec := bestSection(q, ms, r)
+	if sec != nil {
+		s.heads = sec.heldHeads
+	}
 	for _, w := range q.words {
 		if namesResource(w, ms) {
 			continue
 		}
 		if hasWord(toks, w) || identWord(q, toks, w) {
+			if sec != nil && !sec.holds(q, r, w) {
+				// held only by the long row's other sections: it says the
+				// row is about the word a little, as a comment does
+				s.score++
+				s.matched = append(s.matched, w)
+				s.outside = append(s.outside, w)
+				continue
+			}
 			s.score += 3
 			s.matched = append(s.matched, w)
 			if len(r.comments) > 0 {
@@ -870,8 +892,11 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 	s.comments = commentsOf(r, cmts)
 	if s.score > 0 {
 		// devco D-969: a long row ranks by its best section too, its
-		// heading naming the question's words (longsec.go)
-		s.score += headBonus(q, ms, r)
+		// heading naming the question's words (longsec.go); D-972: only
+		// the distinctive heading words keep it (distinctBonus)
+		s.score += headWord * len(s.heads)
+	} else {
+		s.heads = nil
 	}
 	if s.score == 0 && r.meaning {
 		// nearest the question in meaning, sharing none of its words: the
@@ -981,7 +1006,7 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 			all = append(all, s)
 		}
 	}
-	rareBonus(q, all) // idents.go: the distinctive words count more (H-230)
+	distinctBonus(q, all) // idents.go: the distinctive words count more (H-230, D-972)
 	// subject.go: the words a cut row keeps first (H-232)
 	subject := subjectTermsOf(all)
 	// an everything-about answer leads with the newest row of each folder

@@ -17,7 +17,7 @@ package ask
 //   - a row whose one identifier names two or more of the question's
 //     words names the asked thing (identBonus), as a phrase would
 //   - a question word few of the scored rows hold is distinctive and
-//     counts a point more than one most rows hold (rareBonus): a row
+//     counts a point more than one most rows hold (distinctBonus): a row
 //     matching the question's rare words beats one matching only the
 //     common ones
 //
@@ -25,6 +25,7 @@ package ask
 // spells its parts out (the max run duration) the same way (identWord).
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -154,6 +155,15 @@ func identBonus(q question, ms []match, r *textRow) int {
 		return 0
 	}
 	best := 0
+	// devco D-972: a question that writes an identifier (vault-rekey,
+	// set-when-blank) names the asked thing as a phrase, and a row writing
+	// the same identifier names it too
+	toks := r.tokens()
+	for _, w := range q.words {
+		if ps := q.parts[w]; len(ps) >= 2 && toks[w] && !namesResource(w, ms) {
+			best = max(best, len(ps))
+		}
+	}
 	set := map[string]bool{}
 	for _, ps := range ids {
 		clear(set)
@@ -190,29 +200,47 @@ func identWord(q question, toks map[string]bool, w string) bool {
 	return true
 }
 
-// rareFloor is the fewest scored rows rareBonus reads a word's spread
+// rareFloor is the fewest scored rows distinctBonus reads a word's spread
 // from: among a handful every word is rare.
 const rareFloor = 8
 
-// rareBonus adds a point to each scored row for each question word it
-// holds that at most a quarter of the scored rows hold: the distinctive
-// words (reserved, duration) say more than the common ones every row
-// shares (role, workflow). Less than one question word (3), so a row
-// holding one more of the question's words still wins.
-func rareBonus(q question, all []scored) {
+// distinctBonus adds a point to each scored row for each question word
+// it holds that at most a quarter of the scored rows hold: the
+// distinctive words (reserved, duration) say more than the common ones
+// every row shares (role, workflow). Less than one question word (3), so
+// a row holding one more of the question's words still wins (H-230).
+//
+// It also takes back the headWord a long row's best section heading
+// added (scored.heads) for each heading word or topic that more than a
+// quarter of the scored rows hold (devco D-972, bug hunt H-231): a
+// heading "Commands" or "Mirror" over a note's common words is no reason
+// to rank the note above the short row naming the asked command, which
+// lore search ranks first. A word a long row holds only outside its best
+// section (scored.outside) is never distinctive for that row. Among
+// fewer than rareFloor scored rows every word is distinctive and nothing
+// changes.
+func distinctBonus(q question, all []scored) {
 	if len(all) < rareFloor {
 		return
 	}
-	asked := map[string]bool{}
-	for _, w := range q.words {
-		asked[w] = true
-	}
 	df := wordSpread(all) // subject.go: the same spread a cut row's excerpt weighs words by
+	rare := func(w string) bool { return df[strings.ToLower(w)]*4 <= len(all) }
 	for i := range all {
-		for _, w := range all[i].matched {
-			if asked[w] && df[w]*4 <= len(all) {
-				all[i].score++
+		s := &all[i]
+		for _, w := range s.matched {
+			if isWord(q, w) && rare(w) && !slices.Contains(s.outside, w) {
+				s.score++
+			}
+		}
+		for _, h := range s.heads {
+			if !rare(h) {
+				s.score -= headWord
 			}
 		}
 	}
+}
+
+// isWord reports whether w is one of q's words (not a topic name).
+func isWord(q question, w string) bool {
+	return slices.Contains(q.words, w)
 }

@@ -15,7 +15,7 @@ package ask
 // duplicate while the first run is non-terminal returns the first run's
 // id"). The words the scored rows of the store rarely hold are the
 // question's subject: they weigh more in the excerpt too, the same spread
-// rareBonus ranks rows by, read once per ask.
+// distinctBonus ranks rows by, read once per ask.
 
 import (
 	"math"
@@ -25,7 +25,7 @@ import (
 // subjectTerms is how much each question word a row matched says about
 // the question's subject across the store: weight is ln(1 + n/df) for a
 // word df of the n scored rows hold, and rare holds the words at most a
-// quarter of them hold (rareBonus's distinctive words). Shared by every
+// quarter of them hold (distinctBonus's distinctive words). Shared by every
 // row of one answer; nil (every word 1, none rare) when fewer than
 // rareFloor rows scored, where every word is rare.
 type subjectTerms struct {
