@@ -35,6 +35,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/logic/meta"
@@ -130,6 +131,50 @@ func (a *App) leakCheckDocsAllowed(ctx context.Context, res *OrgResolution, wher
 	if len(docs) == 0 || res == nil {
 		return nil, nil
 	}
+	set, err := a.leakDocsSetupOf(ctx, res)
+	if err != nil || set == nil {
+		return nil, err // an own repo with a known link (or no project) is not checked
+	}
+	s, rows := set.situation, set.rows
+	items := make([]leakcheck.Item, 0, len(docs))
+	for p, b := range docs {
+		label := where + " " + p
+		if p == where {
+			label = where // a PR body is one text, named once
+		}
+		items = append(items, leakcheck.Item{Where: label, Path: p, Content: b, LiveRow: liveRowDoc(where, p)})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
+	all := a.leakCheckByProject(ctx, items, set.idx, set.opts) // per monorepo project folder (leakdocs_projects.go)
+	fs, moved := withoutSelfMatches(where, leakcheck.Blocking(all), rows)
+	if len(fs) == 0 {
+		return textAllowed(all), nil
+	}
+	if moved {
+		return nil, leakBlocked(leakWhereMove, fs, explain)
+	}
+	return nil, withUnlistedHint(leakBlocked(where, fs, explain), UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.ClassRemotes())))
+}
+
+// leakDocsSetup is what F16 checks text against in this repo: its
+// situation, the internal rows (with the repo's own key rows in a client
+// repo), their index and the check options (the text allows of #129).
+// The commit check and `lore check leaks --history` (H-262) share it, so
+// a passage the commit hook refuses is refused in an old version too.
+type leakDocsSetup struct {
+	situation *orgcfg.Situation
+	rows      []leakcheck.IndexRow
+	idx       *leakcheck.Index
+	opts      leakcheck.Options
+}
+
+// leakDocsSetupOf builds the leakDocsSetup of the repo res resolves; nil
+// (no error) for a repo F16 does not check (an own repo with a known
+// link, or no project). An unreadable store refuses (fail closed).
+func (a *App) leakDocsSetupOf(ctx context.Context, res *OrgResolution) (*leakDocsSetup, error) {
+	if res == nil {
+		return nil, nil
+	}
 	s, err := res.Situation(ctx)
 	if err != nil {
 		return nil, leakCannotCheckErr("", err)
@@ -174,24 +219,8 @@ func (a *App) leakCheckDocsAllowed(ctx context.Context, res *OrgResolution, wher
 		}
 		rows = withRepoKeys(rows, keys)
 	}
-	items := make([]leakcheck.Item, 0, len(docs))
-	for p, b := range docs {
-		label := where + " " + p
-		if p == where {
-			label = where // a PR body is one text, named once
-		}
-		items = append(items, leakcheck.Item{Where: label, Path: p, Content: b, LiveRow: liveRowDoc(where, p)})
-	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
-	all := a.leakCheckByProject(ctx, items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client, TextAllows: allows}) // per monorepo project folder (leakdocs_projects.go)
-	fs, moved := withoutSelfMatches(where, leakcheck.Blocking(all), rows)
-	if len(fs) == 0 {
-		return textAllowed(all), nil
-	}
-	if moved {
-		return nil, leakBlocked(leakWhereMove, fs, explain)
-	}
-	return nil, withUnlistedHint(leakBlocked(where, fs, explain), UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.ClassRemotes())))
+	return &leakDocsSetup{situation: s, rows: rows, idx: leakcheck.NewIndex(rows, nil),
+		opts: leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client, TextAllows: allows}}, nil
 }
 
 // textAllowed are the findings of fs a text allow covered (#129).

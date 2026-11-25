@@ -180,21 +180,30 @@ func asClientLine(f leakcheck.Finding, explain bool) string {
 // no client team yet, so no org store is shared), plus this repo's own
 // key rows for the foreign-key rule. An unreadable store refuses.
 func (a *App) asClientIndex(ctx context.Context, res *OrgResolution) (*leakcheck.Index, error) {
+	idx, _, err := a.asClientIndexAllows(ctx, res)
+	return idx, err
+}
+
+// asClientIndexAllows is asClientIndex with the text allows (#129) of the
+// rows it indexes: `lore check leaks --history --as-client` (D-994) lets
+// an approved passage through in an old version as the commit hook does.
+func (a *App) asClientIndexAllows(ctx context.Context, res *OrgResolution) (*leakcheck.Index, []leakcheck.TextAllow, error) {
 	var scope leakScope
 	if res != nil {
 		s, serr := res.Situation(ctx)
 		if serr != nil {
-			return nil, leakCannotCheckErr("", serr)
+			return nil, nil, leakCannotCheckErr("", serr)
 		}
 		if s.ResolveErr == nil && s.Result.Org != nil {
 			expected, oerr := res.OrgStores(ctx)
 			if oerr != nil {
-				return nil, leakCannotCheckErr("", oerr)
+				return nil, nil, leakCannotCheckErr("", oerr)
 			}
 			scope = a.leakScopeFor(s.Result.Org, "", a.leakAttached(ctx, expected))
 		}
 	}
 	var rows []leakcheck.IndexRow
+	var allows []leakcheck.TextAllow
 	err := a.withExtra(scope.Extra, func() error {
 		idents, ierr := a.StoreIdentities(ctx)
 		if ierr != nil {
@@ -206,16 +215,20 @@ func (a *App) asClientIndex(ctx context.Context, res *OrgResolution) (*leakcheck
 		}
 		var rerr error
 		rows, rerr = a.leakRows(ctx, true, names, nil, nil)
+		if rerr != nil {
+			return rerr
+		}
+		allows, rerr = leakTextAllows(ctx, a, rows) // before the repo's own key rows join rows
 		return rerr
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	keys, err := a.List(ctx, store.SourceRepo, schema.TableMetaKeys)
 	if err != nil {
-		return nil, leakCannotCheckErr("the repo's key rows", err)
+		return nil, nil, leakCannotCheckErr("the repo's key rows", err)
 	}
-	return leakcheck.NewIndex(withRepoKeys(rows, keys), nil), nil
+	return leakcheck.NewIndex(withRepoKeys(rows, keys), nil), allows, nil
 }
 
 // asClientSecrets is the secret rule over tracked files: the write scanner

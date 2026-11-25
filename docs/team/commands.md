@@ -740,13 +740,15 @@ Examples:
   lore check leaks --rows
   # every commit of the repo's history
   lore check leaks --history
+  # every commit, as the client would read it, before a hand-over
+  lore check leaks --history --as-client
 
 Flags:
-      --as-client           check the whole repo as the client would see it (before a hand-over)
+      --as-client           check the whole repo as the client would see it (before a hand-over); with --history, every file version and commit message too
       --ci                  CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal. CI cannot read your private store: a not-a-secret allow kept in a store folder (where a linked repo saves them) is not seen here; the commit and pre-push hooks on each member's machine enforce it, and a committed .lore/data/secret_allows entry or .gitleaksignore line is seen
       --commit-msg string   also check this commit message file (the commit-msg hook's $1)
       --explain             print the rule, the source and the matched words of each finding
-      --history             scan every file version and commit message reachable from HEAD for secrets (each version read once), naming the commit that added each one; with --since, only the commits after that one
+      --history             scan every file version and commit message reachable from HEAD for secrets and, in a client repo or with --as-client, internal notes (each version read once), naming the commit that added each one; with --since, only the commits after that one
       --json                print the result (or the error) as JSON
       --rows                re-scan every stored row of every attached store with today's secret rules
       --since string        with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits. With --history: check only the commits after this one

@@ -71,7 +71,8 @@ func TestStoryOHistoryLeakScan(t *testing.T) {
 			t.Errorf("one value in four versions is listed more than once:\n%s", out)
 		}
 		// --since: only the commits after it; the key added before it is not new
-		ada.Lore(pc.Dir, "check", "leaks", "--history", "--since", pc.Head()).OK(t).Says(t, "✓", "no secret in 0 commit(s)")
+		// (platform is a client repo by the fail-closed default, so its notes are read too: D-994)
+		ada.Lore(pc.Dir, "check", "leaks", "--history", "--since", pc.Head()).OK(t).Says(t, "✓", "no secret or internal note in 0 commit(s)")
 		ada.Lore(pc.Dir, "check", "leaks", "--history", "--since", before).Fails(t, 19, "deploy.env:1")
 	})
 
@@ -96,7 +97,7 @@ func TestStoryOHistoryLeakScan(t *testing.T) {
 		pc.WriteFile(".gitleaksignore", m[1]+"\n")
 		pc.Git("add", "-A")
 		pc.Git("commit", "-q", "-m", "accept the history findings")
-		ada.Lore(pc.Dir, "check", "leaks", "--history").OK(t).Says(t, "✓ lore check leaks --history: no secret in")
+		ada.Lore(pc.Dir, "check", "leaks", "--history").OK(t).Says(t, "✓ lore check leaks --history: no secret or internal note in")
 	})
 
 	s.Step("D-870/a-repo-lore-is-not-set-up-in-gets-the-gitleaksignore-line", func() {

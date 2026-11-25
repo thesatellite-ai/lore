@@ -81,18 +81,22 @@ type historyFinding struct {
 	order        int // the adding commit's place in history (oldest first)
 }
 
-// historyStats is what the scan read, for the summary and the refusal.
+// historyStats is what the scan read, for the summary and the refusal;
+// notesAllowed counts the note findings a text allow let through.
 type historyStats struct {
-	commits, blobs, large, binary, messages int
-	bytes                                   int64
+	commits, blobs, large, binary, messages, notesAllowed int
+	bytes                                                 int64
 }
 
 // CheckHistory scans every file version and commit message reachable from
 // HEAD (since..HEAD when since is set) in the repo at root with the hook's
-// secret rules and allow entries. It returns the ✓ summary, or
-// E_LEAK_BLOCKED naming each value (commit, path, line, rule, match hash)
-// with its next step. Fails closed: a history it cannot read refuses.
-func (a *App) CheckHistory(ctx context.Context, root, since string) (string, error) {
+// secret rules and allow entries, and (D-994) with the internal-note rules:
+// the commit hook's in a client repo, --as-client's when asClient (the
+// repo read as its client's before a hand-over). It returns the ✓
+// summary, or E_LEAK_BLOCKED naming each value or note (commit, path,
+// line, rule) with its next step; explain adds each note finding's rule
+// and source. Fails closed: a history or store it cannot read refuses.
+func (a *App) CheckHistory(ctx context.Context, res *OrgResolution, root, since string, asClient, explain bool) (string, error) {
 	top := gitTop(ctx, root)
 	if top == "" {
 		return "", errs.New(errs.InvalidInput, "check leaks --history needs a git repo: "+root+" is not in one").
@@ -123,16 +127,26 @@ func (a *App) CheckHistory(ctx context.Context, root, since string) (string, err
 	if err != nil {
 		return "", err
 	}
+	notes, skipped, err := a.historyNotesOf(ctx, res, root, asClient, explain)
+	if err != nil {
+		return "", err
+	}
 	_, isGit, inStore := rowfs.StoreTop(root)
 	inStore = inStore && isGit
-	return scanHistory(ctx, top, revs, sc, allows, pinned, historyPlace{inStore: inStore, allowSaves: a.secretsAllowSaves(ctx)})
+	return scanHistory(ctx, top, revs, sc, allows, pinned, historyPlace{inStore: inStore, allowSaves: a.secretsAllowSaves(ctx), notes: notes, notesSkipped: skipped})
 }
 
 // historyPlace is what the repo is, for the scan and the next steps:
-// inStore (a store clone, whose row files sit at <folder>/<table>/) and
+// inStore (a store clone, whose row files sit at <folder>/<table>/),
 // allowSaves (`lore secrets allow` can save an entry here; false in a
-// repo lore is not set up in).
-type historyPlace struct{ inStore, allowSaves bool }
+// repo lore is not set up in), notes (the internal-note check, nil for
+// secrets only, D-994) and notesSkipped (the ✓ line's note when an own
+// repo's notes were not read).
+type historyPlace struct {
+	inStore, allowSaves bool
+	notes               *historyNotes
+	notesSkipped        string
+}
 
 // scanHistory is CheckHistory after its inputs are resolved (the unit the
 // tests drive with a plain scanner).
@@ -160,8 +174,9 @@ func scanHistory(ctx context.Context, top string, revs []string, sc scan.Scanner
 	}
 	_, _ = fmt.Fprintf(historyProgress, "%s: reading %d commits, %d file versions (%d MB); every version is read once\n",
 		historyWhere, st.commits, len(read), total>>20)
-	_ = sc.Scan("", "")                        // build a lazy scanner once, before the workers share it
-	hits := map[string][]leakcheck.SecretHit{} // blob oid → its findings
+	_ = sc.Scan("", "")                          // build a lazy scanner once, before the workers share it
+	hits := map[string][]leakcheck.SecretHit{}   // blob oid → its findings
+	noteHits := map[string][]leakcheck.Finding{} // blob oid → its internal-note findings (D-994)
 	var done int64
 	for lo := 0; lo < len(read); {
 		hi, size := lo, 0
@@ -192,28 +207,45 @@ func scanHistory(ctx context.Context, top string, revs []string, sc scan.Scanner
 				hits[chunk[i].oid] = h
 			}
 		}
+		st.notesAllowed += at.notes.blobHits(chunk, bodies, noteHits) // the same bodies, read once
 		done += int64(size)
 		if total > historyChunkBytes && hi < len(read) {
 			_, _ = fmt.Fprintf(historyProgress, "%s: %d of %d MB read\n", historyWhere, done>>20, total>>20)
 		}
 		lo = hi
 	}
-	msgHits, nmsg, err := historyMessages(ctx, top, revs, sc, allows)
+	msgHits, noteMsgs, err := historyMessages(ctx, top, revs, sc, allows, at.notes, &st)
 	if err != nil {
 		return "", err
 	}
-	st.messages = nmsg
-	if len(hits) == 0 && len(msgHits) == 0 {
-		return historyClean(st), nil
+	if len(hits) == 0 && len(msgHits) == 0 && len(noteHits) == 0 && len(noteMsgs) == 0 {
+		return historyClean(st, at), nil
 	}
-	found, err := historyFindings(ctx, top, revs, blobs, hits, pinned)
+	want := make(map[string]bool, len(hits)+len(noteHits))
+	for oid := range hits {
+		want[oid] = true
+	}
+	for oid := range noteHits {
+		want[oid] = true
+	}
+	added, head, err := historyPlaces(ctx, top, revs, want)
 	if err != nil {
 		return "", err
 	}
-	if len(found) == 0 && len(msgHits) == 0 {
-		return historyClean(st), nil
+	found := historyFindings(blobs, hits, pinned, added, head)
+	notes := historyNoteFindings(blobs, noteHits, added, head)
+	if len(found) == 0 && len(msgHits) == 0 && len(notes) == 0 && len(noteMsgs) == 0 {
+		return historyClean(st, at), nil
 	}
-	return "", historyRefusal(st, found, msgHits, at)
+	return "", historyRefusal(st, historyAll{found, msgHits, notes, noteMsgs}, at)
+}
+
+// historyAll is every finding of a history scan, for the refusal.
+type historyAll struct {
+	secrets  []historyFinding
+	msgs     []historyMsgHit
+	notes    []historyNoteFinding
+	noteMsgs []historyNoteMsg
 }
 
 // scanHistoryChunk scans each body of a chunk on every CPU; out[i] are the
@@ -284,28 +316,34 @@ func historyBlobs(ctx context.Context, top string, revs []string) ([]historyBlob
 	return out, nil
 }
 
-// historyMessages scans every commit message reachable from revs; the
-// findings are keyed "message of commit <short sha>" (the pre-push hook's
-// name for a pushed message), in history order (newest first).
-func historyMessages(ctx context.Context, top string, revs []string, sc scan.Scanner, allows hookAllows) ([]historyMsgHit, int, error) {
+// historyMessages scans every commit message reachable from revs for
+// secrets and, with notes, for internal notes (D-994); the secret findings
+// are keyed "message of commit <short sha>" (the pre-push hook's name for
+// a pushed message), both in history order (newest first). st gets the
+// message count and the note findings an allow let through.
+func historyMessages(ctx context.Context, top string, revs []string, sc scan.Scanner, allows hookAllows, notes *historyNotes, st *historyStats) ([]historyMsgHit, []historyNoteMsg, error) {
 	out, err := liveGit(ctx, top, append([]string{"log", "--format=%H%x1f%B%x1e"}, revs...)...)
 	if err != nil {
-		return nil, 0, leakCannotCheckErr("the commit messages of the history", err)
+		return nil, nil, leakCannotCheckErr("the commit messages of the history", err)
 	}
 	var hits []historyMsgHit
-	n := 0
+	var order []string
+	bodies := map[string]string{}
 	for _, rec := range strings.Split(string(out), "\x1e") {
 		sha, body, ok := strings.Cut(strings.TrimLeft(rec, "\n"), "\x1f")
 		if !ok {
 			continue
 		}
-		n++
+		st.messages++
+		order, bodies[sha] = append(order, sha), body
 		key := PushCommitMsgPrefix + shortSHA(sha)
 		for _, h := range scanDoc(sc, allows, key, []byte(body), false) {
 			hits = append(hits, historyMsgHit{commit: sha, hit: h})
 		}
 	}
-	return hits, n, nil
+	noteHits, allowed := notes.msgHits(order, bodies)
+	st.notesAllowed += allowed
+	return hits, noteHits, nil
 }
 
 // historyMsgHit is a secret in a commit message.
@@ -314,25 +352,32 @@ type historyMsgHit struct {
 	hit    leakcheck.SecretHit
 }
 
-// historyFindings turns the blob hits into one finding per value: the
-// commit that first added it (one git log --raw pass), the path there,
-// whether HEAD still holds it, and the versions carrying it. A finding a
-// commit-pinned .gitleaksignore line names is dropped.
-func historyFindings(ctx context.Context, top string, revs []string, blobs []historyBlob, hits map[string][]leakcheck.SecretHit, pinned historyPinSet) ([]historyFinding, error) {
-	added, err := historyAdders(ctx, top, revs, hits)
+// historyPlaces names, for each blob in want, the commit that first added
+// it (one git log --raw pass) and a path HEAD holds it at (atHead; absent
+// when HEAD no longer holds it).
+func historyPlaces(ctx context.Context, top string, revs []string, want map[string]bool) (added map[string]historyAdd, atHead map[string]string, err error) {
+	added, err = historyAdders(ctx, top, revs, want)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	head, err := treeBlobOIDs(ctx, top, nil, "HEAD")
 	if err != nil {
-		return nil, leakCannotCheckErr("the files at HEAD", err)
+		return nil, nil, leakCannotCheckErr("the files at HEAD", err)
 	}
-	atHead := map[string]string{} // blob oid → a path HEAD holds it at
+	atHead = map[string]string{}
 	for p, oid := range head {
-		if _, ok := hits[oid]; ok {
+		if want[oid] {
 			atHead[oid] = p
 		}
 	}
+	return added, atHead, nil
+}
+
+// historyFindings turns the blob hits into one finding per value: the
+// commit that first added it (added), the path there, whether HEAD still
+// holds it (atHead), and the versions carrying it. A finding a
+// commit-pinned .gitleaksignore line names is dropped.
+func historyFindings(blobs []historyBlob, hits map[string][]leakcheck.SecretHit, pinned historyPinSet, added map[string]historyAdd, atHead map[string]string) []historyFinding {
 	type key struct{ path, rule, preview string }
 	byKey := map[key]*historyFinding{}
 	for _, b := range blobs {
@@ -379,7 +424,7 @@ func historyFindings(ctx context.Context, top string, revs []string, blobs []his
 		}
 		return out[i].hit.Line < out[j].hit.Line
 	})
-	return out, nil
+	return out
 }
 
 // historyAdd is where a blob first entered the history.
@@ -391,7 +436,7 @@ type historyAdd struct {
 // historyAdders names, for each blob in want, the oldest commit whose diff
 // (against its first parent for a merge) adds it, and its path there:
 // one git log --raw pass, oldest first.
-func historyAdders(ctx context.Context, top string, revs []string, want map[string][]leakcheck.SecretHit) (map[string]historyAdd, error) {
+func historyAdders(ctx context.Context, top string, revs []string, want map[string]bool) (map[string]historyAdd, error) {
 	args := append([]string{"-c", "core.quotePath=false", "log", "--reverse", "--raw", "--no-abbrev", "--no-renames",
 		"--diff-merges=first-parent", "--format=commit %H"}, revs...)
 	out, err := liveGit(ctx, top, args...)
@@ -418,7 +463,7 @@ func historyAdders(ctx context.Context, top string, revs []string, want map[stri
 			continue
 		}
 		oid := f[3]
-		if _, need := want[oid]; !need {
+		if !want[oid] {
 			continue
 		}
 		if _, seen := found[oid]; seen {
@@ -437,11 +482,19 @@ func historyAdders(ctx context.Context, top string, revs []string, want map[stri
 	return found, nil
 }
 
-// historyClean is the ✓ line of a history with no finding.
-func historyClean(st historyStats) string {
-	msg := fmt.Sprintf("✓ %s: no secret in %d commit(s) reachable from HEAD (%d file versions, %d MB, %d commit messages read)",
-		historyWhere, st.commits, st.blobs, st.bytes>>20, st.messages)
-	return msg + historySkipped(st)
+// historyClean is the ✓ line of a history with no finding: what was
+// checked (secrets, and internal notes when at.notes is set), what was
+// read, the passages a text allow let through, and what was not read.
+func historyClean(st historyStats, at historyPlace) string {
+	msg := fmt.Sprintf("✓ %s: no %s in %d commit(s) reachable from HEAD (%d file versions, %d MB, %d commit messages read)",
+		historyWhere, historyWhat(at.notes != nil), st.commits, st.blobs, st.bytes>>20, st.messages)
+	if at.notes != nil && at.notes.asClient {
+		msg += ", read as the client would"
+	}
+	if st.notesAllowed > 0 {
+		msg += fmt.Sprintf("; %d passage(s) a lore leaks allow entry lets through", st.notesAllowed)
+	}
+	return msg + historySkipped(st) + at.notesSkipped
 }
 
 // historySkipped names the file versions the scan did not read, so a pass
@@ -465,7 +518,8 @@ func historySkipped(st historyStats) string {
 // A value still in the current files gets the `lore secrets allow` line
 // where lore can save one; every other finding the commit-pinned
 // .gitleaksignore line this check honours.
-func historyRefusal(st historyStats, found []historyFinding, msgs []historyMsgHit, place historyPlace) error {
+func historyRefusal(st historyStats, all historyAll, place historyPlace) error {
+	found, msgs := all.secrets, all.msgs
 	var lines []string
 	for _, f := range found {
 		at := fmt.Sprintf("%s:%d", f.path, f.hit.Line)
@@ -494,12 +548,32 @@ func historyRefusal(st historyStats, found []historyFinding, msgs []historyMsgHi
 	for _, m := range msgs {
 		lines = append(lines, fmt.Sprintf("  %s %-40s secret: rule %s match %s", shortSHA(m.commit), "commit message", m.hit.Rule, m.hit.Preview))
 	}
+	explain := place.notes != nil && place.notes.explain
+	lines = append(lines, historyNoteLines(all.notes, all.noteMsgs, explain)...)
 	n := len(found) + len(msgs)
-	head := fmt.Sprintf("%s: %d secret(s) in the history of HEAD (%d commits, %d file versions, %d commit messages read%s):\n",
-		historyWhere, n, st.commits, st.blobs, st.messages, historySkipped(st))
-	hint := "rotate each credential first: anyone with a clone has every commit, so removing a value from the files does not remove it from history; " +
-		"remove a value still in the current files and commit; rewriting history (git filter-repo, then a force push every clone must follow) is your choice, lore never does it; " +
-		"a finding that is not a secret: follow the `not a secret?` line printed under it (a commit message cannot be allowed: rotate the credential)"
+	nNotes := len(all.notes) + len(all.noteMsgs)
+	what := fmt.Sprintf("%d secret(s)", n)
+	switch {
+	case nNotes > 0 && n == 0:
+		what = fmt.Sprintf("%d internal note(s)", nNotes)
+	case nNotes > 0:
+		what += fmt.Sprintf(" and %d internal note(s)", nNotes)
+	}
+	read := ""
+	if place.notes != nil && place.notes.asClient {
+		read = ", read as the client would"
+	}
+	head := fmt.Sprintf("%s: %s in the history of HEAD (%d commits, %d file versions, %d commit messages read%s%s):\n",
+		historyWhere, what, st.commits, st.blobs, st.messages, read, historySkipped(st))
+	var hint string
+	if n > 0 {
+		hint = "rotate each credential first: anyone with a clone has every commit, so removing a value from the files does not remove it from history; " +
+			"remove a value still in the current files and commit; rewriting history (git filter-repo, then a force push every clone must follow) is your choice, lore never does it; " +
+			"a finding that is not a secret: follow the `not a secret?` line printed under it (a commit message cannot be allowed: rotate the credential)"
+	}
+	if nNotes > 0 {
+		hint = joinNonEmpty("; ", hint, historyNoteHint(place.notes))
+	}
 	return errs.New(errs.LeakBlocked, head+strings.Join(lines, "\n")).WithHint(hint)
 }
 

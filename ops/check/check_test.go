@@ -99,7 +99,8 @@ func TestLeaksModes(t *testing.T) {
 		{name: "ci + since", flags: flags("ci", "true", "since", "abc1234"), mode: ModeCI},
 		{name: "since alone", flags: flags("since", "abc1234"), code: errs.InvalidInput},
 		{name: "history + ci", flags: flags("history", "true", "ci", "true"), code: errs.InvalidInput},
-		{name: "history + as-client", flags: flags("history", "true", "as-client", "true"), code: errs.InvalidInput},
+		{name: "history + as-client", flags: flags("history", "true", "as-client", "true"), mode: ModeHistory}, // D-994: the history read as the client would
+		{name: "history + as-client + explain", flags: flags("history", "true", "as-client", "true", "explain", "true"), mode: ModeHistory},
 		{name: "history + rows", flags: flags("history", "true", "rows", "true"), code: errs.InvalidInput},
 		{name: "history + staged", flags: flags("history", "true", "staged", "true"), code: errs.InvalidInput},
 		{name: "history + commit-msg", flags: flags("history", "true", "commit-msg", "m"), code: errs.InvalidInput},

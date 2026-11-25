@@ -9,7 +9,9 @@ package wire
 //	leaks   ─▶ --ci: key loosening since the default branch, then every
 //	           .lore/data row file must belong to this project (no store)
 //	        ─▶ --as-client: CheckAsClient (check_asclient_standalone.go)
-//	        ─▶ --history: CheckHistory (check_history.go, D-870)
+//	        ─▶ --history: CheckHistory (check_history.go, D-870): secrets and
+//	           (D-994) internal notes of every version; with --as-client
+//	           read as the client would
 //	        ─▶ default: staged files (+ --commit-msg) ─▶ LeakCheckDocs
 //	           ("commit"); silent when clean
 //
@@ -113,7 +115,7 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 		if aerr != nil {
 			return opscheck.LeaksOut{}, aerr
 		}
-		msg, herr := a.CheckHistory(ctx, root, in.Since)
+		msg, herr := a.CheckHistory(ctx, l.res, root, in.Since, in.AsClient, in.Explain)
 		return opscheck.LeaksOut{Message: msg}, herr
 	case in.AsClient: // later 515 (check_asclient_standalone.go)
 		a, aerr := l.appOf()

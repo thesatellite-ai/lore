@@ -12662,7 +12662,7 @@
                 "properties": {
                   "as_client": {
                     "type": "boolean",
-                    "description": "check the whole repo as the client would see it (before a hand-over)"
+                    "description": "check the whole repo as the client would see it (before a hand-over); with --history, every file version and commit message too"
                   },
                   "ci": {
                     "type": "boolean",
@@ -12678,7 +12678,7 @@
                   },
                   "history": {
                     "type": "boolean",
-                    "description": "scan every file version and commit message reachable from HEAD for secrets (each version read once), naming the commit that added each one; with --since, only the commits after that one"
+                    "description": "scan every file version and commit message reachable from HEAD for secrets and, in a client repo or with --as-client, internal notes (each version read once), naming the commit that added each one; with --since, only the commits after that one"
                   },
                   "rows": {
                     "type": "boolean",

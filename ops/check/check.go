@@ -76,9 +76,9 @@ type LeaksIn struct {
 	Explain   bool   `json:"explain,omitempty" flag:"explain" desc:"print the rule, the source and the matched words of each finding"`
 	Staged    bool   `json:"staged,omitempty" flag:"staged" desc:"check the staged files (default unless --commit-msg is given alone)"`
 	CommitMsg string `json:"commit_msg,omitempty" flag:"commit-msg" desc:"also check this commit message file (the commit-msg hook's $1)"`
-	AsClient  bool   `json:"as_client,omitempty" flag:"as-client" desc:"check the whole repo as the client would see it (before a hand-over)"`
+	AsClient  bool   `json:"as_client,omitempty" flag:"as-client" desc:"check the whole repo as the client would see it (before a hand-over); with --history, every file version and commit message too"`
 	Rows      bool   `json:"rows,omitempty" flag:"rows" desc:"re-scan every stored row of every attached store with today's secret rules"`
-	History   bool   `json:"history,omitempty" flag:"history" desc:"scan every file version and commit message reachable from HEAD for secrets (each version read once), naming the commit that added each one; with --since, only the commits after that one"`
+	History   bool   `json:"history,omitempty" flag:"history" desc:"scan every file version and commit message reachable from HEAD for secrets and, in a client repo or with --as-client, internal notes (each version read once), naming the commit that added each one; with --since, only the commits after that one"`
 }
 
 // Mode is the check the flags ask for.
@@ -86,12 +86,12 @@ func (in LeaksIn) Mode() string {
 	switch {
 	case in.CI:
 		return ModeCI
+	case in.History: // before --as-client: --history --as-client reads the history as the client would
+		return ModeHistory
 	case in.AsClient:
 		return ModeAsClient
 	case in.Rows:
 		return ModeRows
-	case in.History:
-		return ModeHistory
 	}
 	return ModeCommit
 }
@@ -162,15 +162,16 @@ func Ops(c Checker) []op.Entry {
 				{Title: "before handing an own repo to the client", CLI: "lore check leaks --as-client", Want: "✓"},
 				{Title: "every stored row with today's secret rules", CLI: "lore check leaks --rows", Want: "✓"},
 				{Title: "every commit of the repo's history", CLI: "lore check leaks --history", Want: "✓"},
+				{Title: "every commit, as the client would read it, before a hand-over", CLI: "lore check leaks --history --as-client", Want: "✓"},
 			},
 		}, func(ctx context.Context, in LeaksIn) (LeaksOut, error) {
 			if in.CI && in.AsClient {
 				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --ci and --as-client cannot be used together").
 					WithHint("--ci is the client's CI check; --as-client is the hand-over check of an own repo")
 			}
-			if in.History && (in.CI || in.AsClient || in.Rows || in.Staged || in.CommitMsg != "") {
+			if in.History && (in.CI || in.Rows || in.Staged || in.CommitMsg != "") {
 				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --history checks the repo's history alone").
-					WithHint("run --history on its own (with --since <commit> for the commits after it); the commit, --ci, --as-client and --rows checks are separate runs")
+					WithHint("run --history on its own (with --since <commit> for the commits after it, --as-client to read it as the client would); the commit, --ci and --rows checks are separate runs")
 			}
 			if in.Since != "" && !in.CI && !in.History {
 				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --since is a --ci or --history option").
