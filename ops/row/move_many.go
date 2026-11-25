@@ -63,6 +63,44 @@ type ManyMover interface {
 	PlanMove(ctx context.Context, refs []engine.Ref, to store.Source, opt engine.MoveOptions) (engine.MovedMany, error)
 }
 
+// FolderCarrier is the optional Env upgrade (wire.App) for a bulk move
+// that carries a whole folder into another store of its org under the
+// same name (devco D-992, bug hunt H-260): `--from acme/shop --to
+// clientshop/shop`. Folder names are unique across an org's stores, so
+// the folder cannot be made in the new store first; the move makes it,
+// and the folder it leaves is removed. An Env without it never carries.
+type FolderCarrier interface {
+	// FolderCarry is the carry this move would make (ok false: none).
+	FolderCarry(ctx context.Context) (FolderCarry, bool)
+	// FinishFolderCarry runs after the rows moved: the folder is made in
+	// the new store, the old folder's repo links go with it, and the old
+	// folder is removed (what is left of it to the trash).
+	FinishFolderCarry(ctx context.Context) (FolderCarry, error)
+}
+
+// FolderCarry is a folder a bulk move carries (MoveOut.Carried).
+type FolderCarry struct {
+	Folder string `json:"folder"`
+	// From and To are the folder's place before and after.
+	From string `json:"from"`
+	To   string `json:"to"`
+	// Links counts the repo links (lore org link) that move with it.
+	Links int `json:"links"`
+	// Removed is true once the old folder is gone; Batch is the trash
+	// batch holding what was left in it ("" none).
+	Removed bool   `json:"removed,omitempty"`
+	Batch   string `json:"batch,omitempty"`
+}
+
+// folderCarry is the carry o's Env reports for this move (ok false: none).
+func (o ops) folderCarry(ctx context.Context) (FolderCarry, bool) {
+	fc, ok := o.env.(FolderCarrier)
+	if !ok {
+		return FolderCarry{}, false
+	}
+	return fc.FolderCarry(ctx)
+}
+
 // NearDuplicateFinder is the optional Env upgrade (wire.App) that lists
 // the rows a bulk move would bring into --to that repeat a row already
 // there (devco D-724: same name, or most body words in common), as store
@@ -88,10 +126,18 @@ var placeTables = map[row.Table]bool{
 // never leave the machine), global-key tables (actors, machines: one id
 // everywhere) and team-profile tables (never in a client repo, and the
 // roster's own).
-func movableTables() []row.Table {
+func movableTables() []row.Table { return bulkTables(false) }
+
+// bulkTables is movableTables; with carry (a folder carried whole, devco
+// D-992) the folder's own bookkeeping (placeTables) goes with it too, all
+// but its project row: the folder in the new store has its own.
+func bulkTables(carry bool) []row.Table {
 	var out []row.Table
 	for _, d := range schema.Builtin() {
-		if !d.Synced || d.MachineLocal || d.GlobalKey || d.NeverClient || placeTables[d.Name] {
+		if !d.Synced || d.MachineLocal || d.GlobalKey || d.NeverClient {
+			continue
+		}
+		if placeTables[d.Name] && (!carry || d.Name == schema.TableProjects) {
 			continue
 		}
 		out = append(out, d.Name)
@@ -199,7 +245,14 @@ func (o ops) planMany(ctx context.Context, in MoveIn) (ManyMover, bulkPlan, erro
 		return nil, bulkPlan{}, errs.New(errs.InvalidInput, "move --from: "+string(from)+" and --to are the same store; nothing to move").
 			WithHint("name another attached store with --to (`lore store list` shows them)")
 	}
-	tables := movableTables()
+	_, carry := o.folderCarry(ctx)
+	if carry && len(in.Where) > 0 {
+		// devco D-992: a folder name lives in one store of the org, so a
+		// folder carried into another store goes whole
+		return nil, bulkPlan{}, errs.New(errs.InvalidInput, "move --from: "+string(from)+" moves into "+to+" under its own name, which takes the whole folder (folder names are unique across an org's stores); --where would leave rows behind in it").
+			WithHint("move every row: drop --where (`lore move --from " + strings.TrimSpace(in.From) + " --to " + to + " --dry-run`), or move the matching rows into a folder of another name")
+	}
+	tables := bulkTables(carry)
 	match, err := wheredel.Across(in.Where, tables, "move")
 	if err != nil {
 		return nil, bulkPlan{}, err
@@ -242,7 +295,18 @@ func (o ops) moveMany(ctx context.Context, in MoveIn) (MoveOut, error) {
 		def, _ := o.env.TableSchema(ctx, h.Row.Table)
 		out.Rows = append(out.Rows, MovedRow{ID: h.Row.ID.String(), Table: string(h.Row.Table), From: string(h.Source), Title: opstrash.Title(h.Row, def, true)})
 	}
+	carry, carrying := o.folderCarry(ctx)
+	if carrying {
+		out.Carried = carry
+	}
 	if len(p.hits) == 0 {
+		if carrying && !in.DryRun {
+			// an empty folder still moves (D-992)
+			return o.finishCarry(ctx, out)
+		}
+		if carrying {
+			out.next = o.bulkLine(ctx, in, p)
+		}
 		return out, nil
 	}
 	// the one-row move's company-row check, for every row at once (D-659)
@@ -278,6 +342,20 @@ func (o ops) moveMany(ctx context.Context, in MoveIn) (MoveOut, error) {
 		return MoveOut{}, err
 	}
 	out.addRowWarnings(mv.Rows)
+	if carrying {
+		return o.finishCarry(ctx, out)
+	}
+	return out, nil
+}
+
+// finishCarry ends a move that carries its folder (D-992): the folder made
+// in the new store with the old one's links, the old folder removed.
+func (o ops) finishCarry(ctx context.Context, out MoveOut) (MoveOut, error) {
+	done, err := o.env.(FolderCarrier).FinishFolderCarry(ctx)
+	if err != nil {
+		return MoveOut{}, err
+	}
+	out.Carried = done
 	return out, nil
 }
 
@@ -331,6 +409,9 @@ func (o ops) moveManyQuestion(ctx context.Context, in MoveIn) (string, error) {
 		return "", err
 	}
 	if len(p.hits) == 0 {
+		if c, ok := o.folderCarry(ctx); ok {
+			return "This moves the folder, which holds no rows:\n" + c.text(true) + "Move it?", nil // D-992
+		}
 		return "", nil // the move answers "nothing matches" without asking
 	}
 	if err = profilestore.RequireAdminForRows(ctx, o.env, p.hits, "move", o.bulkLine(ctx, in, p), ""); err != nil {
@@ -352,6 +433,9 @@ func (o ops) moveManyQuestion(ctx context.Context, in MoveIn) (string, error) {
 		def, _ := o.env.TableSchema(ctx, h.Row.Table)
 		b.WriteString("  " + strconv.Quote(opstrash.Title(h.Row, def, true)) + " (" + h.Row.ID.String() + ")\n")
 	}
+	if c, ok := o.folderCarry(ctx); ok {
+		b.WriteString(c.text(true))
+	}
 	b.WriteString("Every row keeps its id; one commit in " + string(p.to) + " and one in " + string(p.from) + ". Move them?")
 	return b.String(), nil
 }
@@ -364,6 +448,12 @@ func (o MoveOut) bulkText() string {
 	var b strings.Builder
 	n := strconv.Itoa(len(o.Rows))
 	switch {
+	case len(o.Rows) == 0 && o.Carried.Folder != "":
+		b.WriteString(o.Carried.text(o.DryRun))
+		if o.next != "" {
+			b.WriteString("next: " + o.next + "\n")
+		}
+		return b.String()
 	case len(o.Rows) == 0:
 		b.WriteString("no live row in " + o.From + " matches; nothing to move\n")
 		return b.String()
@@ -400,6 +490,9 @@ func (o MoveOut) bulkText() string {
 	for _, l := range (opsstores.NearDupPrint{Place: o.To, From: o.From, Dry: o.DryRun, Suffix: o.setup}).Lines(o.Duplicates) {
 		b.WriteString(l + "\n")
 	}
+	if o.Carried.Folder != "" {
+		b.WriteString(o.Carried.text(o.DryRun))
+	}
 	for _, n := range o.Notes {
 		b.WriteString("  " + n + "\n")
 	}
@@ -410,4 +503,21 @@ func (o MoveOut) bulkText() string {
 		b.WriteString("next: " + o.next + "\n")
 	}
 	return b.String()
+}
+
+// text is the carry's line: what moves with the folder and what happens to
+// the folder it leaves (dry: would).
+func (c FolderCarry) text(dry bool) string {
+	links := ""
+	if c.Links > 0 {
+		links = " and its " + strconv.Itoa(c.Links) + " repo link(s)"
+	}
+	if dry {
+		return "would move folder " + c.Folder + " from " + c.From + " to " + c.To + " with its settings" + links + "; " + c.From + " would be removed (folder names are unique across an org's stores)\n"
+	}
+	gone := c.From + " removed"
+	if c.Batch != "" {
+		gone += " (what was left in it, its old project row, is in that store's trash under " + c.Batch + ")"
+	}
+	return "✓ moved folder " + c.Folder + " to " + c.To + " with its settings" + links + "; " + gone + "\n"
 }

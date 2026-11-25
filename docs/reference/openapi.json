@@ -73393,6 +73393,35 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "carried": {
+                      "type": "object",
+                      "properties": {
+                        "batch": {
+                          "type": "string"
+                        },
+                        "folder": {
+                          "type": "string"
+                        },
+                        "from": {
+                          "type": "string"
+                        },
+                        "links": {
+                          "type": "integer"
+                        },
+                        "removed": {
+                          "type": "boolean"
+                        },
+                        "to": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "folder",
+                        "from",
+                        "to",
+                        "links"
+                      ]
+                    },
                     "children": {
                       "type": "array",
                       "items": {
@@ -74540,6 +74569,35 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "carried": {
+                      "type": "object",
+                      "properties": {
+                        "batch": {
+                          "type": "string"
+                        },
+                        "folder": {
+                          "type": "string"
+                        },
+                        "from": {
+                          "type": "string"
+                        },
+                        "links": {
+                          "type": "integer"
+                        },
+                        "removed": {
+                          "type": "boolean"
+                        },
+                        "to": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "folder",
+                        "from",
+                        "to",
+                        "links"
+                      ]
+                    },
                     "children": {
                       "type": "array",
                       "items": {

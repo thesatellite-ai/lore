@@ -1286,7 +1286,7 @@ func (a *App) AddFolder(ctx context.Context, in opsstores.FolderAddIn) (opsstore
 	// org link refuses it (team matrix F13).
 	if f, other := a.otherOrgStoreFolder(ctx, src, in.Folder); other {
 		return opsstores.FolderAddOut{}, errs.New(errs.InvalidInput, "store folder add: folder "+in.Folder+" is already in "+f.Org+"'s store "+f.Label+"; folder names are unique across an org's stores").
-			WithHint("write to that folder with --to " + f.Label + "/" + in.Folder + ", or pick another name: lore store folder add --store " + in.Store + " --folder <other name>")
+			WithHint("write to that folder with --to " + f.Label + "/" + in.Folder + "; to move it into " + in.Store + " keeping its name: lore move --from " + f.Label + "/" + in.Folder + " --to " + in.Store + "/" + in.Folder + " --dry-run; or pick another name: lore store folder add --store " + in.Store + " --folder <other name>")
 	}
 	// team and an org store's url are shown as the store they resolved to
 	out := opsstores.FolderAddOut{Store: a.storeLabel(in.Store, src), Folder: in.Folder}

@@ -70,6 +70,11 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 	if err := a.checkMeTarget(ctx, e, d); err != nil {
 		return ctx, d, err
 	}
+	// devco D-992: a whole folder moving into another store of its org
+	// under its own name (foldercarry.go)
+	if fc, ok := a.folderCarryOf(ctx, e, d); ok {
+		ctx = context.WithValue(ctx, folderCarryKey{}, fc)
+	}
 	from, root, created, err := a.attachFolderTarget(ctx, e, d, c)
 	if err != nil {
 		return ctx, d, err
@@ -204,7 +209,14 @@ func (a *App) attachFolderPlace(ctx context.Context, to string, mayCreate bool, 
 	if err != nil || !found {
 		return "", "", newFolder{}, err // not found: the engine answers "no store named … is attached"
 	}
-	if folderName != rowfs.FolderRoot {
+	_, carry := carryOf(ctx, name)
+	if carry {
+		// devco D-992: the folder moves here under its name (foldercarry.go),
+		// so the folder it leaves is no reason to look elsewhere and the
+		// name it keeps is no typo to confirm
+		mayCreate = true
+	}
+	if folderName != rowfs.FolderRoot && !carry {
 		// the folder may live in another store of the org (foldertarget.go):
 		// the target is that store's folder, never a new folder here
 		if f, ok := a.otherOrgStoreFolder(ctx, src, folderName); ok {

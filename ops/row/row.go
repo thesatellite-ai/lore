@@ -350,6 +350,9 @@ type MoveOut struct {
 	// move too since D-854, with its --with-children sub-tasks): listed,
 	// both kept, never merged; the bulk dry run lists them too.
 	Duplicates []opsstores.NearDuplicate `json:"duplicates,omitempty"`
+	// Carried is the folder a bulk move carried into another store of its
+	// org under its own name (devco D-992; with DryRun, would carry).
+	Carried FolderCarry `json:"carried,omitzero"`
 	// next is the bulk move's printed next step (the run of a dry run).
 	next string
 	// place is the one-row move's full --to (a linked folder as
