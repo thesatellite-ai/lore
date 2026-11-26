@@ -432,20 +432,9 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		return ImportOut{}, err
 	}
 	out.Batch = bid.String()
-	if slices.Contains(inTree(recs), true) {
-		// devco:D-938: a task tree is written row by row (a child reads its
-		// parent back), so the whole import first runs check-only, as its
-		// dry run does: a record the write would refuse stops the import
-		// before its first row lands, never part way through the file
-		check := out
-		check.Rows = slices.Clone(out.Rows)
-		if cerr := engine.CheckFirst(bctx, func(sctx context.Context) error {
-			_, err := o.importWrite(sctx, in, from, target, recs, dropped, plan, planned, check, true)
-			return err
-		}); cerr != nil {
-			return ImportOut{}, errs.Prefix("task import: nothing written", cerr)
-		}
-	}
+	// devco:D-938, D-1002: the whole file, task trees and statuses too, is
+	// one stage committed at the end, so a record the write refuses stops
+	// the import before any row lands (no check-only pass first).
 	return o.importWrite(bctx, in, from, target, recs, dropped, plan, planned, out, false)
 }
 
@@ -472,15 +461,18 @@ func (o ops) importWrite(bctx context.Context, in ImportIn, from string, target 
 	if bctx, err = o.withKeyIndex(bctx); err != nil {
 		return ImportOut{}, err
 	}
-	sctx := engine.Staging(store.WithCommitTitle(bctx, "task import: "+strconv.Itoa(len(recs)-out.existing())+" tasks from "+from))
+	// D-1002: the stage is read back (engine.WithStagedReads), so a tree
+	// record reads its parent and its siblings' ranks from it and the whole
+	// file is ONE store commit, trees included (before, the batch so far was
+	// committed before each tree record: one commit per record).
+	sctx := engine.Staging(engine.WithStagedReads(store.WithCommitTitle(bctx, "task import: "+strconv.Itoa(len(recs)-out.existing())+" tasks from "+from)))
 	defer func() { engine.Discard(sctx) }() // no-op once committed
 	flush := func() error {
 		_, ferr := engine.Commit(sctx)
-		sctx = engine.Staging(store.WithCommitTitle(bctx, "task import"))
 		return ferr
 	}
 	if dry { // one check-only stage for every write (bctx's)
-		sctx, flush = bctx, func() error { return nil }
+		sctx, flush = engine.WithStagedReads(bctx), func() error { return nil }
 	}
 	// The default list is created (if needed) outside the import slot: it
 	// is not an imported row and must not carry _o.import.
@@ -499,12 +491,6 @@ func (o ops) importWrite(bctx context.Context, in ImportIn, from string, target 
 			continue
 		}
 		wctx := sctx
-		if tree[i] {
-			if err = flush(); err != nil {
-				return ImportOut{}, err
-			}
-			wctx = bctx
-		}
 		// XQ9 / PROVENANCE 5.1: the row's _o.import names the importer
 		// kind and the external id (no ext_ source record for a file).
 		rctx := engine.WithImport(wctx, origin.Import{Source: from, ExtID: r.extID})
@@ -533,8 +519,8 @@ func (o ops) importWrite(bctx context.Context, in ImportIn, from string, target 
 			aerr = o.importChecklist(rctx, got.Data.ID, r.checklist)
 		}
 		if aerr != nil {
-			return ImportOut{}, errors.Join(aerr, errs.New(errs.InvalidInput, "task import: stopped at "+r.extID+" after "+
-				strconv.Itoa(i)+" of "+strconv.Itoa(len(recs))+" tasks; the ones written are in batch "+out.Batch))
+			return ImportOut{}, errors.Join(aerr, errs.New(errs.InvalidInput, "task import: nothing written: stopped at "+r.extID+" after "+
+				strconv.Itoa(i)+" of "+strconv.Itoa(len(recs))+" tasks"))
 		}
 		out.Rows[i].ID = got.Data.ID
 		if k := keyOfRecord(r); k != "" {
@@ -543,32 +529,27 @@ func (o ops) importWrite(bctx context.Context, in ImportIn, from string, target 
 		for _, d := range dropped[i] {
 			// PC-TASK-1: the row says what it lost, outside the import
 			// slot (the note is not an imported row).
-			if tree[i] {
-				err = o.addNote(bctx, got.Data.ID, d.note())
-			} else {
-				err = o.stagedNote(sctx, store.Source(got.Store), got.Data.ID, d.note())
-			}
-			if err != nil {
+			if err = o.stagedNote(sctx, store.Source(got.Store), got.Data.ID, d.note()); err != nil {
 				return ImportOut{}, err
 			}
 		}
 	}
-	if err = flush(); err != nil {
-		return ImportOut{}, err
-	}
 	// G-TASK-3: a status other than todo is set after every task exists,
 	// children before parents (pre-order reversed), so a done parent finds
-	// its sub-tasks already closed (checkStatusTree refused the rest).
+	// its sub-tasks already closed (checkStatusTree refused the rest). The
+	// edits join the stage (D-1002): one commit for the whole import.
 	for i := len(recs) - 1; i >= 0; i-- {
 		st := recs[i].cols[colStatus]
 		if out.Rows[i].Existing || statusSet[i] || st == "" || st == schema.TaskStatusTodo {
 			continue
 		}
-		rctx := engine.WithImport(bctx, origin.Import{Source: from, ExtID: recs[i].extID})
+		rctx := engine.WithImport(sctx, origin.Import{Source: from, ExtID: recs[i].extID})
 		if _, err = o.edit(rctx, EditIn{ID: out.Rows[i].ID, Status: st}); err != nil {
-			return ImportOut{}, errors.Join(err, errs.New(errs.InvalidInput, "task import: setting status "+st+" on "+recs[i].extID+
-				" failed; the tasks written are in batch "+out.Batch))
+			return ImportOut{}, errors.Join(err, errs.New(errs.InvalidInput, "task import: nothing written: setting status "+st+" on "+recs[i].extID+" failed"))
 		}
+	}
+	if err = flush(); err != nil {
+		return ImportOut{}, err
 	}
 	return out, nil
 }

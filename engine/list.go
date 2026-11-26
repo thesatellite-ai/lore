@@ -96,6 +96,11 @@ func (e *Engine) List(ctx context.Context, source store.Source, table row.Table)
 		}
 		out = append(out, e.readRow(ctx, a.Name, r))
 	}
+	if stagedReadsAsked(ctx) && mode == DeletedHide {
+		// D-1002: a stage asked to be read back (WithStagedReads) lists its
+		// own rows too; a check-only run keeps its old List (D-932)
+		out = withStaged(ctx, a.Name, table, out)
+	}
 	slices.SortFunc(out, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
 	return e.hideMoveLeftovers(ctx, a.Name, table, out), nil // devco:D-749: listed once, at the moved copy
 }

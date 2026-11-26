@@ -393,10 +393,17 @@ func (o ops) stale(ctx context.Context, in StaleIn) (StaleOut, error) {
 	if err != nil {
 		return StaleOut{}, err
 	}
+	// D-1002: every cancel is staged and read back from the stage (a
+	// parent closed after its last child): one commit per store
+	sctx := engine.Staging(engine.WithStagedReads(bctx))
+	defer engine.Discard(sctx) // no-op once committed
 	for _, s := range hits {
-		if _, err = o.cancel(bctx, CancelIn{ID: s.Row.ID.String(), Reason: schema.TaskCloseStale}); err != nil {
-			return StaleOut{}, staleCloseErr(s.Row.ID.String(), batch.String(), err)
+		if _, err = o.cancel(sctx, CancelIn{ID: s.Row.ID.String(), Reason: schema.TaskCloseStale}); err != nil {
+			return StaleOut{}, staleCloseErr(s.Row.ID.String(), err)
 		}
+	}
+	if _, _, err = engine.CommitEach(sctx); err != nil {
+		return StaleOut{}, err
 	}
 	out.Closed, out.Batch = true, batch.String()
 	out.Human = work.Success + " " + strconv.Itoa(len(hits)) + " tasks cancelled (close_reason stale, batch " + batch.String() + "); lore batch show --id " + batch.String() + "\n"
@@ -404,10 +411,11 @@ func (o ops) stale(ctx context.Context, in StaleIn) (StaleOut, error) {
 }
 
 // staleCloseErr is the refusal of task stale --close when cancelling id
-// fails part way through batch: the context first, then the cancel's own
-// reason and hint (errs.Prefix; a bare Wrap printed the context only).
-func staleCloseErr(id, batch string, err error) error {
-	return errs.Prefix("task stale --close: "+id+" failed after earlier tasks of batch "+batch+" were cancelled", err)
+// fails: the context first, then the cancel's own reason and hint
+// (errs.Prefix; a bare Wrap printed the context only). Every cancel of
+// the batch is one stage (D-1002), so nothing was written.
+func staleCloseErr(id string, err error) error {
+	return errs.Prefix("task stale --close: "+id+" failed; nothing written", err)
 }
 
 // hasOpenChild reports whether task id has an open direct sub-task.

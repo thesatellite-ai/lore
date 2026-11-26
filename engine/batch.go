@@ -169,6 +169,17 @@ type stagedStore struct {
 	events  []Event // finishW's full events, recorded after the write
 }
 
+// stages reports whether r is the version of its row the part's changes
+// hold (a dropped duplicate create is not).
+func (p *stagedStore) stages(r store.Row) bool {
+	for _, c := range p.changes {
+		if c.Row.Key() == r.Key() {
+			return c.Row.HLC == r.HLC
+		}
+	}
+	return false
+}
+
 // stageKey is the context key of the current stage.
 type stageKey struct{}
 
@@ -376,8 +387,12 @@ func (s *stage) part(e *Engine, st Attached) *stagedStore {
 // addWrite holds one put's changes and journal events. A second create of
 // a row the stage already creates (an actor row two staged writes both
 // ensure) is dropped: the first one stands. Any other second write of a
-// staged row is ErrBatch: the stage cannot read its own rows back, so it
-// cannot check that write against the staged version.
+// staged row is ErrBatch unless the stage reads its rows back (over: a
+// check-only stage, or WithStagedReads): the write was then checked
+// against the staged version and replaces it. In a stage that commits,
+// the replacing change keeps the first change's Expect, the store state
+// the whole batch was checked against (D-1002: an import sets a status on
+// a task it created in the same batch).
 func (s *stage) addWrite(e *Engine, st Attached, changes []store.Change, evs []Event, over bool) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -386,7 +401,8 @@ func (s *stage) addWrite(e *Engine, st Attached, changes []store.Change, evs []E
 		return false, nil
 	}
 	p := s.part(e, st)
-	for _, c := range changes {
+	changes = slices.Clone(changes) // the caller's slice keeps its own Expects
+	for i, c := range changes {
 		k := c.Row.Key()
 		if s.written[k] {
 			if !over {
@@ -395,6 +411,11 @@ func (s *stage) addWrite(e *Engine, st Attached, changes []store.Change, evs []E
 			// devco:D-932: a check-only stage is never committed, so a
 			// later write of a row it holds (an add, then its checklist)
 			// replaces the staged copy the later reads see (stagedView)
+			for _, x := range p.changes {
+				if x.Row.Key() == k {
+					changes[i].Expect = x.Expect // D-1002: the store as the batch found it
+				}
+			}
 			p.changes = slices.DeleteFunc(p.changes, func(x store.Change) bool { return x.Row.Key() == k })
 		}
 		s.written[k] = true
@@ -423,6 +444,16 @@ func (s *stage) addFinish(e *Engine, source store.Source, rows []store.Row, evs 
 		if !have[r.Key()] {
 			p.docs = append(p.docs, r)
 			have[r.Key()] = true
+			continue
+		}
+		if p.stages(r) {
+			// a later write replaced the row (addWrite, over): the cache
+			// gets the version Commit writes, not the first
+			for i := range p.docs {
+				if p.docs[i].Key() == r.Key() {
+					p.docs[i] = r
+				}
+			}
 		}
 	}
 	for _, ev := range evs {

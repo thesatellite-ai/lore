@@ -1139,9 +1139,11 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err != nil {
 		return op.Result{}, err
 	}
-	ctx = withPersonalDefaultMark(ctx) // personaldefault.go (devco:D-828)
-	ctx = withStaleCopies(ctx)         // stalecopy.go (devco:D-853)
-	res, err := a.run(ctx, e, d, c)
+	ctx = withPersonalDefaultMark(ctx)        // personaldefault.go (devco:D-828)
+	ctx = withStaleCopies(ctx)                // stalecopy.go (devco:D-853)
+	pushCtx, pushOnce := withCommandPush(ctx) // commandpush.go: one push per command
+	res, err := a.run(pushCtx, e, d, c)
+	pushOnce(ctx)                             // also after a failure: what the command committed is pushed
 	err = fitHomeHint(ctx, e, err)            // hintflags.go (devco:D-539)
 	err = a.personalStoreHint(ctx, e, d, err) // personalunread.go (devco:D-771)
 	if err == nil {

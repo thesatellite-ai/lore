@@ -70,10 +70,10 @@ func checkChanges(ctx context.Context, st Attached, changes []store.Change) erro
 // live row or a deletion, when ctx is check-only (devco:D-932): a dry
 // run's stage is never committed, so its later reads (getRow) and Expect
 // checks (staleNow) see its own earlier writes, as the write's would see
-// them in the store. Outside a check-only stage: false (a real stage's
-// rows are not read back, FB-RES-1).
+// them in the store. A real stage's rows are read back only under
+// WithStagedReads (stageview.go); otherwise false (FB-RES-1).
 func stagedView(ctx context.Context, name store.Source, table row.Table, id ids.AnyID) (store.Row, bool) {
-	if !CheckOnly(ctx) {
+	if !stagedReads(ctx) {
 		return store.Row{}, false
 	}
 	s := stageOf(ctx)

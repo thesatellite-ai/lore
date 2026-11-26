@@ -1202,7 +1202,7 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 		if err := staleNow(ctx, st, sr, expect); err != nil {
 			return stored{}, err
 		}
-		kept, err := s.addWrite(e, st, changes, evs, CheckOnly(ctx))
+		kept, err := s.addWrite(e, st, changes, evs, CheckOnly(ctx) || stagedReadsAsked(ctx))
 		if err != nil {
 			return stored{}, err
 		}

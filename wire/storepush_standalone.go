@@ -125,6 +125,9 @@ type storePush struct {
 	// earlier is what this command's read fetch and push-after-write syncs
 	// did, added to the next Sync's report (lore sync's store lines).
 	earlier store.SyncReport
+	// pendingPush: a write of this command waits for the command's one
+	// push at its end (commandpush.go); an explicit Sync clears it.
+	pendingPush bool
 	// pushFailed: this command's push already failed and said so (FLAG4:
 	// one note; later writes commit locally for `lore sync`).
 	pushFailed bool
@@ -574,7 +577,9 @@ func (b *storePush) offlineWhy(rep store.SyncReport) string {
 
 // pushAfterWrite pushes the commit a write just made (autopush on, mode
 // now; batch only when push_every has passed); a failed push is a note
-// and the commit waits for `lore sync`.
+// and the commit waits for `lore sync`. Inside a command (App.Run) the
+// push waits for the command's end, so a command of several writes
+// pushes once (commandpush.go).
 func (b *storePush) pushAfterWrite(ctx context.Context) {
 	if fetchDeferred(ctx) && !readRun(ctx) {
 		return // the sync after the pick-up pushes it (handedit.go)
@@ -617,6 +622,9 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 	if b.backingOff && (b.res == nil || !b.res.fetchAlways) {
 		b.sayBackingOff() // devco:U-6: no push while the remote was just out of reach
 		return
+	}
+	if deferPush(ctx, b) {
+		return // one push at the end of the command (commandpush.go)
 	}
 	b.pushNow(ctx)
 }
@@ -706,6 +714,7 @@ func (b *storePush) Get(ctx context.Context, table row.Table, id ids.AnyID) (sto
 // when its first read already pushed them.
 func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
 	b.begin(ctx)
+	b.pendingPush = false // this sync pushes what the command's writes left waiting
 	waiting := b.hasUnpushed(ctx)
 	noPush := opsmigrate.NoPushAsked(ctx) // a --no-push migration's sync merges only
 	if noPush {

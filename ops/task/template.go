@@ -816,7 +816,18 @@ func (o ops) addTemplate(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	return o.applyTemplate(ctx, base, tree, t.Name)
+	// D-1002: every task of the template is staged and read back from the
+	// stage (a sub-task reads its parent): one store commit, not one per task
+	sctx := engine.Staging(engine.WithStagedReads(ctx))
+	defer engine.Discard(sctx) // no-op once committed
+	out, err := o.applyTemplate(sctx, base, tree, t.Name)
+	if err != nil {
+		return AddOut{}, err
+	}
+	if _, _, err = engine.CommitEach(sctx); err != nil {
+		return AddOut{}, err
+	}
+	return out, nil
 }
 
 // applyTemplate adds the expanded template tree: the root (with --key, so

@@ -226,6 +226,7 @@ func benchSize(t *testing.T, bin string, n, repeat int) Run {
 	}
 	run.Samples = append(run.Samples, apply, undo)
 	run.Samples = append(run.Samples, w.fewerCommits(100, 20, 500)...)
+	run.Samples = append(run.Samples, w.growthPerWrites(100, 20)...)
 	run.Samples = append(run.Samples, Sample{Name: "Land / promote a layer", Note: "not timed yet: needs a layer flow in the harness (spec item 1, LEFT)"})
 
 	// history views
@@ -500,6 +501,61 @@ func (w *world) fewerCommits(writes, every, undoRows int) []Sample {
 	undo := Sample{Name: fmt.Sprintf("Commits for a %d-row batch undo", undoRows), Value: fmt.Sprintf("%d (before: %d)", made, undoRows)}
 	w.lore("sync")
 	return []Sample{push, commits, undo}
+}
+
+// growthPerWrites measures the spec §7 row ".git growth per 1,000 writes
+// (packed)" (devco:D-1002): writes one-row writes synced every `every`,
+// once with squash on (the default) and once with squash=off (one commit
+// per write, the old behaviour), and reports how much the remote's and
+// the clone's packed .git grew, scaled to 1,000 writes. Each side is
+// repacked (git gc --prune=now) before and after, so loose objects do not
+// count.
+func (w *world) growthPerWrites(writes, every int) []Sample {
+	set := func(mode string) {
+		if r := w.lore("store", "set", "--store", "agency", "--settings", "squash="+mode); r.err != nil {
+			w.t.Fatalf("store set squash=%s: %v\n%s", mode, r.err, r.out)
+		}
+		if r := w.lore("store", "show", "--store", "agency", "--json"); !strings.Contains(r.out, `"squash": "`+mode+`"`) {
+			w.t.Fatalf("store show after squash=%s:\n%s", mode, r.out)
+		}
+	}
+	round := func(mode string) Sample {
+		set(mode)
+		w.lore("sync")
+		bare0, clone0 := w.packed(w.bare), w.packed(w.clone)
+		for i := range writes {
+			w.lore("memory", "add", "--body", fmt.Sprintf("growth %s %d: the widget export runs nightly", mode, i), "--to", "agency", "--yes")
+			if (i+1)%every == 0 {
+				w.lore("sync")
+			}
+		}
+		w.lore("sync")
+		bare1, clone1 := w.packed(w.bare), w.packed(w.clone)
+		per := func(d int) int { return d * 1000 / writes }
+		return Sample{
+			Name: fmt.Sprintf(".git growth per 1,000 writes (squash %s, synced every %d)", mode, every),
+			Value: fmt.Sprintf("remote +%d objects, %+d KB packed; clone +%d objects, %+d KB packed",
+				per(bare1.objects-bare0.objects), per(bare1.kib-bare0.kib), per(clone1.objects-clone0.objects), per(clone1.kib-clone0.kib)),
+			Note: fmt.Sprintf("%d writes, scaled; objects are exact, the packed size moves with how git gc deltifies the whole history (it can shrink)", writes),
+		}
+	}
+	return []Sample{round("off"), round("on")} // ends on the default, squash on
+}
+
+// packedSize is a git dir's object count and size after a repack.
+type packedSize struct{ objects, kib int }
+
+// packed repacks the git dir at dir (git gc --prune=now) and returns its
+// objects and their size in KiB (packs plus any loose object left).
+func (w *world) packed(dir string) packedSize {
+	w.git(dir, "gc", "--prune=now", "--quiet")
+	cv := map[string]int{}
+	for _, l := range strings.Split(w.git(dir, "count-objects", "-v"), "\n") {
+		if k, v, ok := strings.Cut(l, ": "); ok {
+			cv[k], _ = strconv.Atoi(strings.TrimSpace(v))
+		}
+	}
+	return packedSize{objects: cv["in-pack"] + cv["count"], kib: cv["size-pack"] + cv["size"]}
 }
 
 // held checks the two planted changes are still held back after the
