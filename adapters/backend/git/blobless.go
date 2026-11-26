@@ -329,6 +329,7 @@ var RecloneCarried = []string{
 	filepath.Join(gitDirName, StateDirName, "signals-seen.json"),
 	filepath.Join(gitDirName, authorityFile),
 	filepath.Join(gitDirName, authorityFile+authorityRowsSuffix),
+	filepath.Join(gitDirName, authorityFile+authorityViewSuffix),
 }
 
 // RemoteResetMarked reports whether lore marked the clone at dir as

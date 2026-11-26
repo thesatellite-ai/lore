@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -42,20 +43,9 @@ func CheckStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
 // (E_NOT_A_STORE naming up to maxListedOffenders of them, and a missing
 // marker). A tip of lore files only passes with or without the marker.
 func checkStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
-	out, err := gitRun(ctx, "-C", dir, "ls-tree", "-r", "-z", "--name-only", rev)
+	marker, bad, err := scanStoreTree(ctx, dir, rev)
 	if err != nil {
 		return err
-	}
-	marker := false
-	var bad []string
-	for _, p := range strings.Split(out, "\x00") {
-		switch {
-		case p == "":
-		case p == storeMarkerFile:
-			marker = true
-		case !storeAllowed(p):
-			bad = append(bad, p)
-		}
 	}
 	if len(bad) == 0 || marker {
 		// devco R-2: a repo with the store marker is a lore store, and
@@ -76,7 +66,6 @@ func checkStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
 		parts = append(parts, "no "+storeMarkerFile)
 	}
 	if len(bad) > 0 {
-		sort.Strings(bad)
 		parts = append(parts, "it holds non-lore files: "+listOffenders(bad))
 	}
 	return errs.New(errs.NotAStore, fmt.Sprintf("%s (branch %s) is listed under stores: but is not a lore store (%s)", norm, branch, strings.Join(parts, "; "))).
@@ -86,6 +75,76 @@ func checkStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
 // listOffenders names the first maxListedOffenders paths in full (never
 // only their folder: "org/" hid which file lore refused, item 32b) and
 // counts the rest.
+// storeScan is what scanStoreTree found at one commit of one clone.
+type storeScan struct {
+	marker bool
+	bad    []string
+}
+
+// storeScans memoises scanStoreTree by clone and full commit id: the
+// files at a commit never change.
+var storeScans = struct {
+	sync.Mutex
+	byKey map[string]storeScan
+}{byKey: map[string]storeScan{}}
+
+// maxStoreScans bounds storeScans (a long-lived process sees many tips).
+const maxStoreScans = 64
+
+// scanStoreTree lists the files at rev of the clone at dir: whether the
+// store marker is there, and the files a store may not hold (sorted). It
+// reads the listing as it goes and keeps only those, and memoises the
+// answer for a full commit id. Why (bug hunt H-277, devco:D-1015): every
+// org links read split the whole recursive listing (a string per row
+// file) and the git memo kept the listing for the rest of the run: ~25 MB
+// of lore doctor's memory at 100k commits, ten times that at 1M.
+func scanStoreTree(ctx context.Context, dir, rev string) (bool, []string, error) {
+	key := dir + "\x00" + rev
+	if fullOID(rev) {
+		storeScans.Lock()
+		sc, ok := storeScans.byKey[key]
+		storeScans.Unlock()
+		if ok {
+			return sc.marker, sc.bad, nil
+		}
+	}
+	out, err := gitRunEnv(ctx, nil, "-C", dir, "ls-tree", "-r", "-z", "--name-only", rev)
+	if err != nil {
+		return false, nil, err
+	}
+	var sc storeScan
+	eachZ(out, func(p string) {
+		switch {
+		case p == storeMarkerFile:
+			sc.marker = true
+		case !storeAllowed(p):
+			sc.bad = append(sc.bad, p)
+		}
+	})
+	sort.Strings(sc.bad)
+	if fullOID(rev) {
+		storeScans.Lock()
+		if len(storeScans.byKey) >= maxStoreScans {
+			clear(storeScans.byKey)
+		}
+		storeScans.byKey[key] = sc
+		storeScans.Unlock()
+	}
+	return sc.marker, sc.bad, nil
+}
+
+// eachZ calls fn with each non-empty NUL-terminated name of out, without
+// a slice of them all.
+func eachZ(out string, fn func(string)) {
+	for out != "" {
+		p, rest, _ := strings.Cut(out, "\x00")
+		if p != "" {
+			fn(p)
+		}
+		out = rest
+	}
+}
+
 func listOffenders(bad []string) string {
 	if len(bad) <= maxListedOffenders {
 		return strings.Join(bad, ", ")
@@ -116,15 +175,12 @@ func (s StrayFile) String() string {
 // that added them (one git call each). A repo without the store marker is not asked
 // (checkStoreTree refuses it).
 func StrayFiles(ctx context.Context, dir, rev string) []StrayFile {
-	out, err := gitRun(ctx, "-C", dir, "ls-tree", "-r", "-z", "--name-only", rev)
+	_, bad, err := scanStoreTree(ctx, dir, rev)
 	if err != nil {
 		return nil
 	}
 	var strays []StrayFile
-	for _, p := range strings.Split(out, "\x00") {
-		if p == "" || p == storeMarkerFile || storeAllowed(p) {
-			continue
-		}
+	for _, p := range bad {
 		s := StrayFile{Path: p}
 		if len(strays) < maxListedOffenders {
 			if log, lerr := gitRun(ctx, "-C", dir, "log", "-1", "--diff-filter=A", "--format=%h%x1f%an%x1f%ae", rev, "--", p); lerr == nil {

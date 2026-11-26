@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // authorityFile is the replay's file in the git folder of a clone lore owns.
@@ -285,6 +286,11 @@ func (b *Backend) keepBaseAt(tip string) {
 	}
 }
 
+// replayFileDecodes counts the saved replays decoded whole in this
+// process: the tests' proof that a reader at the saved HEAD decodes none
+// (bug hunt H-277, devco:D-1015).
+var replayFileDecodes atomic.Int64
+
 // loadAuthorityAt is the replay saved at p ("" = none), nil when there is
 // none this lore can use.
 func (b *Backend) loadAuthorityAt(p string) *authority {
@@ -296,6 +302,7 @@ func (b *Backend) loadAuthorityAt(p string) *authority {
 	if err != nil {
 		return nil
 	}
+	replayFileDecodes.Add(1)
 	var s savedAuthority
 	if gob.NewDecoder(bytes.NewReader(raw)).Decode(&s) != nil || s.Format != authorityFormat || s.Binary != bin || s.Head == "" || s.Clone != filepath.Clean(b.work) {
 		return nil
@@ -391,6 +398,7 @@ func (b *Backend) saveAuthority(a *authority) {
 	}
 	writeGobAtomic(p+authorityRowsSuffix, savedRows{Format: authorityFormat, Binary: bin, Clone: s.Clone, Head: s.Head, OrgHead: s.OrgHead,
 		Held: s.Held, Trusted: s.Trusted, Credited: s.Credited})
+	b.saveHeadView(a, s)
 	if tip, ok := RefFromFiles(b.work, trackingRefNS+b.branch); ok && tip == s.Head {
 		writeBytesAtomic(p+authorityBaseSuffix, buf.Bytes()) // the replay at the remote tip (authorityBaseSuffix)
 	}
@@ -523,4 +531,113 @@ func (a *authority) saved(bin string) (savedAuthority, bool) {
 		s.Admins[id] = at(set)
 	}
 	return s, true
+}
+
+// authorityViewSuffix names the head view kept beside a saved replay:
+// <replay file>.view (savedView).
+const authorityViewSuffix = ".view"
+
+// savedView is what a reader of the org file's history needs of the
+// replay at exactly its head (OrgFileChanges, AdminAt): the org file
+// changes and who was an admin at HEAD, at each change and at each
+// change's parent (the commits the org file check and an org file read
+// at HEAD or at its accepted change ask about). Why (bug hunt
+// H-277, devco:D-1015): lore doctor's org file check decoded the whole
+// saved replay, whose stamps (one per row version), accepted versions
+// (one per row file) and admin sets (one per commit) grow with the
+// history: 51 MB on disk and ~115 MB in memory at 100k commits, ten times
+// that at 1M. The view grows only with the org file's own changes.
+type savedView struct {
+	Format  int
+	Binary  string
+	Clone   string
+	Head    string
+	OrgHead string
+	OrgFile []savedOrgChange
+	// Snaps holds each distinct admin set once; Admins maps HEAD, each org
+	// file change and its parent to its set (-1: the replay has none
+	// there, the same answer the whole replay gives)
+	Snaps  []savedAdmins
+	Admins map[string]int
+}
+
+// saveHeadView writes the head view of a (saved as s) beside the replay
+// file; a failure leaves no view and readers take the whole replay.
+func (b *Backend) saveHeadView(a *authority, s savedAuthority) {
+	p := b.authorityPath()
+	if p == "" {
+		return
+	}
+	v := savedView{Format: authorityFormat, Binary: s.Binary, Clone: s.Clone, Head: s.Head, OrgHead: s.OrgHead, OrgFile: s.OrgFile,
+		Admins: map[string]int{}}
+	index := map[*adminSet]int{}
+	keep := func(commit string) {
+		if _, done := v.Admins[commit]; done || commit == "" {
+			return
+		}
+		set, ok := a.admins[commit]
+		if !ok || set == nil {
+			v.Admins[commit] = -1
+			return
+		}
+		i, seen := index[set]
+		if !seen {
+			i = len(v.Snaps)
+			index[set] = i
+			v.Snaps = append(v.Snaps, savedAdmins{Emails: set.emails, AnyAdmin: set.anyAdmin})
+		}
+		v.Admins[commit] = i
+	}
+	keep(a.head)
+	for _, c := range a.orgFile {
+		keep(c.commit)
+		keep(c.parent)
+	}
+	var buf bytes.Buffer
+	if gob.NewEncoder(&buf).Encode(&v) != nil {
+		_ = os.Remove(p + authorityViewSuffix) // a stale view must not outlive its replay
+		return
+	}
+	writeBytesAtomic(p+authorityViewSuffix, buf.Bytes())
+}
+
+// loadHeadView is the saved head view of the replay at head (and the org
+// head orgHead), as an authority holding only the org file changes and
+// the admin sets savedView keeps (view set); nil when none matches
+// exactly. It reads the file a read-only backend was given too
+// (authorityReadPath), as replayFromDisk does.
+func (b *Backend) loadHeadView(head, orgHead string) *authority {
+	p, bin := b.authorityReadPath(), binaryStamp()
+	if p == "" || bin == "" || head == "" {
+		return nil
+	}
+	f, err := os.Open(p + authorityViewSuffix)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = f.Close() }()
+	var s savedView
+	if gob.NewDecoder(f).Decode(&s) != nil || s.Format != authorityFormat || s.Binary != bin ||
+		s.Clone != filepath.Clean(b.work) || s.Head != head || s.OrgHead != orgHead {
+		return nil
+	}
+	a := &authority{head: s.Head, orgHead: s.OrgHead, view: true, admins: make(map[string]*adminSet, len(s.Admins))}
+	sets := make([]*adminSet, len(s.Snaps))
+	for i, x := range s.Snaps {
+		sets[i] = &adminSet{emails: orEmpty(x.Emails), anyAdmin: x.AnyAdmin}
+	}
+	for commit, i := range s.Admins {
+		switch {
+		case i == -1:
+			a.admins[commit] = nil // known commit, no admin set: undecided
+		case i < 0 || i >= len(sets):
+			return nil
+		default:
+			a.admins[commit] = sets[i]
+		}
+	}
+	for _, c := range s.OrgFile {
+		a.orgFile = append(a.orgFile, orgFileChange{commit: c.Commit, parent: c.Parent, author: c.Author, path: c.Path, blob: c.Blob, merge: c.Merge})
+	}
+	return a
 }

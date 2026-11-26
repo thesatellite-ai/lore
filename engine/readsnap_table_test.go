@@ -17,9 +17,14 @@ type fixedRows struct {
 	rows   []store.Row
 	full   atomic.Int64 // reads of every table
 	hinted atomic.Int64 // reads narrowed to some tables (store.WithTables)
+	// unshared counts reads made without the store.WithSharedDocs promise
+	unshared atomic.Int64
 }
 
 func (b *fixedRows) Read(ctx context.Context, _ store.Cursor) ([]store.Row, store.Cursor, error) {
+	if !store.SharedDocs(ctx) {
+		b.unshared.Add(1)
+	}
 	if tables := store.TablesOf(ctx); len(tables) > 0 {
 		b.hinted.Add(1)
 		var out []store.Row
@@ -131,5 +136,36 @@ func TestOneTableReadStartsNoFullRead(t *testing.T) {
 	}
 	if got, hinted := b.full.Load(), b.hinted.Load(); got != 1 || hinted != 1 {
 		t.Fatalf("%d whole-store and %d one-table reads, want 1 and 1 (the later read is the snapshot's)", got, hinted)
+	}
+}
+
+// TestSnapshotReadsShareDocuments (bug hunt H-277, devco:D-1015): the
+// read snapshot's whole-store and one-table fills tell the backend it may
+// hand out the documents it keeps (store.WithSharedDocs): the snapshot
+// never writes into one. Before, the git backend copied every document
+// of its cached full read for each fill: ~120 MB of lore doctor's memory
+// at 100k commits. A read outside a snapshot makes no such promise.
+func TestSnapshotReadsShareDocuments(t *testing.T) {
+	t.Parallel()
+	b := actorsAndMemories()
+	st := Attached{Name: "kb", Backend: b}
+	ctx := WithReadSnapshot(context.Background())
+	if _, err := readOneTable(ctx, st, "actors"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := readAll(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	if b.hinted.Load() != 1 || b.full.Load() != 1 {
+		t.Fatalf("reads: %d one-table, %d whole; want 1 and 1", b.hinted.Load(), b.full.Load())
+	}
+	if got := b.unshared.Load(); got != 0 {
+		t.Fatalf("%d snapshot fill(s) made without the shared-documents promise, want 0", got)
+	}
+	if _, _, err := readAll(context.Background(), st); err != nil {
+		t.Fatal(err)
+	}
+	if got := b.unshared.Load(); got != 1 {
+		t.Fatalf("a read outside a snapshot: %d without the promise, want 1", got)
 	}
 }

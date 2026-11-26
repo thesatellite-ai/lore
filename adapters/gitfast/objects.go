@@ -6,6 +6,7 @@ package gitfast
 // life of the Session.
 
 import (
+	"bufio"
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
@@ -144,7 +145,27 @@ func (s *objectStore) readLocked(id string, depth int) (object, error) {
 	}
 	s.cache[id] = &cachedObject{o: o, used: s.use}
 	s.bytes += len(o.data)
+	if s.bytes > objectCacheMaxBytes {
+		s.startOver()
+	}
 	return o, nil
+}
+
+// objectCacheMaxBytes bounds what one object store keeps while it is in
+// use, as objPoolMaxBytes bounds a kept store between commands (a var
+// only so a test can lower it). Why (bug hunt H-277, devco:D-1015): the
+// cache of a store opened for one command had no bound, so a command that
+// walked a big store's trees (lore doctor's store file check lists every
+// file) kept every tree and delta base it read: 26 MB at 100k commits,
+// ten times that at 1M.
+var objectCacheMaxBytes = objPoolMaxBytes
+
+// startOver drops every decoded object and tree index s keeps (objects
+// already handed out stay valid: they are never written to). s.mu is held.
+func (s *objectStore) startOver() {
+	clear(s.cache)
+	clear(s.trees)
+	s.bytes = 0
 }
 
 // readLoose reads objects/xx/yyyy… in every object folder.
@@ -172,11 +193,12 @@ func (s *objectStore) readLoose(id string) (object, error) {
 
 // decodeLoose inflates a loose object: "<type> <size>\0<content>".
 func decodeLoose(r io.Reader) (object, error) {
-	zr, err := zlib.NewReader(r)
-	if err != nil {
-		return object{}, errUnsupported
-	}
-	all, err := io.ReadAll(zr)
+	var all []byte
+	err := inflate(r, func(zr io.Reader) error {
+		var rerr error
+		all, rerr = io.ReadAll(zr)
+		return rerr
+	})
 	if err != nil {
 		return object{}, errUnsupported
 	}
@@ -411,15 +433,57 @@ func (s *objectStore) readAt(p *pack, off int64, depth int) (object, error) {
 
 // inflateAt inflates the zlib stream at off that holds size bytes.
 func inflateAt(f *os.File, off int64, size uint64) ([]byte, error) {
-	zr, err := zlib.NewReader(io.NewSectionReader(f, off, 1<<62))
+	out := make([]byte, size)
+	err := inflate(io.NewSectionReader(f, off, 1<<62), func(zr io.Reader) error {
+		_, rerr := io.ReadFull(zr, out)
+		return rerr
+	})
 	if err != nil {
 		return nil, errUnsupported
 	}
-	out := make([]byte, size)
-	if _, err := io.ReadFull(zr, out); err != nil {
-		return nil, errUnsupported
-	}
 	return out, nil
+}
+
+// inflater is a zlib reader and the buffered input it reads from, kept
+// for reuse (inflaters).
+type inflater struct {
+	in *bufio.Reader
+	zr io.ReadCloser
+}
+
+// inflaters pools the zlib readers object reads use. Why (bug hunt H-277,
+// devco:D-1015): a new zlib reader allocates its 32 KB window and an input
+// buffer, and one was made for every object read: lore doctor on a
+// 100k-commit store allocated 6.4 GB that way in a 12 s run, so the heap
+// between collections, and the process's memory, grew to several times
+// what it kept.
+var inflaters sync.Pool
+
+// inflate runs read over the zlib stream src with a pooled reader; the
+// reader is handed back to the pool when read returns, so read must not
+// keep it.
+func inflate(src io.Reader, read func(zr io.Reader) error) error {
+	z, _ := inflaters.Get().(*inflater)
+	if z == nil {
+		z = &inflater{in: bufio.NewReader(src)}
+	} else {
+		z.in.Reset(src)
+	}
+	if z.zr == nil {
+		zr, err := zlib.NewReader(z.in)
+		if err != nil {
+			return err // nothing to keep: the next use makes a new one
+		}
+		z.zr = zr
+	} else if rs, ok := z.zr.(zlib.Resetter); !ok {
+		return errUnsupported
+	} else if err := rs.Reset(z.in, nil); err != nil {
+		return err
+	}
+	err := read(z.zr)
+	z.in.Reset(nil) // the pool keeps no file
+	inflaters.Put(z)
+	return err
 }
 
 // applyDelta builds the target of a git delta from base.

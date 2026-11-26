@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,14 @@ import (
 func newProcess(b *Backend) {
 	forgetAuthority(b)
 	authorityFiles.Delete(filepath.Clean(b.work))
+	for _, views := range []*struct {
+		sync.Mutex
+		byWork map[string]*authority
+	}{&headViews, &rowViews} {
+		views.Lock()
+		delete(views.byWork, b.work)
+		views.Unlock()
+	}
 }
 
 // TestCloneAuthorityReadsSavedReplay (bug hunt H-274, devco:D-1012): the
@@ -89,9 +98,8 @@ func TestCloneAuthorityReadsSavedReplay(t *testing.T) {
 	if got := replayCount() - n; got != 0 {
 		t.Errorf("AdminAt replayed %d commit(s) with a replay saved at HEAD, want 0", got)
 	}
-	authorityCache.Lock()
-	got := authorityCache.byWork[dir]
-	authorityCache.Unlock()
+	newProcess(b)
+	_, got := cloneAuthority(ctx, dir) // the whole replay, from the saved file
 	sameAuthority(t, got, want)
 }
 

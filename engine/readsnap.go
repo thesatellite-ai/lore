@@ -204,7 +204,9 @@ func (s *readSnapshot) startedFull(ctx context.Context, st Attached) (*snapFill,
 func (s *readSnapshot) fill(ctx context.Context, st Attached, f *snapFill) {
 	defer close(f.done)
 	f.err = errFillAborted // replaced below unless Read panics
-	f.rows, f.next, f.err = readAllOf(ctx, st)
+	// the snapshot never writes into a document: the backend may share the
+	// bytes it keeps (store.WithSharedDocs)
+	f.rows, f.next, f.err = readAllOf(store.WithSharedDocs(ctx), st)
 	if f.err != nil {
 		s.mu.Lock()
 		if s.full[st.Backend] == f {
@@ -234,7 +236,7 @@ func (s *readSnapshot) readTableShared(ctx context.Context, st Attached, table r
 		func() {
 			defer close(f.done)
 			f.err = errFillAborted // replaced below unless Read panics
-			f.rows, _, f.err = st.Backend.Read(store.WithTables(withMirror(ctx, st), table), "")
+			f.rows, _, f.err = st.Backend.Read(store.WithSharedDocs(store.WithTables(withMirror(ctx, st), table)), "")
 		}()
 		if f.err != nil {
 			s.mu.Lock()

@@ -480,16 +480,13 @@ func resolveBranchTip(ctx context.Context, dir, branch string) (string, bool) {
 // _meta.json cannot be parsed is skipped (a broken meta must not hide
 // every other link; doctor reports it).
 func readLinks(ctx context.Context, dir, rev string) ([]indexedLink, error) {
-	out, err := gitRun(ctx, "-C", dir, "ls-tree", "-r", "-z", "--name-only", rev)
+	metas, err := metaFiles(ctx, dir, rev)
 	if err != nil {
 		return nil, err
 	}
 	var links []indexedLink
-	for _, p := range strings.Split(out, "\x00") {
-		folder, ok := metaFolder(p)
-		if !ok {
-			continue
-		}
+	for _, p := range metas {
+		folder, _ := metaFolder(p)
 		raw, rerr := gitRun(ctx, "-C", dir, "cat-file", "blob", rev+":"+p)
 		if rerr != nil {
 			return nil, rerr
@@ -506,6 +503,45 @@ func readLinks(ctx context.Context, dir, rev string) ([]indexedLink, error) {
 		}
 	}
 	return links, nil
+}
+
+// metaFiles lists the project markers at rev (every path metaFolder
+// takes), in the order git lists them: the top-level entries first, then
+// only the marker paths those can hold. Why (bug hunt H-277,
+// devco:D-1015): it listed every file of the store recursively to find a
+// few markers, a string per row file (1.2M at 1M commits) held by every
+// org links read, and the git memo kept the listing for the run.
+func metaFiles(ctx context.Context, dir, rev string) ([]string, error) {
+	top, err := gitRun(ctx, "-C", dir, "ls-tree", "-z", "--name-only", rev)
+	if err != nil {
+		return nil, err
+	}
+	var want []string
+	try := func(p string) {
+		if _, ok := metaFolder(p); ok {
+			want = append(want, p)
+		}
+	}
+	try(rowfs.MetaFileName)
+	try(rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.MetaFileName)
+	eachZ(top, func(name string) {
+		try(name + "/" + rowfs.MetaFileName)
+		try(name + "/" + rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.MetaFileName)
+	})
+	if len(want) == 0 {
+		return nil, nil
+	}
+	out, err := gitRun(ctx, append([]string{"-C", dir, "ls-tree", "-r", "-z", "--name-only", rev, "--"}, want...)...)
+	if err != nil {
+		return nil, err
+	}
+	var metas []string
+	eachZ(out, func(p string) {
+		if _, ok := metaFolder(p); ok {
+			metas = append(metas, p)
+		}
+	})
+	return metas, nil
 }
 
 // metaFolder reports whether p is a top-level folder's project marker

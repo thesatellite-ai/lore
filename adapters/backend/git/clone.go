@@ -970,7 +970,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 		return nil, "", err
 	}
 	if from == "" {
-		if rows, ok := b.cachedFull(h); ok {
+		if rows, ok := b.cachedFull(h, store.SharedDocs(ctx)); ok {
 			return rows, store.Cursor(h), nil
 		}
 	}
@@ -983,7 +983,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	pathspecs, hinted := b.folder.Pathspecs(), false
 	tables := store.TablesOf(ctx)
 	if from == "" && len(tables) > 0 {
-		if rows, ok := b.cachedTables(h, tables); ok {
+		if rows, ok := b.cachedTables(h, tables, store.SharedDocs(ctx)); ok {
 			return rows, "", nil
 		}
 		pathspecs, hinted = b.folder.TablePathspecs(tables), true
@@ -1076,11 +1076,11 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 		rows = append(rows, auth.creditRow(roots[name], r)) // C35: the committer named as the writer
 	}
 	if hinted {
-		b.keepTables(h, tables, rows)
+		b.keepTables(h, tables, rows, store.SharedDocs(ctx))
 		return rows, "", nil
 	}
 	if from == "" {
-		b.keepFull(h, rows)
+		b.keepFull(h, rows, store.SharedDocs(ctx))
 	}
 	return rows, store.Cursor(h), nil
 }
@@ -1096,8 +1096,9 @@ func tablesKey(tables []row.Table) string {
 }
 
 // cachedTables is a copy of a read narrowed to tables at commit h, if one
-// was kept there (Backend.tableRows).
-func (b *Backend) cachedTables(h string, tables []row.Table) ([]store.Row, bool) {
+// was kept there (Backend.tableRows); shared hands out the kept documents
+// (store.WithSharedDocs).
+func (b *Backend) cachedTables(h string, tables []row.Table, shared bool) ([]store.Row, bool) {
 	b.fullMu.Lock()
 	defer b.fullMu.Unlock()
 	if b.tableHead == "" || b.tableHead != h {
@@ -1107,44 +1108,53 @@ func (b *Backend) cachedTables(h string, tables []row.Table) ([]store.Row, bool)
 	if !ok {
 		return nil, false
 	}
-	return copyRows(rows), true
+	return copyRows(rows, shared), true
 }
 
 // keepTables records rows as the read narrowed to tables at commit h; a
-// new commit starts the set again.
-func (b *Backend) keepTables(h string, tables []row.Table, rows []store.Row) {
+// new commit starts the set again. shared keeps rows' own documents
+// (the reader promised never to write them, store.WithSharedDocs).
+func (b *Backend) keepTables(h string, tables []row.Table, rows []store.Row, shared bool) {
 	b.fullMu.Lock()
 	defer b.fullMu.Unlock()
 	if b.tableHead != h || b.tableRows == nil {
 		b.tableHead, b.tableRows = h, map[string][]store.Row{}
 	}
-	b.tableRows[tablesKey(tables)] = copyRows(rows)
+	b.tableRows[tablesKey(tables)] = copyRows(rows, shared)
 }
 
 // cachedFull is a copy of the full read at commit h, if the last one was
 // read there (Backend.full). Copies, documents too: a caller may change
-// what Read returns (storetest: a backend never hands out its own buffer).
-func (b *Backend) cachedFull(h string) ([]store.Row, bool) {
+// what Read returns (storetest: a backend never hands out its own buffer),
+// unless shared: the reader promised never to write them
+// (store.WithSharedDocs).
+func (b *Backend) cachedFull(h string, shared bool) ([]store.Row, bool) {
 	b.fullMu.Lock()
 	defer b.fullMu.Unlock()
 	if b.fullHead == "" || b.fullHead != h {
 		return nil, false
 	}
-	return copyRows(b.fullRows), true
+	return copyRows(b.fullRows, shared), true
 }
 
-// keepFull records rows as the full read at commit h.
-func (b *Backend) keepFull(h string, rows []store.Row) {
+// keepFull records rows as the full read at commit h; shared keeps rows'
+// own documents (keepTables).
+func (b *Backend) keepFull(h string, rows []store.Row, shared bool) {
 	b.fullMu.Lock()
 	defer b.fullMu.Unlock()
-	b.fullHead, b.fullRows = h, copyRows(rows)
+	b.fullHead, b.fullRows = h, copyRows(rows, shared)
 }
 
-// copyRows copies rows and their documents.
-func copyRows(rows []store.Row) []store.Row {
+// copyRows copies rows and, unless shared, their documents: shared rows
+// hold the same document bytes, which no one writes (store.WithSharedDocs).
+// Why (bug hunt H-277, devco:D-1015): a copy of every document for each
+// reader of a 100k-commit store was ~120 MB of lore doctor's memory.
+func copyRows(rows []store.Row, shared bool) []store.Row {
 	out := make([]store.Row, len(rows))
 	for i, r := range rows {
-		r.Doc = append([]byte(nil), r.Doc...)
+		if !shared {
+			r.Doc = append([]byte(nil), r.Doc...)
+		}
 		out[i] = r
 	}
 	return out

@@ -48,14 +48,17 @@ const (
 
 // Backend is one open data folder of a git store.
 type Backend struct {
-	// rosterMu guards rosterFrom: the org roster a store with no org
+	// rosterMu guards rosterFrom and rosterAt: the org roster a store with no org
 	// folder is checked against (SetRosterSource, authority.go).
 	rosterMu   sync.Mutex
 	rosterFrom rosterFunc
-	cfg        config
-	git        runner
-	mode       mode
-	readOnly   bool
+	// rosterAt is the roster source's HEAD alone (rosterHead): a cached
+	// replay is checked against it without replaying the org's history
+	rosterAt func(ctx context.Context) (string, error)
+	cfg      config
+	git      runner
+	mode     mode
+	readOnly bool
 	// readOnlyErr, when set (MarkReadOnlyBecause), is what a refused write
 	// answers instead of the bare store.ErrReadOnly, so the refusal names the
 	// store, why it takes no writes and what to do instead (devco N-8).

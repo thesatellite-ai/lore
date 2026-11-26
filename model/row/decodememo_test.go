@@ -70,3 +70,42 @@ func BenchmarkDecodeNoMemo(b *testing.B) {
 		}
 	}
 }
+
+// TestDecodeMemoBoundCountsDecodedRows (bug hunt H-277, devco:D-1015):
+// the memo's bound counts what a kept decode holds, its text in the row's
+// values and the decoded structure besides (about twice the document),
+// not only the document's bytes. Before, it kept the document as its key
+// too and counted only that: bounded at 48 MB of documents it held ~145
+// MB, the largest part of lore doctor's memory after the store's rows.
+// Not parallel: it fills and clears the process's memo.
+func TestDecodeMemoBoundCountsDecodedRows(t *testing.T) {
+	const size = 2000
+	t.Cleanup(func() {
+		memo.mu.Lock()
+		clear(memo.rows)
+		memo.bytes = 0
+		memo.mu.Unlock()
+	})
+	n := decodeMemoMaxBytes / size // every document fits a bound of document bytes
+	for i := range n {
+		doc := make([]byte, size)
+		binaryPut(doc, i)
+		memo.put(doc, Row{})
+	}
+	memo.mu.Lock()
+	kept := len(memo.rows)
+	memo.mu.Unlock()
+	if held := kept * 2 * size; held > decodeMemoMaxBytes {
+		t.Fatalf("the memo keeps %d decodes of %d-byte documents (~%d MB with their rows), past its bound of %d MB", kept, size, held>>20, decodeMemoMaxBytes>>20)
+	}
+	if kept == 0 {
+		t.Fatal("the memo keeps nothing")
+	}
+}
+
+// binaryPut writes i into the first bytes of doc, so every document differs.
+func binaryPut(doc []byte, i int) {
+	for j := range 8 {
+		doc[j] = byte(i >> (8 * j))
+	}
+}

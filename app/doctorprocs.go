@@ -2,6 +2,7 @@ package app
 
 import (
 	"runtime"
+	"runtime/debug"
 
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 )
@@ -23,4 +24,24 @@ func capDoctorProcs(args []string) {
 	if n := opsdoctor.MaxParallel(); runtime.GOMAXPROCS(0) > n {
 		runtime.GOMAXPROCS(n)
 	}
+}
+
+// doctorGCPercent is `lore doctor`'s GOGC: the Go default, not the CLI's
+// gcPercent. Why (bug hunt H-277, devco:D-1015): gcPercent lets the heap
+// grow five times past what a collection keeps, which suits a command of a
+// tenth of a second; doctor runs for seconds over every row of every
+// attached store, so at 100k commits it kept ~150 MB and peaked at ~1 GB
+// RSS. At the Go default it peaks at about twice what it keeps, for ~8%
+// more CPU and the same wall time.
+const doctorGCPercent = 100
+
+// paceDoctorGC sets doctorGCPercent for `lore doctor` unless the
+// environment chose its own GOGC (the person's tuning wins, as with
+// gcDefaults). It reports whether it set it, for the test.
+func paceDoctorGC(args []string, getenv func(string) string) bool {
+	if commandName(args) != doctorCommand || getenv("GOGC") != "" {
+		return false
+	}
+	debug.SetGCPercent(doctorGCPercent)
+	return true
 }

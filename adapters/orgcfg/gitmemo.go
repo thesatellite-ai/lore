@@ -28,6 +28,13 @@ import (
 // memo starts over (an import of a few hundred rows stays far below it).
 const gitMemoMaxBytes = 8 << 20
 
+// gitMemoMaxAnswer is the largest answer the memo keeps. Why (bug hunt
+// H-277, devco:D-1015): the bound was checked before the answer went in,
+// so an answer bigger than the whole bound (a recursive ls-tree of a
+// 100k-commit store is 8.5 MB, ten times that at 1M) cleared the memo and
+// then stayed in it for the rest of the run.
+const gitMemoMaxAnswer = gitMemoMaxBytes / 4
+
 // gitMemo holds the memoised answers of this process.
 var gitMemo = struct {
 	mu    sync.Mutex
@@ -88,6 +95,11 @@ func keepRun(args []string, out string) {
 	defer gitMemo.mu.Unlock()
 	key := memoKey(args)
 	if _, ok := gitMemo.runs[key]; ok {
+		return
+	}
+	if len(key)+len(out) > gitMemoMaxAnswer {
+		// one answer this big (a whole-store ls-tree -r) would be kept past
+		// the bound, for the rest of the run (bug hunt H-277, devco:D-1015)
 		return
 	}
 	if gitMemo.bytes+len(key)+len(out) > gitMemoMaxBytes {

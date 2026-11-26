@@ -554,6 +554,11 @@ type authority struct {
 	// (heldAtCut), so a compaction or an adopting clone never replays
 	// the history again to the cut (devco:D-1004, store growth SG-6)
 	holds []holdEvent
+	// view marks a head view (loadHeadView): only head, orgHead, orgFile
+	// and the admin sets savedView keeps are set, so it answers
+	// OrgFileChanges and AdminAt at those commits and is never carried on,
+	// saved or kept in authorityCache
+	view bool
 }
 
 // holdEvent is one change of a file's hold: held (with the trusted
@@ -629,6 +634,11 @@ func AdminAt(ctx context.Context, dir, rev, email string) (admin, decided bool) 
 	if dir == "" || rev == "" || email == "" {
 		return false, false
 	}
+	if _, v := cloneHeadView(ctx, dir); v != nil {
+		if _, known := v.admins[rev]; known {
+			return v.adminAt(rev, email)
+		}
+	}
 	_, a := cloneAuthority(ctx, dir)
 	if a == nil {
 		return false, false
@@ -639,7 +649,7 @@ func AdminAt(ctx context.Context, dir, rev, email string) (admin, decided bool) 
 // adminAt is AdminAt read from the replay a.
 func (a *authority) adminAt(rev, email string) (admin, decided bool) {
 	set, ok := a.admins[rev]
-	if !ok || !set.anyAdmin {
+	if !ok || set == nil || !set.anyAdmin {
 		return false, false
 	}
 	return set.emails[strings.ToLower(strings.TrimSpace(email))], true
@@ -650,22 +660,13 @@ func (a *authority) adminAt(rev, email string) (admin, decided bool) {
 // the one kept on disk, carried on over the new commits (authorityOf),
 // with the backend that read it.
 func cloneAuthority(ctx context.Context, dir string) (*Backend, *authority) {
-	bin, err := lookGit(DefaultBinary)
-	if err != nil {
-		return nil, nil
-	}
 	// it reads the replay the clone's opens keep (savedAuthorityFile: the
 	// git folder of a lore-owned clone, the lore home cache for a person's
 	// own clone in the stores folder), else the one a lore-owned clone keeps
 	// in its git folder, and never writes one: a replay it carries on stays
 	// in memory (devco:D-1004, D-1012)
-	read := savedAuthorityFile(dir)
-	if read == "" {
-		read = authorityFileFor(dir, "", false)
-	}
-	b := &Backend{git: runner{bin: bin}, work: dir, mode: modeClone, authorityReadAt: read}
-	h, err := b.head(ctx)
-	if err != nil || h == "" {
+	b, h := cloneReader(ctx, dir)
+	if b == nil {
 		return nil, nil
 	}
 	a, err := b.authorityOf(ctx, h)
@@ -674,6 +675,71 @@ func cloneAuthority(ctx context.Context, dir string) (*Backend, *authority) {
 	}
 	return b, a
 }
+
+// cloneReader is a read-only backend of the store clone at dir and its
+// HEAD (nil when git or HEAD cannot be read): it reads the replay the
+// clone's opens keep and never writes one (cloneAuthority).
+func cloneReader(ctx context.Context, dir string) (*Backend, string) {
+	bin, err := lookGit(DefaultBinary)
+	if err != nil {
+		return nil, ""
+	}
+	read := savedAuthorityFile(dir)
+	if read == "" {
+		read = authorityFileFor(dir, "", false)
+	}
+	b := &Backend{git: runner{bin: bin}, work: dir, mode: modeClone, authorityReadAt: read}
+	h, err := b.head(ctx)
+	if err != nil || h == "" {
+		return nil, ""
+	}
+	return b, h
+}
+
+// cloneHeadView is what OrgFileChanges and AdminAt need of the replay of
+// the store clone at dir at its HEAD: the replay this process holds there,
+// else the head view saved with it (loadHeadView), else the whole replay
+// (cloneAuthority). Why (bug hunt H-277, devco:D-1015): lore doctor's org
+// file check decoded the whole saved replay, which grows with every row
+// version of the history (~115 MB at 100k commits), to read the org
+// file's few changes.
+func cloneHeadView(ctx context.Context, dir string) (*Backend, *authority) {
+	b, h := cloneReader(ctx, dir)
+	if b == nil {
+		return nil, nil
+	}
+	orgHead := b.rosterHead(ctx)
+	authorityCache.Lock()
+	a := authorityCache.byWork[b.work]
+	authorityCache.Unlock()
+	if a != nil && a.head == h && a.orgHead == orgHead {
+		return b, a
+	}
+	headViews.Lock()
+	v := headViews.byWork[b.work]
+	headViews.Unlock()
+	if v == nil || v.head != h || v.orgHead != orgHead {
+		v = b.loadHeadView(h, orgHead)
+	}
+	if v != nil {
+		headViews.Lock()
+		headViews.byWork[b.work] = v
+		headViews.Unlock()
+		return b, v
+	}
+	a, err := b.authorityOf(ctx, h)
+	if err != nil || a == nil {
+		return nil, nil
+	}
+	return b, a
+}
+
+// headViews keeps each clone's loaded head view (loadHeadView) for the
+// process: the org file check asks for it once per org entry and store.
+var headViews = struct {
+	sync.Mutex
+	byWork map[string]*authority
+}{byWork: map[string]*authority{}}
 
 // OrgFileChange is one change to an org file (lore-org.yaml) in a store
 // clone's history, in the order the roster replay decides commits, with
@@ -710,7 +776,7 @@ func OrgFileChanges(ctx context.Context, dir, tip string) (changes []OrgFileChan
 	if dir == "" || tip == "" {
 		return nil, false
 	}
-	b, a := cloneAuthority(ctx, dir)
+	b, a := cloneHeadView(ctx, dir)
 	if a == nil {
 		return nil, false
 	}
@@ -1573,9 +1639,10 @@ func (b *Backend) SetRosterSource(org *Backend) {
 	b.rosterMu.Lock()
 	defer b.rosterMu.Unlock()
 	if org == nil || org == b || org.mode != modeClone || org.marker.OrgFolder == "" || b.marker.OrgFolder != "" {
-		b.rosterFrom = nil
+		b.rosterFrom, b.rosterAt = nil, nil
 		return
 	}
+	b.rosterAt = org.head
 	b.rosterFrom = func(ctx context.Context) (*rosterState, string, error) {
 		h, err := org.head(ctx)
 		if err != nil || h == "" {
@@ -1598,12 +1665,19 @@ func (b *Backend) rosterSource() rosterFunc {
 
 // rosterHead is the roster source's HEAD ("" without one), so a cached
 // replay is redone when the org's roster moved.
+//
+// It reads the org clone's HEAD only. Why (bug hunt H-277, devco:D-1015):
+// it asked the roster source, which replays (or decodes the saved replay
+// of) the org store's whole history, so every read of a client store
+// whose replay was already known paid for the org's whole history.
 func (b *Backend) rosterHead(ctx context.Context) string {
-	src := b.rosterSource()
-	if src == nil {
+	b.rosterMu.Lock()
+	at := b.rosterAt
+	b.rosterMu.Unlock()
+	if at == nil {
 		return ""
 	}
-	_, h, _ := src(ctx)
+	h, _ := at(ctx)
 	return h
 }
 
@@ -1691,7 +1765,9 @@ func (b *Backend) Held(ctx context.Context) ([]HeldChange, error) {
 	if err != nil {
 		return nil, err
 	}
-	a, err := b.authorityOf(ctx, h)
+	// the held files are in the row view saved with the replay: no decode
+	// of the whole replay (bug hunt H-277, devco:D-1015)
+	a, err := b.rowAuthorityOf(ctx, h)
 	if err != nil || a == nil {
 		return nil, err
 	}
