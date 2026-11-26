@@ -41,7 +41,7 @@ func TestStoryOAskExcerptKeepsSubjectSection(t *testing.T) {
 
 	s.Step("D-973/the-cut-keeps-the-subject-section", func() {
 		q := "what does the job queue return for a duplicate key while the first run is still running"
-		// devco D-1006: the note fits the default 4,000 characters whole
+		// devco D-1006: the note fits the default --max-chars whole
 		// and is printed whole; the cut is checked where it does not fit
 		ada.Lore(pc.Dir, "ask", "--query", q).OK(t).Says(t, subject)
 		r := ada.Lore(pc.Dir, "ask", "--query", q, "--max-chars", "1200").OK(t)

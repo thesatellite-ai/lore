@@ -195,8 +195,12 @@ type data struct {
 // Defaults of ask.
 const (
 	// DefaultMaxChars is --max-chars' default: an answer an agent reads in
-	// one go, lighter than the files a grep would open.
-	DefaultMaxChars = 4000
+	// one go, lighter than the files a grep would open. Why 8000 (devco
+	// D-1013): at 4000 the answering row was found but printed cut or as
+	// a candidate line, so an agent needed a lore show for most
+	// questions; 8000 prints up to three rows whole at the same speed
+	// and still stays below what a grep reads.
+	DefaultMaxChars = 8000
 	// DefaultTop is how many rows are printed in full (--top): about ten,
 	// so an agent reading the answer has the evidence; --max-chars still
 	// caps the text. Why (devco D-898, owner pick list item 3): three rows

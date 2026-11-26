@@ -6775,7 +6775,7 @@
                 "properties": {
                   "max_chars": {
                     "type": "integer",
-                    "description": "cap the answer at this many characters (default 4000); what is left out is counted at the end"
+                    "description": "cap the answer at this many characters (default 8000); what is left out is counted at the end"
                   },
                   "query": {
                     "type": "string",

@@ -31,16 +31,19 @@ func yieldNote(title string, size int, secs ...[2]string) string {
 }
 
 func yieldData() (data, string) {
+	// each note is nine tenths of the default cap, so neither fits whole
+	// next to the candidate lines (devco D-1013 raised the cap to 8,000)
+	size := DefaultMaxChars * 9 / 10
 	at := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
 	const answer = "After three tries the job moves to the dead-letter tray and the dock lead gets a page."
 	pad := " The night shift checks the dock board at every change of shift, and the board lists each station with its owner, its spare parts shelf and the phone number of the facilities desk that answers outside office hours."
-	first := yieldNote("As built: label worker", 3600,
+	first := yieldNote("As built: label worker", size,
 		[2]string{"Label worker queue", "The label worker reads print jobs from the label queue; each job names its printer, its template and its parcel." + pad},
 		[2]string{"Label worker printers", "Every printer of the label worker has a heartbeat; a printer missing two heartbeats is skipped by the label queue." + pad},
 		[2]string{"Label worker templates", "Label templates are versioned; the label worker renders a job with the template version the queue names." + pad},
 		[2]string{"Label worker retries", answer},
 	)
-	second := yieldNote("As built: label printers", 3600,
+	second := yieldNote("As built: label printers", size,
 		[2]string{"Label printers", "The label printers sit at the dock; the label worker sends them jobs over the print network." + pad},
 		[2]string{"Firmware", "Printer firmware is updated by the facilities team on the first weekday of the month." + pad},
 	)

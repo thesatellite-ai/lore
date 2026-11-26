@@ -680,7 +680,9 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		add := ada.Lore(ada.Home, "memory", "add", "--body", doc.String(), "--to", to, "--yes", "--json")
 		add.OK(t)
 		id := regexp.MustCompile(`mem_[0-9a-f]{20,}`).FindString(add.Out())
-		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when does phase two of the orbit rollout start")
+		// a 4,000-character answer, where the note does not fit whole (at
+		// the default 8,000 it fits and is printed whole, devco D-1013)
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when does phase two of the orbit rollout start", "--max-chars", "4000")
 		r.OK(t)
 		out := r.Out()
 		for _, want := range []string{"§ Orbit design notes > Rollout plan (matching section)\n", "Phase two starts on 2026-06-05", "lore show --id " + id + " prints it whole"} {

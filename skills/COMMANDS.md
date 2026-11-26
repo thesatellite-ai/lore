@@ -315,11 +315,11 @@ lore ask --store me --query "everything about alice-ng"   # who:, latest (newest
 lore ask --store me --query "what is my gym now"          # a changed fact starts with now: <newest> (changed <day>; before that: <older>)
 lore ask --query "everything about alise-ng" --json        # a typo, a nickname or a role finds the resource too
 lore resource alias add --kind person --id robert-kim --alias Bobby --alias CFO   # other names every lookup and ask find it by (alias list / alias remove)
-lore ask --query "status of orbit" --max-chars 8000 --top 5
+lore ask --query "status of orbit" --max-chars 12000 --top 5
 lore ask --query "add partial refunds in billing/refund.go"  # names a file: its rules and hotfixes first (as lore context --for-file)
 ```
 
-The answer is capped at `--max-chars` (default 4000) and ends with `cited:` and the id of every resource, task and row in it. Two answers are kept short on purpose: "who is X" is one line per resource (contact values such as an email only when the question names that field, no linked resources, no id: `lore resource show --kind <kind> --name <name>` prints the whole resource), and a debt question is one line per open task (the title, its status when not todo, who owes whom when the title does not say) with the task ids once in `cited:`. `--json` always holds every field, id and link.
+The answer is capped at `--max-chars` (default 8000) and ends with `cited:` and the id of every resource, task and row in it. Two answers are kept short on purpose: "who is X" is one line per resource (contact values such as an email only when the question names that field, no linked resources, no id: `lore resource show --kind <kind> --name <name>` prints the whole resource), and a debt question is one line per open task (the title, its status when not todo, who owes whom when the title does not say) with the task ids once in `cited:`. `--json` always holds every field, id and link.
 
 ## Global search (cross-entity, one call)
 

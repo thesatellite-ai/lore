@@ -90,7 +90,7 @@ type RunIn struct {
 	Query string `json:"query" arg:"0" rest:"true" desc:"the question, in your own words: who is alice-ng, what is the status of orbit, what did we decide for orbit and why, what do I owe alice-ng, what does alice-ng owe me, what happened yesterday / last week / on 2026-11-02, everything about alice-ng (a typo, a nickname or a role finds the resource too); name the file you are changing (add partial refunds in billing/refund.go) for the rules and hotfixes that apply to it"`
 	// Store names the stores to read, as every other read's --store.
 	Store    string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store alone instead of every attached one: <org> (every folder), <store>/<folder>, a store's name, me (every folder of your personal store), or repo (the repo's own rows); works from any folder; with none outside a code repo, where no setup covers the folder, it reads your personal store"`
-	MaxChars int    `json:"max_chars,omitempty" flag:"max-chars" min:"200" desc:"cap the answer at this many characters (default 4000); what is left out is counted at the end"`
+	MaxChars int    `json:"max_chars,omitempty" flag:"max-chars" min:"200" desc:"cap the answer at this many characters (default 8000); what is left out is counted at the end"`
 	Top      int    `json:"top,omitempty" flag:"top" min:"1" desc:"how many best rows to print in full (default 10, within --max-chars); a date question with no other words (what happened yesterday) prints every row of its dates"`
 }
 
@@ -370,8 +370,8 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	// a row the file's context already printed is not printed twice
 	d.rows = slices.DeleteFunc(d.rows, func(r textRow) bool { return picked[r.ID] })
 	// the rows get what the file's context left, at least 1: build reads
-	// 0 or less as "no --max-chars" (4000), which let a context that
-	// filled a small cap be followed by 4000 characters of rows; the best
+	// 0 or less as "no --max-chars" (DefaultMaxChars), which let a context
+	// that filled a small cap be followed by a full answer's rows; the best
 	// row is still printed, cut (devco D-859)
 	out := build(q, d, in.Top, max(maxChars-len(text), 1))
 	out.File, out.Context, out.note, out.maxChars = q.file, text, note, maxChars

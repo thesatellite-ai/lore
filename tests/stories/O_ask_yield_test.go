@@ -82,7 +82,9 @@ func TestStoryOAskFirstRowRoom(t *testing.T) {
 
 	s.Step("D-1011/the-first-note-gets-the-room-of-the-second-cut", func() {
 		q := "how does the label worker handle a failed label"
-		r := ada.Lore(pc.Dir, "ask", "--query", q).OK(t)
+		// the notes are sized to a 4,000-character answer, where neither
+		// fits whole (the default is 8,000 since devco D-1013)
+		r := ada.Lore(pc.Dir, "ask", "--query", q, "--max-chars", "4000").OK(t)
 		out := r.Out()
 		if !strings.Contains(out, answer) {
 			t.Errorf("[O D-1011] ask %q: the first note's answering sentence is not printed:\n%s", q, r)
