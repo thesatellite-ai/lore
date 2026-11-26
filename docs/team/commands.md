@@ -353,10 +353,12 @@ Examples:
   lore store set --store me --settings push=batch --settings push_every=10m
   # compact an org store's history older than 30 days
   lore store set --store team --settings compact=on --settings compact_after=30d
+  # keep one remote commit per write (a push folds them into one per author by default)
+  lore store set --store me --settings squash=off
 
 Flags:
       --json                   print the result (or the error) as JSON
-      --settings stringArray   key=value: push=now|batch|manual, push_every=5m, compact=on|off, compact_after=30d (required)
+      --settings stringArray   key=value: push=now|batch|manual, push_every=5m, squash=on|off, compact=on|off, compact_after=30d (required)
       --store string           the store: me (personal), an org's store (team, or its name), or a .lore/stores.yaml store (required)
 ```
 <!-- /help -->

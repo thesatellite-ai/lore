@@ -225,6 +225,7 @@ func benchSize(t *testing.T, bin string, n, repeat int) Run {
 		undo.add(w.lore("batch", "undo", "--id", id, "--yes"))
 	}
 	run.Samples = append(run.Samples, apply, undo)
+	run.Samples = append(run.Samples, w.fewerCommits(100, 20, 500)...)
 	run.Samples = append(run.Samples, Sample{Name: "Land / promote a layer", Note: "not timed yet: needs a layer flow in the harness (spec item 1, LEFT)"})
 
 	// history views
@@ -449,6 +450,56 @@ func (w *world) seed(n int) Plan {
 		t.Fatalf("seed: %v", err)
 	}
 	return p
+}
+
+// fewerCommits measures store growth item 4 (devco:D-1000): writes synced
+// every `every` writes reach the remote as one commit per sync (spec
+// acceptance: 1,000 writes synced every 20 = at most 50), and a batch
+// undo of undoRows rows is one commit. A count over the bound is an error.
+func (w *world) fewerCommits(writes, every, undoRows int) []Sample {
+	t := w.t
+	count := func(dir, rev string) int {
+		n, err := strconv.Atoi(strings.TrimSpace(w.git(dir, "rev-list", "--count", rev)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	w.lore("sync")
+	before := count(w.bare, "main")
+	push := Sample{Name: fmt.Sprintf("Push of %d writes (lore sync)", every), Note: "every write is a local commit; a push sends one commit per author (squash on)"}
+	for i := range writes {
+		w.lore("memory", "add", "--body", fmt.Sprintf("growth write %d: the invoice export runs nightly", i), "--to", "agency", "--yes")
+		if (i+1)%every == 0 {
+			push.add(w.lore("sync"))
+		}
+	}
+	got, most := count(w.bare, "main")-before, (writes+every-1)/every
+	if got > most {
+		t.Errorf("%d writes synced every %d gave the remote %d commits, want at most %d", writes, every, got, most)
+	}
+	commits := Sample{Name: fmt.Sprintf("Remote commits for %d writes synced every %d", writes, every), Value: fmt.Sprintf("%d (at most %d; before squash on every push: %d)", got, most, writes)}
+	file := filepath.Join(w.root, "undo-rows.jsonl")
+	var b strings.Builder
+	for j := range undoRows {
+		fmt.Fprintf(&b, `{"op":"memory add","input":{"body":"undo row %d: the cache index","to":"agency"}}`+"\n", j)
+	}
+	mustWrite(t, file, b.String())
+	res := w.lore("batch", "apply", "--file", file, "--yes")
+	id := regexp.MustCompile(`bat_[0-9a-f]{32}`).FindString(res.out)
+	if id == "" {
+		t.Errorf("batch apply printed no batch id:\n%s", res.out)
+		return []Sample{push, commits}
+	}
+	local := count(w.clone, "HEAD")
+	w.lore("batch", "undo", "--id", id, "--yes")
+	made := count(w.clone, "HEAD") - local
+	if made != 1 {
+		t.Errorf("a %d-row batch undo made %d commits, want 1", undoRows, made)
+	}
+	undo := Sample{Name: fmt.Sprintf("Commits for a %d-row batch undo", undoRows), Value: fmt.Sprintf("%d (before: %d)", made, undoRows)}
+	w.lore("sync")
+	return []Sample{push, commits, undo}
 }
 
 // held checks the two planted changes are still held back after the

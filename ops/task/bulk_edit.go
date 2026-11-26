@@ -19,6 +19,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 )
 
@@ -186,6 +188,18 @@ func (o ops) deleteOp(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	fenced, err := FenceClaimed(bctx, o.env, all)
 	if err != nil {
 		return work.WriteOut{}, err
+	}
+	if md, ok := upgrade.As[wheredel.ManyDeleter](o.env); ok && !engine.PurgeAsked(bctx) {
+		// one delete for every root and its sub-tasks: one store write per
+		// store, not one commit per task (devco:D-1000)
+		refs := make([]engine.Ref, 0, len(roots))
+		for _, s := range roots {
+			refs = append(refs, engine.Ref{Store: s.Source, Table: table, ID: s.Row.ID})
+		}
+		if derr := md.DeleteMany(bctx, refs); derr != nil {
+			return work.WriteOut{}, errs.Prefix("task delete --where: the "+strconv.Itoa(len(roots))+" tasks could not go to the trash (batch "+batch.String()+"; `lore trash restore --id "+batch.String()+"` brings back any that did)", derr)
+		}
+		roots = nil
 	}
 	for _, s := range roots {
 		if _, derr := work.Delete(bctx, o.env, Noun, table, s.Row.ID, ""); derr != nil {

@@ -170,6 +170,16 @@ func spOneBatchOnTop(t *testing.T, before, after []string, memories int) {
 	}
 }
 
+// spFirstWrite writes a first row to store from c and syncs it: a first
+// write also registers its writer, a roster row a push keeps as a commit
+// of its own when it squashes (devco:D-1000), so it goes out before a
+// test counts the commits of a batch.
+func spFirstWrite(t *testing.T, p *spPair, c *th.Clone, store string) {
+	t.Helper()
+	p.add(t, c, store, "a first fact")
+	c.MustLore("sync")
+}
+
 // spPushView is the part of `lore store show --store <store> --json` the tests read.
 type spPushView struct {
 	Push struct {
@@ -232,6 +242,7 @@ func (p *spPair) spCompacted(t *testing.T, epoch, kept int) {
 func TestE40_StorePushBatchCombinesWrites(t *testing.T) {
 	p := newSPPersonal(t, spNow)
 	p.ca.MustLore("store", "set", "me", "push=batch", "push_every=10m").Says(t, "me: push batch every 10m")
+	spFirstWrite(t, p, p.ca, "me")
 	before := p.log()
 	ids := []string{
 		p.add(t, p.ca, "me", "batched fact one"),
@@ -267,7 +278,7 @@ func TestE40_StorePushBatchCombinesWrites(t *testing.T) {
 func TestE41_StorePushBatchPushesWhenIntervalPassed(t *testing.T) {
 	p := newSPPersonal(t, spNow)
 	p.ca.MustLore("store", "set", "me", "push=batch", "push_every=10m")
-	p.ca.MustLore("sync") // the last push is now
+	spFirstWrite(t, p, p.ca, "me") // the last push is now
 	before := p.log()
 	p.add(t, p.ca, "me", "interval fact one")
 	p.a.Advance(5 * time.Minute)
@@ -286,7 +297,7 @@ func TestE41_StorePushBatchPushesWhenIntervalPassed(t *testing.T) {
 func TestE42_StorePushOfflineBatchThenOnline(t *testing.T) {
 	p := newSPPersonal(t, spNow)
 	p.ca.MustLore("store", "set", "me", "push=batch", "push_every=1m")
-	p.ca.MustLore("sync")
+	spFirstWrite(t, p, p.ca, "me")
 	before := p.log()
 	away := p.store.Dir + ".away"
 	if err := os.Rename(p.store.Dir, away); err != nil {
@@ -317,11 +328,13 @@ func TestE42_StorePushOfflineBatchThenOnline(t *testing.T) {
 // ---------------------------------------------------------------- manual
 
 // Manual mode (the default, C5): writes and later reads (even after a long
-// time) never reach the remote; only `lore sync` pushes, sending the waiting
-// commits as they are (each keeps its title and author; only batch folds).
+// time) never reach the remote; only `lore sync` pushes, and it sends the
+// waiting writes as one batch commit (squash on, the default in every push
+// mode since devco:D-1000).
 func TestE43_StorePushManualPushesOnlyOnSync(t *testing.T) {
 	p := newSPPersonal(t, spNow)
 	p.ca.MustLore("store", "set", "me", "push=manual").Says(t, "me: push manual")
+	spFirstWrite(t, p, p.ca, "me")
 	before := p.log()
 	p.add(t, p.ca, "me", "manual fact one")
 	p.add(t, p.ca, "me", "manual fact two")
@@ -335,6 +348,23 @@ func TestE43_StorePushManualPushesOnlyOnSync(t *testing.T) {
 	p.cb.MustLore("sync")
 	p.cb.MustLore("memory", "list").Never(t, "manual fact one")
 	p.ca.MustLore("sync").Says(t, "store me: pushed (sent ")
+	spOneBatchOnTop(t, before, p.log(), 3)
+	p.cb.MustLore("sync")
+	spSees(t, p.cb, "manual fact one", "manual fact two", "manual fact three")
+}
+
+// squash=off (devco:D-1000): a team that wants one commit per write in its
+// git history keeps it; `lore sync` sends the waiting commits as they are,
+// each with its own title and author.
+func TestE43b_StorePushSquashOffKeepsEachCommit(t *testing.T) {
+	p := newSPPersonal(t, spNow)
+	p.ca.MustLore("store", "set", "me", "push=manual", "squash=off").Says(t, "me: push manual, squash off")
+	spFirstWrite(t, p, p.ca, "me")
+	before := p.log()
+	for _, b := range []string{"plain fact one", "plain fact two", "plain fact three"} {
+		p.add(t, p.ca, "me", b)
+	}
+	p.ca.MustLore("sync").Says(t, "store me: pushed (sent ")
 	after := p.log()
 	if len(after) <= len(before) || !slices.Equal(after[len(after)-len(before):], before) {
 		t.Fatalf("the sync must add commits on top of the old history:\nbefore %q\nafter  %q", before, after)
@@ -342,7 +372,7 @@ func TestE43_StorePushManualPushesOnlyOnSync(t *testing.T) {
 	adds := 0
 	for _, s := range after[:len(after)-len(before)] {
 		if strings.HasPrefix(s, "lore: batch ") {
-			t.Fatalf("a manual sync folded the commits into a batch: %q", after)
+			t.Fatalf("squash=off folded the commits into a batch: %q", after)
 		}
 		if strings.Contains(s, "memory add mem_") {
 			adds++
@@ -352,7 +382,7 @@ func TestE43_StorePushManualPushesOnlyOnSync(t *testing.T) {
 		t.Fatalf("want the three memory adds as their own commits, got %q", after)
 	}
 	p.cb.MustLore("sync")
-	spSees(t, p.cb, "manual fact one", "manual fact two", "manual fact three")
+	spSees(t, p.cb, "plain fact one", "plain fact two", "plain fact three")
 }
 
 // ---------------------------------------------------------------- compaction
@@ -569,7 +599,7 @@ func spCrashSetup(t *testing.T) (*spPair, []string, []string) {
 	t.Helper()
 	p := newSPPersonal(t, spNow)
 	p.ca.MustLore("store", "set", "me", "push=batch", "push_every=10m")
-	p.ca.MustLore("sync")
+	spFirstWrite(t, p, p.ca, "me")
 	before := p.log()
 	bodies := []string{"crash fact one", "crash fact two", "crash fact three"}
 	for _, b := range bodies {

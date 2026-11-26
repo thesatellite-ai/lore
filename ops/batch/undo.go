@@ -10,12 +10,16 @@ package batch
 //	     │   check, the edits of an import; R14, PASS3-A-6) ─► every row
 //	     │   still at the batch's hlc? else E_STALE naming the rows changed
 //	     │   since, nothing written (P3-BATCH-1) ─► one new batch of the
-//	     │   same kind putting each row back to its image before the batch
+//	     │   same kind putting each row back to its image before the batch,
+//	     │   staged: one store write (one commit) per store, not one per row
+//	     │   (devco:D-1000, store growth item 4)
 //	     ├► "trash" rows (a delete batch) ─► Undoer.Restore(bat_) — the same
 //	     │   write as `lore trash restore <bat_…>`; rows purged since are
 //	     │   listed as skipped, never brought back (DQ4)
 //	     └► "create" rows (an import, a bulk add) ─► ask (--yes) ─► one new
-//	         delete batch moving each still-alive created row to the trash
+//	         delete batch moving each still-alive created row to the trash,
+//	         as one delete (ManyDeleter: one commit per store) when the Env
+//	         has it
 
 import (
 	"bytes"
@@ -52,6 +56,13 @@ const (
 	actTrash   = string(engine.ActionTrash)
 	actRestore = string(engine.ActionRestore)
 )
+
+// ManyDeleter is the optional Env upgrade that moves many rows to the
+// trash as one delete, one store write per store (*wire.App: engine
+// TrashMany). Why: a 500-row create batch's undo made 500 commits.
+type ManyDeleter interface {
+	DeleteMany(ctx context.Context, refs []engine.Ref) error
+}
 
 // Undoer is the optional Env upgrade undo writes through (*wire.App has it).
 type Undoer interface {
@@ -214,12 +225,25 @@ func (o ops) undoEdits(ctx context.Context, id ids.ID[ids.Batch], evs []Event, o
 	if err != nil {
 		return err
 	}
-	for i, rid := range order {
+	// Every put-back is staged and written as one store write per store
+	// (engine.CommitEach): one commit for the whole undo, not one per row
+	// (devco:D-1000). The rows are distinct, so no write reads another's.
+	sctx := engine.Staging(bctx)
+	for _, rid := range order {
 		p := priors[rid]
-		if _, werr := rv.Revert(bctx, engine.Ref{Store: p.Store, Table: p.Before.Table, ID: rid}, p.After, p.Before); werr != nil {
-			return errs.Prefix("batch undo: stopped after "+strconv.Itoa(i)+" of "+strconv.Itoa(len(order))+
-				" rows (the rows put back are in batch "+into.String()+"; undo: lore batch undo --id "+into.String()+")", werr)
+		if _, werr := rv.Revert(sctx, engine.Ref{Store: p.Store, Table: p.Before.Table, ID: rid}, p.After, p.Before); werr != nil {
+			engine.Discard(sctx)
+			return errs.Prefix("batch undo: "+rid.String()+" could not be put back, so nothing was written", werr)
 		}
+	}
+	if written, _, cerr := engine.CommitEach(sctx); cerr != nil {
+		if len(written) == 0 {
+			return errs.Prefix("batch undo: nothing was written", cerr)
+		}
+		return errs.Prefix("batch undo: stopped after "+plural.Count(len(written), "store")+" of the rows' stores (the rows put back are in batch "+
+			into.String()+"; undo: lore batch undo --id "+into.String()+")", cerr)
+	}
+	for _, rid := range order {
 		out.Reverted = append(out.Reverted, rid.String())
 	}
 	out.Reverts = into.String()
@@ -425,26 +449,56 @@ func (o ops) undoCreate(ctx context.Context, u Undoer, id ids.ID[ids.Batch], evs
 	}
 	dctx = engine.WithDeleteReason(dctx, "undo of "+id.String())
 	incidental := rosterIncidental(evs)
+	md, many := upgrade.As[ManyDeleter](o.env)
+	g, canGet := upgrade.As[getter](o.env)
+	many = many && canGet
+	var refs []engine.Ref
+	var listed []string
 	for _, ev := range evs {
 		if incidental && rosterTable(ev.Table) {
 			out.Skipped = append(out.Skipped, Skip{ID: ev.ID.String(), Reason: reasonRosterKept})
 			continue
 		}
-		_, derr := u.Delete(dctx, engine.Ref{Store: ev.Store, Table: ev.Table, ID: ev.ID})
+		ref := engine.Ref{Store: ev.Store, Table: ev.Table, ID: ev.ID}
+		if many {
+			// one delete for every live row (devco:D-1000: one commit per
+			// store, not one per row); a row gone already is named here
+			_, cur, gerr := g.Get(dctx, ref)
+			switch {
+			case gerr == nil && cur.Deleted, errs.Has(gerr, errs.InTrash), errs.Has(gerr, errs.NotFound):
+				out.Skipped = append(out.Skipped, Skip{ID: ev.ID.String(), Reason: reasonAlreadyDeleted})
+			case gerr != nil:
+				return gerr
+			default:
+				refs, listed = append(refs, ref), append(listed, ev.ID.String())
+			}
+			continue
+		}
+		_, derr := u.Delete(dctx, ref)
 		switch {
 		case derr == nil:
 			out.Trashed = append(out.Trashed, ev.ID.String())
 		case errs.Has(derr, errs.InTrash), errs.Has(derr, errs.NotFound):
-			out.Skipped = append(out.Skipped, Skip{ID: ev.ID.String(), Reason: "already deleted"})
+			out.Skipped = append(out.Skipped, Skip{ID: ev.ID.String(), Reason: reasonAlreadyDeleted})
 		default:
 			return derr
 		}
+	}
+	if len(refs) > 0 {
+		if err := md.DeleteMany(engine.WithConfirmed(dctx), refs); err != nil {
+			return err
+		}
+		out.Trashed = append(out.Trashed, listed...)
 	}
 	if len(out.Trashed) > 0 {
 		out.Into = into.String()
 	}
 	return nil
 }
+
+// reasonAlreadyDeleted is the skip reason of a created row that is gone
+// already (in the trash, purged).
+const reasonAlreadyDeleted = "already deleted"
 
 // reasonRosterKept is the skip reason of a roster row an undo keeps.
 const reasonRosterKept = "kept: the writer's own roster row, made by the batch's first write in that store"

@@ -20,13 +20,17 @@ package wire
 // logic/storepush) changes when the push happens:
 //
 //	now     as above
-//	batch   a write commits locally; the push (all unpushed commits as ONE
-//	        batch commit) runs when push_every has passed since the last
+//	batch   a write commits locally; the push runs when push_every has
+//	        passed since the last
 //	        push, on `lore sync`, and on a command that needs the remote
 //	        current (FetchAlways, the agent's session start); a read fetch
 //	        merges without pushing
 //	manual  a write commits locally; only an explicit Sync pushes (`lore
 //	        sync`, and the roster/coordination steps that push on purpose)
+//
+// Every push (all three modes) folds the unpushed commits into one batch
+// commit per author unless squash=off (store growth item 4); a hand edit
+// and a roster change keep their own commit (git pushmodes.go).
 //
 // After a push that landed, compact=on compacts the store at most once a
 // day (personal store, an org store from an admin's machine, or a
@@ -416,10 +420,11 @@ func (b *storePush) hasUnpulled(ctx context.Context) bool {
 	return err == nil && n > 0
 }
 
-// syncInner syncs the clone: noPush fetches and merges only; a batch
-// store's push folds its unpushed commits into one batch commit. A manual
-// store (the default, C5) sends its commits as they are: each keeps its
-// subject and author (a layout commit, a hand edit, a settings change).
+// syncInner syncs the clone: noPush fetches and merges only; a push folds
+// the unpushed commits into one batch commit per author (squash=on, the
+// default in every push mode; store growth item 4: one commit per write
+// made a busy store ~600 commits a day). A hand edit and a roster change
+// keep their own commit; squash=off sends every commit as it is.
 //
 // A clone this command already fetched (any folder of it, markFetched) is
 // not fetched again (devco L-12-perf): a fetch-only sync of it has nothing
@@ -442,13 +447,13 @@ func (b *storePush) syncInner(ctx context.Context, noPush bool) (store.SyncRepor
 // syncOnce is syncInner's one sync of the clone.
 func (b *storePush) syncOnce(ctx context.Context, noPush bool) (store.SyncReport, error) {
 	gb := gitOf(b.inner)
-	if gb == nil || (!noPush && !b.held()) {
+	squash := !noPush && b.pushSettings().Squash()
+	if gb == nil || (!noPush && !b.held() && !squash) {
 		if noPush {
 			return store.SyncReport{}, nil // a store lore cannot sync without pushing is left alone
 		}
 		return b.sayHeld(b.inner.Sync(ctx))
 	}
-	squash := !noPush && b.pushSettings().Push == storepush.ModeBatch
 	return b.sayHeld(gb.SyncWith(ctx, gitbackend.SyncOptions{NoPush: noPush, Squash: squash}))
 }
 

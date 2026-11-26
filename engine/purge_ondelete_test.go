@@ -214,3 +214,49 @@ func TestDeletePurgeUnsupportedStoreWritesNothing(t *testing.T) {
 		t.Fatalf("the row is gone: %v", err)
 	}
 }
+
+// TestTrashManyHonoursPurgeOnDelete (devco:D-1000): bulk deletes moved
+// onto TrashMany (one write per store), which only ever trashed. Under
+// policy trash.purge_on_delete a single delete is a purge that needs
+// --confirm; a many-row delete now does the same: without --confirm it
+// asks and changes nothing, with it every row is purged, none kept in the
+// trash. Break-verified: before, TrashMany moved both rows to the trash.
+func TestTrashManyHonoursPurgeOnDelete(t *testing.T) {
+	t.Parallel()
+	for _, conf := range []bool{false, true} {
+		f := purgeFixtureWith(t, purgeOnDeletePolicy(t, true))
+		ctx := context.Background()
+		kbPrj, err := f.eng.Create(ctx, kbStore, schema.TableProjects, map[string]value.Value{"name": txt("kb-project")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var refs []Ref
+		for _, body := range []string{"widget note one", "widget note two"} {
+			fields := f.memFields(body)
+			fields["project_id"] = txt(kbPrj.Row.ID.String())
+			w, cerr := f.eng.Create(ctx, kbStore, schema.TableMemories, fields)
+			if cerr != nil {
+				t.Fatal(cerr)
+			}
+			refs = append(refs, Ref{Store: kbStore, Table: schema.TableMemories, ID: w.Row.ID})
+		}
+		pr := &PurgeRequest{Confirmed: conf}
+		_, err = f.eng.TrashMany(WithConfirmed(WithPurge(ctx, pr)), refs)
+		trashed, terr := f.eng.Trashed(ctx)
+		if terr != nil {
+			t.Fatal(terr)
+		}
+		if len(trashed) != 0 {
+			t.Fatalf("confirm=%v: %d rows kept in the trash under trash.purge_on_delete", conf, len(trashed))
+		}
+		if !conf {
+			if !errs.Has(err, errs.NeedsConfirm) || !strings.Contains(err.Error(), "policy trash.purge_on_delete") {
+				t.Fatalf("without --confirm: err = %v, want E_NEEDS_CONFIRM naming the policy", err)
+			}
+			continue
+		}
+		if err != nil || len(pr.Purged) != 2 {
+			t.Fatalf("with --confirm: err = %v, purged %v; want both rows purged", err, pr.Purged)
+		}
+	}
+}

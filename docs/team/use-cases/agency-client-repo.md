@@ -131,7 +131,7 @@ Alice adds an internal task for Bob from the default branch: a task added on a f
 ```console
 # alice, in website
 $ lore sync >/dev/null; lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync
-lore: pushed store agency/client: commit 9b40ce7 to branch main (2 commits, 1 row file)
+lore: pushed store agency/client: commit 9b40ce7 to branch main (1 commit, 1 row file)
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency/client)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency/client)

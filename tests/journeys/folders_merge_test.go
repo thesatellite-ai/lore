@@ -189,9 +189,10 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		took := time.Since(start)
 		lee.LoreIn(hub, "sync").OK(t) // C5: the repairs reach the store with Lee's sync
 		t.Logf("doctor --fix (%s, %d store commits):\n%s", took, two.CommitCount(mainRef)-before, grepLines(r.Out(), "empty_ref"))
-		// two repairs ran (task leads, empty refs): one store commit each
-		if n := two.CommitCount(mainRef) - before; n != 2 {
-			t.Errorf("doctor --fix made %d commits, want one per repair (2): %q", n, two.Log(mainRef)[:n])
+		// two repairs ran (task leads, empty refs), one local commit each, and
+		// Lee's sync sends them as one batch (devco:D-1000), never a commit per row
+		if n := two.CommitCount(mainRef) - before; n != 1 || !strings.HasPrefix(two.Log(mainRef)[0], "lore: batch ") {
+			t.Errorf("doctor --fix reached the store as %d commits, want one batch of both repairs: %q", n, two.Log(mainRef)[:max(n, 1)])
 		}
 		after := lee.LoreIn(hub, "doctor").Never(t, "empty_ref", "task_lead")
 		t.Logf("doctor after --fix:\n%s", after.Out())

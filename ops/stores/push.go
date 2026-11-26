@@ -62,9 +62,12 @@ type PushView struct {
 	// an org store.
 	Place string `json:"place"`
 	Org   string `json:"org,omitempty"`
-	// Push, PushEvery, Compact, CompactAfter are the effective settings.
+	// Push, PushEvery, Squash, Compact, CompactAfter are the effective
+	// settings (Squash: on folds the commits a push carries into one per
+	// author, off keeps one per write).
 	Push         string `json:"push"`
 	PushEvery    string `json:"push_every"`
+	Squash       string `json:"squash"`
 	Compact      string `json:"compact"`
 	CompactAfter string `json:"compact_after,omitempty"`
 	// Summary is the one-line form ("push batch every 10m, compact off").
@@ -160,7 +163,7 @@ func (v PushView) personalLines(b *strings.Builder) {
 // SetIn is the input of store.set.
 type SetIn struct {
 	Store    string   `json:"store" arg:"0" desc:"the store: me (personal), an org's store (team, or its name), or a .lore/stores.yaml store"`
-	Settings []string `json:"settings" arg:"1" rest:"true" desc:"key=value: push=now|batch|manual, push_every=5m, compact=on|off, compact_after=30d"`
+	Settings []string `json:"settings" arg:"1" rest:"true" desc:"key=value: push=now|batch|manual, push_every=5m, squash=on|off, compact=on|off, compact_after=30d"`
 }
 
 // CompactIn is the input of store.compact.
@@ -239,7 +242,7 @@ func CheckSettings(store string, words []string) ([]storepush.Assignment, error)
 	for _, a := range set {
 		if s, err = s.Apply(a.Key, a.Value); err != nil {
 			return nil, errs.New(errs.InvalidInput, "store set: "+err.Error()).
-				WithHint("push=now|batch|manual, push_every=<interval ≥ 1m>, compact=on|off, compact_after=<age ≥ 1d>")
+				WithHint("push=now|batch|manual, push_every=<interval ≥ 1m>, squash=on|off, compact=on|off, compact_after=<age ≥ 1d>")
 		}
 	}
 	return set, nil
@@ -272,6 +275,7 @@ func pushOps(m Manager) []op.Entry {
 			Examples: []op.Example{
 				{Title: "batch the personal store's pushes", CLI: "lore store set --store me --settings push=batch --settings push_every=10m", Want: "push batch every 10m"},
 				{Title: "compact an org store's history older than 30 days", CLI: "lore store set --store team --settings compact=on --settings compact_after=30d", Want: "compact on after 30d"},
+				{Title: "keep one remote commit per write (a push folds them into one per author by default)", CLI: "lore store set --store me --settings squash=off", Want: "squash off"},
 			},
 		}, func(ctx context.Context, in SetIn) (PushView, error) {
 			p, err := pusher(m, "set")

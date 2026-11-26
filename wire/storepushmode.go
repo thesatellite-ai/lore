@@ -67,8 +67,7 @@ func personalPushRaw(home string) (storepush.Raw, error) {
 	if err != nil || cfg == nil {
 		return storepush.Raw{}, err
 	}
-	p := cfg.Personal
-	return storepush.Raw{Push: p.Push, PushEvery: p.PushEvery, Compact: p.Compact, CompactAfter: p.CompactAfter}, nil
+	return cfg.Personal.PushRaw(), nil
 }
 
 // orgOfClone names the configured org one of whose stores the clone at

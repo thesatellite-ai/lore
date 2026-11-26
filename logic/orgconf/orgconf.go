@@ -104,17 +104,19 @@ type Config struct {
 type Personal struct {
 	// Store is PersonalStoreLocal (the default when empty) or a store url.
 	Store string `yaml:"store,omitempty"`
-	// Push, PushEvery, Compact and CompactAfter are the personal store's
-	// push and compaction settings (logic/storepush; `lore store set me`).
+	// Push, PushEvery, Squash, Compact and CompactAfter are the personal
+	// store's push and compaction settings (logic/storepush; `lore store
+	// set me`).
 	Push         string `yaml:"push,omitempty"`
 	PushEvery    string `yaml:"push_every,omitempty"`
 	Compact      string `yaml:"compact,omitempty"`
 	CompactAfter string `yaml:"compact_after,omitempty"`
+	Squash       string `yaml:"squash,omitempty"`
 }
 
 // PushRaw is the personal store's push settings as written.
 func (p Personal) PushRaw() storepush.Raw {
-	return storepush.Raw{Push: p.Push, PushEvery: p.PushEvery, Compact: p.Compact, CompactAfter: p.CompactAfter}
+	return storepush.Raw{Push: p.Push, PushEvery: p.PushEvery, Compact: p.Compact, CompactAfter: p.CompactAfter, Squash: p.Squash}
 }
 
 // Org is one entry under `orgs:` (F13).

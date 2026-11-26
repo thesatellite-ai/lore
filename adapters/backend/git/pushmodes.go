@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -29,6 +30,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/branchlayer"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
@@ -183,7 +185,9 @@ func (b *Backend) OldestUnpushed(ctx context.Context) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	args := []string{"log", "--format=%ct", h}
+	// %at too: a batch commit a push squashed but could not send keeps its
+	// first write's author date (squashOnto)
+	args := []string{"log", "--format=%at %ct", h}
 	if remote != "" {
 		args = append(args, "^"+remote)
 	}
@@ -192,8 +196,8 @@ func (b *Backend) OldestUnpushed(ctx context.Context) (time.Time, error) {
 		return time.Time{}, errs.Wrap(errs.Internal, "git: read the waiting commits", err)
 	}
 	var oldest time.Time
-	for line := range strings.SplitSeq(trimmed(out), "\n") {
-		sec, perr := strconv.ParseInt(strings.TrimSpace(line), 10, 64)
+	for field := range strings.FieldsSeq(trimmed(out)) {
+		sec, perr := strconv.ParseInt(field, 10, 64)
 		if perr != nil {
 			continue
 		}
@@ -240,18 +244,33 @@ func (b *Backend) countCommits(ctx context.Context, from, to string) (int, error
 	return strconv.Atoi(trimmed(out))
 }
 
-// Hand-edit commits in a batch (brief 2.1: committed as that person). The
-// pick-up's commits carry handEditTrailer (clone.go commitBatch, from
-// store.PersonAuthored); the batch squash keeps each as a commit of its
-// own with its author, committer, dates and message, and squashes only
-// lore's own commits between them:
+// What a push squashes (store growth item 4, owner 2026-11-25: one commit
+// per write made a busy store ~600 commits a day). The commits of
+// remote..h become one batch commit per run of commits by the same
+// author, in order; the commits the authority replay must judge one by
+// one keep a commit of their own with their author, committer, dates and
+// message (recommit):
 //
-//	remote ─ w1 ─ w2 ─ H ─ w3 ─ w4      (H: hand edit by the person)
-//	remote ─ batch(w1,w2) ─ H' ─ batch(w3,w4)
+//	remote ─ w1 ─ w2 ─ H ─ w3 ─ R ─ w4 ─ x5 ─ x6
+//	remote ─ batch(w1,w2) ─ H' ─ w3' ─ R' ─ w4' ─ batch(x5,x6)
 //
-// Each new commit takes its original's tree, so the result's tree is h's.
-// A local history with a merge in it is pushed as it is when it holds a
-// hand edit (a tree of a commit before the merge would undo the merge).
+//	H  a hand edit (brief 2.1: committed as that person; handEditTrailer
+//	   from clone.go commitBatch)
+//	R  a roster change or a file that is not a row (squashSolo): the
+//	   replay judges each later commit against the roster as the earlier
+//	   ones left it, so a run never spans one
+//	x  another author than w (an agent session authored as its person,
+//	   a second identity on the clone): the replay judges each commit by
+//	   its author, so authors are never mixed
+//
+// Each batch keeps its run's author and committer (never the identity of
+// the process that pushes), the first commit's author date and the last
+// one's committer date: the push hold (commitsAfter, committer time) sees
+// no write as older than it was. Each new commit takes its original's
+// tree, so the result's tree is h's. A local history with a merge in it
+// is squashed only when it is one run with no solo commit (a tree of a
+// commit before the merge would undo the merge); else it is pushed as it
+// is.
 
 // handEditKey is the trailer key that marks a person's own change.
 const handEditKey = "Lore-Hand-Edit"
@@ -261,14 +280,27 @@ const handEditTrailer = handEditKey + ": true"
 
 // localCommit is one commit of remote..h for the squash.
 type localCommit struct {
-	id   string
-	hand bool // a hand-edit commit (handEditTrailer)
+	id string
+	// parent is the first parent (a merge's other parents are not kept)
+	parent string
+	// merge: the commit has more than one parent
+	merge bool
+	// solo: a commit the squash keeps as a commit of its own (a hand edit,
+	// a roster change, a file that is not a row; squashSolo)
+	solo bool
+	// who is the author and committer (name and e-mail each): a run of
+	// commits with the same who becomes one batch
+	who string
+	// authorDate and committerDate are git's raw dates ("<unix> <tz>")
+	authorDate, committerDate string
+	// author and committer are the people of the commit
+	author, committer Signature
 }
 
-// squashOnto makes the commits of remote..h one commit on remote with h's
-// tree and a batch message, and moves the branch there (compare-and-swap
-// on h). One commit or none is left as it is. Hand-edit commits stay
-// commits of their own (see above).
+// squashOnto makes the commits of remote..h one commit per author run on
+// remote with h's tree and a batch message, and moves the branch there
+// (compare-and-swap on h). One commit or none is left as it is; so is a
+// run of one commit sitting where it was. See above for what stays.
 func (b *Backend) squashOnto(ctx context.Context, remote, h string) (string, error) {
 	n, err := b.countCommits(ctx, remote, h)
 	if err != nil || n <= 1 {
@@ -278,52 +310,69 @@ func (b *Backend) squashOnto(ctx context.Context, remote, h string) (string, err
 	if err != nil {
 		return h, err
 	}
-	hands := 0
-	for _, c := range local {
-		if c.hand {
-			hands++
-		}
-	}
-	if hands > 0 && (!linear || hands == len(local)) {
-		return h, nil // nothing lore may fold without losing a person's commit
-	}
-	env, err := b.commitEnv(ctx, Signature{})
+	// A branch layer names the store commit it was made on (its
+	// Lore-Layer-Store-Base trailer) and lands against it: a local commit a
+	// layer names, and every one before it, stays as it is; only the
+	// commits after the newest of them are folded.
+	bases, err := b.layerBases(ctx)
 	if err != nil {
 		return h, err
 	}
-	next, from := remote, remote // from: the parent of the run of lore commits
-	var run string               // the last lore commit of the current run
+	for i := len(local) - 1; i >= 0; i-- {
+		if bases[local[i].id] {
+			remote, local, linear = local[i].id, local[i+1:], linearFrom(local[i].id, local[i+1:])
+			break
+		}
+	}
+	if len(local) <= 1 {
+		return h, nil
+	}
+	if !linear && !squashableMerge(local) {
+		return h, nil // nothing lore may fold without losing a commit the replay judges alone
+	}
+	next := remote
+	var run []localCommit // the current run of one author's commits
 	flush := func() error {
-		if run == "" {
+		if len(run) == 0 {
 			return nil
 		}
-		msg, err := b.batchMessage(ctx, from, run)
+		defer func() { run = nil }()
+		last := run[len(run)-1]
+		if len(run) == 1 {
+			var err error
+			next, err = b.keepCommit(ctx, last, next)
+			return err
+		}
+		msg, err := b.batchMessage(ctx, run[0].id+"^", last.id)
 		if err != nil {
 			return err
 		}
-		if next, err = b.commitTree(ctx, run+"^{tree}", []string{next}, b.cfg.withTrailers(ctx, msg), env); err != nil {
-			return err
-		}
-		run = ""
-		return nil
+		env := slices.Concat(authorEnv(run[0].author), committerEnv(last.committer),
+			[]string{"GIT_AUTHOR_DATE=" + run[0].authorDate, "GIT_COMMITTER_DATE=" + last.committerDate})
+		next, err = b.commitTree(ctx, last.id+"^{tree}", []string{next}, b.cfg.withTrailers(ctx, msg), env)
+		return err
 	}
 	for _, c := range local {
-		if !c.hand {
-			if run == "" {
-				from = c.id + "^"
-			}
-			run = c.id
+		if !c.solo && (len(run) == 0 || run[0].who == c.who) {
+			run = append(run, c)
 			continue
 		}
 		if err := flush(); err != nil {
 			return h, err
 		}
-		if next, err = b.recommit(ctx, chainCommit{id: c.id, tree: c.id + "^{tree}"}, next); err != nil {
-			return h, err
+		if c.solo {
+			if next, err = b.keepCommit(ctx, c, next); err != nil {
+				return h, err
+			}
+			continue
 		}
+		run = []localCommit{c}
 	}
 	if err := flush(); err != nil {
 		return h, err
+	}
+	if next == h {
+		return h, nil
 	}
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"update-ref", "-m", "lore: batch", "HEAD", next, h}}); err != nil {
 		return h, errs.Wrap(errs.Internal, "git: move the branch to the batch commit", err)
@@ -331,12 +380,85 @@ func (b *Backend) squashOnto(ctx context.Context, remote, h string) (string, err
 	return next, nil
 }
 
-// localCommits lists remote..h oldest first, each marked when it is a
-// hand-edit commit; linear is false when one of them is a merge or the
-// first one does not sit on remote.
+// layerBases is the set of store commits the clone's own branch layers
+// (live and trashed) name as their base (TrailerStoreBase).
+func (b *Backend) layerBases(ctx context.Context) (map[string]bool, error) {
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"for-each-ref",
+		"--format=%(trailers:key=" + TrailerStoreBase + ",valueonly,separator=%x2C)", branchlayer.RefPrefix, branchlayer.TrashPrefix}})
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "git: read the branch layers' bases", err)
+	}
+	bases := map[string]bool{}
+	for _, f := range strings.FieldsFunc(string(out), func(r rune) bool { return r == '\n' || r == ',' }) {
+		if f = strings.TrimSpace(f); f != "" {
+			bases[f] = true
+		}
+	}
+	return bases, nil
+}
+
+// linearFrom reports whether local is a line of single-parent commits on
+// base.
+func linearFrom(base string, local []localCommit) bool {
+	prev := base
+	for _, c := range local {
+		if c.merge || c.parent != prev {
+			return false
+		}
+		prev = c.id
+	}
+	return true
+}
+
+// squashableMerge reports whether a local history with a merge in it may
+// be squashed at all: one author's commits and no solo commit, so the one
+// batch takes h's tree and drops no commit the replay must judge alone.
+func squashableMerge(local []localCommit) bool {
+	for _, c := range local {
+		if c.solo || c.who != local[0].who {
+			return false
+		}
+	}
+	return true
+}
+
+// keepCommit puts c on next unchanged: c itself when it already sits there
+// (its original parent was not rewritten), else c made again on next with
+// its own tree, people, dates and message.
+func (b *Backend) keepCommit(ctx context.Context, c localCommit, next string) (string, error) {
+	if c.parent == next {
+		return c.id, nil
+	}
+	return b.recommit(ctx, chainCommit{id: c.id, tree: c.id + "^{tree}"}, next)
+}
+
+// squashSolo reports whether a commit with these changes keeps a commit
+// of its own in a squash: a row of a table the authority replay keeps
+// (the roster, project and team membership, team contacts), the org file
+// (each change is judged against the admins at its parent) or the store
+// marker (settings, epoch). A starter file or the signpost a first write
+// adds is not. A new actor row is roster too: a refused roster change
+// holds back every row of its commit, so folded with the author's other
+// writes it would hold those back as well (TestSquashKeepsTheHeldSet).
+func squashSolo(paths []string) bool {
+	for _, p := range paths {
+		if p == rowfs.MarkerFile || rowfs.IsOrgFileName(path.Base(p)) {
+			return true
+		}
+		if t := tableOfPath(p); isRowFile(p) && (kept(t) || teamInfoTables[t]) {
+			return true
+		}
+	}
+	return false
+}
+
+// localCommits lists remote..h oldest first, each with its people, dates
+// and whether it stays a commit of its own (squashSolo, hand edits);
+// linear is false when one of them is a merge or the first one does not
+// sit on remote. A merge lists no paths (git log shows none for it).
 func (b *Backend) localCommits(ctx context.Context, remote, h string) ([]localCommit, bool, error) {
-	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"log", "--reverse", "--topo-order",
-		"--format=%H%x00%P%x00%(trailers:key=" + handEditKey + ",valueonly,separator=%x2C)%x1e", h, "^" + remote}})
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"log", "--reverse", "--topo-order", "--no-renames", "--name-only", "-z", "--date=raw",
+		"--format=%x1e%H%x00%P%x00%an%x00%ae%x00%ad%x00%cn%x00%ce%x00%cd%x00%(trailers:key=" + handEditKey + ",valueonly,separator=%x2C)%x1f", h, "^" + remote}})
 	if err != nil {
 		return nil, false, errs.Wrap(errs.Internal, "git: list the commits of the batch", err)
 	}
@@ -347,8 +469,9 @@ func (b *Backend) localCommits(ctx context.Context, remote, h string) ([]localCo
 	var list []localCommit
 	linear, prev := true, trimmed(base)
 	for rec := range strings.SplitSeq(string(out), "\x1e") {
-		f := strings.SplitN(strings.TrimLeft(rec, "\n"), "\x00", 3)
-		if len(f) != 3 || f[0] == "" {
+		head, files, _ := strings.Cut(rec, "\x1f")
+		f := strings.Split(head, "\x00")
+		if len(f) != localCommitFields || f[0] == "" {
 			continue
 		}
 		parents := strings.Fields(f[1])
@@ -356,9 +479,31 @@ func (b *Backend) localCommits(ctx context.Context, remote, h string) ([]localCo
 			linear = false
 		}
 		prev = f[0]
-		list = append(list, localCommit{id: f[0], hand: strings.TrimSpace(f[2]) != ""})
+		var paths []string
+		for p := range strings.SplitSeq(files, "\x00") {
+			if p = strings.TrimSpace(p); p != "" {
+				paths = append(paths, p)
+			}
+		}
+		author, committer := Signature{Name: f[2], Email: f[3]}, Signature{Name: f[5], Email: f[6]}
+		list = append(list, localCommit{
+			id: f[0], parent: first(parents), merge: len(parents) > 1, solo: strings.TrimSpace(f[8]) != "" || squashSolo(paths),
+			who:    strings.Join([]string{f[2], f[3], f[5], f[6]}, "\x00"),
+			author: author, committer: committer, authorDate: f[4], committerDate: f[7],
+		})
 	}
 	return list, linear, nil
+}
+
+// localCommitFields is the field count of localCommits' log format.
+const localCommitFields = 9
+
+// first is the first of list ("" when empty).
+func first(list []string) string {
+	if len(list) == 0 {
+		return ""
+	}
+	return list[0]
 }
 
 // batchMessage names the rows a batch carries: the subject counts them

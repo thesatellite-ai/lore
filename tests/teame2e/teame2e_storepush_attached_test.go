@@ -60,6 +60,7 @@ func TestE55_StorePushAttachedStoreSetBatchCompact(t *testing.T) {
 	if v := spShow(t, p.cb, spAttachedStore); v.Push.Push != "batch" || v.Push.PushEvery != "10m" {
 		t.Fatalf("the other clone must see the store's batch setting, got %+v", v.Push)
 	}
+	spFirstWrite(t, p, p.cb, spAttachedStore) // bob's first write registers him: its own commit
 	before := p.log()
 	p.add(t, p.cb, spAttachedStore, "kb bob one")
 	p.add(t, p.cb, spAttachedStore, "kb bob two")

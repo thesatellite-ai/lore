@@ -111,6 +111,11 @@ func TestJourneySoloKBStoreSessionEnd(t *testing.T) {
 		// A this was refused ("no admin can be named").
 		m.LoreIn(app, "store", "set", l7aKBName, "push=batch", "push_every=1h").OK(t).
 			Says(t, "kb: push batch every 1h", "the store's lore-store.yaml")
+		// the first write registers the writer (a roster row) and the setting
+		// is a marker commit: a push keeps both as commits of their own when
+		// it squashes (devco:D-1000), so they go out before the counted batch
+		m.LoreIn(app, "memory", "add", "--body", "kb: a first note", "--to", l7aKBName).OK(t)
+		m.LoreIn(app, "store", "push", "--store", l7aKBName).OK(t)
 		m.LoreIn(app, "memory", "add", "--body", "kb: the staging db resets nightly", "--to", l7aKBName).OK(t)
 		m.LoreIn(app, "memory", "add", "--body", "kb: invoices go out on the 1st", "--to", l7aKBName).OK(t)
 		if l7aRemoteHas(w, "staging db resets") || l7aRemoteHas(w, "invoices go out") {

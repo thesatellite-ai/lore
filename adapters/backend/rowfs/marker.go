@@ -120,6 +120,7 @@ type markerWire struct {
 	PushEvery    string `yaml:"push_every,omitempty"`
 	Compact      string `yaml:"compact,omitempty"`
 	CompactAfter string `yaml:"compact_after,omitempty"`
+	Squash       string `yaml:"squash,omitempty"`
 }
 
 // ParseMarker parses marker bytes.
@@ -141,7 +142,7 @@ func ParseMarker(b []byte) (Marker, error) {
 		return Marker{}, errs.New(errs.ConfigInvalid, "rowfs: "+MarkerFile+": epoch must not be negative")
 	}
 	m := Marker{Version: w.LoreStore, Visibility: Visibility(w.Visibility), Created: w.Created, OrgFolder: w.OrgFolder,
-		Org: w.Org, OrgStore: w.OrgStore, Epoch: w.Epoch, Push: storepush.Raw{Push: w.PushMode, PushEvery: w.PushEvery, Compact: w.Compact, CompactAfter: w.CompactAfter}}
+		Org: w.Org, OrgStore: w.OrgStore, Epoch: w.Epoch, Push: storepush.Raw{Push: w.PushMode, PushEvery: w.PushEvery, Compact: w.Compact, CompactAfter: w.CompactAfter, Squash: w.Squash}}
 	if m.Visibility == "" {
 		m.Visibility = VisibilityInternal
 	}
@@ -170,7 +171,7 @@ func (m Marker) Encode() ([]byte, error) {
 		return nil, errs.New(errs.InvalidInput, "rowfs: visibility must be internal or shareable")
 	}
 	w := markerWire{LoreStore: MarkerVersion, ID: m.ID.String(), Visibility: string(m.Visibility), Created: m.Created, OrgFolder: m.OrgFolder,
-		Org: m.Org, OrgStore: m.OrgStore, Epoch: m.Epoch, PushMode: m.Push.Push, PushEvery: m.Push.PushEvery, Compact: m.Push.Compact, CompactAfter: m.Push.CompactAfter}
+		Org: m.Org, OrgStore: m.OrgStore, Epoch: m.Epoch, PushMode: m.Push.Push, PushEvery: m.Push.PushEvery, Compact: m.Push.Compact, CompactAfter: m.Push.CompactAfter, Squash: m.Push.Squash}
 	b, err := yaml.Marshal(w)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "rowfs: encode "+MarkerFile, err)

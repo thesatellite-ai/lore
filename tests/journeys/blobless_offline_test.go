@@ -57,6 +57,9 @@ func TestJourneyBloblessStoreOffline(t *testing.T) {
 			t.Fatalf("no task id in %s", out)
 		}
 		id = m[1]
+		// each version its own push: a push sends one commit per author
+		// (devco:D-1000), which would fold the two versions into one
+		lee.Lore(parent, "sync").OK(t)
 		lee.Lore(parent, "task", "edit", "--id", id, "--title", jblNew).OK(t)
 		lee.Lore(parent, "sync").OK(t)
 		p := jPath(t, lee.Lore(parent, "path", id, "--json").OK(t))

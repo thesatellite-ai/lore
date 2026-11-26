@@ -379,10 +379,12 @@ func (o ops) metaImport(ctx context.Context, in MetaImportIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	for i, id := range order {
-		if _, err := o.env.Update(engine.WithMeta(bctx, *writes[id]), engine.Ref{ID: id}, map[string]value.Value{}); err != nil {
-			return RowOut{}, errs.Prefix(fmt.Sprintf("meta import: stopped at row %s after %d of %d rows (batch %s; see: lore batch show --id %s)", id, i, len(order), bid, bid), err)
-		}
+	if done, serr := stagedEach(bctx, len(order), func(sctx context.Context, i int) error {
+		_, uerr := o.env.Update(engine.WithMeta(sctx, *writes[order[i]]), engine.Ref{ID: order[i]}, map[string]value.Value{})
+		return uerr
+	}); serr != nil {
+		at := order[min(done, len(order)-1)]
+		return RowOut{}, errs.Prefix(fmt.Sprintf("meta import: stopped at row %s after %d of %d rows (batch %s; see: lore batch show --id %s)", at, done, len(order), bid, bid), serr)
 	}
 	return RowOut{ID: bid.String(), Human: fmt.Sprintf("imported %d values on %d rows; batch %s (undo: lore batch undo --id %s)\n", len(recs), len(order), bid, bid)}, nil
 }

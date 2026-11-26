@@ -93434,6 +93434,9 @@
                             "type": "string"
                           }
                         },
+                        "squash": {
+                          "type": "string"
+                        },
                         "stale": {
                           "type": "boolean"
                         },
@@ -93461,6 +93464,7 @@
                         "place",
                         "push",
                         "push_every",
+                        "squash",
                         "compact",
                         "summary",
                         "epoch",
@@ -94628,7 +94632,7 @@
                 "properties": {
                   "settings": {
                     "type": "array",
-                    "description": "key=value: push=now|batch|manual, push_every=5m, compact=on|off, compact_after=30d",
+                    "description": "key=value: push=now|batch|manual, push_every=5m, squash=on|off, compact=on|off, compact_after=30d",
                     "items": {
                       "type": "string"
                     }
@@ -94703,6 +94707,9 @@
                         "type": "string"
                       }
                     },
+                    "squash": {
+                      "type": "string"
+                    },
                     "stale": {
                       "type": "boolean"
                     },
@@ -94730,6 +94737,7 @@
                     "place",
                     "push",
                     "push_every",
+                    "squash",
                     "compact",
                     "summary",
                     "epoch",
@@ -95570,6 +95578,9 @@
                             "type": "string"
                           }
                         },
+                        "squash": {
+                          "type": "string"
+                        },
                         "stale": {
                           "type": "boolean"
                         },
@@ -95597,6 +95608,7 @@
                         "place",
                         "push",
                         "push_every",
+                        "squash",
                         "compact",
                         "summary",
                         "epoch",

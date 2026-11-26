@@ -76,6 +76,14 @@ func spBatchMachine(t *testing.T, shape string) {
 		t.Errorf("%s: place %q org %q admin %v, want org %s admin", spOrg, v.Place, v.Org, v.Admin, spOrg)
 	}
 	m.CheckMachine(t, shape+"/batch set", gone)
+	// The first write to a store also registers its writer, a roster row,
+	// and store set committed the org store's marker: a push keeps both as
+	// commits of their own when it squashes (devco:D-1000), so they go out
+	// before the batch counted below.
+	for _, s := range []string{"me", spOrg} {
+		spMemAdd(t, m, repo, s, "first fact in "+s)
+	}
+	lsRun(t, m, repo, "sync")
 
 	before := map[string][]spCommit{"me": spLog(t, meBare), spOrg: spLog(t, teamBare)}
 	bare := map[string]string{"me": meBare, spOrg: teamBare}

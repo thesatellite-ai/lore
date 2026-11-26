@@ -312,13 +312,13 @@ Your personal store (`me`), your org's stores and the stores a repo attaches in 
 | `batch` | commits on your machine only | when the oldest waiting write is `push_every` (default `5m`) old and you run any lore command that uses the store, on `lore sync`, on commands that need the remote current (`lore sync status`, `lore land`), when your coding tool starts or ends a session, and from the repo's git hooks lore installs (after a commit, before a push) |
 | `now` (your opt-in) | commits and pushes | at once, one commit per write, roster and link writes included |
 
-Each store commit is titled after what you did, in one form for every kind of record: the command and the record's id, as in `lore: memory add mem_01ab…` or `lore: task add tsk_01cd…` (with `(N rows)` when more of its own rows, such as a task list, went into the same commit). A title names only records the commit holds. A record lore writes on the side of your command is named too: your actor row when your first write registers you (or your agent) is listed, as in `lore: memory add mem_01ab… (+ actor act_02ef…)`, or gets its own commit, `lore: actor register act_02ef…`; a folder's project row, made at the folder's first write, is listed after your actor row in that write's commit, as in `lore: memory add mem_01ab… (+ actor act_02ef…, project prj_03aa…)`, and gets its own commit, `lore: project add prj_03aa…`, only when that write names no project. No text of a record goes into a commit title: not a note's body, not a task's or plan's title, not a folder's or person's name, since a title can hold private words as easily as a body and a commit title stays readable in `git log` after a delete or purge; `lore show --id <id>` gives the record. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. In `manual` mode `lore sync` sends the waiting commits as they are, each with its own title and author. In `batch` mode they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
+Each store commit is titled after what you did, in one form for every kind of record: the command and the record's id, as in `lore: memory add mem_01ab…` or `lore: task add tsk_01cd…` (with `(N rows)` when more of its own rows, such as a task list, went into the same commit). A title names only records the commit holds. A record lore writes on the side of your command is named too: your actor row when your first write registers you (or your agent) is listed, as in `lore: memory add mem_01ab… (+ actor act_02ef…)`, or gets its own commit, `lore: actor register act_02ef…`; a folder's project row, made at the folder's first write, is listed after your actor row in that write's commit, as in `lore: memory add mem_01ab… (+ actor act_02ef…, project prj_03aa…)`, and gets its own commit, `lore: project add prj_03aa…`, only when that write names no project. No text of a record goes into a commit title: not a note's body, not a task's or plan's title, not a folder's or person's name, since a title can hold private words as easily as a body and a commit title stays readable in `git log` after a delete or purge; `lore show --id <id>` gives the record. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. A push (in every mode: `lore sync`, `lore store push`, a `batch` push, the push after a write in mode `now`) sends the waiting commits as **one** commit per author, `lore: batch N rows (memories 2, tasks 1)` with one line per note in its message, in the order they were written; one waiting commit goes out as it is, with its own title. Some commits keep their own commit, title and author, so the org's checks of who may change what judge exactly the same changes: a hand edit, a roster or membership change (`lore member add`, `lore team add`, your actor row on a first write), `lore-org.yaml` and the store's `lore-store.yaml`; a waiting commit a branch's own notes (a branch layer) were started on goes out as it is, with every commit before it, so the branch still lands. `lore batch undo`, `lore meta set --where`, `lore meta import`, `lore task delete --where` and `lore resource delete` write one commit per store, however many rows they change. A store whose team wants one commit per write in its git history sets `squash=off` (`lore store set --store <store> --settings squash=off`); then a push sends the waiting commits as they are. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
 
 Your actor row and your machine profile live in one folder of a store, the folder that holds your row (the org folder, where the roster is), not in every folder you write to. A write in another folder of the same store (`task edit --id … --assign @lee` in `sync/`) commits only that row: one commit, with no `sync/actors/…` or `sync/machines/…` file beside it, since a folder's reads attach the org folder and find you there. A coding agent's first write in a store adds the agent's own row to that same folder, once, as its own commit; later writes carry only their rows. A folder of a store that holds no row of yours yet (a store with no org folder) still gets your actor row with your first write there.
 
 lore has no daemon, timer or background process, and never starts one. A batch goes out only when something runs lore: a command you (or your coding tool) run anyway checks the age of the oldest waiting write and, once it is `push_every` old, pushes the batch inside that command. That push gets a short time limit, so a slow or unreachable remote never holds your command up; what did not go out stays committed for the next command. If nothing runs lore, the batch simply stays on your machine, safe. `lore store show`, `lore sync status` and `lore doctor` show how old the oldest waiting write is, and `lore doctor` warns once it is more than a day old. Run `lore sync` to push it.
 
-Alice batches her personal store. Her two notes wait on her machine, together with the rows lore records about her and her machine on a first write; `lore store show` says how many commits are waiting, and `lore sync` pushes them as one commit:
+Alice batches her personal store. Her two notes wait on her machine, together with the rows lore records about her and her machine on a first write; `lore store show` says how many commits are waiting, and `lore sync` pushes them as two commits: the first write, which also adds her actor row (a roster change keeps its own commit), and one batch of the rest:
 
 <!-- example: store-push#batch -->
 ```console
@@ -348,15 +348,13 @@ me: push batch every 10m, compact off
   epoch     0
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 $ lore sync
-lore: pushed store me: commit 601d285 to branch main (1 commit, 4 row files)
-store me: pushed (sent 1, received 0, merged 0, refused 0); rows: 4 sent
+lore: pushed store me: commit 601d285 to branch main (2 commits, 4 row files)
+store me: pushed (sent 2, received 0, merged 0, refused 0); rows: 4 sent
 store agency/client: up to date
 store agency/org: up to date
 $ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
-lore: batch 4 rows (actors 1, machines 1, memories 2)
-actors act_7a67…9504
+lore: batch 2 rows (machines 1, memories 1)
 machines mch_162d…9666
-memories mem_2ad3…f891
 memories mem_54fe…28f2
 Lore-Version: dev
 ```
@@ -379,7 +377,7 @@ $ lore doctor | grep 'store me:'
 
 ### Where the setting lives, and who may change it
 
-- **Your personal store:** in the `personal:` block of `~/.lore/config.yaml` (keys `push`, `push_every`, `compact`, `compact_after`). `lore store set --store me --settings …` writes it; `lore config set --key personal.push --value batch` works too, and `lore config check` checks the values.
+- **Your personal store:** in the `personal:` block of `~/.lore/config.yaml` (keys `push`, `push_every`, `squash`, `compact`, `compact_after`). `lore store set --store me --settings …` writes it; `lore config set --key personal.push --value batch` works too, and `lore config check` checks the values.
 - **An org's store:** in the store's own `lore-store.yaml`, so every member gets the same setting. Only an admin of the org may change it: the person this machine is in that org (`orgs[<org>].identity` in `~/.lore/config.yaml`) must hold the admin role on the org's roster (`lore member list` shows it), as the org's creator does from `lore org create` on, with or without an admin setup. An admin setup on a machine whose person the roster names a member gives no admin rights; only where this machine cannot read the roster (no clone of the org's store yet, or a store with no `lore-org.yaml`) does the admin setup decide. A member cannot override it on their own machine.
 - **A store attached in `.lore/stores.yaml`** (`lore store init` or `lore store add`) that belongs to no org: in the store's own `lore-store.yaml` too, so every clone of it gets the same setting. There is no admin to ask, so anyone who can push to the store may change it with `lore store set --store <store> --settings …`, and compact it. If the store holds an org's `lore-org.yaml` (it is an org's store that this machine attached by its address without `lore org import`), it is that org's store and only the org's admin may change it.
 
@@ -421,6 +419,7 @@ The values `lore store set` takes:
 |---|---|---|
 | `push` | `manual`, `batch`, `now` | `manual` |
 | `push_every` | how long a batch may wait, at least `1m` (such as `10m`, `1h`) | `5m` |
+| `squash` | `on`: a push folds the waiting commits into one commit per author (a hand edit, a roster change, `lore-org.yaml` and `lore-store.yaml` keep their own); `off`: one remote commit per write | `on` |
 | `compact` | `on` or `off`: fold old history by itself (below) | `off` |
 | `compact_after` | how old history must be to be folded, at least `1d` (such as `30d`); `compact=on` needs it | none |
 
@@ -472,13 +471,13 @@ ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
 ```console
 # alice, in website
 $ lore store compact --store agency --before 30d --dry-run
-would squash 6 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 5 row file(s); epoch 0 → 1
+would squash 5 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 5 row file(s); epoch 0 → 1
 $ lore store compact --store agency --before 30d
-ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 6 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
+ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 5 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore store compact --store agency --before 30d --yes
-✓ compacted agency: 6 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 5 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
+✓ compacted agency: 5 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 5 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
   pushed store agency: commit 05513aa to branch main
 ```
 <!-- /example -->

@@ -150,6 +150,10 @@ func (a *App) pushView(ctx context.Context, name string, gb *git.Backend, place 
 	if s.CompactAfter > 0 {
 		v.CompactAfter = storepush.FormatAge(s.CompactAfter)
 	}
+	v.Squash = storepush.SquashOn
+	if !s.Squash() {
+		v.Squash = storepush.SquashOff
+	}
 	v.Summary = s.Describe()
 	v.Epoch = gb.Epoch(ctx)
 	v.Unpushed, _ = gb.Unpushed(ctx) // display only
@@ -176,7 +180,7 @@ func normalized(cur storepush.Raw, set []storepush.Assignment) (storepush.Raw, e
 	for _, s := range set {
 		if _, err := storepush.Default().Apply(s.Key, s.Value); err != nil {
 			return cur, errs.New(errs.InvalidInput, "store set: "+err.Error()).
-				WithHint("push=now|batch|manual, push_every=<interval ≥ 1m>, compact=on|off, compact_after=<age ≥ 1d>")
+				WithHint("push=now|batch|manual, push_every=<interval ≥ 1m>, squash=on|off, compact=on|off, compact_after=<age ≥ 1d>")
 		}
 		v := strings.ToLower(strings.TrimSpace(s.Value))
 		if s.Key == storepush.KeyPushEvery || s.Key == storepush.KeyCompactAfter {
@@ -186,16 +190,7 @@ func normalized(cur storepush.Raw, set []storepush.Assignment) (storepush.Raw, e
 			}
 			v = storepush.FormatAge(d)
 		}
-		switch s.Key {
-		case storepush.KeyPush:
-			next.Push = v
-		case storepush.KeyPushEvery:
-			next.PushEvery = v
-		case storepush.KeyCompact:
-			next.Compact = v
-		case storepush.KeyCompactAfter:
-			next.CompactAfter = v
-		}
+		next = next.With(s.Key, v)
 	}
 	if _, err := storepush.FromRaw(next); err != nil {
 		return cur, errs.New(errs.InvalidInput, "store set: "+err.Error()).
@@ -292,7 +287,7 @@ func (a *App) setOrgStorePushAt(ctx context.Context, src attach.Store, name stri
 func writePersonalPush(home string, r storepush.Raw) error {
 	return editMachineConfig(home, func(root *yaml.Node) error {
 		p := mapChild(root, configKeyPersonal)
-		for _, kv := range [][2]string{{storepush.KeyPush, r.Push}, {storepush.KeyPushEvery, r.PushEvery}, {storepush.KeyCompact, r.Compact}, {storepush.KeyCompactAfter, r.CompactAfter}} {
+		for _, kv := range r.Pairs() {
 			if kv[1] == "" {
 				mapDelete(p, kv[0])
 				continue
@@ -338,7 +333,7 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 				WithHint("run `lore sync` in the repos that use that clone (or `lore store show` to find it), then compact again")
 		}
 	}
-	res, err := gb.Compact(ctx, git.CompactRequest{Cutoff: cutoff, DryRun: in.DryRun, Squash: s.Push != storepush.ModeNow})
+	res, err := gb.Compact(ctx, git.CompactRequest{Cutoff: cutoff, DryRun: in.DryRun, Squash: s.Squash()})
 	if err != nil {
 		return opsstores.CompactOut{}, err
 	}
@@ -464,7 +459,7 @@ func (b *storePush) autoCompact(ctx context.Context) {
 	// nothing (the branch moves only after the remote took the rewrite).
 	cctx, cancel := context.WithTimeout(ctx, 2*piggybackTimeout)
 	defer cancel()
-	res, err := gb.Compact(cctx, git.CompactRequest{Cutoff: s.Cutoff(now), Squash: s.Push != storepush.ModeNow})
+	res, err := gb.Compact(cctx, git.CompactRequest{Cutoff: s.Cutoff(now), Squash: s.Squash()})
 	b.reportPushes()
 	if err != nil || res.Nothing {
 		return
@@ -506,7 +501,7 @@ func (a *App) FlushBatches(ctx context.Context) {
 			continue
 		}
 		pctx, cancel := context.WithTimeout(ctx, piggybackTimeout) // never hold the hook up
-		rep, serr := gb.SyncWith(pctx, git.SyncOptions{Squash: true})
+		rep, serr := gb.SyncWith(pctx, git.SyncOptions{Squash: a.storeSettings(gb, place).Squash()})
 		cancel()
 		printPushes(a.pushNotes(), name, gb.TakePushes())
 		if serr == nil && !rep.Offline && len(rep.Refused) == 0 {

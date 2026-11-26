@@ -159,6 +159,9 @@ func TestAuthorityKeptOnDisk(t *testing.T) {
 	gitT(t, b.work, "-c", "user.name=x", "-c", "user.email="+o.boss.email, "merge", "--quiet", "--no-ff", "--no-edit", testBranch)
 	gitT(t, b.work, "checkout", "--quiet", testBranch)
 	gitT(t, b.work, "merge", "--quiet", "--ff-only", "theirs")
+	// without the replay kept at the remote tip, which would start it
+	// there (devco:D-1000, TestSquashKeepsTheReplayIncremental)
+	_ = os.Remove(b.authorityPath() + authorityBaseSuffix)
 	forgetAuthority(b)
 	before = replayCount()
 	again = authorityNow(t, b)
@@ -213,6 +216,7 @@ func TestAuthorityOnDiskOfAnotherLoreIsNotUsed(t *testing.T) {
 	if b.loadAuthority() != nil {
 		t.Error("a broken replay file was used")
 	}
+	_ = os.Remove(b.authorityPath() + authorityBaseSuffix) // the replay at the remote tip would answer instead (devco:D-1000)
 	forgetAuthority(b)
 	before := replayCount()
 	authorityNow(t, b)

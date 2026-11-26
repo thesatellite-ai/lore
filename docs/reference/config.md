@@ -106,8 +106,9 @@ $ lore config check
 | `identity.name` | none | your name in those repos |
 | `identity.handle` | none | your short name after `@` (lowercase letters, digits, `_` or `-`) |
 | `personal.store` | none (no personal store) | your personal store, the target of `--to me`, shown in all your repos: a git URL of your own private store, the path of a bare git repository on this machine (`/srv/git/lore-me.git`, a git store), or a local folder `file:///<absolute path>`. `lore store init --name me` with no URL makes `file://~/.lore/stores/_me` and records it here; with another URL it also moves every setup whose own `personal_store` is that local folder to follow this key (`inherit`): a person has one personal store `me`. The v0.1.17 value `local` (`~/.lore/personal`) is still accepted and attached as `me`, in a folder named after your org when one resolves |
-| `personal.push` | `manual` | how your writes to the personal store reach its remote: `manual` (the default) keeps them on this machine until you run `lore sync` or `lore store push`; `batch` pushes them as one commit once `personal.push_every` has passed, on `lore sync` and when a coding tool starts a session; `now` pushes each write at once, an opt-in you choose. `lore store set --store me --settings push=…` writes it; see [How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote) |
+| `personal.push` | `manual` | how your writes to the personal store reach its remote: `manual` (the default) keeps them on this machine until you run `lore sync` or `lore store push`; `batch` pushes them (one commit per author, `personal.squash`) once `personal.push_every` has passed, on `lore sync` and when a coding tool starts a session; `now` pushes each write at once, an opt-in you choose. `lore store set --store me --settings push=…` writes it; see [How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote) |
 | `personal.push_every` | `5m` | how long a batch may wait before it is pushed, at least `1m` |
+| `personal.squash` | `on` | `on`: a push sends the commits waiting for it as one commit per author (a hand edit and a roster change keep their own); `off`: one remote commit per write |
 | `personal.compact` | `off` | `on`: fold the personal store's history older than `personal.compact_after` into one commit by itself, at most once a day (`lore store compact --store me` does it by hand) |
 | `personal.compact_after` | none | how old history must be before it is folded, at least `1d` (such as `30d`); `personal.compact: on` needs it |
 | `orgs` | none | one entry per company you work for (see below) |
@@ -375,6 +376,7 @@ The rules it checks, in plain words:
 | `personal.store` | a git URL or a `file://` path (or the v0.1.17 value `local`) |
 | `personal.push` | `manual`, `batch` or `now` |
 | `personal.push_every` | at least `1m` |
+| `personal.squash` | `on` or `off` |
 | `personal.compact` | `on` or `off`; `on` needs `personal.compact_after` |
 | `personal.compact_after` | at least `1d` |
 | `orgs[].name` | see the org entry table; two entries may not share a name |
@@ -472,6 +474,7 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 | `org_folder` | none | the folder suggested for the roster and company rules; only a hint, the org entry's `org_folder` decides |
 | `push` | `manual` | how every member's writes to this store reach the remote: `manual` (the default: each person's `lore sync` sends their writes), `batch` or `now`, as `personal.push` above. Only an org admin sets it, with `lore store set --store <store> --settings push=…`; a member cannot override it |
 | `push_every` | `5m` | how long a member's batch may wait before it is pushed, at least `1m` |
+| `squash` | `on` | `on`: every member's push sends the commits waiting for it as one commit per author (a hand edit, a roster change, `lore-org.yaml` and `lore-store.yaml` keep their own); `off`: one remote commit per write |
 | `compact` | `off` | `on`: the admin's machine folds history older than `compact_after` into one commit by itself, at most once a day |
 | `compact_after` | none | how old history must be before it is folded, at least `1d`; `compact: on` needs it |
 | `epoch` | `0` | how many times the history was folded; `lore store compact` raises it, and a copy that sees a higher epoch moves onto the new history and replays its unpushed work. Never edit it by hand |
@@ -551,7 +554,7 @@ not set
 - A store branch name may not contain `/`. Use `staging`, not `team/staging`.
 - `identity.key` is `human:` plus your email, not your email alone and not your name.
 - `1d12h` is refused; write `36h`.
-- `personal.push`, `push_every`, `compact` and `compact_after` apply to your personal store only. An org store keeps its own in its `lore-store.yaml`, set by the org admin with `lore store set`.
+- `personal.push`, `push_every`, `squash`, `compact` and `compact_after` apply to your personal store only. An org store keeps its own in its `lore-store.yaml`, set by the org admin with `lore store set`.
 - An ssh alias of yours in lore-org.yaml or `.lore/stores.yaml` works on your machine only: teammates cannot reach the store. Put the canonical url there and the alias in your own `access:`; `lore doctor` names every such url.
 - `LORE_HOME` moves lore's whole home (`~/.lore`): config (your identity included), store clones, caches and state all go there, and `${LORE_HOME}` in `db_path` is that folder. To point `${LORE_HOME}` in `db_path` at another folder without moving the home, set `LORE_V017_HOME` for the `lore migrate run`.
 

@@ -12,8 +12,10 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 var _ opsstores.StorePusherNow = (*App)(nil)
@@ -95,7 +97,12 @@ func (a *App) pushStoreNow(ctx context.Context, in opsstores.PushIn, notes io.Wr
 		// in an attached store's sync (armLeftHold; D-85)
 		sctx = gitbackend.WithPushHold(sctx, hold)
 	}
-	rep, err := b.Sync(sctx)
+	var rep store.SyncReport
+	if gb := gitOf(b); gb != nil {
+		rep, err = gb.SyncWith(sctx, gitbackend.SyncOptions{Squash: a.urlPushSettings(gb, raw).Squash()})
+	} else {
+		rep, err = b.Sync(sctx)
+	}
 	if gb := gitOf(b); gb != nil && notes != nil {
 		// the push line every push to a store prints (pushreport.go):
 		// a sync that sent a waiting clone said only its counts line
@@ -125,4 +132,18 @@ func (a *App) pushStoreNow(ctx context.Context, in opsstores.PushIn, notes io.Wr
 		moved.received += c.Received
 	}
 	return out, moved, nil
+}
+
+// urlPushSettings is the push settings of the store clone gb opened by
+// url raw: a personal store url reads the personal: block, any other
+// store its lore-store.yaml (as an attached store's push does,
+// storePush.pushSettings), so `lore store push` squashes like `lore sync`.
+func (a *App) urlPushSettings(gb *gitbackend.Backend, raw string) storepush.Settings {
+	rk, _ := storeKey(raw)
+	for _, u := range personalStoreURLs(a.opts.Home) {
+		if k, _ := storeKey(u); u == raw || (rk != "" && k == rk) {
+			return a.storeSettings(gb, placePersonal)
+		}
+	}
+	return a.storeSettings(gb, placeStore)
 }

@@ -17,6 +17,8 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -694,12 +696,24 @@ func (o ops) resDeleteWithDependents(ctx context.Context, in ResDeleteIn) (ResDe
 		return ResDeleteOut{}, err
 	}
 	out.Batch = bid.String()
+	if md, ok := upgrade.As[wheredel.ManyDeleter](o.env); ok && !engine.PurgeAsked(bctx) {
+		// one delete for the resource and its parts: one store write per
+		// store, not one commit per row (devco:D-1000)
+		refs := make([]engine.Ref, 0, len(targets))
+		for _, t := range targets {
+			refs = append(refs, engine.Ref{Store: t.Src, Table: schema.TableResources, ID: t.Row.ID})
+		}
+		if err = md.DeleteMany(bctx, refs); err != nil {
+			return ResDeleteOut{}, err
+		}
+		targets = nil
+	}
 	for _, t := range targets {
 		if _, err = o.env.Delete(bctx, engine.Ref{Store: t.Src, Table: schema.TableResources, ID: t.Row.ID}); err != nil {
 			return ResDeleteOut{}, err
 		}
 	}
 	// DQ8 (OV46): one delete wording for every noun, through trashline.
-	out.Human = trashline.MovedBatch(plural.Count(len(targets), "resource")+" ("+strings.Join(labels, ", ")+")", out.Batch)
+	out.Human = trashline.MovedBatch(plural.Count(out.Count, "resource")+" ("+strings.Join(labels, ", ")+")", out.Batch)
 	return out, nil
 }

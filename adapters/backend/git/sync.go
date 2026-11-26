@@ -207,6 +207,7 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		switch verdict {
 		case pushApplied:
 			pushedOver, pushed = remote, true
+			b.keepBaseAt(h) // h is the remote tip now: a later squash builds on it (authorityBaseSuffix)
 		case pushOffline:
 			rep.Offline, rep.OfflineDetail = true, msg
 		case pushRefused:

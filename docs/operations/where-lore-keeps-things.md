@@ -44,7 +44,7 @@ lore's home: ~/.lore
       the open stamp beside a cache file (what a read needs to open it without parsing its schema; a command that writes the cache writes it, and so does the first read after lore is upgraded or reinstalled): a store folder's cache; store notes; used by ~/work/website
   cache/uses
       one record per repo of the cache files it uses: uses/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)
-  cache/uses/05513aa29b7881f12bc94eb06be8acf0d03eaed2c5b80873f8e40d2805d7e0ce.json
+  cache/uses/dfd8dc87ab36569644249d3a03cd835408aea9b7d622772bf8470b374c57ed46.json
       a repo's cache use record
   machine.json
       this machine's id, kept so it stays the same between runs

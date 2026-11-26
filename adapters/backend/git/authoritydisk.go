@@ -195,8 +195,45 @@ func (b *Backend) heldSeenPath(folder string) string {
 
 // loadAuthority is the replay authorityFile holds, nil when there is none
 // this lore can use.
-func (b *Backend) loadAuthority() *authority {
+func (b *Backend) loadAuthority() *authority { return b.loadAuthorityAt(b.authorityPath()) }
+
+// authorityBaseSuffix names the replay kept at the remote tip beside the
+// saved replay: <replay file>.base. Why (devco:D-1000): a push squashes
+// the commits waiting in the clone (pushmodes.go squashOnto), which
+// rewrites them, so the replay saved at the old HEAD no longer lies on
+// the new history and the next command would replay the whole history
+// (D-999 carries a replay only along the first-parent line). The squash
+// builds on the remote tip, so the replay at that tip does lie on it, and
+// the next command carries it over the squashed commits only.
+const authorityBaseSuffix = ".base"
+
+// keepBaseAt keeps the replay this process holds as the replay at the
+// remote tip when it reached tip, a commit a push just made the remote's
+// (the push's own check judged it before the tracking ref moved, so
+// saveAuthority could not tell it was the tip then).
+func (b *Backend) keepBaseAt(tip string) {
+	authorityCache.Lock()
+	a := authorityCache.byWork[b.work]
+	authorityCache.Unlock()
 	p, bin := b.authorityPath(), binaryStamp()
+	if a == nil || a.head != tip || p == "" || bin == "" {
+		return
+	}
+	s, ok := a.saved(bin)
+	if !ok {
+		return
+	}
+	s.Clone = filepath.Clean(b.work)
+	var buf bytes.Buffer
+	if gob.NewEncoder(&buf).Encode(&s) == nil {
+		writeBytesAtomic(p+authorityBaseSuffix, buf.Bytes())
+	}
+}
+
+// loadAuthorityAt is the replay saved at p ("" = none), nil when there is
+// none this lore can use.
+func (b *Backend) loadAuthorityAt(p string) *authority {
+	bin := binaryStamp()
 	if p == "" || bin == "" {
 		return nil
 	}
@@ -296,6 +333,9 @@ func (b *Backend) saveAuthority(a *authority) {
 	}
 	writeGobAtomic(p+authorityRowsSuffix, savedRows{Format: authorityFormat, Binary: bin, Clone: s.Clone, Head: s.Head, OrgHead: s.OrgHead,
 		Held: s.Held, Trusted: s.Trusted, Credited: s.Credited})
+	if tip, ok := RefFromFiles(b.work, trackingRefNS+b.branch); ok && tip == s.Head {
+		writeBytesAtomic(p+authorityBaseSuffix, buf.Bytes()) // the replay at the remote tip (authorityBaseSuffix)
+	}
 }
 
 // authorityRowsSuffix names the row view kept beside a saved replay:
@@ -318,6 +358,19 @@ type savedRows struct {
 	Held     map[string]HeldChange
 	Trusted  map[string]string
 	Credited map[string]savedCredit
+}
+
+// writeBytesAtomic writes raw to p through a temp file and a rename (a
+// reader sees the old file or the new one); a failure is passed over.
+func writeBytesAtomic(p string, raw []byte) {
+	tmp, err := os.CreateTemp(filepath.Dir(p), filepath.Base(p)+".*")
+	if err != nil {
+		return
+	}
+	_, werr := tmp.Write(raw)
+	if cerr := tmp.Close(); werr != nil || cerr != nil || os.Rename(tmp.Name(), p) != nil {
+		_ = os.Remove(tmp.Name())
+	}
 }
 
 // writeGobAtomic writes v gob-encoded to p through a temp file and a

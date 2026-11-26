@@ -1,7 +1,8 @@
 // Package storepush holds the rules of a lore-only store's push and
 // compaction settings (owner decision 2026-11-09, "store push modes"):
-// how writes reach the remote (push: now | batch | manual, push_every)
-// and whether old history is squashed (compact: off | on, compact_after).
+// how writes reach the remote (push: now | batch | manual, push_every),
+// how many commits a push carries (squash: on | off) and whether old
+// history is squashed (compact: off | on, compact_after).
 // Layer L1: plain values and decisions, no file, clock or git access.
 //
 //	"push=batch push_every=10m" ──▶ ParseAssignments ──▶ Settings.Apply ──▶ Validate
@@ -49,6 +50,13 @@ const (
 	CompactOn  = "on"
 )
 
+// Squash switch values (the file and CLI spelling): the same words as
+// compact's.
+const (
+	SquashOn  = CompactOn
+	SquashOff = CompactOff
+)
+
 // Setting keys (`lore store set <store> key=value`, config.yaml and
 // lore-store.yaml keys).
 const (
@@ -56,10 +64,11 @@ const (
 	KeyPushEvery    = "push_every"
 	KeyCompact      = "compact"
 	KeyCompactAfter = "compact_after"
+	KeySquash       = "squash"
 )
 
 // Keys lists every setting key.
-func Keys() []string { return []string{KeyPush, KeyPushEvery, KeyCompact, KeyCompactAfter} }
+func Keys() []string { return []string{KeyPush, KeyPushEvery, KeySquash, KeyCompact, KeyCompactAfter} }
 
 // Defaults and bounds.
 const (
@@ -91,11 +100,20 @@ type Settings struct {
 	Compact   bool
 	// CompactAfter is the age past which history is squashed (0 = unset).
 	CompactAfter time.Duration
+	// NoSquash keeps one remote commit per write (squash=off). Unset, a
+	// push folds the local commits waiting for it into one commit per
+	// author (store growth item 4: a busy store made ~600 commits a day);
+	// a team that wants per-write history in git turns it off.
+	NoSquash bool
 }
 
 // Default is a store with no settings: push manual (writes commit locally
-// and wait for `lore sync`), compaction off.
+// and wait for `lore sync`), squash on, compaction off.
 func Default() Settings { return Settings{Push: ModeManual, PushEvery: DefaultPushEvery} }
+
+// Squash reports whether a push folds the waiting local commits into one
+// commit per author (squash=on, the default).
+func (s Settings) Squash() bool { return !s.NoSquash }
 
 // Raw is the settings as spelled in a file (each "" when unset).
 type Raw struct {
@@ -103,6 +121,29 @@ type Raw struct {
 	PushEvery    string
 	Compact      string
 	CompactAfter string
+	Squash       string
+}
+
+// Pairs is r as key/value pairs in Keys order (unset values are "").
+func (r Raw) Pairs() [][2]string {
+	return [][2]string{{KeyPush, r.Push}, {KeyPushEvery, r.PushEvery}, {KeySquash, r.Squash}, {KeyCompact, r.Compact}, {KeyCompactAfter, r.CompactAfter}}
+}
+
+// With returns r with key's value set to v (an unknown key leaves r).
+func (r Raw) With(key, v string) Raw {
+	switch key {
+	case KeyPush:
+		r.Push = v
+	case KeyPushEvery:
+		r.PushEvery = v
+	case KeySquash:
+		r.Squash = v
+	case KeyCompact:
+		r.Compact = v
+	case KeyCompactAfter:
+		r.CompactAfter = v
+	}
+	return r
 }
 
 // IsZero reports whether no key is set.
@@ -112,7 +153,7 @@ func (r Raw) IsZero() bool { return r == Raw{} }
 func FromRaw(r Raw) (Settings, error) {
 	s := Default()
 	var all []error
-	for _, kv := range [][2]string{{KeyPush, r.Push}, {KeyPushEvery, r.PushEvery}, {KeyCompact, r.Compact}, {KeyCompactAfter, r.CompactAfter}} {
+	for _, kv := range r.Pairs() {
 		if strings.TrimSpace(kv[1]) == "" {
 			continue
 		}
@@ -168,6 +209,9 @@ func (s Settings) Raw() Raw {
 	}
 	if s.CompactAfter != 0 {
 		r.CompactAfter = FormatAge(s.CompactAfter)
+	}
+	if s.NoSquash {
+		r.Squash = SquashOff
 	}
 	return r
 }
@@ -230,6 +274,12 @@ func (s Settings) Apply(key, value string) (Settings, error) {
 			return s, err
 		}
 		s.Compact = on
+	case KeySquash:
+		on, err := ParseSquash(value)
+		if err != nil {
+			return s, err
+		}
+		s.NoSquash = !on
 	case KeyCompactAfter:
 		d, err := ParseAge(value)
 		if errors.Is(err, ErrNotPositive) {
@@ -281,6 +331,17 @@ func ParseCompact(v string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("compact %q: use on or off", v)
+}
+
+// ParseSquash reads the squash switch.
+func ParseSquash(v string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case SquashOn:
+		return true, nil
+	case SquashOff:
+		return false, nil
+	}
+	return false, fmt.Errorf("squash %q: use on or off", v)
 }
 
 // ParseAge reads an age or interval: whole days ("30d") or Go syntax
@@ -371,6 +432,9 @@ func (s Settings) Describe() string {
 	out := "push " + string(s.Push)
 	if s.Push == ModeBatch {
 		out += " every " + FormatAge(s.PushEvery)
+	}
+	if s.NoSquash {
+		out += ", squash off"
 	}
 	if s.Compact {
 		out += ", compact on after " + FormatAge(s.CompactAfter)

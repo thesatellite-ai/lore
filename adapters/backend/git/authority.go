@@ -840,23 +840,36 @@ func (a *authority) clone() *authority {
 // (replayRangeAfter: plain commits and merges alike); nil when neither (a
 // full replay is due).
 func (b *Backend) replayFromDisk(ctx context.Context, head, orgHead string) (*authority, error) {
-	a := b.loadAuthority()
-	if a == nil || a.orgHead != orgHead {
-		return nil, nil
-	}
-	if a.head == head {
+	// the replay saved last, then the one saved at the remote tip: after a
+	// push squashed the waiting commits only the second lies on HEAD's
+	// history (authorityBaseSuffix)
+	saved := b.authorityPath()
+	for _, p := range []string{saved, saved + authorityBaseSuffix} {
+		if saved == "" {
+			break
+		}
+		a := b.loadAuthorityAt(p)
+		if a == nil || a.orgHead != orgHead {
+			continue
+		}
+		if a.head == head {
+			if p != saved {
+				b.saveAuthority(a) // the replay saved last is behind or unreadable: this one replaces it
+			}
+			return a, nil
+		}
+		commits, ok := b.replayRangeAfter(ctx, a.head, head)
+		if !ok {
+			continue
+		}
+		if err := b.replayOver(ctx, a, commits); err != nil {
+			return nil, err
+		}
+		a.head = head
+		b.saveAuthority(a)
 		return a, nil
 	}
-	commits, ok := b.replayRangeAfter(ctx, a.head, head)
-	if !ok {
-		return nil, nil
-	}
-	if err := b.replayOver(ctx, a, commits); err != nil {
-		return nil, err
-	}
-	a.head = head
-	b.saveAuthority(a)
-	return a, nil
+	return nil, nil
 }
 
 // replayRangeAfter lists the commits from (exclusive) to to in the order a

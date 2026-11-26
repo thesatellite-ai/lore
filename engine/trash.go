@@ -385,7 +385,54 @@ func (e *Engine) TrashMany(ctx context.Context, refs []Ref) (Written, error) {
 		b = Batch{ID: bid, Kind: BatchKindDelete}
 		ctx = WithBatch(ctx, b)
 	}
+	for _, r := range roots {
+		if e.purgeOnDelete(ctx, r.src) {
+			// policy trash.purge_on_delete makes every delete a purge
+			// (3.12), which this one write never does: each root goes
+			// through Delete's path, which purges it with --confirm or asks
+			// for it, so a many-row delete never keeps what the policy
+			// removes (devco:D-1000: bulk deletes moved onto TrashMany)
+			return e.deleteEach(ctx, roots)
+		}
+	}
 	return e.writeTrash(ctx, b, reason, rootIDs, plan, false)
+}
+
+// deleteEach deletes each root as its own Delete (softDelete, which
+// applies --purge and trash.purge_on_delete) under ctx's batch, and joins
+// what they wrote. A root a cascade of an earlier one already removed is
+// skipped.
+func (e *Engine) deleteEach(ctx context.Context, roots []trashItem) (Written, error) {
+	var w Written
+	for i, r := range roots {
+		src, cur, err := e.locate(ctx, Ref{Store: r.src, Table: r.row.Table, ID: r.row.ID})
+		if err != nil {
+			return w, err
+		}
+		if cur.Deleted {
+			continue // removed with an earlier root
+		}
+		one, err := e.softDelete(ctx, src, cur)
+		if err != nil {
+			return w, err
+		}
+		if i == 0 {
+			w.Row = one.Row
+		} else {
+			w.Also = append(w.Also, Changed{Store: src, Row: one.Row})
+		}
+		w.Also = append(w.Also, one.Also...)
+		w.Warnings = append(w.Warnings, one.Warnings...)
+	}
+	return w, nil
+}
+
+// PurgeAsked reports whether ctx carries a delete's --purge
+// (WithPurge): TrashMany refuses one, so a bulk delete that would use it
+// deletes row by row instead.
+func PurgeAsked(ctx context.Context) bool {
+	pr := purgeOf(ctx)
+	return pr != nil && pr.Asked
 }
 
 // purgeDeleted purges the group a --purge delete just put in the trash

@@ -35,6 +35,8 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/resname"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -1829,13 +1831,25 @@ func (o ops) resDeleteWhere(ctx context.Context, in ResDeleteIn) (ResDeleteOut, 
 		return ResDeleteOut{}, err
 	}
 	out.Batch = bid.String()
+	if md, ok := upgrade.As[wheredel.ManyDeleter](o.env); ok && !engine.PurgeAsked(bctx) {
+		// one delete for every resource: one store write per store, not
+		// one commit per row (devco:D-1000)
+		refs := make([]engine.Ref, 0, len(hits))
+		for _, r := range hits {
+			refs = append(refs, engine.Ref{Store: r.Src, Table: schema.TableResources, ID: r.Row.ID})
+		}
+		if derr := md.DeleteMany(bctx, refs); derr != nil {
+			return ResDeleteOut{}, errs.Prefix("resource delete: the "+plural.Count(len(hits), "resource")+" could not go to the trash (batch "+out.Batch+"; `lore trash restore --id "+out.Batch+"` brings back any that did)", derr)
+		}
+		hits = nil
+	}
 	for i, r := range hits {
 		if _, derr := o.env.Delete(bctx, engine.Ref{Store: r.Src, Table: schema.TableResources, ID: r.Row.ID}); derr != nil {
 			return ResDeleteOut{}, errors.Join(derr, errs.New(errs.InvalidInput, "resource delete: stopped after "+strconv.Itoa(i)+
 				" of "+strconv.Itoa(len(hits))+" resources; the ones deleted are in batch "+out.Batch))
 		}
 	}
-	out.Human = trashline.MovedBatch(plural.Count(len(hits), d.name()+" resource"), out.Batch)
+	out.Human = trashline.MovedBatch(plural.Count(len(out.IDs), d.name()+" resource"), out.Batch)
 	return out, nil
 }
 

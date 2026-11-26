@@ -158,8 +158,8 @@ lore-store.yaml
 
 # alice, in website
 $ lore sync
-lore: pushed store notes: commit 9b40ce7 to branch main (6 commits, 5 row files)
-store notes: pushed (sent 6, received 0, merged 0, refused 0); rows: 5 sent
+lore: pushed store notes: commit 05513aa to branch main (4 commits, 5 row files)
+store notes: pushed (sent 4, received 0, merged 0, refused 0); rows: 5 sent
 $ lore store use --path ~/code/notes --yes
 ✓ store notes now uses your clone ~/code/notes (recorded on this machine only)
   before: ~/.lore/stores/acme/notes

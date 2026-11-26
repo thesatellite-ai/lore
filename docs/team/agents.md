@@ -214,10 +214,10 @@ lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ tsk_d431…313a — update the contact page [medium] → [agency/client]
   on tasklist tlt_05e9…4603 "default" (the default; --tasklist picks another)
-lore: pushed store agency (the store clone: folders client, org): commit 9b40ce7 to branch main (4 commits, 3 row files)
+lore: pushed store agency (the store clone: folders client, org): commit 9b40ce7 to branch main (2 commits, 3 row files)
 store me: up to date
 store me/everywhere: up to date
-store agency/client: pushed (sent 4, received 0, merged 0, refused 0); rows: 2 sent
+store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 
 # bob, in website

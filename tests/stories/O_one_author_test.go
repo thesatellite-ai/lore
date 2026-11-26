@@ -45,6 +45,12 @@ func TestStoryOOneAuthorForEveryStoreCommit(t *testing.T) {
 	s.Step("D-714/org-link-and-adopt-sign-as-the-org-identity", func() {
 		ada.Lore(nc.Dir, "org", "link", "--org", oOrg, "--project", folder, "--yes").OK(t)
 		ada.Lore(nc.Dir, "store", "adopt", place, "--yes").OK(t)
+		// the ops' own commits, before the sync folds them into one batch
+		// per author (devco:D-1000), which keeps that author
+		local := strings.ToLower(s.Git(clone, "log", "--format=%s", "--branches", "^"+base))
+		if !strings.Contains(local, "adopt") || !strings.Contains(local, "link") {
+			t.Fatalf("fixture: want an org link commit and an adopt commit in the store since the step began, got:\n%s", local)
+		}
 		ada.Lore(pc.Dir, "sync").OK(t)
 		want := oAdminOrg.Name + "|" + oAdminOrg.Email + "|" + oAdminOrg.Name + "|" + oAdminOrg.Email
 		log := strings.TrimSpace(s.Git(clone, "log", "--format=%an|%ae|%cn|%ce|%s", "--branches", "--remotes", "^"+base))
@@ -59,9 +65,8 @@ func TestStoryOOneAuthorForEveryStoreCommit(t *testing.T) {
 				t.Errorf("the store commit %q is by %s, want the org identity %s (one author for every op)", f[4], got, want)
 			}
 		}
-		joined := strings.Join(subjects, "\n")
-		if !strings.Contains(joined, "adopt") || !strings.Contains(strings.ToLower(joined), "link") {
-			t.Fatalf("fixture: want an org link commit and an adopt commit in the store since the step began, got:\n%s", joined)
+		if len(subjects) == 0 {
+			t.Fatal("fixture: no store commit since the step began")
 		}
 	})
 }
