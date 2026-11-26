@@ -525,7 +525,7 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 			if err := syncTaskNodes(ctx, tx, string(source), taskIDs); err != nil {
 				return err
 			}
-			if err := updateTaskTree(ctx, tx); err != nil {
+			if err := updateTaskTree(ctx, tx, taskIDs); err != nil {
 				return err
 			}
 		}

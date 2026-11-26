@@ -227,3 +227,111 @@ func (w *walk) IntN(n int) int {
 	}
 	return v % n
 }
+
+// TestTaskTreeWriteReadsAroundItsTasks: a task write reads the nodes
+// around the tasks it changed, not every task of the file. The first build
+// of a cache applies one folder at a time, and reading every node and the
+// whole closure on each Apply made it O(folders x tasks): 22-28 min on a
+// 1.26M-row store (devco:D-1019). Not parallel: treeNodeReads is shared by
+// the package.
+func TestTaskTreeWriteReadsAroundItsTasks(t *testing.T) {
+	f := newFixture(t)
+	c := f.open("c.db")
+	const folders, perFolder = 40, 50
+	var first ids.AnyID
+	for i := range folders {
+		rows := make([]store.Row, 0, perFolder)
+		parent := ""
+		for j := range perFolder {
+			id := newTsk()
+			if i == 0 && j == 0 {
+				first = id
+			}
+			rows = append(rows, f.taskRow(id, parent, "", false))
+			if j%5 == 0 {
+				parent = id.String() // chains of five under each other
+			}
+		}
+		f.apply(c, store.Source("folder"+strconv.Itoa(i)), "1", rows...)
+	}
+	treeNodeReads.Store(0)
+	f.apply(c, "folder0", "2", f.taskRow(first, "", "z", false))
+	if got := treeNodeReads.Load(); got > 50 {
+		t.Fatalf("one task write read %d task nodes of %d: it must read only around the task it changed", got, folders*perFolder)
+	}
+	treeNodeReads.Store(0)
+	f.apply(c, "folder39", "2", f.taskRow(newTsk(), first.String(), "", false))
+	if got := treeNodeReads.Load(); got > 50 {
+		t.Fatalf("one task add read %d task nodes of %d", got, folders*perFolder)
+	}
+	assertMatchesFull(t, f, c, nil, "after the folder writes")
+}
+
+// TestTaskTreeIncrementalMatchesFullDeep: the per-write update against a
+// full rebuild on random forests deeper and wider than
+// TestTaskTreeIncrementalMatchesFull's: 40 tasks in three sources, long
+// chains, cycles of every length made by one write or by a parent that
+// arrives, ids held by two sources, whole folders written at once
+// (devco:D-1019).
+func TestTaskTreeIncrementalMatchesFullDeep(t *testing.T) {
+	t.Parallel()
+	for _, seed := range []uint64{7, 41, 1019} {
+		t.Run(strconv.FormatUint(seed, 10), func(t *testing.T) {
+			t.Parallel()
+			f := newFixture(t)
+			c := f.open("c.db")
+			const n = 40
+			pool := make([]ids.AnyID, n)
+			names := map[string]string{}
+			for i := range pool {
+				pool[i] = newTsk()
+				names[pool[i].String()] = "T" + strconv.Itoa(i)
+			}
+			rng := &walk{state: seed}
+			missing := newTsk().String()
+			sources := []store.Source{"a", "b", "c"}
+			for i := range 300 {
+				k := 1 + rng.IntN(6)
+				if rng.IntN(20) == 0 {
+					k = n // a whole folder at once, as a first build applies it
+				}
+				rows := make([]store.Row, 0, k)
+				seen := map[int]bool{}
+				for range k {
+					j := rng.IntN(n)
+					if seen[j] {
+						continue
+					}
+					seen[j] = true
+					switch rng.IntN(12) {
+					case 0:
+						rows = append(rows, f.tomb(schema.TableTasks, pool[j]))
+					case 1:
+						rows = append(rows, f.taskRow(pool[j], "", "", true))
+					default:
+						parent := ""
+						switch p := rng.IntN(n + 4); {
+						case p < n && rng.IntN(2) == 0 && j > 0:
+							parent = pool[(j+n-1)%n].String() // a long chain T0 <- T1 <- ...
+						case p < n:
+							parent = pool[p].String()
+						case p == n:
+							parent = missing
+						}
+						rows = append(rows, f.taskRow(pool[j], parent, strconv.Itoa(rng.IntN(3)), false))
+					}
+				}
+				src := sources[rng.IntN(len(sources))]
+				if rng.IntN(60) == 0 {
+					if err := c.Rebuild(f.ctx, src); err != nil {
+						t.Fatal(err)
+					}
+					assertMatchesFull(t, f, c, names, "rebuild "+strconv.Itoa(i))
+					continue
+				}
+				f.apply(c, src, strconv.Itoa(i), rows...)
+				assertMatchesFull(t, f, c, names, "write "+strconv.Itoa(i)+" "+string(src))
+			}
+		})
+	}
+}

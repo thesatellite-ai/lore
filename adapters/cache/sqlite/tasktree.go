@@ -13,9 +13,10 @@ import (
 // The task_tree closure table (TASK_SYSTEM_DESIGN 6, 23 "cache tables"):
 //
 //	Apply (tasks rows stored) ── syncTaskNodes(source, ids) ─► _task_nodes
-//	                              updateTaskTree(tx): new tree vs the closure's
-//	                              depth 0/1 rows; only the subtrees of tasks
-//	                              whose effective parent changed are rewritten
+//	                              updateTaskTree(tx, ids): the nodes around ids
+//	                              vs the closure's depth 0/1 rows; only the
+//	                              subtrees of tasks whose effective parent
+//	                              changed are rewritten (treeview.go)
 //	Rebuild(source) / init ───── refreshTaskTree(tx): the whole closure
 //	                              (init also backfills _task_nodes from _rows)
 //
@@ -51,6 +52,9 @@ var taskTreeDDL = []string{
 	`CREATE TABLE IF NOT EXISTS "` + tblTaskTree + `" (ancestor_id TEXT NOT NULL, descendant_id TEXT NOT NULL, depth INTEGER NOT NULL, PRIMARY KEY (ancestor_id, descendant_id))`,
 	`CREATE INDEX IF NOT EXISTS "ix_task_tree_desc" ON "` + tblTaskTree + `" (descendant_id)`,
 	`CREATE TABLE IF NOT EXISTS "` + tblTaskNodes + `" (source TEXT NOT NULL, id TEXT NOT NULL, parent TEXT NOT NULL, rank TEXT NOT NULL, PRIMARY KEY (source, id))`,
+	// a write's update looks nodes up by id and by parent (devco:D-1019)
+	`CREATE INDEX IF NOT EXISTS "ix_task_nodes_id" ON "` + tblTaskNodes + `" (id, source)`,
+	`CREATE INDEX IF NOT EXISTS "ix_task_nodes_parent" ON "` + tblTaskNodes + `" (parent)`,
 }
 
 // Fixed statements of the closure (schema constants only, no input).
@@ -69,10 +73,16 @@ const (
 	// an id held by two sources counts once: the first by (id, source)
 	qTreeTasks = `SELECT id, parent, rank FROM "` + tblTaskNodes + `" ORDER BY id, source`
 
-	qTreeClear     = `DELETE FROM "` + tblTaskTree + `"`
-	qTreeInsert    = `INSERT OR IGNORE INTO "` + tblTaskTree + `" (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)`
-	qTreeDropDesc  = `DELETE FROM "` + tblTaskTree + `" WHERE descendant_id = ?`
-	qTreeParents   = `SELECT descendant_id, ancestor_id, depth FROM "` + tblTaskTree + `" WHERE depth <= 1`
+	qTreeClear    = `DELETE FROM "` + tblTaskTree + `"`
+	qTreeInsert   = `INSERT OR IGNORE INTO "` + tblTaskTree + `" (ancestor_id, descendant_id, depth) VALUES (?, ?, ?)`
+	qTreeDropDesc = `DELETE FROM "` + tblTaskTree + `" WHERE descendant_id = ?`
+	// one node by id: the copy of the first source, as qTreeTasks counts it
+	qNodeOne = `SELECT parent FROM "` + tblTaskNodes + `" WHERE id = ? ORDER BY source LIMIT 1`
+	// the ids that name a task as their parent (any source; the caller
+	// checks each one's counted copy)
+	qNodeKids = `SELECT DISTINCT id FROM "` + tblTaskNodes + `" WHERE parent = ?`
+	// the closure rows above one task: depth 0 = present, 1 = its parent
+	qTreeAbove     = `SELECT ancestor_id, depth FROM "` + tblTaskTree + `" WHERE descendant_id = ?`
 	qTreeNeedsFill = `SELECT (SELECT COUNT(*) FROM "` + tblTaskNodes + `") = 0 AND EXISTS (SELECT 1 FROM "` + tblRows + `" WHERE tbl = '` + schema.TableTasks + `' AND deleted = 0)`
 )
 
@@ -118,49 +128,71 @@ func refreshTaskTree(ctx context.Context, tx *sql.Tx) error {
 }
 
 // updateTaskTree brings the closure in line with `_task_nodes` after a
-// write, touching only the closure rows of the tasks whose presence or
-// effective parent changed and of their new subtrees. The result equals refreshTaskTree's
+// write that synced the nodes of changed, touching only the closure rows of
+// the tasks whose presence or effective parent changed and of their new
+// subtrees. The result equals refreshTaskTree's
 // (TestTaskTreeIncrementalMatchesFull).
-func updateTaskTree(ctx context.Context, tx *sql.Tx) error {
-	nodes, err := treeNodes(ctx, tx)
-	if err != nil {
-		return err
-	}
-	t := tasktree.Build(nodes)
-	// the closure's own view of the old tree: depth 0 = present, depth 1 =
-	// effective parent
-	oldParent := map[string]string{}
-	rs, err := tx.QueryContext(ctx, qTreeParents)
-	if err != nil {
-		return dbErr("task_tree: read closure", err)
-	}
-	for rs.Next() {
-		var d, a string
-		var depth int
-		if err := rs.Scan(&d, &a, &depth); err != nil {
-			_ = rs.Close()
-			return dbErr("task_tree: read closure", err)
+//
+// Why it reads only around changed (devco:D-1019): reading every node and
+// the whole closure on each write made the first build of a cache, one
+// Apply per folder, O(folders x tasks): 22-28 min on a 1.26M-row store.
+// A task's effective parent depends only on its own node, on whether its
+// parent has a node, and on whether it is the smallest id of a cycle of
+// parent links (tasktree.Build), so a write can change it only for:
+//   - a changed task itself;
+//   - a task naming a changed task as parent (that parent came or went);
+//   - the members of a cycle through a changed task (made or re-broken);
+//   - the smallest id of a cycle a changed task left or broke: in the old
+//     tree it is the top of that task's chain, one of its old ancestors.
+func updateTaskTree(ctx context.Context, tx *sql.Tx, changed []string) error {
+	v := newTreeView(ctx, tx)
+	cand := map[string]bool{}
+	done := map[string]bool{} // a changed id already looked around (cand may hold it as another's neighbour)
+	for _, id := range changed {
+		if done[id] {
+			continue
 		}
-		if depth == 1 {
-			oldParent[d] = a
-		} else if _, ok := oldParent[d]; !ok {
-			oldParent[d] = ""
+		done[id] = true
+		cand[id] = true
+		kids, err := v.linkedKids(id)
+		if err != nil {
+			return err
 		}
-	}
-	if err := rs.Close(); err != nil {
-		return dbErr("task_tree: read closure", err)
-	}
-	if err := rs.Err(); err != nil {
-		return dbErr("task_tree: read closure", err)
+		for _, k := range kids {
+			cand[k] = true
+		}
+		old, err := v.oldAbove(id)
+		if err != nil {
+			return err
+		}
+		for _, a := range old.ancestors {
+			cand[a] = true
+		}
+		cyc, err := v.cycleThrough(id)
+		if err != nil {
+			return err
+		}
+		for _, m := range cyc {
+			cand[m] = true
+		}
 	}
 	var moved []string
-	for _, n := range nodes {
-		if p, ok := oldParent[n.ID]; !ok || p != t.Parent(n.ID) {
-			moved = append(moved, n.ID)
+	for _, id := range slices.Sorted(maps.Keys(cand)) {
+		old, err := v.oldAbove(id)
+		if err != nil {
+			return err
 		}
-	}
-	for id := range oldParent {
-		if !t.Has(id) {
+		has, err := v.has(id)
+		if err != nil {
+			return err
+		}
+		p := ""
+		if has {
+			if p, err = v.parent(id); err != nil {
+				return err
+			}
+		}
+		if has != old.present || p != old.parent {
 			moved = append(moved, id)
 		}
 	}
@@ -172,20 +204,27 @@ func updateTaskTree(ctx context.Context, tx *sql.Tx) error {
 	// task's new subtree, or is that task
 	affected := map[string]bool{}
 	for _, id := range moved {
-		affected[id] = true
-		for _, d := range t.Descendants(id) {
-			affected[d] = true
+		if err := v.subtree(id, affected); err != nil {
+			return err
 		}
 	}
-	ids := slices.Sorted(maps.Keys(affected))
-	for _, id := range ids {
-		if _, err := tx.ExecContext(ctx, qTreeDropDesc, id); err != nil {
+	for _, id := range slices.Sorted(maps.Keys(affected)) {
+		if _, err := txExec(ctx, tx, qTreeDropDesc, id); err != nil {
 			return dbErr("task_tree: update", err)
 		}
-		if t.Has(id) {
-			if err := insertClosure(ctx, tx, t, id); err != nil {
-				return err
-			}
+		has, err := v.has(id)
+		if err != nil {
+			return err
+		}
+		if !has {
+			continue
+		}
+		up, err := v.ancestors(id)
+		if err != nil {
+			return err
+		}
+		if err := insertChain(ctx, tx, id, up); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -194,11 +233,16 @@ func updateTaskTree(ctx context.Context, tx *sql.Tx) error {
 // insertClosure writes id's closure rows: itself at depth 0 and each
 // ancestor at its distance.
 func insertClosure(ctx context.Context, tx *sql.Tx, t *tasktree.Tree, id string) error {
-	if _, err := tx.ExecContext(ctx, qTreeInsert, id, id, 0); err != nil {
+	return insertChain(ctx, tx, id, t.Ancestors(id))
+}
+
+// insertChain writes id's closure rows given its ancestors, nearest first.
+func insertChain(ctx context.Context, tx *sql.Tx, id string, ancestors []string) error {
+	if _, err := txExec(ctx, tx, qTreeInsert, id, id, 0); err != nil {
 		return dbErr("task_tree: fill", err)
 	}
-	for d, a := range t.Ancestors(id) {
-		if _, err := tx.ExecContext(ctx, qTreeInsert, a, id, d+1); err != nil {
+	for d, a := range ancestors {
+		if _, err := txExec(ctx, tx, qTreeInsert, a, id, d+1); err != nil {
 			return dbErr("task_tree: fill", err)
 		}
 	}
@@ -226,6 +270,7 @@ func treeNodes(ctx context.Context, q *sql.Tx) ([]tasktree.Node, error) {
 		seen[n.ID] = true
 		out = append(out, n)
 	}
+	treeNodeReads.Add(int64(len(out)))
 	if err := rs.Err(); err != nil {
 		return nil, dbErr("task_tree: read tasks", err)
 	}
