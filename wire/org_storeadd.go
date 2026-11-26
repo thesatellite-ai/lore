@@ -199,5 +199,5 @@ func addedStoreFloorLine(ctx context.Context, g *orgcfg.GitLinks, in opsorgcmd.S
 	case res.Folders == 0:
 		return "· " + want + ": every folder already needs lore " + floor + " or later"
 	}
-	return "✓ " + want + ": " + pluralword.Of(res.Folders, "folder", "folders") + " now need lore " + floor + storeFloorPushNote(res)
+	return "✓ " + want + ": " + pluralword.Of(res.Folders, "folder", "folders") + " now need lore " + floor + storeFloorPushNote(res, in.URL)
 }

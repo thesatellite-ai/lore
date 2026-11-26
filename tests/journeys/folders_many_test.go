@@ -162,8 +162,11 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.Lore(parent, "store", "set", three.SSHURL(), "compact_archive=on").OK(t)
 		lee.SetEnv("LORE_COMPACT_V2", "1")
 		// resolved by its url, the org's store reaches the org floor check
-		// (devco D-1003); the floor itself is not raised in this journey
-		lee.Lore(parent, "store", "compact", three.SSHURL(), "--dry-run").Refused(t, "min_lore_version")
+		// (devco D-1003); the floor itself is not raised in this journey: a
+		// dry run shows its answer and the floor line, the real run is
+		// refused (devco D-1010)
+		lee.Lore(parent, "store", "compact", three.SSHURL(), "--dry-run").OK(t).Says(t, "the real run would be refused now", "min_lore_version")
+		lee.Lore(parent, "store", "compact", three.SSHURL(), "--yes").Refused(t, "min_lore_version")
 		lee.SetEnv("LORE_COMPACT_V2", "")
 		lee.Lore(parent, "store", "set", three.SSHURL(), "push=now").OK(t)
 	})

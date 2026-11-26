@@ -85,11 +85,11 @@ func (h *standaloneOrg) setOrgMinLore(ctx context.Context, cfg *orgconf.Config, 
 		case res.Empty:
 			lines = append(lines, "· "+st.URL+": no commit yet, so no folder to raise")
 		case res.Folders == 0 && res.OrgFile:
-			lines = append(lines, "· "+st.URL+": every folder already needs "+floor+" or later"+storeFloorPushNote(res))
+			lines = append(lines, "· "+st.URL+": every folder already needs "+floor+" or later"+storeFloorPushNote(res, st.URL))
 		case res.Folders == 0:
 			lines = append(lines, "· "+st.URL+": every folder already needs "+floor+" or later; nothing committed")
 		default:
-			lines = append(lines, "✓ "+st.URL+": "+pluralword.Of(res.Folders, "folder", "folders")+" now need lore "+floor+storeFloorPushNote(res))
+			lines = append(lines, "✓ "+st.URL+": "+pluralword.Of(res.Folders, "folder", "folders")+" now need lore "+floor+storeFloorPushNote(res, st.URL))
 		}
 	}
 	if failed == nil && sc != nil {
@@ -151,15 +151,17 @@ func orNoneFloor(v string) string {
 	return v
 }
 
-// storeFloorPushNote says whether the floor commit left the machine.
-func storeFloorPushNote(res orgcfg.StoreFloorResult) string {
+// storeFloorPushNote says whether the floor commit left the machine;
+// storeURL is the store as the org lists it (a store push takes that, not
+// the normalised url without a scheme, devco:D-1010).
+func storeFloorPushNote(res orgcfg.StoreFloorResult, storeURL string) string {
 	switch {
 	case res.Pushed:
 		return " (pushed)"
 	case res.Offline:
 		return " (committed; the store could not be reached, lore sync sends it)"
 	case res.NoPush:
-		return " (committed in the store clone; lore sync, or lore store push --store " + res.StoreURL + ", sends it)"
+		return " (committed in the store clone; lore sync, or " + StorePushCommand(storeURL) + ", sends it)"
 	}
 	return ""
 }

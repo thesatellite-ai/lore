@@ -395,6 +395,11 @@ func pushOps(m Manager) []op.Entry {
 			plan := in
 			plan.DryRun = true
 			out, err := p.CompactStore(ctx, plan)
+			if err == nil && !in.DryRun && out.WouldRefuse != "" {
+				// the plan only notes the org floor (devco:D-1010); the run
+				// the person asked for is refused before any question
+				return CompactOut{}, errs.New(errs.Refused, "store compact: "+out.WouldRefuse).WithHint(out.Raise)
+			}
 			if err != nil || in.DryRun || out.Nothing {
 				return out, err
 			}

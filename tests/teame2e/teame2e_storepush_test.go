@@ -600,11 +600,11 @@ func TestE47_StorePushNonAdminRefused(t *testing.T) {
 	}
 }
 
-// devco:D-1010 (H-272): the creator's compact_archive=on waits in her
-// clone (manual push) while bob's sync moved the remote; raising the org's
-// floor with --push lost the push race and used to rebuild its commit on
-// the remote's tip, dropping the waiting setting. The setting stays, and
-// lore sync sends both. A compaction dry run never refuses for the floor:
+// devco:D-1010 (H-272): the creator's row waits in her clone (manual
+// push) while bob's sync moved the remote; raising the org's floor with
+// --push lost the push race and used to rebuild its commit on the remote's
+// tip, dropping the waiting commits (E47's compact_archive=on setting).
+// They stay, and the printed lore store push sends them. A compaction dry run never refuses for the floor:
 // it shows its plan and says what the real run needs first; the real run
 // is refused until the floor is raised.
 func TestE47b_StorePushDryRunNamesTheOrgFloor(t *testing.T) {
@@ -619,15 +619,23 @@ func TestE47b_StorePushDryRunNamesTheOrgFloor(t *testing.T) {
 		Says(t, "would squash", "the real run would be refused now", "min_lore_version is not set",
 			"lore org config set --org "+spOrg+" --key min_lore_version --value 0.1.57 --push --yes")
 	p.ca.Lore("store", "compact", spOrgStore, "--yes").Fails(t, spExitRefused, spCodeRefused, "a compaction needs 0.1.57")
-	p.ca.MustLore("org", "config", "set", "--org", spOrg, "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes")
+	// the race: alice's row waits in her clone (manual push) while bob
+	// pushes first
+	p.add(t, p.ca, spOrgStore, "alice waits for her sync")
+	p.add(t, p.cb, spOrgStore, "bob pushed first")
+	p.cb.MustLore("sync")
+	push := "lore store push --store " + p.store.URL() // printed for the commit left in the clone, and it runs as printed
+	p.ca.MustLore("org", "config", "set", "--org", spOrg, "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes").
+		Says(t, "committed in the store clone", push)
 	if v := spShow(t, p.ca, spOrgStore); v.Push.CompactArchive != "on" {
 		t.Fatalf("raising the floor must keep the waiting compact_archive=on, got %+v", v.Push)
 	}
-	p.ca.MustLore("sync")
+	p.ca.MustLore(strings.Fields(push)[1:]...)
 	p.cb.MustLore("sync")
 	if v := spShow(t, p.cb, spOrgStore); v.Push.CompactArchive != "on" {
 		t.Fatalf("lore sync sends the kept setting, bob sees %+v", v.Push)
 	}
+	p.cb.MustLore("search", "alice waits").Says(t, "alice waits for her sync")
 	p.ca.MustLore("store", "compact", spOrgStore, "--dry-run").Says(t, "would squash").Never(t, "would be refused")
 }
 
