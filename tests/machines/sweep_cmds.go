@@ -164,6 +164,12 @@ var reads = []sweepStep{
 	// store maintain packs this machine's store clones (local only, no row,
 	// no ref of the store, no network; devco:D-996)
 	{Cmd: "store maintain", Args: []string{"--all"}, In: inBoth},
+	// store prefetch / reclone (devco:D-1001): no store is named repo, a
+	// documented refusal (E_NOT_FOUND) that fetches and moves nothing
+	// (both run on a blobless clone in tests/journeys
+	// TestJourneyBloblessStoreClone)
+	{Cmd: "store prefetch", Args: []string{"--store", "repo"}, In: inRepo},
+	{Cmd: "store reclone", Args: []string{"--store", "repo"}, In: inRepo},
 	// The code repo is never a push-mode store: both answer E_REFUSED with
 	// a hint, and neither changes a file (a real set or compaction runs in
 	// the store push tests).

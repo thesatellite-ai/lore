@@ -49,6 +49,7 @@ type configKeys struct {
 		LockTimeout      string `yaml:"lock_timeout,omitempty"`
 		Maintenance      string `yaml:"maintenance,omitempty"`       // storemaint.go (devco:D-996)
 		MaintenanceEvery string `yaml:"maintenance_every,omitempty"` // storemaint.go
+		CloneFilter      string `yaml:"clone_filter,omitempty"`      // storeclonefilter.go (devco:D-1001)
 	} `yaml:"store,omitempty"`
 	// The onboarding keys (ONBOARDING_DESIGN 3.2, 7.3; config_setups.go).
 	Setups []yaml.Node `yaml:"setups,omitempty"`
@@ -121,6 +122,9 @@ func (s standaloneConfig) CheckConfig(_ context.Context) (opsconfig.CheckOut, er
 	if yaml.Unmarshal(raw, &node) == nil {
 		if _, lerr := readLockTimeout(s.home); lerr != nil {
 			problems = append(problems, errMessage(lerr))
+		}
+		if _, ferr := readCloneFilter(s.home); ferr != nil {
+			problems = append(problems, errMessage(ferr))
 		}
 		if d, derr := decodeSetupsDoc(raw); derr == nil {
 			problems = append(problems, d.problems()...)

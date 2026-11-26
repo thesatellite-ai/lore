@@ -196,6 +196,20 @@ Each write is one commit, and git stores every new commit, folder tree and row a
 - **Run it now:** `lore store maintain --all` packs every clone and prints each one's size before and after; `lore store maintain --store <name>` packs one (a store name, its url, or its folder under `~/.lore/stores`, such as `acme/notes`). `lore doctor` shows a `store_maintenance` note for a clone whose `.git` is over twice the size of its packs (its size, packs, loose objects and last pass), with that command.
 - **Turn it off** for this machine with `store: {maintenance: off}` in `~/.lore/config.yaml` ([config](../reference/config.md)); a person's own clone (`lore store use`) is packed only when named with `--store`.
 
+## Blobless clones (opt-in)
+
+A store's clone holds every version of every row since the store began. With `store: {clone_filter: blob:none}` in `~/.lore/config.yaml` ([config](../reference/config.md)), every store clone this machine makes from then on is **blobless**: it holds every commit and folder tree (so ancestry, merges and lore's checks of who changed what work as before) but only the row files it checks out; an older version is fetched from the store's remote the first time a read needs it. It is never a shallow clone (`--depth`), which would break that history.
+
+- **New history comes complete.** Every later fetch brings new commits with all their files, so a blobless clone only ever lacks versions older than the clone itself.
+- **Missing versions are fetched in one request**, never one at a time: lore lists what a read lacks and asks the remote for all of it at once.
+- **Offline it says so.** With `LORE_OFFLINE=1` (or no network), a read that needs an old version the clone lacks, such as `lore task history --id <id> --git`, stops with `E_OFFLINE` and names `lore store prefetch --store <name>`; it never prints fewer versions. Reads of the current rows (`show`, `list`, `search`, `ask`) never need the network.
+- **Before going offline,** `lore store prefetch --store <name>` fetches every old version the clone lacks, in one request; a full clone has nothing to fetch.
+- **Existing clones stay as they are.** A full clone cannot drop its old versions in place; `lore store reclone --store <name> --filter blob:none` makes it again blobless, and `--filter none` makes a blobless one full again. The new clone takes over lore's state of the old one (its saved check of who changed what, the remote tip it saw, its claims), and the old one is kept under `~/.lore/cache/replaced-clones/` for a week, then the daily pass removes it. A clone with commits the remote does not have yet is refused: `lore sync` first.
+- **The first read of a new blobless clone still fetches most old versions.** Lore checks every commit of the store's history for who wrote what when it first reads a new clone, and that check reads every version of every row, so today it fetches them (in one request) and the clone ends up about as big as a full one. A clone made by `lore store reclone` keeps the old clone's saved check and skips that. This is why the setting is off by default; it becomes the default once that first check no longer reads old versions.
+- **Moving a store** (`lore store set-url`) first fetches every old version into a blobless clone, since the store's new address starts empty and the old one is the only place they live; offline it changes nothing.
+- **A server without partial clone support** sends everything; lore notices and the clone is a full one.
+- **Every machine of a team should run lore 0.1.54 or later** before anyone turns this on: an older lore read a version a blobless clone lacks as no such version.
+
 ## Every store at once, from anywhere
 
 Outside any repo, `lore sync` syncs every store `lore store list` shows (the org's stores and your personal store `me`), one line per store; a store that fails does not stop the others, and the command exits non-zero naming the ones that failed. `lore org refresh` without an argument refreshes the only org on the machine, else the active setup's org.

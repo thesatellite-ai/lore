@@ -107,6 +107,9 @@ type config struct {
 	// markerOrg is the org and main store url the marker a first write
 	// adds names (WithMarkerOrg); nil = none.
 	markerOrg func(ctx context.Context, remote string) (org, main string)
+	// cloneFilter is store.clone_filter (WithCloneFilter, blobless.go):
+	// CloneFilterBlobless makes a new clone blobless; "" or none = full.
+	cloneFilter string
 }
 
 // WithMarkerOrg gives the backend the org (and the url of its main store)

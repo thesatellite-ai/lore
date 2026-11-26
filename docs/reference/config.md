@@ -133,6 +133,7 @@ $ lore config check
 | `cache.auto_prune` | `true` | `false` turns the daily cache sweep off; `lore cache prune` still works by hand |
 | `store.maintenance` | `auto` | `off` stops lore packing its store clones by itself once a day; `lore store maintain --all` still works by hand (see [Lore keeps the clone packed](../sync/store-clones.md#lore-keeps-the-clone-packed)) |
 | `store.maintenance_every` | `24h` | how old a clone's last pass may get before the next command starts one in the background; a duration from `1h` to `720h` |
+| `store.clone_filter` | `none` | `blob:none` makes every new store clone of this machine blobless: every commit and tree, old row versions fetched when a read needs them; existing clones stay as they are (`lore store reclone --store <name> --filter blob:none` remakes one); see [Blobless clones](../sync/store-clones.md#blobless-clones-opt-in) |
 | `read_server` | `true` | `false` turns off the local read server, so every command runs in its own process (see [The local read server](../operations/where-lore-keeps-things.md#the-local-read-server)) |
 | `policies.<key>` | none | a stricter limit for this machine only, for any key `lore policy show` lists (see below) |
 | `context.profiles` | none | your own tool profiles for `lore render`, added after the built-in ones (see below) |

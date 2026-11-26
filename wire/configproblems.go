@@ -84,6 +84,9 @@ func (a *App) ConfigProblems(context.Context) []opssetup.ConfigProblem {
 		if _, lerr := readLockTimeout(a.opts.Home); lerr != nil {
 			problems = append(problems, errMessage(lerr))
 		}
+		if _, ferr := readCloneFilter(a.opts.Home); ferr != nil {
+			problems = append(problems, errMessage(ferr))
+		}
 		if d, derr := decodeSetupsDoc(raw); derr == nil {
 			problems = append(problems, d.problems()...)
 			// SOURCE_OF_TRUTH row 1: reported, never a write refusal.

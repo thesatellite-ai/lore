@@ -254,6 +254,8 @@ func (a *App) MaintainClones(ctx context.Context, in opsstores.MaintainIn) (opss
 		targets = maintClones(home)
 	}
 	out := opsstores.MaintainOut{Clones: []opsstores.MaintainView{}}
+	// clones `lore store reclone` replaced, kept a week (devco:D-1001)
+	_, _ = git.SweepOldClones(home, a.wall())
 	for _, f := range targets {
 		if ctx.Err() != nil {
 			return out, ctx.Err()

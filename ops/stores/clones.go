@@ -553,6 +553,8 @@ var storeURLForm = map[string]string{
 	"forget":   "lore store forget --url <url>",
 	"push":     "lore store push --store <url>",
 	"maintain": "lore store maintain --store <url>",
+	"prefetch": "lore store prefetch --store <url>",
+	"reclone":  "lore store reclone --store <url>",
 }
 
 // cloneOps are the clone commands bound to m.

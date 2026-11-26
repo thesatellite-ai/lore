@@ -585,7 +585,12 @@ func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options)
 	if opts.Wall != nil {
 		clock = git.WithClock(opts.Wall)
 	}
-	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), git.WithCloneIdentity(who.cloneIdentity), cloneIdentitySay(opts.Notice), trailers, route, clock, handGitOption(opts.Notice)), who.owner, who.identityFor, opts.Notice)
+	// store.clone_filter (devco:D-1001): a new clone is blobless when set
+	filter, err := readCloneFilter(opts.Home)
+	if err != nil {
+		return nil, err
+	}
+	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), git.WithCloneIdentity(who.cloneIdentity), cloneIdentitySay(opts.Notice), trailers, route, clock, handGitOption(opts.Notice), git.WithCloneFilter(filter)), who.owner, who.identityFor, opts.Notice)
 }
 
 // openStore opens the store at a canonical url with this App's backends.

@@ -402,6 +402,13 @@ func (b *Backend) initClone(ctx context.Context, remote string) error {
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"remote", "add", "--", RemoteName, remote}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: add the store remote", err)
 	}
+	if b.cloneFilterFor(ctx) == CloneFilterBlobless {
+		// store.clone_filter (devco:D-1001): the first fetch (openFetch)
+		// brings every commit and tree, and only the blobs it checks out
+		if err := b.setPromisor(ctx); err != nil {
+			return err
+		}
+	}
 	// devco:D-996: git's own auto gc stays off in the clone (lore's pass,
 	// maintain.go, packs it), and a new clone's first pass is a day away
 	setGitAutoOff(ctx, b.git, b.work)
@@ -732,13 +739,23 @@ func (b *Backend) openFetch(ctx context.Context, dir string) (head string, err e
 		return DefaultBranch, ferr // refused earlier in this scope: no second connection
 	}
 	remote := "remote." + RemoteName + "."
-	err = b.runFetch(ctx, dir, "-c", remote+"followRemoteHEAD=always", "-c", remote+"fetch="+headsRefspec, "-c", remote+"fetch="+liveRefspec, "-c", remote+"fetch="+layerRefspec, "-c", remote+"fetch="+layerTrashRefspec,
-		"fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", RemoteName)
+	args := []string{"-c", remote + "followRemoteHEAD=always", "-c", remote + "fetch=" + headsRefspec, "-c", remote + "fetch=" + liveRefspec, "-c", remote + "fetch=" + layerRefspec, "-c", remote + "fetch=" + layerTrashRefspec,
+		"fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head"}
+	blobless := partialCloneAt(dir)
+	if blobless {
+		args = append(args, filterArg) // a blobless clone's first fetch (devco:D-1001)
+	}
+	err = b.runFetch(ctx, dir, append(args, RemoteName)...)
 	if err != nil {
 		if isOffline(err) {
 			scope.noteFailedFetch(dir, err) // git ran and the remote did not serve it (not a cancelled ctx)
 		}
 		return DefaultBranch, err
+	}
+	if blobless {
+		if err := b.noteFilterHonoured(ctx); err != nil {
+			return DefaultBranch, err
+		}
 	}
 	b.openScope.Store(scope)
 	b.openLive = true

@@ -134,6 +134,12 @@ var retriedSubcommands = map[string]bool{"fetch": true, "push": true, "ls-remote
 // runOnce is one try of run.
 func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	args := c.args
+	if r.owned && subcommand(c.args) == "fetch" && partialCloneAt(c.dir) {
+		// a blobless clone (devco:D-1001): new history comes with every
+		// blob, so only blobs older than the clone are ever fetched on
+		// demand (blobless.go)
+		args = withNoFilter(args)
+	}
 	if r.owned {
 		// core.autocrlf=false: row files are bytes lore hashes and
 		// compares, never text to convert. Git for Windows defaults to

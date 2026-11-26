@@ -125,7 +125,8 @@ func sameStoreURL(a, b string) bool {
 // unreachable. The caller holds the store lock.
 func fetch(ctx context.Context, r Router, dir string) error {
 	args := append([]string{"fetch", "--quiet", "--prune", remoteName}, fetchRefspecs...)
-	_, err := netGit(ctx, r, dir, args...)
+	// a blobless clone (devco:D-1001): new history comes with every blob
+	_, err := netGit(ctx, r, dir, gitbackend.FetchArgsIn(dir, args)...)
 	return err
 }
 

@@ -94319,6 +94319,140 @@
         }
       }
     },
+    "/v1/stores/prefetch": {
+      "post": {
+        "operationId": "store.prefetch",
+        "summary": "Fetch every old version a blobless store clone lacks, in one request, so every history read works offline (a full clone has them all)",
+        "tags": [
+          "store"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "store": {
+                    "type": "string",
+                    "description": "the store: its name or url"
+                  }
+                },
+                "required": [
+                  "store"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "blobless": {
+                      "type": "boolean"
+                    },
+                    "clone": {
+                      "type": "string"
+                    },
+                    "fetched": {
+                      "type": "integer"
+                    },
+                    "missing": {
+                      "type": "integer"
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "store",
+                    "clone",
+                    "missing",
+                    "fetched"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT, E_STORE_SCHEME",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_REFUSED, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE, E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/stores/push": {
       "post": {
         "operationId": "store.push",
@@ -94443,6 +94577,148 @@
           },
           "428": {
             "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE, E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stores/reclone": {
+      "post": {
+        "operationId": "store.reclone",
+        "summary": "Make this machine's clone of a store again, blobless (--filter blob:none) or full (--filter none); the old clone is kept aside for a week",
+        "tags": [
+          "store"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "filter": {
+                    "type": "string",
+                    "description": "blob:none (blobless: old versions fetched when needed) or none (every version); default store.clone_filter"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "the store: its name or url"
+                  }
+                },
+                "required": [
+                  "store"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "after_bytes": {
+                      "type": "integer"
+                    },
+                    "before_bytes": {
+                      "type": "integer"
+                    },
+                    "blobless": {
+                      "type": "boolean"
+                    },
+                    "clone": {
+                      "type": "string"
+                    },
+                    "old": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "store",
+                    "clone",
+                    "old",
+                    "before_bytes",
+                    "after_bytes"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT, E_STORE_SCHEME",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_REFUSED, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {

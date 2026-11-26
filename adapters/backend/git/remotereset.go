@@ -483,6 +483,15 @@ func RepointOrigin(ctx context.Context, dir, origin string) error {
 		return err
 	}
 	r := runner{bin: bin, owned: true}
+	if partialCloneAt(dir) {
+		// a blobless clone (devco:D-1001): the next sync pushes the whole
+		// history to the new repository, and the old versions this clone
+		// lacks can come only from the old one, so they are fetched now,
+		// before origin changes; offline nothing changes (E_OFFLINE)
+		if _, err := (&Backend{git: r, work: dir}).Prefetch(ctx); err != nil {
+			return errs.Prefix("before pointing the blobless clone "+dir+" at "+origin+": ", err)
+		}
+	}
 	if _, err := r.run(ctx, call{dir: dir, args: []string{"remote", "set-url", "--", RemoteName, origin}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: point the clone "+dir+" at "+origin, err)
 	}

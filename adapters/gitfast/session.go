@@ -580,3 +580,14 @@ func OutputQuiet(ctx context.Context, dir string, args, env []string, stdin []by
 	}
 	return Output(ctx, dir, args, env, stdin, run)
 }
+
+// PartialClone reports whether the git repository whose config file is at
+// configPath is a partial clone (extensions.partialClone, or a
+// remote.<name>.promisor that is true). A config that does not parse the
+// plain way, or is missing, reads as false. Why exported: the store
+// backend asks it before every fetch, so a blobless store clone fetches
+// new history with every blob (store growth SG-3b, devco:D-1001).
+func PartialClone(configPath string) bool {
+	promisor, ok := partialClone(configPath)
+	return ok && promisor
+}

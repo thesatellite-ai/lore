@@ -802,7 +802,8 @@ func fetchStoreLive(ctx context.Context, src liveSource) {
 		return // the --all parent fetched every store clone's live refs just now (git.RefreshClone)
 	}
 	ref := liveRefLocal + "/" + src.branch
-	_, _ = liveGit(ctx, src.dir, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--", git.RemoteName, "+"+ref+":"+liveTrackingPrefix+src.branch)
+	args := git.FetchArgsIn(src.dir, []string{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--", git.RemoteName, "+" + ref + ":" + liveTrackingPrefix + src.branch})
+	_, _ = liveGit(ctx, src.dir, args...)
 }
 
 // openFetched reports whether b's first open already fetched its live refs
