@@ -893,10 +893,47 @@ func (b *Backend) authorityOf(ctx context.Context, head string) (*authority, err
 		}
 		b.saveAuthority(a)
 	}
+	if b.holdViewsOnly(a) {
+		return a, nil
+	}
 	authorityCache.Lock()
 	authorityCache.byWork[b.work] = a
 	authorityCache.Unlock()
 	return a, nil
+}
+
+// authorityHoldFiles is the most row files a replay may cover and still
+// be kept whole in the process (authorityCache). A var: a test keeps a
+// small one.
+var authorityHoldFiles = 1 << 18
+
+// holdViewsOnly keeps only a's row view and head view in the process,
+// read back from what saveAuthority just wrote, when a covers more than
+// authorityHoldFiles row files; false (a is kept whole, as before) for a
+// smaller replay or when the views were not saved. Why (bug hunt H-280,
+// devco:D-1018): a compacted store's replay holds every row file of the
+// store, ~375 MB at 1.26M files, and the process kept it for its whole
+// life although its reads (heldBlob, creditRow) and the org file check
+// need only the views; a later replay in the process reads the saved one
+// back from disk.
+func (b *Backend) holdViewsOnly(a *authority) bool {
+	if a == nil || len(a.accepted) <= authorityHoldFiles {
+		return false
+	}
+	rows, view := b.loadRowView(a.head, a.orgHead), b.loadHeadView(a.head, a.orgHead)
+	if rows == nil || view == nil {
+		return false
+	}
+	authorityCache.Lock()
+	delete(authorityCache.byWork, b.work)
+	authorityCache.Unlock()
+	rowViews.Lock()
+	rowViews.byWork[b.work] = rows
+	rowViews.Unlock()
+	headViews.Lock()
+	headViews.byWork[b.work] = view
+	headViews.Unlock()
+	return true
 }
 
 // rowAuthorityOf is what a row read at head needs of the replay
@@ -1166,60 +1203,42 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 	return nil
 }
 
-// replayChunk is replayOver for one chunk: every blob its commits need is
-// read once, up front, and dropped when the chunk is decided.
+// replayChunk is replayOver for one chunk. The roster's own rows (the
+// tables a commit's checks read across its files, crossFile) are read
+// once for the whole chunk, up front; every other row version is read a
+// window of replayWindowFiles files at a time, in the order the replay
+// decides them (replayWindow), and dropped when the window is decided.
+// Why (bug hunt H-280, devco:D-1018): a compacted store's snapshot is one
+// commit holding every row file, and reading the whole chunk's versions
+// at once held all 1.26M of them decoded (~1.7 GB) for one commit.
 func (b *Backend) replayChunk(ctx context.Context, a *authority, commits []replayCommit) error {
 	replayedCommits.Add(int64(len(commits)))
-	// read every roster blob once, up front
 	var names []string
 	seen := map[string]bool{}
-	want := func(sha string) {
-		if !zeroBlob(sha) && sha != "" && !seen[sha] {
-			seen[sha] = true
-			names = append(names, sha)
-		}
-	}
 	for _, c := range commits {
 		for _, f := range c.changes {
-			if !isRowFile(f.path) {
-				continue
-			}
-			want(f.newBlob)
-			if pinnable(tableOfPath(f.path)) {
-				// the role rule judges the version a commit replaced
-				// (devco D-851): an incremental replay has not read it
-				want(f.oldBlob)
-				want(a.accepted[f.path])
+			if isRowFile(f.path) && crossFile(tableOfPath(f.path)) && !zeroBlob(f.newBlob) && f.newBlob != "" && !seen[f.newBlob] {
+				seen[f.newBlob] = true
+				names = append(names, f.newBlob)
 			}
 		}
 	}
-	notePeak(len(names))
-	raws, err := b.replayBlobs(ctx, names)
+	fixed, err := b.replayDocs(ctx, names)
 	if err != nil {
 		return err
 	}
-	parsed := make(map[string]rosterDoc, len(raws))
-	for sha, raw := range raws {
-		var d rosterDoc
-		if json.Unmarshal(bytes.TrimSpace(raw), &d) == nil {
-			d.content = contentKey(raw)
-			parsed[sha] = d
-		}
-	}
-	raws = nil // only the fields the check reads stay in memory
-	docOf := func(sha string) (rosterDoc, bool) {
-		d, ok := parsed[sha]
-		return d, ok
-	}
+	notePeak(len(names))
+	w := &replayWindow{b: b, commits: commits, accepted: a.accepted, fixed: fixed}
+	docOf := w.docOf
 	st, accepted, snap := a.state, a.accepted, a.snap
-	for _, c := range commits {
+	for ci, c := range commits {
 		rosterMoved := false
 		reason := ""
 		if !c.merge && !st.orgless && !c.snapshot {
 			reason = st.refusal(c, docOf)
 		}
 		actor := st.authorActor(c, docOf)
-		for _, f := range c.changes {
+		for fi, f := range c.changes {
 			if path.Base(f.path) == orgFileName {
 				parent := ""
 				if len(c.parents) > 0 {
@@ -1229,6 +1248,9 @@ func (b *Backend) replayChunk(ctx context.Context, a *authority, commits []repla
 			}
 			if !isRowFile(f.path) {
 				continue
+			}
+			if err := w.reach(ctx, ci, fi); err != nil {
+				return err
 			}
 			reason := reason
 			credited := false
@@ -1387,7 +1409,9 @@ func (s *rosterState) refusal(c replayCommit, docOf func(string) (rosterDoc, boo
 func (s *rosterState) addsPerson(c replayCommit, actor string, docOf func(string) (rosterDoc, bool)) string {
 	who, admin := "", false
 	for _, f := range c.changes {
-		if !isRowFile(f.path) || zeroBlob(f.newBlob) {
+		// only a new actor or stint adds a person: no other version is
+		// read (the replay reads those a window at a time, replayWindow)
+		if t := tableOfPath(f.path); !isRowFile(f.path) || zeroBlob(f.newBlob) || (t != schema.TableActors && t != schema.TableActorPeriods) {
 			continue
 		}
 		if _, hadOld := s.docs[f.path]; hadOld {

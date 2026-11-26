@@ -40,8 +40,15 @@ type readSnapshot struct {
 	// store's reads of one table (tables) and never reads a whole store.
 	tablesOnly bool
 	tables     map[tableFillKey]*snapFill
-	// decoded memoizes row decodes for the snapshot's life (decode).
-	decoded map[decodeKey]decodedRow
+	// decoded memoizes row decodes for the snapshot's life (decode), up
+	// to decodeMemoBudget (decodedBytes): a full memo takes no more
+	decoded      map[decodeKey]decodedRow
+	decodedBytes int64
+	// kept is the finished reads in the order they finished, keptBytes
+	// their size: past snapshotBudget the oldest are dropped
+	// (readsnapbudget.go)
+	kept      []snapKept
+	keptBytes int64
 }
 
 // snapFill is one backend's full read: done closes once rows, next and err
@@ -150,6 +157,7 @@ func sharedFull(ctx context.Context, st Attached) (*snapFill, bool, error) {
 		if f.err != nil {
 			return nil, false, nil // the filler's failure (its own context, say) is not this reader's
 		}
+		s.touch(f)
 	}
 	if f.err != nil {
 		return nil, true, f.err
@@ -195,6 +203,7 @@ func (s *readSnapshot) startedFull(ctx context.Context, st Attached) (*snapFill,
 	if f.err != nil {
 		return nil, false, nil
 	}
+	s.touch(f)
 	return f, true, nil
 }
 
@@ -213,7 +222,9 @@ func (s *readSnapshot) fill(ctx context.Context, st Attached, f *snapFill) {
 			delete(s.full, st.Backend)
 		}
 		s.mu.Unlock()
+		return
 	}
+	s.keepFill(st.Backend, nil, f)
 }
 
 // readTableShared is st's read of table through a table snapshot s: the
@@ -246,6 +257,7 @@ func (s *readSnapshot) readTableShared(ctx context.Context, st Attached, table r
 			s.mu.Unlock()
 			return nil, f.err
 		}
+		s.keepFill(nil, &k, f)
 	} else {
 		select {
 		case <-f.done:
@@ -256,6 +268,7 @@ func (s *readSnapshot) readTableShared(ctx context.Context, st Attached, table r
 			rows, _, err := st.Backend.Read(store.WithTables(withMirror(ctx, st), table), "")
 			return rows, err
 		}
+		s.touch(f)
 	}
 	return slices.Clone(f.rows), nil
 }
@@ -339,6 +352,7 @@ func dropSnapshot(ctx context.Context, st Attached) {
 				delete(s.tables, k)
 			}
 		}
+		s.unkeepLocked(st.Backend)
 		s.mu.Unlock()
 	}
 }
@@ -380,10 +394,12 @@ func decode(ctx context.Context, sr store.Row) (row.Row, error) {
 		return row.Row{}, err
 	}
 	s.mu.Lock()
-	if s.decoded == nil {
-		s.decoded = map[decodeKey]decodedRow{}
+	if _, kept := s.decoded[k]; !kept && s.memoLocked(sr.Doc) {
+		if s.decoded == nil {
+			s.decoded = map[decodeKey]decodedRow{}
+		}
+		s.decoded[k] = decodedRow{doc: sr.Doc, r: ownCopy(r)}
 	}
-	s.decoded[k] = decodedRow{doc: sr.Doc, r: ownCopy(r)}
 	s.mu.Unlock()
 	return r, nil
 }

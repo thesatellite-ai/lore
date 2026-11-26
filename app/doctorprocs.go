@@ -40,9 +40,10 @@ const doctorGCPercent = 100
 // pace doctor's heap still grew to about twice what it kept (~210 MB kept
 // at 100k commits, ~400 MB heap, ~480 MB RSS) because its checks allocate
 // fast between collections; under this limit the collector runs earlier
-// once the heap nears it (~340 MB RSS, same wall time). It is soft: a
-// store whose doctor keeps more than this still finishes, the collector
-// then takes at most about half the CPU.
+// once the heap nears it (~340 MB RSS, same wall time). It is a floor: a
+// store whose doctor keeps more than this gets a limit a quarter above
+// what it keeps (followLiveHeap, bug hunt H-280: under the fixed limit a
+// 1.26M-row store's doctor spent 45+ minutes collecting).
 const doctorMemLimit = 256 << 20
 
 // paceDoctorGC sets doctorGCPercent and doctorMemLimit for `lore doctor`
@@ -57,7 +58,7 @@ func paceDoctorGC(args []string, getenv func(string) string) (percent bool, limi
 		percent = true
 	}
 	if getenv("GOMEMLIMIT") == "" {
-		debug.SetMemoryLimit(doctorMemLimit)
+		followLiveHeap(doctorMemLimit) // gcfollow.go: a big store's doctor gets room above what it keeps (H-280)
 		limit = true
 	}
 	return percent, limit

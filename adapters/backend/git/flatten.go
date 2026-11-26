@@ -291,6 +291,7 @@ func (b *Backend) dropCaches() {
 	b.fullHead, b.fullRows = "", nil
 	b.tableHead, b.tableRows = "", nil
 	b.fullMu.Unlock()
+	forgetKept(b)
 }
 
 // oldLayoutFiles lists every file to move: tracked ones (from the index)

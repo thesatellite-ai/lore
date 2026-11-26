@@ -971,6 +971,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	}
 	if from == "" {
 		if rows, ok := b.cachedFull(h, store.SharedDocs(ctx)); ok {
+			touchKept(b)
 			return rows, store.Cursor(h), nil
 		}
 	}
@@ -984,6 +985,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	tables := store.TablesOf(ctx)
 	if from == "" && len(tables) > 0 {
 		if rows, ok := b.cachedTables(h, tables, store.SharedDocs(ctx)); ok {
+			touchKept(b)
 			return rows, "", nil
 		}
 		pathspecs, hinted = b.folder.TablePathspecs(tables), true
@@ -1116,11 +1118,13 @@ func (b *Backend) cachedTables(h string, tables []row.Table, shared bool) ([]sto
 // (the reader promised never to write them, store.WithSharedDocs).
 func (b *Backend) keepTables(h string, tables []row.Table, rows []store.Row, shared bool) {
 	b.fullMu.Lock()
-	defer b.fullMu.Unlock()
 	if b.tableHead != h || b.tableRows == nil {
 		b.tableHead, b.tableRows = h, map[string][]store.Row{}
 	}
 	b.tableRows[tablesKey(tables)] = copyRows(rows, shared)
+	n := b.keptBytes()
+	b.fullMu.Unlock()
+	noteKept(b, n) // one budget for every backend's kept reads (keptreads.go)
 }
 
 // cachedFull is a copy of the full read at commit h, if the last one was
@@ -1141,8 +1145,10 @@ func (b *Backend) cachedFull(h string, shared bool) ([]store.Row, bool) {
 // own documents (keepTables).
 func (b *Backend) keepFull(h string, rows []store.Row, shared bool) {
 	b.fullMu.Lock()
-	defer b.fullMu.Unlock()
 	b.fullHead, b.fullRows = h, copyRows(rows, shared)
+	n := b.keptBytes()
+	b.fullMu.Unlock()
+	noteKept(b, n) // one budget for every backend's kept reads (keptreads.go)
 }
 
 // copyRows copies rows and, unless shared, their documents: shared rows

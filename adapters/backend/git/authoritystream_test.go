@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -195,7 +196,11 @@ func TestSavedReplayInParts(t *testing.T) {
 			break
 		}
 	}
-	if want := len(a.state.stamps) + len(a.admins) + len(a.accepted) + len(a.refused); parts < want {
+	files := maps.Clone(a.accepted) // one record per file: its stamps and accepted version
+	for p := range a.state.stamps {
+		files[p] = ""
+	}
+	if want := len(files) + len(a.admins) + len(a.refused); parts < want {
 		t.Errorf("%d parts for %d entries, want one each", parts, want)
 	}
 	back := b.loadAuthority()

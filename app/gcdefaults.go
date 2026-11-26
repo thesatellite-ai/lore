@@ -26,7 +26,7 @@ func applyGCDefaults(getenv func(string) string) (percent bool, limit bool) {
 		percent = true
 	}
 	if getenv("GOMEMLIMIT") == "" {
-		debug.SetMemoryLimit(gcLimit)
+		followLiveHeap(gcLimit) // gcfollow.go: never a limit below what the command keeps (H-280)
 		limit = true
 	}
 	return percent, limit

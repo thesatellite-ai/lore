@@ -62,8 +62,9 @@ const authorityHashLen = 8
 // authorityFormat is the layout of authorityFile: bump it when
 // savedAuthority changes shape (2: the clone path, devco:D-812; 3: the
 // org file's changes, devco:D-999; 4: the hold log, devco:D-1004; 5:
-// stamp lists per file and 16-byte content keys, devco:D-1017).
-const authorityFormat = 5
+// stamp lists per file and 16-byte content keys, devco:D-1017; 6: one
+// record per file in the parts, with binary ids, devco:D-1018).
+const authorityFormat = 6
 
 // authorityFiles maps a clone folder to the replay file its open chose
 // (authorityFileFor), so a Backend made without an open uses the same
@@ -318,9 +319,10 @@ func (b *Backend) loadAuthorityAt(p string) *authority {
 		if dec.Decode(&part) != nil {
 			return nil // a file cut short: replay again
 		}
-		maps.Copy(s.Stamps, part.Stamps)
+		if !readFiles(&part, s.Stamps, s.Accepted) {
+			return nil
+		}
 		maps.Copy(s.Admins, part.Admins)
-		maps.Copy(s.Accepted, part.Accepted)
 		maps.Copy(s.Refused, part.Refused)
 		if part.Last {
 			break
@@ -406,14 +408,137 @@ func (b *Backend) saveAuthority(a *authority) {
 // authorityIOBuf is the buffer a saved replay is written and read through.
 const authorityIOBuf = 1 << 16
 
-// savedPart is one part of a saved replay's stamps and admins, written
-// after its header (writeAuthority); the last part is marked Last.
+// savedPart is one part of a saved replay's files, admins and refusals,
+// written after its header (writeAuthority); the last part is marked
+// Last. Files holds one record per row file (its stamps and accepted
+// version together), each naming its folder and actors by their place in
+// the part's own Dirs and Actors. Why (bug hunt H-280, devco:D-1018): the
+// replay of a compacted store holds every row file of the store, and with
+// each path written twice (stamps, accepted), each blob id as hex and each
+// stamp's actor id in full, 1.26M files were a 320 MB file.
 type savedPart struct {
-	Stamps   map[string][]stampRec
-	Admins   map[string]int
-	Accepted map[string]string
-	Refused  map[string]bool
-	Last     bool
+	Files   []savedFile
+	Dirs    []string
+	Actors  []string
+	Admins  map[string]int
+	Refused map[string]bool
+	Last    bool
+}
+
+// savedFile is one row file of a saved replay: its path (Dirs[Dir] + "/"
+// + Base, or Base alone at the top when Dir is -1), its stamps
+// (rosterState.stamps) and, when Has, its accepted version
+// (authority.accepted: Blob as raw bytes, else Text, "" when removed).
+type savedFile struct {
+	Dir    int
+	Base   string
+	Has    bool
+	Blob   []byte
+	Text   string
+	Stamps []savedStamp
+}
+
+// savedStamp is a stampRec: its digests as bytes (none for the zero
+// sum) and its actor by its place in the part's Actors.
+type savedStamp struct {
+	HLC, Content []byte
+	Actor        int
+}
+
+// sumBytes is sum as a savedStamp holds it: nil for the zero sum.
+func sumBytes(sum contentSum) []byte {
+	if sum == (contentSum{}) {
+		return nil
+	}
+	return sum[:]
+}
+
+// sumOf is the contentSum of a savedStamp's bytes; ok is false for bytes
+// of another length.
+func sumOf(b []byte) (contentSum, bool) {
+	var sum contentSum
+	if len(b) == 0 {
+		return sum, true
+	}
+	if len(b) != len(sum) {
+		return sum, false
+	}
+	copy(sum[:], b)
+	return sum, true
+}
+
+// filePart builds the savedParts' file records, with the part's tables.
+type filePart struct {
+	part   *savedPart
+	dirs   map[string]int
+	actors map[string]int
+}
+
+// add appends p's record: its stamps recs and, when has, its accepted
+// version blob.
+func (f *filePart) add(p string, recs []stampRec, blob string, has bool) {
+	rec := savedFile{Dir: -1, Base: p, Has: has}
+	if i := strings.LastIndexByte(p, '/'); i >= 0 {
+		dir := p[:i]
+		n, ok := f.dirs[dir]
+		if !ok {
+			n = len(f.part.Dirs)
+			f.dirs[dir] = n
+			f.part.Dirs = append(f.part.Dirs, dir)
+		}
+		rec.Dir, rec.Base = n, p[i+1:]
+	}
+	if has {
+		if raw, err := hex.DecodeString(blob); err == nil && blob != "" && hex.EncodeToString(raw) == blob {
+			rec.Blob = raw
+		} else {
+			rec.Text = blob
+		}
+	}
+	for _, r := range recs {
+		n, ok := f.actors[r.Actor]
+		if !ok {
+			n = len(f.part.Actors)
+			f.actors[r.Actor] = n
+			f.part.Actors = append(f.part.Actors, r.Actor)
+		}
+		rec.Stamps = append(rec.Stamps, savedStamp{HLC: sumBytes(r.HLC), Content: sumBytes(r.Content), Actor: n})
+	}
+	f.part.Files = append(f.part.Files, rec)
+}
+
+// readFiles puts part's file records into stamps and accepted; false
+// when a record does not hold together (the file is then not used).
+func readFiles(part *savedPart, stamps map[string][]stampRec, accepted map[string]string) bool {
+	for _, f := range part.Files {
+		p := f.Base
+		if f.Dir >= len(part.Dirs) || f.Dir < -1 {
+			return false
+		}
+		if f.Dir >= 0 {
+			p = part.Dirs[f.Dir] + "/" + f.Base
+		}
+		if f.Has {
+			accepted[p] = f.Text
+			if len(f.Blob) > 0 {
+				accepted[p] = hex.EncodeToString(f.Blob)
+			}
+		}
+		if len(f.Stamps) == 0 {
+			continue
+		}
+		recs := make([]stampRec, 0, len(f.Stamps))
+		for _, st := range f.Stamps {
+			hlc, ok1 := sumOf(st.HLC)
+			content, ok2 := sumOf(st.Content)
+			if !ok1 || !ok2 || st.Actor < 0 || st.Actor >= len(part.Actors) {
+				return false
+			}
+			recs = append(recs, stampRec{HLC: hlc, Actor: part.Actors[st.Actor], Content: content})
+		}
+		stamps[p] = recs
+	}
+	return true
 }
 
 // authorityPartRows is how many entries (a file's stamps or accepted
@@ -437,28 +562,34 @@ func writeAuthority(p string, a *authority, header *savedAuthority, index map[*a
 	w := bufio.NewWriterSize(tmp, authorityIOBuf)
 	enc := gob.NewEncoder(w)
 	eerr := enc.Encode(header)
-	newPart := func() savedPart {
-		return savedPart{Stamps: map[string][]stampRec{}, Admins: map[string]int{}, Accepted: map[string]string{}, Refused: map[string]bool{}}
+	var part savedPart
+	var files filePart
+	newPart := func() {
+		part = savedPart{Admins: map[string]int{}, Refused: map[string]bool{}}
+		files = filePart{part: &part, dirs: map[string]int{}, actors: map[string]int{}}
 	}
-	part := newPart()
+	newPart()
 	flush := func(last bool) {
-		if eerr != nil || (!last && len(part.Stamps)+len(part.Admins)+len(part.Accepted)+len(part.Refused) < authorityPartRows) {
+		if eerr != nil || (!last && len(part.Files)+len(part.Admins)+len(part.Refused) < authorityPartRows) {
 			return
 		}
 		part.Last = last
 		eerr = enc.Encode(&part)
-		part = newPart()
+		newPart()
 	}
 	for p, recs := range a.state.stamps {
-		part.Stamps[p] = recs
-		flush(false)
-	}
-	for id, set := range a.admins {
-		part.Admins[id] = index[set]
+		blob, has := a.accepted[p]
+		files.add(p, recs, blob, has)
 		flush(false)
 	}
 	for p, blob := range a.accepted {
-		part.Accepted[p] = blob
+		if _, done := a.state.stamps[p]; !done {
+			files.add(p, nil, blob, true)
+			flush(false)
+		}
+	}
+	for id, set := range a.admins {
+		part.Admins[id] = index[set]
 		flush(false)
 	}
 	for id := range a.refused {

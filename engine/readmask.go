@@ -66,10 +66,17 @@ type MaskedRead struct {
 // results by (field, text), so a row read many times in one process is
 // scanned once, and the rows masked so far.
 type readMasks struct {
-	mu     sync.Mutex
-	memo   map[[2]string][]scan.Finding
-	masked map[string]MaskedRead
+	mu   sync.Mutex
+	memo map[[2]string][]scan.Finding
+	// memoBytes is the text the memo holds: past scanMemoBudget it takes
+	// no more (bug hunt H-280, devco:D-1018: it held every text field of
+	// every row a doctor run read, the whole text of a 1.26M-row store)
+	memoBytes int64
+	masked    map[string]MaskedRead
 }
+
+// scanMemoBudget is the most text bytes the read-mask memo keeps. A var: a test sets a small one.
+var scanMemoBudget int64 = 64 << 20
 
 // readMaskSkip are the tables never masked on read: the secret settings
 // themselves (an allow entry names a rule and a hash, never the text, and
@@ -103,7 +110,10 @@ func (e *Engine) scanRead(field, text string) []scan.Finding {
 	}
 	found := e.readScanner.Scan(field, text)
 	m.mu.Lock()
-	m.memo[k] = found
+	if cost := int64(len(field) + len(text)); m.memoBytes+cost <= scanMemoBudget {
+		m.memoBytes += cost // a full memo keeps what it holds and takes no more
+		m.memo[k] = found
+	}
 	m.mu.Unlock()
 	return found
 }

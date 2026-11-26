@@ -43,9 +43,10 @@ func TestCapDoctorProcs(t *testing.T) {
 func TestPaceDoctorGC(t *testing.T) {
 	prev := debug.SetGCPercent(gcPercent)
 	prevLimit := debug.SetMemoryLimit(gcLimit)
-	t.Cleanup(func() { debug.SetGCPercent(prev); debug.SetMemoryLimit(prevLimit) })
+	prevFloor := heapFloor.Load()
+	t.Cleanup(func() { debug.SetGCPercent(prev); debug.SetMemoryLimit(prevLimit); heapFloor.Store(prevFloor) })
 	none := func(string) string { return "" }
-	reset := func() { debug.SetGCPercent(gcPercent); debug.SetMemoryLimit(gcLimit) }
+	reset := func() { debug.SetGCPercent(gcPercent); heapFloor.Store(0); debug.SetMemoryLimit(gcLimit) }
 
 	for _, args := range [][]string{{"doctor"}, {"--json", "doctor", "run", "--all"}} {
 		reset()
