@@ -124,6 +124,7 @@ func (o *Out) fitCandidates(order []Ranked, maxChars int, more []Row, cards []Ca
 	memo := map[string]Candidate{}
 	list, dropped := o.candidatesOf(all, more, cards, memo)
 	if len(list) == 0 {
+		o.grow(all, more, cards, memo, list, dropped, maxChars) // grow.go
 		return
 	}
 	items := len(o.items())
@@ -132,6 +133,8 @@ func (o *Out) fitCandidates(order []Ranked, maxChars int, more []Row, cards []Ca
 		list, dropped = o.candidatesOf(all, more, cards, memo)
 		items = len(o.items())
 	}
+	list, dropped = o.grow(all, more, cards, memo, list, dropped, maxChars) // grow.go
+	items = len(o.items())
 	for len(list) > 0 && items+len(candText(list))+len(dropText(droppedBefore(dropped, list))) > maxChars {
 		list = list[:len(list)-1]
 	}

@@ -54,7 +54,7 @@ func TestStoryOAskExcerptKeepsAskedSentence(t *testing.T) {
 		// the printed next step runs where printed and prints the row whole
 		id := ""
 		for l := range strings.SplitSeq(r.Out(), "\n") {
-			if i := strings.Index(l, "lore show --id "); i >= 0 {
+			if i := strings.Index(l, "lore show --id "); i >= 0 && strings.Contains(l, "prints it whole") {
 				id = strings.Fields(l[i+len("lore show --id "):])[0]
 			}
 		}

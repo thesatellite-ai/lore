@@ -6,8 +6,8 @@ import (
 )
 
 // Long rows: a row longer than longRow characters is printed as the part
-// of it that answers the question, at most longRoom characters, never
-// whole: a markdown row as its best sections by heading, any other as its
+// of it that answers the question, at most longRoom characters unless
+// the answer has room for more (grow.go, devco D-1006): a markdown row as its best sections by heading, any other as its
 // best paragraph (chunkLong); it is ranked by its best section too
 // (longsec.go).
 //
@@ -34,8 +34,9 @@ const (
 // whole. A date question keeps whole rows: the rows of its dates are the
 // answer.
 //
-// Why a long row is never printed whole (devco D-969, bug hunt H-228,
-// S5-04): an architecture note of ~3,900 characters whose sections all
+// Why a long row is cut first (devco D-969, bug hunt H-228, S5-04;
+// grow.go prints it whole only when the answer has room for it next to
+// the candidate lines and it holds the question's subject): an architecture note of ~3,900 characters whose sections all
 // repeated the question's words stayed whole and was the only row of the
 // 4,000-character answer; the memory that answered was left out.
 //

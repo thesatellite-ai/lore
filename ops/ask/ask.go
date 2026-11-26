@@ -137,7 +137,10 @@ type Out struct {
 	// list leaves out, each with why (candidates.go, bug hunt H-270).
 	Dropped  []Dropped `json:"dropped,omitempty" desc:"rows lore search ranks among the candidates that the list leaves out, each with dropped_reason (same text as a row above: one note stored twice)"`
 	maxChars int
-	note     string
+	// top is --top, the most rows printed in full (grow.go never prints
+	// more).
+	top  int
+	note string
 	// names maps a ${res:…} reference to the resource's name (nameIndex):
 	// a candidate the full rows did not read is read with it
 	names map[string]string
@@ -250,7 +253,7 @@ type Row struct {
 	// best sections, each after a "§ <heading path>" line, devco D-888;
 	// else its best paragraph, with … where text was left out), and
 	// FullChars is the whole body's length (lore show --id prints it).
-	FullChars int    `json:"full_chars,omitempty" desc:"set when the row was cut to the part that answers the question: a row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, best first, each after a line § <heading path>, the first marked (matching section)) or else its best paragraph (… marking text left out), and a row longer than --max-chars the same within the room left; this is the whole body's length; lore show --id <id> prints it whole"`
+	FullChars int    `json:"full_chars,omitempty" desc:"set when the row was cut to the part that answers the question: a row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, more when the answer has room, best first, each after a line § <heading path>, the first marked (matching section)) or else its best paragraph (… marking text left out), and a row longer than --max-chars the same within the room left; a cut row the answer has room for next to the first five candidates is printed whole instead, or its cut widened to that room (a long row only when its printed part holds a rare word of the question); this is the whole body's length; lore show --id <id> prints it whole"`
 	History   string `json:"history,omitempty" desc:"set when the row is no longer the current answer, read it as history: superseded by <id>, valid until <day>, or replaced by <id> from <day> (a newer row of the same folder on the same thing)"`
 	// LeftOut is set with FullChars when the part of the row left out
 	// holds question words the printed part does not (leftout.go, devco

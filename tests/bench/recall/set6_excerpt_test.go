@@ -91,7 +91,13 @@ func TestSet6AskExcerptKeepsSubjectSection(t *testing.T) {
 		linkedRun(t, env, app, bin, "memory", "add", "--to", "kb/app", "--body", r, "--yes")
 	}
 	for _, c := range set6ExcerptCases {
-		out, _ := linkedRun(t, env, app, bin, "ask", "--query", c.query)
+		// devco D-1006: the note fits the default 4,000 characters whole and
+		// is printed whole; the cut is checked where it does not fit
+		whole, _ := linkedRun(t, env, app, bin, "ask", "--query", c.query)
+		if !strings.Contains(whole, c.want) {
+			t.Errorf("%q: the answer at the default --max-chars lacks the subject sentence (%q):\n%s", c.query, c.want, whole)
+		}
+		out, _ := linkedRun(t, env, app, bin, "ask", "--query", c.query, "--max-chars", "2000")
 		if !strings.Contains(out, "lore show --id") {
 			t.Errorf("%q: the note was not cut (the case needs a cut):\n%s", c.query, out)
 		}

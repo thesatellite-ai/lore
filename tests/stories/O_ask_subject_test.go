@@ -40,7 +40,11 @@ func TestStoryOAskExcerptKeepsSubjectSection(t *testing.T) {
 	})
 
 	s.Step("D-973/the-cut-keeps-the-subject-section", func() {
-		r := ada.Lore(pc.Dir, "ask", "--query", "what does the job queue return for a duplicate key while the first run is still running").OK(t)
+		q := "what does the job queue return for a duplicate key while the first run is still running"
+		// devco D-1006: the note fits the default 4,000 characters whole
+		// and is printed whole; the cut is checked where it does not fit
+		ada.Lore(pc.Dir, "ask", "--query", q).OK(t).Says(t, subject)
+		r := ada.Lore(pc.Dir, "ask", "--query", q, "--max-chars", "1200").OK(t)
 		out := r.Out()
 		if !strings.Contains(out, subject) || !strings.Contains(out, "Caller API (matching section)") {
 			t.Fatalf("[O D-973] the cut note dropped the section holding the question's subject:\n%s", r)
@@ -51,7 +55,7 @@ func TestStoryOAskExcerptKeepsSubjectSection(t *testing.T) {
 		// the printed next step runs where printed and prints the note whole
 		id := ""
 		for l := range strings.SplitSeq(out, "\n") {
-			if i := strings.Index(l, "lore show --id "); i >= 0 {
+			if i := strings.Index(l, "lore show --id "); i >= 0 && strings.Contains(l, "prints it whole") {
 				id = strings.Fields(l[i+len("lore show --id "):])[0]
 			}
 		}

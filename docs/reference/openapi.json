@@ -7188,7 +7188,7 @@
                           },
                           "full_chars": {
                             "type": "integer",
-                            "description": "set when the row was cut to the part that answers the question: a row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, best first, each after a line § \u003cheading path\u003e, the first marked (matching section)) or else its best paragraph (… marking text left out), and a row longer than --max-chars the same within the room left; this is the whole body's length; lore show --id \u003cid\u003e prints it whole"
+                            "description": "set when the row was cut to the part that answers the question: a row longer than 1,500 characters prints its best sections by heading (at most 1,000 characters, more when the answer has room, best first, each after a line § \u003cheading path\u003e, the first marked (matching section)) or else its best paragraph (… marking text left out), and a row longer than --max-chars the same within the room left; a cut row the answer has room for next to the first five candidates is printed whole instead, or its cut widened to that room (a long row only when its printed part holds a rare word of the question); this is the whole body's length; lore show --id \u003cid\u003e prints it whole"
                           },
                           "history": {
                             "type": "string",

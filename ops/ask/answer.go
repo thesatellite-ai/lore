@@ -425,7 +425,7 @@ func build(q question, d data, top, maxChars int) Out {
 	ms := matchResources(q, d.resources)
 	identity := isIdentity(q.text) && len(ms) > 0
 	q.about = !identity && len(ms) > 0 && (isAbout(q.text) || bareName(q, ms))
-	out.identity, out.asked, out.q = identity, q.tokens, q
+	out.identity, out.asked, out.q, out.top = identity, q.tokens, q, top
 	for _, m := range ms {
 		r := resourceOf(m, d.resources, q.owe != oweNone)
 		if q.about && m.whole {
