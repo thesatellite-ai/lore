@@ -82,7 +82,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -174,7 +173,7 @@ type rosterDoc struct {
 	// content is the row's content key (contentKey), not a file field:
 	// the stamp carry is accepted only for content the stated writer
 	// committed (devco D-329)
-	content string
+	content contentSum
 }
 
 // strList is a list of text in a row file: a JSON array, or (v0.1.17
@@ -204,14 +203,24 @@ func (l strList) has(v string) bool { return v != "" && slices.Contains(l, v) }
 // without changing the row ("_v"): content keys leave it out.
 const contentFormatKey = "_v"
 
+// contentSum is a content key: the first contentSumLen bytes of the
+// digest (the zero sum: none). Why (bug hunt H-279, devco:D-1017): the
+// replay keeps one per accepted row version, and as 64 hex characters it
+// was a quarter of a 1M-commit replay's memory; 128 bits still tell any
+// two contents apart, by chance or by design.
+type contentSum [contentSumLen]byte
+
+// contentSumLen is how many bytes of the digest a contentSum keeps.
+const contentSumLen = 16
+
 // contentKey is a digest of a row file's content: its keys sorted, each
 // value compacted, the format version left out. Two files with the same
 // row content (a revert, a partial push, a conflict settled with the
 // other side's version, re-encoded by another lore) have the same key.
-func contentKey(raw []byte) string {
+func contentKey(raw []byte) contentSum {
 	var obj map[string]json.RawMessage
 	if json.Unmarshal(bytes.TrimSpace(raw), &obj) != nil {
-		return ""
+		return contentSum{}
 	}
 	keys := make([]string, 0, len(obj))
 	for k := range obj {
@@ -232,7 +241,9 @@ func contentKey(raw []byte) string {
 		h.Write(buf.Bytes())
 		h.Write([]byte{0})
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	var sum contentSum
+	copy(sum[:], h.Sum(nil))
+	return sum
 }
 
 // deleted reports a tombstone.
@@ -280,40 +291,80 @@ func kept(table string) bool { return rosterTables[table] || wallTables[table] }
 // rosterState is the roster as the accepted commits left it.
 type rosterState struct {
 	docs map[string]rosterDoc // path ─▶ row (kept tables only)
-	// stamps maps each row file to the _hlc stamps of its accepted
-	// versions: the actors whose commits wrote them and the content each
-	// version had
-	stamps map[string]map[string][]stampRec
+	// stamps maps each row file to its accepted versions, oldest first:
+	// each one's _hlc stamp, the actor whose commit wrote it and its
+	// content (a list, not a map by stamp: a file has few versions, and a
+	// map per file was most of a long history's replay, H-279)
+	stamps map[string][]stampRec
 	// orgless is set for a store with no org folder checked against its
 	// org's roster (SetRosterSource): no admin-only roster rules apply
 	orgless bool
+	// tables is docs' live rows by table, in path order (byTable); nil
+	// when docs changed since (setDoc, dropDoc). Why (bug hunt H-279,
+	// devco:D-1017): the checks of every commit ask byTable several
+	// times, and each listed every kept row anew
+	tables map[string][]rosterDoc
+}
+
+// setDoc keeps d as the row at p.
+func (s *rosterState) setDoc(p string, d rosterDoc) {
+	s.docs[p] = d
+	s.tables = nil
+}
+
+// dropDoc forgets the row at p.
+func (s *rosterState) dropDoc(p string) {
+	if _, ok := s.docs[p]; ok {
+		delete(s.docs, p)
+		s.tables = nil
+	}
 }
 
 // newRosterState is an empty state.
 func newRosterState() *rosterState {
-	return &rosterState{docs: map[string]rosterDoc{}, stamps: map[string]map[string][]stampRec{}}
+	return &rosterState{docs: map[string]rosterDoc{}, stamps: map[string][]stampRec{}}
 }
 
-// stampRec is one accepted version of a row file with a given stamp: who
-// committed it and its content key.
-type stampRec struct{ actor, content string }
+// stampRec is one accepted version of a row file: its stamp, who
+// committed it and its content key. The fields are exported for the
+// saved replay, which holds the lists as they are (savedAuthority).
+type stampRec struct {
+	HLC     contentSum // the digest of the _hlc stamp (stampSum)
+	Actor   string
+	Content contentSum
+}
+
+// stampSum is the digest a stampRec keeps of an _hlc stamp: the stamp
+// itself is ~60 bytes, one per accepted row version (bug hunt H-279,
+// devco:D-1017), and the replay only ever compares it.
+func stampSum(hlc string) contentSum {
+	h := sha256.Sum256([]byte(hlc))
+	var sum contentSum
+	copy(sum[:], h[:])
+	return sum
+}
 
 // stamp records that actor's accepted commit wrote p with stamp hlc and
 // content key content.
-func (s *rosterState) stamp(p, hlc, actor, content string) {
+func (s *rosterState) stamp(p, hlc, actor string, content contentSum) {
 	if hlc == "" {
 		return
 	}
-	if s.stamps[p] == nil {
-		s.stamps[p] = map[string][]stampRec{}
-	}
-	s.stamps[p][hlc] = append(s.stamps[p][hlc], stampRec{actor: actor, content: content})
+	s.stamps[p] = append(s.stamps[p], stampRec{HLC: stampSum(hlc), Actor: actor, Content: content})
 }
 
 // stampKnown reports whether an accepted version of p carries hlc.
 func (s *rosterState) stampKnown(p, hlc string) bool {
-	_, ok := s.stamps[p][hlc]
-	return ok && hlc != ""
+	if hlc == "" {
+		return false
+	}
+	sum := stampSum(hlc)
+	for _, r := range s.stamps[p] {
+		if r.HLC == sum {
+			return true
+		}
+	}
+	return false
 }
 
 // stampBy reports whether an accepted version of p with stamp hlc and
@@ -321,9 +372,10 @@ func (s *rosterState) stampKnown(p, hlc string) bool {
 // the agent claimed. The content must match, not only the stamp: an old
 // stamp of the stated writer on changed content is a forgery (devco
 // D-329).
-func (s *rosterState) stampBy(p, hlc, claimed, content string) bool {
-	for _, r := range s.stamps[p][hlc] {
-		if r.actor != "" && content != "" && r.content == content && (r.actor == claimed || s.owns(r.actor, claimed)) {
+func (s *rosterState) stampBy(p, hlc, claimed string, content contentSum) bool {
+	sum := stampSum(hlc)
+	for _, r := range s.stamps[p] {
+		if r.HLC == sum && r.Actor != "" && content != (contentSum{}) && r.Content == content && (r.Actor == claimed || s.owns(r.Actor, claimed)) {
 			return true
 		}
 	}
@@ -403,15 +455,19 @@ func (s *rosterState) folderHoldsProjectOf(folder, actor string) bool {
 	return false
 }
 
-// byTable lists the live rows of table.
+// byTable lists the live rows of table, in path order. The list is
+// shared: a caller reads it, never changes it.
 func (s *rosterState) byTable(table string) []rosterDoc {
-	var out []rosterDoc
-	for p, d := range s.docs {
-		if tableOfPath(p) == table && !d.deleted() {
-			out = append(out, d)
+	if s.tables == nil {
+		s.tables = map[string][]rosterDoc{}
+		for _, p := range slices.Sorted(maps.Keys(s.docs)) {
+			if d := s.docs[p]; !d.deleted() {
+				t := tableOfPath(p)
+				s.tables[t] = append(s.tables[t], d)
+			}
 		}
 	}
-	return out
+	return slices.Clip(s.tables[table])
 }
 
 // hasAdmin reports whether any open stint is an admin's.
@@ -832,11 +888,7 @@ func (b *Backend) authorityOf(ctx context.Context, head string) (*authority, err
 		}
 	}
 	if a == nil {
-		commits, err := b.replayCommits(ctx, head)
-		if err != nil {
-			return nil, err
-		}
-		if a, err = b.replay(ctx, head, commits); err != nil {
+		if a, err = b.fullReplay(ctx, head); err != nil {
 			return nil, err
 		}
 		b.saveAuthority(a)
@@ -915,13 +967,9 @@ func (b *Backend) replayOverHeld(ctx context.Context, held *authority, head, org
 // file too, whose lists it appends to). The values themselves (row docs,
 // admin sets, holds) are never changed in place, so they are shared.
 func (a *authority) clone() *authority {
-	st := &rosterState{docs: maps.Clone(a.state.docs), stamps: make(map[string]map[string][]stampRec, len(a.state.stamps)), orgless: a.state.orgless}
-	for p, byHLC := range a.state.stamps {
-		m := make(map[string][]stampRec, len(byHLC))
-		for h, recs := range byHLC {
-			m[h] = slices.Clip(recs) // an append copies instead of writing past a's end
-		}
-		st.stamps[p] = m
+	st := &rosterState{docs: maps.Clone(a.state.docs), stamps: make(map[string][]stampRec, len(a.state.stamps)), orgless: a.state.orgless}
+	for p, recs := range a.state.stamps {
+		st.stamps[p] = slices.Clip(recs) // an append copies instead of writing past a's end
 	}
 	return &authority{head: a.head, orgHead: a.orgHead, state: st, held: maps.Clone(a.held), trusted: maps.Clone(a.trusted), refused: maps.Clone(a.refused),
 		credited: maps.Clone(a.credited), admins: maps.Clone(a.admins), accepted: maps.Clone(a.accepted), snap: a.snap, orgFile: slices.Clip(a.orgFile),
@@ -1022,41 +1070,36 @@ const commitMark = "\x01"
 // "-1 HEAD": the last commit alone) oldest first with their parents and
 // the files each changed (blob ids on both sides).
 func (b *Backend) replayCommits(ctx context.Context, revs ...string) ([]replayCommit, error) {
-	args := []string{"log", "--reverse", "--topo-order", "-c", "--no-renames", "--raw", "--no-abbrev", "-z", "--format=" + "%x01%H%x00%P%x00%ae%x00"}
-	out, err := b.git.run(ctx, call{dir: b.work, args: append(append(args, revs...), "--")})
+	args := append(append([]string(nil), replayLogArgs...), revs...)
+	out, err := b.git.run(ctx, call{dir: b.work, args: append(args, "--")})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "git: read the store's history for the roster check", err)
 	}
 	var commits []replayCommit
 	for _, rec := range strings.Split(string(out), commitMark) {
-		if rec == "" {
-			continue
+		if c, ok := parseReplayRecord(rec); ok {
+			commits = append(commits, c)
 		}
-		parts := strings.SplitN(rec, "\x00", 4)
-		if len(parts) < 4 {
-			continue
-		}
-		c := replayCommit{id: parts[0], parents: strings.Fields(parts[1]), author: strings.ToLower(parts[2])}
-		fields := strings.Split(strings.TrimLeft(parts[3], "\x00\n"), "\x00")
-		for i := 0; i+1 < len(fields); i += 2 {
-			// ":<modes…> <blobs…> <status>": one colon per parent, then
-			// parents+1 modes and parents+1 blobs (the last is the result)
-			raw := strings.TrimSpace(fields[i])
-			n := len(raw) - len(strings.TrimLeft(raw, ":"))
-			meta := strings.Fields(strings.TrimLeft(raw, ":"))
-			if n < 1 || len(meta) < 2*n+3 {
-				continue
-			}
-			c.merge = c.merge || n > 1
-			c.changes = append(c.changes, fileChange{path: fields[i+1], oldBlob: meta[n+1], newBlob: meta[2*n+1]})
-		}
-		commits = append(commits, c)
 	}
 	return commits, nil
 }
 
 // replay walks commits and decides each one.
 func (b *Backend) replay(ctx context.Context, head string, commits []replayCommit) (*authority, error) {
+	a, err := b.newReplay(ctx, head)
+	if err != nil {
+		return nil, err
+	}
+	b.markSnapshotRoot(ctx, commits)
+	if err := b.replayOver(ctx, a, commits); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// newReplay is a replay at head before its first commit: an empty roster,
+// or for a store with no org folder its org's roster as it is now.
+func (b *Backend) newReplay(ctx context.Context, head string) (*authority, error) {
 	st := newRosterState()
 	orgHead := ""
 	if src := b.rosterSource(); src != nil {
@@ -1069,13 +1112,8 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 			st, orgHead = base.forOrgless(), h
 		}
 	}
-	a := &authority{head: head, orgHead: orgHead, state: st, admins: map[string]*adminSet{}, held: map[string]HeldChange{}, trusted: map[string]string{}, refused: map[string]bool{}, credited: map[string]credit{},
-		accepted: map[string]string{}, snap: st.adminSnapshot()}
-	b.markSnapshotRoot(ctx, commits)
-	if err := b.replayOver(ctx, a, commits); err != nil {
-		return nil, err
-	}
-	return a, nil
+	return &authority{head: head, orgHead: orgHead, state: st, admins: map[string]*adminSet{}, held: map[string]HeldChange{}, trusted: map[string]string{}, refused: map[string]bool{}, credited: map[string]credit{},
+		accepted: map[string]string{}, snap: st.adminSnapshot()}, nil
 }
 
 // markSnapshotRoot marks the root of a full replay's commits as a
@@ -1111,8 +1149,26 @@ func (b *Backend) markSnapshotRoot(ctx context.Context, commits []replayCommit) 
 var replayedCommits atomic.Int64
 
 // replayOver decides commits, the commits right after where a's replay
-// stopped, and carries a's state on over them.
+// stopped, and carries a's state on over them, replayChunkCommits at a
+// time: a long range (a first sync's fetch of many commits) never holds
+// every row version it read at once (bug hunt H-279, devco:D-1017).
 func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replayCommit) error {
+	if len(commits) > replayChunkCommits {
+		paceReplayGC()
+	}
+	for len(commits) > 0 {
+		n := min(len(commits), replayChunkCommits)
+		if err := b.replayChunk(ctx, a, commits[:n]); err != nil {
+			return err
+		}
+		commits = commits[n:]
+	}
+	return nil
+}
+
+// replayChunk is replayOver for one chunk: every blob its commits need is
+// read once, up front, and dropped when the chunk is decided.
+func (b *Backend) replayChunk(ctx context.Context, a *authority, commits []replayCommit) error {
 	replayedCommits.Add(int64(len(commits)))
 	// read every roster blob once, up front
 	var names []string
@@ -1137,7 +1193,8 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 			}
 		}
 	}
-	raws, err := b.readBlobs(ctx, names)
+	notePeak(len(names))
+	raws, err := b.replayBlobs(ctx, names)
 	if err != nil {
 		return err
 	}
@@ -1208,7 +1265,7 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 			rosterMoved = rosterMoved || rosterTables[tableOfPath(f.path)]
 			if zeroBlob(f.newBlob) {
 				accepted[f.path] = ""
-				delete(st.docs, f.path)
+				st.dropDoc(f.path)
 				continue
 			}
 			accepted[f.path] = f.newBlob
@@ -1222,7 +1279,7 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 				}
 				st.stamp(f.path, d.HLC, stamper, d.content)
 				if t := tableOfPath(f.path); kept(t) && (!st.orgless || t == schema.TableProjects) {
-					st.docs[f.path] = d
+					st.setDoc(f.path, d)
 				}
 			}
 		}

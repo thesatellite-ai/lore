@@ -219,7 +219,9 @@ func knownType(t string) bool {
 	return t == typeCommit || t == typeTree || t == typeBlob || t == typeTag
 }
 
-// pack is one .pack with its .idx (version 2) loaded in memory.
+// pack is one .pack with its .idx (version 2): in memory when the index
+// is small (idxInMemoryMax), else looked up in the index file (idx set,
+// ids nil).
 type pack struct {
 	path    string
 	fanout  [256]uint32
@@ -227,7 +229,22 @@ type pack struct {
 	offsets []uint32
 	large   []uint64
 	f       *os.File
+	// idx is the open index file of a big index, read per lookup
+	idx *os.File
 }
+
+// idxInMemoryMax is the largest pack index (bytes) kept in memory. Why
+// (bug hunt H-279, devco:D-1017): every command that read an object of a
+// store loaded the whole index of its pack, ~28 bytes per object: 45 MB
+// for a 300k-commit store, ~150 MB at 1M commits, held for the whole
+// command. A bigger index is binary-searched in its file instead (about
+// twenty 20-byte reads per lookup); bulk reads go to git (backend/git
+// call.bulk), so the few objects a command reads here stay cheap. A var:
+// a test sets it to 0 to read a small pack the way a big one is read.
+var idxInMemoryMax int64 = 8 << 20
+
+// idxHeader is the size of an idx v2 header plus its fanout table.
+const idxHeader = 8 + 256*4
 
 // loadPacks reads every pack index not yet loaded.
 func (s *objectStore) loadPacks() error {
@@ -261,6 +278,9 @@ func (s *objectStore) loadPacks() error {
 
 // openPack loads an idx v2 file and opens its pack.
 func openPack(idxPath string) (*pack, error) {
+	if st, err := os.Stat(idxPath); err == nil && st.Size() > idxInMemoryMax {
+		return openPackOnDisk(idxPath)
+	}
 	raw, err := os.ReadFile(idxPath)
 	if err != nil {
 		return nil, err
@@ -296,6 +316,72 @@ func openPack(idxPath string) (*pack, error) {
 	return p, nil
 }
 
+// openPackOnDisk opens a big idx v2 file (idxInMemoryMax) and its pack,
+// reading only its fanout table: find looks ids up in the file.
+func openPackOnDisk(idxPath string) (*pack, error) {
+	idx, err := os.Open(idxPath)
+	if err != nil {
+		return nil, err
+	}
+	var head [idxHeader]byte
+	if _, err := idx.ReadAt(head[:], 0); err != nil || !bytes.Equal(head[:4], []byte{0xff, 't', 'O', 'c'}) || binary.BigEndian.Uint32(head[4:8]) != 2 {
+		_ = idx.Close() // read-only file; nothing to flush
+		return nil, errUnsupported
+	}
+	p := &pack{path: strings.TrimSuffix(idxPath, ".idx") + ".pack", idx: idx}
+	for i := range 256 {
+		p.fanout[i] = binary.BigEndian.Uint32(head[8+i*4:])
+	}
+	f, err := os.Open(p.path)
+	if err != nil {
+		_ = idx.Close() // read-only file; nothing to flush
+		return nil, err
+	}
+	p.f = f
+	return p, nil
+}
+
+// close releases the pack's open files.
+func (p *pack) close() {
+	_ = p.f.Close() // read-only file; nothing to flush
+	if p.idx != nil {
+		_ = p.idx.Close()
+	}
+}
+
+// findOnDisk is find for an index kept in its file: a binary search over
+// the ids between the fanout bounds lo and hi, then the id's offset (a
+// read failure is a miss: the caller falls back to git).
+func (p *pack) findOnDisk(id []byte, lo, hi uint32) (int64, bool) {
+	n := int64(p.fanout[255])
+	var cur [20]byte
+	failed := false
+	at := func(i int) []byte {
+		if _, err := p.idx.ReadAt(cur[:], idxHeader+int64(i)*20); err != nil {
+			failed = true
+		}
+		return cur[:]
+	}
+	i := sort.Search(int(hi-lo), func(k int) bool {
+		return bytes.Compare(at(int(lo)+k), id) >= 0
+	}) + int(lo)
+	if i >= int(hi) || !bytes.Equal(at(i), id) || failed {
+		return 0, false
+	}
+	var word [8]byte
+	if _, err := p.idx.ReadAt(word[:4], idxHeader+n*24+int64(i)*4); err != nil {
+		return 0, false
+	}
+	off := binary.BigEndian.Uint32(word[:4])
+	if off&0x80000000 == 0 {
+		return int64(off), true
+	}
+	if _, err := p.idx.ReadAt(word[:], idxHeader+n*28+int64(off&0x7fffffff)*8); err != nil {
+		return 0, false
+	}
+	return int64(binary.BigEndian.Uint64(word[:])), true
+}
+
 // find returns the pack offset of id.
 func (p *pack) find(id []byte) (int64, bool) {
 	lo := uint32(0)
@@ -303,6 +389,9 @@ func (p *pack) find(id []byte) (int64, bool) {
 		lo = p.fanout[id[0]-1]
 	}
 	hi := p.fanout[id[0]]
+	if p.idx != nil {
+		return p.findOnDisk(id, lo, hi)
+	}
 	i := sort.Search(int(hi-lo), func(i int) bool {
 		return bytes.Compare(p.ids[(int(lo)+i)*20:(int(lo)+i)*20+20], id) >= 0
 	}) + int(lo)
@@ -562,7 +651,7 @@ func (s *objectStore) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, p := range s.packs {
-		_ = p.f.Close() // read-only file; nothing to flush
+		p.close()
 	}
 	s.packs = nil
 	clear(s.seen)

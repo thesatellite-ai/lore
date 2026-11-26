@@ -29,6 +29,24 @@ const catFileHeaderFields = 3
 // devco:D-997). One process for all rows keeps a full read of a big store
 // fast.
 func (b *Backend) readBlobs(ctx context.Context, names []string) (map[string][]byte, error) {
+	return b.readBlobsBy(ctx, names, false)
+}
+
+// replayBlobs is readBlobs for the roster replay: a read of bulkBlobs or
+// more names runs git itself (call.bulk). Why (bug hunt H-279,
+// devco:D-1017): the replay reads a chunk's row versions in commit order,
+// which is about the pack's own order, so git's delta cache serves them;
+// gitfast inflated each one with its delta chain again, 92% of a first
+// sync's CPU at 100k commits. Other reads keep gitfast: a doctor's row
+// read asks in id order, where git's cache misses and gitfast's object
+// cache does better (20k rows of one folder: 4.9 s with gitfast, 18 s
+// with git).
+func (b *Backend) replayBlobs(ctx context.Context, names []string) (map[string][]byte, error) {
+	return b.readBlobsBy(ctx, names, len(names) >= bulkBlobs)
+}
+
+// readBlobsBy is readBlobs, run by git itself when bulk is set.
+func (b *Backend) readBlobsBy(ctx context.Context, names []string, bulk bool) (map[string][]byte, error) {
 	out := make(map[string][]byte, len(names))
 	if len(names) == 0 {
 		return out, nil
@@ -46,7 +64,7 @@ func (b *Backend) readBlobs(ctx context.Context, names []string) (map[string][]b
 	if partial {
 		env = []string{noLazyFetchEnv}
 	}
-	missing, err := b.catBatch(ctx, names, env, out)
+	missing, err := b.catBatch(ctx, names, env, bulk, out)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +83,7 @@ func (b *Backend) readBlobs(ctx context.Context, names []string) (map[string][]b
 			if err := b.fetchMissing(ctx, oids); err != nil {
 				return nil, err
 			}
-			if missing, err = b.catBatch(ctx, again, env, out); err != nil {
+			if missing, err = b.catBatch(ctx, again, env, bulk, out); err != nil {
 				return nil, err
 			}
 		} else {
@@ -81,11 +99,17 @@ func (b *Backend) readBlobs(ctx context.Context, names []string) (map[string][]b
 // noLazyFetchEnv stops git fetching an object a partial clone lacks.
 const noLazyFetchEnv = "GIT_NO_LAZY_FETCH=1"
 
+// bulkBlobs is how many names make a replay's blob read a bulk one
+// (replayBlobs, call.bulk): git reads them itself. Below it gitfast
+// answers in-process and saves the git process (a few row versions of
+// one commit).
+const bulkBlobs = 256
+
 // catBatch reads names with one `git cat-file --batch` into out and
 // returns the names cat-file printed "missing" for.
-func (b *Backend) catBatch(ctx context.Context, names, env []string, out map[string][]byte) ([]string, error) {
+func (b *Backend) catBatch(ctx context.Context, names, env []string, bulk bool, out map[string][]byte) ([]string, error) {
 	stdin := []byte(strings.Join(names, "\n") + "\n")
-	raw, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "--batch"}, env: env, stdin: stdin})
+	raw, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "--batch"}, env: env, stdin: stdin, bulk: bulk})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "git: read row files", err)
 	}

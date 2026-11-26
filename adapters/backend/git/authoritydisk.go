@@ -22,11 +22,14 @@ package git
 // in doubt, and a write failure only costs the next process a replay.
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,8 +61,9 @@ const authorityHashLen = 8
 
 // authorityFormat is the layout of authorityFile: bump it when
 // savedAuthority changes shape (2: the clone path, devco:D-812; 3: the
-// org file's changes, devco:D-999; 4: the hold log, devco:D-1004).
-const authorityFormat = 4
+// org file's changes, devco:D-999; 4: the hold log, devco:D-1004; 5:
+// stamp lists per file and 16-byte content keys, devco:D-1017).
+const authorityFormat = 5
 
 // authorityFiles maps a clone folder to the replay file its open chose
 // (authorityFileFor), so a Backend made without an open uses the same
@@ -73,12 +77,15 @@ type savedAuthority struct {
 	Binary string
 	// Clone is the clone folder the replay is of: a file under the lore
 	// home is used for that clone only
-	Clone    string
-	Head     string
-	OrgHead  string
-	Orgless  bool
-	Docs     map[string]savedDoc
-	Stamps   map[string]map[string][]savedStamp
+	Clone   string
+	Head    string
+	OrgHead string
+	Orgless bool
+	Docs    map[string]savedDoc
+	// Stamps is the replay's own stamp lists (rosterState.stamps), shared
+	// with it, not copied; the file holds them, Admins, Accepted and
+	// Refused in savedParts after the header (writeAuthority)
+	Stamps   map[string][]stampRec
 	Held     map[string]HeldChange
 	Trusted  map[string]string
 	Refused  map[string]bool
@@ -110,11 +117,8 @@ type savedOrgChange struct {
 // savedDoc is a rosterDoc with its content key.
 type savedDoc struct {
 	Doc     rosterDoc
-	Content string
+	Content contentSum
 }
-
-// savedStamp is a stampRec.
-type savedStamp struct{ Actor, Content string }
 
 // savedCredit is a credit.
 type savedCredit struct {
@@ -275,15 +279,12 @@ func (b *Backend) keepBaseAt(tip string) {
 	if a == nil || a.head != tip || p == "" || bin == "" {
 		return
 	}
-	s, ok := a.saved(bin)
+	s, index, ok := a.savedHeader(bin)
 	if !ok {
 		return
 	}
 	s.Clone = filepath.Clean(b.work)
-	var buf bytes.Buffer
-	if gob.NewEncoder(&buf).Encode(&s) == nil {
-		writeBytesAtomic(p+authorityBaseSuffix, buf.Bytes())
-	}
+	writeAuthority(p+authorityBaseSuffix, a, &s, index)
 }
 
 // replayFileDecodes counts the saved replays decoded whole in this
@@ -298,14 +299,32 @@ func (b *Backend) loadAuthorityAt(p string) *authority {
 	if p == "" || bin == "" {
 		return nil
 	}
-	raw, err := os.ReadFile(p)
+	f, err := os.Open(p)
 	if err != nil {
 		return nil
 	}
+	defer func() { _ = f.Close() }()
 	replayFileDecodes.Add(1)
 	var s savedAuthority
-	if gob.NewDecoder(bytes.NewReader(raw)).Decode(&s) != nil || s.Format != authorityFormat || s.Binary != bin || s.Head == "" || s.Clone != filepath.Clean(b.work) {
+	// decoded from the file as it is read, never read whole first: at 1M
+	// commits the file is hundreds of MB (bug hunt H-279, devco:D-1017)
+	dec := gob.NewDecoder(bufio.NewReaderSize(f, authorityIOBuf))
+	if dec.Decode(&s) != nil || s.Format != authorityFormat || s.Binary != bin || s.Head == "" || s.Clone != filepath.Clean(b.work) {
 		return nil
+	}
+	s.Stamps, s.Admins, s.Accepted, s.Refused = orEmpty(s.Stamps), orEmpty(s.Admins), orEmpty(s.Accepted), orEmpty(s.Refused)
+	for {
+		var part savedPart
+		if dec.Decode(&part) != nil {
+			return nil // a file cut short: replay again
+		}
+		maps.Copy(s.Stamps, part.Stamps)
+		maps.Copy(s.Admins, part.Admins)
+		maps.Copy(s.Accepted, part.Accepted)
+		maps.Copy(s.Refused, part.Refused)
+		if part.Last {
+			break
+		}
 	}
 	return s.authority()
 }
@@ -328,17 +347,7 @@ func (s savedAuthority) authority() *authority {
 		d.Doc.content = d.Content
 		st.docs[p] = d.Doc
 	}
-	for p, byHLC := range s.Stamps {
-		m := make(map[string][]stampRec, len(byHLC))
-		for h, recs := range byHLC {
-			out := make([]stampRec, len(recs))
-			for i, r := range recs {
-				out[i] = stampRec{actor: r.Actor, content: r.Content}
-			}
-			m[h] = out
-		}
-		st.stamps[p] = m
-	}
+	st.stamps = orEmpty(s.Stamps)
 	a := &authority{head: s.Head, orgHead: s.OrgHead, state: st, held: orEmpty(s.Held), trusted: orEmpty(s.Trusted), refused: orEmpty(s.Refused),
 		credited: map[string]credit{}, admins: make(map[string]*adminSet, len(s.Admins)), accepted: orEmpty(s.Accepted), snap: snaps[s.Snap]}
 	for p, c := range s.Credited {
@@ -375,7 +384,7 @@ func (b *Backend) saveAuthority(a *authority) {
 	if p == "" || bin == "" || a == nil {
 		return
 	}
-	s, ok := a.saved(bin)
+	s, index, ok := a.savedHeader(bin)
 	if !ok {
 		return
 	}
@@ -383,24 +392,103 @@ func (b *Backend) saveAuthority(a *authority) {
 	if os.MkdirAll(filepath.Dir(p), authorityDirMode) != nil {
 		return
 	}
-	var buf bytes.Buffer
-	if gob.NewEncoder(&buf).Encode(&s) != nil {
-		return
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(p), authorityFile+".*")
-	if err != nil {
-		return
-	}
-	_, werr := tmp.Write(buf.Bytes())
-	if cerr := tmp.Close(); werr != nil || cerr != nil || os.Rename(tmp.Name(), p) != nil {
-		_ = os.Remove(tmp.Name())
+	if !writeAuthority(p, a, &s, index) {
 		return
 	}
 	writeGobAtomic(p+authorityRowsSuffix, savedRows{Format: authorityFormat, Binary: bin, Clone: s.Clone, Head: s.Head, OrgHead: s.OrgHead,
 		Held: s.Held, Trusted: s.Trusted, Credited: s.Credited})
 	b.saveHeadView(a, s)
 	if tip, ok := RefFromFiles(b.work, trackingRefNS+b.branch); ok && tip == s.Head {
-		writeBytesAtomic(p+authorityBaseSuffix, buf.Bytes()) // the replay at the remote tip (authorityBaseSuffix)
+		copyFileAtomic(p, p+authorityBaseSuffix) // the replay at the remote tip (authorityBaseSuffix)
+	}
+}
+
+// authorityIOBuf is the buffer a saved replay is written and read through.
+const authorityIOBuf = 1 << 16
+
+// savedPart is one part of a saved replay's stamps and admins, written
+// after its header (writeAuthority); the last part is marked Last.
+type savedPart struct {
+	Stamps   map[string][]stampRec
+	Admins   map[string]int
+	Accepted map[string]string
+	Refused  map[string]bool
+	Last     bool
+}
+
+// authorityPartRows is how many entries (a file's stamps or accepted
+// version, a commit's admin set or refusal) one savedPart holds (a var: a
+// test writes one per part).
+var authorityPartRows = 16384
+
+// writeAuthority writes the replay a to p through a temp file and a
+// rename (a reader sees the old file or the new one, never half of one):
+// header (a's savedHeader, admin sets indexed by index), then its stamps
+// and admins in savedParts, encoded straight into the file. Why (bug hunt
+// H-279, devco:D-1017): gob builds each value it encodes whole in memory,
+// and the replay of a 1M-commit history is hundreds of MB encoded; it was
+// one value, encoded into memory and then copied to the file. false when
+// it was not written (the next process replays again).
+func writeAuthority(p string, a *authority, header *savedAuthority, index map[*adminSet]int) bool {
+	tmp, err := os.CreateTemp(filepath.Dir(p), filepath.Base(p)+".*")
+	if err != nil {
+		return false
+	}
+	w := bufio.NewWriterSize(tmp, authorityIOBuf)
+	enc := gob.NewEncoder(w)
+	eerr := enc.Encode(header)
+	newPart := func() savedPart {
+		return savedPart{Stamps: map[string][]stampRec{}, Admins: map[string]int{}, Accepted: map[string]string{}, Refused: map[string]bool{}}
+	}
+	part := newPart()
+	flush := func(last bool) {
+		if eerr != nil || (!last && len(part.Stamps)+len(part.Admins)+len(part.Accepted)+len(part.Refused) < authorityPartRows) {
+			return
+		}
+		part.Last = last
+		eerr = enc.Encode(&part)
+		part = newPart()
+	}
+	for p, recs := range a.state.stamps {
+		part.Stamps[p] = recs
+		flush(false)
+	}
+	for id, set := range a.admins {
+		part.Admins[id] = index[set]
+		flush(false)
+	}
+	for p, blob := range a.accepted {
+		part.Accepted[p] = blob
+		flush(false)
+	}
+	for id := range a.refused {
+		part.Refused[id] = true
+		flush(false)
+	}
+	flush(true)
+	ferr := w.Flush()
+	if cerr := tmp.Close(); eerr != nil || ferr != nil || cerr != nil || os.Rename(tmp.Name(), p) != nil {
+		_ = os.Remove(tmp.Name())
+		return false
+	}
+	return true
+}
+
+// copyFileAtomic copies src to dst through a temp file and a rename,
+// without holding the file in memory; a failure leaves dst as it was.
+func copyFileAtomic(src, dst string) {
+	in, err := os.Open(src)
+	if err != nil {
+		return
+	}
+	defer func() { _ = in.Close() }()
+	tmp, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".*")
+	if err != nil {
+		return
+	}
+	_, werr := io.Copy(tmp, in)
+	if cerr := tmp.Close(); werr != nil || cerr != nil || os.Rename(tmp.Name(), dst) != nil {
+		_ = os.Remove(tmp.Name())
 	}
 }
 
@@ -484,23 +572,27 @@ func (b *Backend) loadRowView(head, orgHead string) *authority {
 // is false when a has no admin set where the replay stopped (an authority
 // not made by replay).
 func (a *authority) saved(bin string) (savedAuthority, bool) {
+	s, index, ok := a.savedHeader(bin)
+	if !ok {
+		return savedAuthority{}, false
+	}
+	s.Stamps, s.Accepted, s.Refused = a.state.stamps, a.accepted, a.refused
+	s.Admins = make(map[string]int, len(a.admins))
+	for id, set := range a.admins {
+		s.Admins[id] = index[set]
+	}
+	return s, true
+}
+
+// savedHeader is saved without the parts that grow with the history,
+// Stamps, Admins, Accepted and Refused (writeAuthority writes them in
+// parts after it), with the index of each admin set in its Snaps.
+func (a *authority) savedHeader(bin string) (savedAuthority, map[*adminSet]int, bool) {
 	s := savedAuthority{Format: authorityFormat, Binary: bin, Head: a.head, OrgHead: a.orgHead, Orgless: a.state.orgless,
-		Docs: make(map[string]savedDoc, len(a.state.docs)), Stamps: make(map[string]map[string][]savedStamp, len(a.state.stamps)),
-		Held: a.held, Trusted: a.trusted, Refused: a.refused, Credited: make(map[string]savedCredit, len(a.credited)),
-		Admins: make(map[string]int, len(a.admins)), Accepted: a.accepted}
+		Docs: make(map[string]savedDoc, len(a.state.docs)),
+		Held: a.held, Trusted: a.trusted, Credited: make(map[string]savedCredit, len(a.credited))}
 	for p, d := range a.state.docs {
 		s.Docs[p] = savedDoc{Doc: d, Content: d.content}
-	}
-	for p, byHLC := range a.state.stamps {
-		m := make(map[string][]savedStamp, len(byHLC))
-		for h, recs := range byHLC {
-			out := make([]savedStamp, len(recs))
-			for i, r := range recs {
-				out[i] = savedStamp{Actor: r.actor, Content: r.content}
-			}
-			m[h] = out
-		}
-		s.Stamps[p] = m
 	}
 	for p, c := range a.credited {
 		s.Credited[p] = savedCredit{Actor: c.actor, Claimed: c.claimed, HLC: c.hlc, Created: c.created, Commit: c.commit}
@@ -521,16 +613,16 @@ func (a *authority) saved(bin string) (savedAuthority, bool) {
 		return index[set]
 	}
 	if a.snap == nil {
-		return savedAuthority{}, false
+		return savedAuthority{}, nil, false
 	}
 	s.Snap = at(a.snap)
-	for id, set := range a.admins {
+	for _, set := range a.admins {
 		if set == nil {
-			return savedAuthority{}, false
+			return savedAuthority{}, nil, false
 		}
-		s.Admins[id] = at(set)
+		at(set)
 	}
-	return s, true
+	return s, index, true
 }
 
 // authorityViewSuffix names the head view kept beside a saved replay:

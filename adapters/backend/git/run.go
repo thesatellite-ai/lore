@@ -99,6 +99,12 @@ type call struct {
 	args  []string
 	env   []string
 	stdin []byte
+	// bulk runs git itself, never gitfast, and keeps nothing of the
+	// answer in gitfast's memo: a read of many objects at once (bulkBlobs),
+	// which git's own delta cache answers many times faster than gitfast's
+	// in-process inflate (bug hunt H-279, devco:D-1017: a first sync of a
+	// 100k-commit store spent 92% of its CPU inflating row versions there)
+	bulk bool
 }
 
 // run runs git and returns stdout. A fetch, push or ls-remote whose
@@ -131,8 +137,10 @@ func (r runner) run(ctx context.Context, c call) ([]byte, error) {
 // retriedSubcommands are the network calls run retries once.
 var retriedSubcommands = map[string]bool{"fetch": true, "push": true, "ls-remote": true}
 
-// runOnce is one try of run.
-func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
+// argsOf is the full git argument list of c: an owned clone's fixed
+// config and the ssh route before the call's own arguments (runOnce and
+// stream run the same command line for the same call).
+func (r runner) argsOf(c call) []string {
 	args := c.args
 	if r.owned && subcommand(c.args) == "fetch" && partialCloneAt(c.dir) {
 		// a blobless clone (devco:D-1001): new history comes with every
@@ -155,6 +163,12 @@ func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	if len(r.routeArgs) > 0 {
 		args = append(append([]string(nil), r.routeArgs...), args...)
 	}
+	return args
+}
+
+// runOnce is one try of run.
+func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
+	args := r.argsOf(c)
 	// LORE_OFFLINE / LORE_NO_FETCH / LORE_NO_STORE_FETCH (gitenv.StoreNetRefused): the call is not
 	// run, and answers as git does when the remote is not there
 	if why, refused := gitenv.StoreNetRefused(os.Environ(), c.args); refused {
@@ -162,7 +176,7 @@ func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	}
 	// gitfast (devco:D-418): a read the process's Session answers from the
 	// clone's files starts no git
-	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 {
+	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 && !c.bulk {
 		if rep, ok := gitfast.Try(ctx, c.dir, args, c.env, c.stdin); ok {
 			if rep.Code != 0 {
 				return rep.Out, &gitError{cmd: subcommand(c.args), code: rep.Code, stderr: rep.Stderr}
@@ -188,7 +202,7 @@ func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	if trace := gitref.TracerFrom(ctx); trace != nil && tracedSubcommands[subcommand(c.args)] {
 		trace(gitref.TraceCall{Args: args, Remote: r.remote, Env: append(append([]string(nil), r.routeEnv...), c.env...), Took: time.Since(start), Err: err})
 	}
-	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 {
+	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 && !c.bulk {
 		code, exited := 0, err == nil
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && ctx.Err() == nil {

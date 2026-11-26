@@ -243,11 +243,7 @@ func (b *Backend) replayAt(ctx context.Context, rev string) (*authority, error) 
 			}
 		}
 	}
-	commits, err := b.replayCommits(ctx, rev)
-	if err != nil {
-		return nil, err
-	}
-	return b.replay(ctx, rev, commits)
+	return b.fullReplay(ctx, rev)
 }
 
 // replayCovering is a replay that reached rev with rev on its head's
@@ -281,11 +277,7 @@ func (b *Backend) replayCovering(ctx context.Context, rev string) (*authority, e
 			}
 		}
 	}
-	commits, err := b.replayCommits(ctx, rev)
-	if err != nil {
-		return nil, err
-	}
-	return b.replay(ctx, rev, commits)
+	return b.fullReplay(ctx, rev)
 }
 
 // adminVerdict is "" when email may rewrite the store at rev by the replay
