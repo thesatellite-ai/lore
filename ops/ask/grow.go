@@ -77,6 +77,20 @@ func (o *Out) grow(all, more []Row, cards []Candidate, memo map[string]Candidate
 			continue
 		}
 		*r = cut
+		if rows == 1 && o.lead == 0 {
+			// devco D-1011: the first row's room comes before a later
+			// row's cut; the later cut rows become candidate lines
+			if l, d, ok := o.yieldCuts(it.ID, all, more, cards, memo); ok {
+				list, dropped = l, d
+				i = slices.IndexFunc(o.Rows, func(r Row) bool { return r.ID == it.ID })
+				r = &o.Rows[i]
+				*r = w
+				if fits(list) {
+					continue
+				}
+				*r = cut
+			}
+		}
 		o.widen(i, w, maxChars-len(o.items())-len(candText(list[:min(minCandidates, len(list))])))
 	}
 	for _, rs := range [][]Row{all, more} {
@@ -105,6 +119,50 @@ func (o *Out) grow(all, more []Row, cards []Candidate, memo map[string]Candidate
 		}
 	}
 	return list, dropped
+}
+
+// yieldMin is the shortest whole row yieldCuts takes out of the answer:
+// a row up to twice longRow is mostly on the page in its cut, and on the
+// real benchmark such a second row answered as often as the first row's
+// wider cut (realeval TUNE: the two questions it lost were rows of 1,548
+// and 1,748 characters; every row it won on was over 3,600).
+const yieldMin = 2 * longRow
+
+// yieldCuts takes every printed row after the row first out of the
+// answer when cap cut it from a whole body over yieldMin characters (a
+// row printed whole, or a short one, stays), each counted as left out and
+// listed again as a candidate line, so the room their excerpts held goes
+// to first; a row of the answer's now: line (one replacing another, or
+// the one it replaces) stays. ok is false when no row is taken out.
+// It returns the candidate list and its dropped rows for what is left.
+//
+// Why (devco D-1011, bug hunt H-273): on a store of long notes cap cut
+// the first two rows to about 1,000 characters each next to five
+// candidate lines, so the first row, the answering one on most questions,
+// was found and printed first but its answering sentence did not fit in
+// its excerpt; a second long row's excerpt answered far fewer questions
+// than the first row printed whole or widened to the freed room.
+func (o *Out) yieldCuts(first string, all, more []Row, cards []Candidate, memo map[string]Candidate) ([]Candidate, []Dropped, bool) {
+	chain := map[string]bool{} // the rows the now: line names
+	for _, r := range o.Rows {
+		if r.replaces != "" {
+			chain[r.ID], chain[r.replaces] = true, true
+		}
+	}
+	gone := map[string]bool{}
+	for _, r := range o.Rows {
+		if r.ID != first && r.FullChars > yieldMin && !chain[r.ID] {
+			gone[r.ID] = true
+		}
+	}
+	if len(gone) == 0 {
+		return nil, nil, false
+	}
+	o.Rows = slices.DeleteFunc(o.Rows, func(r Row) bool { return gone[r.ID] })
+	o.Ranked = slices.DeleteFunc(o.Ranked, func(it Ranked) bool { return it.Kind == KindRow && gone[it.ID] })
+	o.Left += len(gone)
+	list, dropped := o.candidatesOf(all, more, cards, memo)
+	return list, dropped, true
 }
 
 // widen re-cuts row i of o.Rows from its whole form w to at most its
