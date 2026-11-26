@@ -213,6 +213,8 @@ type spPushView struct {
 		Epoch     int    `json:"epoch"`
 		Unpushed  int    `json:"unpushed"`
 		Admin     bool   `json:"admin"`
+		// CompactArchive is the store's compact_archive (on/off).
+		CompactArchive string `json:"compact_archive"`
 	} `json:"push"`
 }
 
@@ -596,6 +598,37 @@ func TestE47_StorePushNonAdminRefused(t *testing.T) {
 	if v := spShow(t, p.cb, spOrgStore); v.Push.Push != "manual" || v.Push.Epoch != 0 {
 		t.Fatalf("refusals change nothing, got %+v", v.Push)
 	}
+}
+
+// devco:D-1010 (H-272): the creator's compact_archive=on waits in her
+// clone (manual push) while bob's sync moved the remote; raising the org's
+// floor with --push lost the push race and used to rebuild its commit on
+// the remote's tip, dropping the waiting setting. The setting stays, and
+// lore sync sends both. A compaction dry run never refuses for the floor:
+// it shows its plan and says what the real run needs first; the real run
+// is refused until the floor is raised.
+func TestE47b_StorePushDryRunNamesTheOrgFloor(t *testing.T) {
+	p := newSPOrg(t, spOld)
+	p.a.SetEnv(spEnvCompactV2, "1")
+	p.ca.MustLore("store", "set", spOrgStore, "compact_archive=on")
+	p.cb.MustLore("sync") // bob's own commits reach the remote first
+	p.add(t, p.ca, spOrgStore, "floor old one")
+	p.add(t, p.ca, spOrgStore, "floor old two")
+	p.a.SetNow(spNow)
+	p.ca.MustLore("store", "compact", spOrgStore, "--dry-run").
+		Says(t, "would squash", "the real run would be refused now", "min_lore_version is not set",
+			"lore org config set --org "+spOrg+" --key min_lore_version --value 0.1.57 --push --yes")
+	p.ca.Lore("store", "compact", spOrgStore, "--yes").Fails(t, spExitRefused, spCodeRefused, "a compaction needs 0.1.57")
+	p.ca.MustLore("org", "config", "set", "--org", spOrg, "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes")
+	if v := spShow(t, p.ca, spOrgStore); v.Push.CompactArchive != "on" {
+		t.Fatalf("raising the floor must keep the waiting compact_archive=on, got %+v", v.Push)
+	}
+	p.ca.MustLore("sync")
+	p.cb.MustLore("sync")
+	if v := spShow(t, p.cb, spOrgStore); v.Push.CompactArchive != "on" {
+		t.Fatalf("lore sync sends the kept setting, bob sees %+v", v.Push)
+	}
+	p.ca.MustLore("store", "compact", spOrgStore, "--dry-run").Says(t, "would squash").Never(t, "would be refused")
 }
 
 // The code repo is never a push-mode store: set and compact are refused

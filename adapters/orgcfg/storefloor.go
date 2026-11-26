@@ -112,6 +112,7 @@ func (g *GitLinks) RaiseStoreFloor(ctx context.Context, e StoreFloorEdit) (Store
 			return out, nil
 		}})
 	res.Pushed, res.Offline = cr.Pushed, cr.Offline
+	res.NoPush = res.NoPush || cr.Held // committed on top of waiting work; lore sync sends it
 	if errors.Is(err, ErrStoreEmpty) {
 		// a store listed before its first write has no folder yet
 		res.Empty = true

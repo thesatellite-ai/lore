@@ -140,6 +140,7 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 			return put, cerr
 		}})
 	res.Pushed, res.Offline = cr.Pushed, cr.Offline
+	res.NoPush = res.NoPush || cr.Held // committed on top of waiting work; lore sync sends it
 	return res, err
 }
 
@@ -182,6 +183,13 @@ type storeCommitResult struct {
 	// Pushed: the commit reached the remote; Offline: committed locally
 	// only because the remote could not be reached.
 	Pushed, Offline bool
+	// Held: the push lost a race while the clone's branch held commits of
+	// its own the remote lacks (a manual-mode store setting or row waiting
+	// for lore sync). The commit stays on top of them in the clone, not
+	// pushed: rebuilding it on the remote's tip would throw them away
+	// (devco:D-1010); lore sync merges the branch with the remote and
+	// sends both.
+	Held bool
 }
 
 // commitStore commits c into the clone under its write lock and pushes it
@@ -209,6 +217,7 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 			return res, ierr
 		}
 	}
+	waiting := false // the branch held commits of its own before this run (Held)
 	for attempt := 0; attempt <= linkPushRetries; attempt++ {
 		offline := false
 		if attempt > 0 {
@@ -246,6 +255,9 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 		}
 		if !hasOld {
 			old = ""
+		}
+		if attempt == 0 && hasOld {
+			waiting = ownCommits(ctx, repo, branch, old)
 		}
 		hasMarker := false
 		if !first {
@@ -324,6 +336,13 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 		}
 		switch outcome, summary := classifyPush(out); outcome {
 		case pushLostRace:
+			if waiting {
+				// rebuilding on the remote's tip would drop the branch's
+				// own waiting commits: keep this commit on top of them
+				// for lore sync, which merges (devco:D-1010)
+				res.Held = true
+				return res, nil
+			}
 			continue // fetch and rebuild on the remote's new tip
 		case pushRefused:
 			return res, fmt.Errorf("%w: %s %s: %s", ErrStoreRefused, target, branch, summary)
@@ -567,6 +586,23 @@ func trackingRef(branch string) string { return "refs/remotes/" + remoteName + "
 func aheadOfRemote(ctx context.Context, repo *gitref.Repo, branch, tip string) bool {
 	t, ok, err := repo.ResolveRef(ctx, trackingRef(branch))
 	return err == nil && (!ok || t != tip)
+}
+
+// ownCommits reports whether the local branch at tip holds a commit the
+// remote-tracking ref does not (work waiting for a push): tip is not an
+// ancestor of the tracking ref, or there is no tracking ref yet. A branch
+// merely behind the remote holds none. An ancestry check that fails counts
+// as own work, so a retry never drops what it could not check.
+func ownCommits(ctx context.Context, repo *gitref.Repo, branch, tip string) bool {
+	t, ok, err := repo.ResolveRef(ctx, trackingRef(branch))
+	if err != nil || !ok {
+		return true
+	}
+	if t == tip {
+		return false
+	}
+	in, err := repo.IsAncestor(ctx, tip, t)
+	return err != nil || !in
 }
 
 // moveRef points ref at oid from wherever it is now.

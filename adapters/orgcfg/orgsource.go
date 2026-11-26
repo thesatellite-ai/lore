@@ -290,6 +290,7 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 			return map[string][]byte{path: body}, nil
 		}})
 	res.Pushed, res.Offline = cr.Pushed, cr.Offline
+	res.NoPush = res.NoPush || cr.Held // committed on top of waiting work; lore sync sends it
 	if err != nil {
 		return res, err
 	}

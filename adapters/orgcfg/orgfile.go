@@ -210,6 +210,7 @@ func (g *GitLinks) WriteOrgFile(ctx context.Context, w OrgFileWrite) (OrgFileRes
 			return nil, nil
 		}})
 	res.Pushed, res.Offline = cr.Pushed, cr.Offline
+	res.NoPush = res.NoPush || cr.Held // committed on top of waiting work; lore sync sends it
 	return res, err
 }
 

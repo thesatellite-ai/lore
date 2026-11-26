@@ -114,6 +114,7 @@ func (g *GitLinks) AddOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (OrgF
 			return map[string][]byte{path: body}, nil
 		}})
 	res.Pushed, res.Offline = cr.Pushed, cr.Offline
+	res.NoPush = res.NoPush || cr.Held // committed on top of waiting work; lore sync sends it
 	return res, err
 }
 

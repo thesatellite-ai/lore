@@ -114,6 +114,7 @@ func (g *GitLinks) RemoveLinks(ctx context.Context, entry, projectID string, lin
 		res.Removed += removed
 		res.Pushed = res.Pushed && cr.Pushed
 		res.Offline = res.Offline || cr.Offline
+		res.NoPush = res.NoPush || cr.Held // committed on top of waiting work; lore sync sends it
 	}
 	if res.Removed == 0 {
 		res.Pushed = false

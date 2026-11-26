@@ -216,6 +216,12 @@ type CompactOut struct {
 	// Undo answers --undo-epoch: UndoEpoch is the epoch put back.
 	Undo      bool `json:"undo,omitempty"`
 	UndoEpoch int  `json:"undo_epoch,omitempty"`
+	// WouldRefuse, on a dry run only, says why the real run would be
+	// refused now (the org's min_lore_version below the release that
+	// verifies epochs) and Raise the command that clears it: a dry run
+	// shows its plan instead of refusing (devco:D-1010).
+	WouldRefuse string `json:"would_refuse,omitempty"`
+	Raise       string `json:"raise,omitempty"`
 }
 
 // Text prints the compaction.
@@ -230,15 +236,15 @@ func (o CompactOut) Text() string {
 		return fmt.Sprintf("✗ store %s: epoch %d does not verify: %s\n", o.Store, o.FromEpoch, o.Reason)
 	case o.Undo && o.DryRun:
 		return fmt.Sprintf("would put back the history of %s that epoch %d archived, keep the %d commit(s) made since, and archive the compacted history as %s; epoch %d → %d\n",
-			o.Store, o.UndoEpoch, o.Kept, o.Archive, o.FromEpoch, o.ToEpoch)
+			o.Store, o.UndoEpoch, o.Kept, o.Archive, o.FromEpoch, o.ToEpoch) + o.refuseLine()
 	case o.Undo:
 		return fmt.Sprintf("✓ undid the compaction of %s: the history of epoch %d is back with the %d commit(s) made since; the compacted history is archived as %s; epoch %d → %d\n",
 			o.Store, o.UndoEpoch, o.Kept, o.Archive, o.FromEpoch, o.ToEpoch) + o.pushedLine() + o.layerLine()
 	case o.Nothing:
-		return fmt.Sprintf("nothing to compact in %s: no history before %s beyond one commit\n", o.Store, o.Before)
+		return fmt.Sprintf("nothing to compact in %s: no history before %s beyond one commit\n", o.Store, o.Before) + o.refuseLine()
 	case o.DryRun:
 		return fmt.Sprintf("would squash %d commit(s) of %s before %s into one snapshot, keep %d later commit(s) and every one of its %d row file(s); epoch %d → %d\n",
-			o.Squashed, o.Store, o.Before, o.Kept, o.Rows, o.FromEpoch, o.ToEpoch)
+			o.Squashed, o.Store, o.Before, o.Kept, o.Rows, o.FromEpoch, o.ToEpoch) + o.refuseLine()
 	}
 	held := ""
 	if o.Held > 0 {
@@ -246,6 +252,15 @@ func (o CompactOut) Text() string {
 	}
 	return fmt.Sprintf("✓ compacted %s: %d commit(s) before %s are one snapshot, %d later commit(s) kept, all %d row file(s) kept%s; epoch %d → %d (old history archived as %s)\n",
 		o.Store, o.Squashed, o.Before, o.Kept, o.Rows, held, o.FromEpoch, o.ToEpoch, o.Archive) + o.pushedLine() + o.layerLine()
+}
+
+// refuseLine is a dry run's note that the real run would be refused now,
+// with the command that clears it ("" when it would run).
+func (o CompactOut) refuseLine() string {
+	if o.WouldRefuse == "" {
+		return ""
+	}
+	return "  the real run would be refused now: " + o.WouldRefuse + "\n  first: " + o.Raise + "\n"
 }
 
 // pushedLine names where the rewrite was pushed ("" when nowhere).

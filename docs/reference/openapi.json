@@ -93204,6 +93204,9 @@
                     "old_tip": {
                       "type": "string"
                     },
+                    "raise": {
+                      "type": "string"
+                    },
                     "reason": {
                       "type": "string"
                     },
@@ -93230,6 +93233,9 @@
                     },
                     "verify": {
                       "type": "boolean"
+                    },
+                    "would_refuse": {
+                      "type": "string"
                     }
                   },
                   "required": [

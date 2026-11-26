@@ -332,11 +332,18 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 		return opsstores.CompactOut{}, errs.New(errs.Refused, "store compact: compaction with an archive is behind its flag; "+in.Store+" needs compact_archive=on and the run LORE_COMPACT_V2=1").
 			WithHint("lore store set --store " + in.Store + " --settings compact_archive=on, then LORE_COMPACT_V2=1 lore store compact --store " + in.Store + " --dry-run")
 	}
-	if err := compactFloor(a.opts.Home, org, in.Store); err != nil {
-		return opsstores.CompactOut{}, err
+	// devco:D-1010: the org's floor refuses only the real run; a dry run
+	// shows its plan and says what the real run needs first
+	gap, raise := compactFloorGap(a.opts.Home, org, in.Store)
+	if gap != "" && !in.DryRun {
+		return opsstores.CompactOut{}, compactFloorErr(gap, raise)
 	}
 	if in.UndoEpoch != "" {
-		return a.undoCompaction(ctx, gb, in, place, s)
+		out, uerr := a.undoCompaction(ctx, gb, in, place, s)
+		if uerr == nil && in.DryRun && gap != "" {
+			out.WouldRefuse, out.Raise = gap, raise
+		}
+		return out, uerr
 	}
 	before := in.Before
 	switch {
@@ -361,6 +368,7 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 	if err != nil {
 		return opsstores.CompactOut{}, err
 	}
+	wasDry := in.DryRun
 	if res.Nothing {
 		in.DryRun = false // nothing to do is an answer, not a plan
 	}
@@ -371,6 +379,9 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 	out := opsstores.CompactOut{Store: in.Store, DryRun: in.DryRun, Before: cutoff.UTC().Format(time.DateOnly), Nothing: res.Nothing,
 		Squashed: res.Squashed, Kept: res.Kept, Rows: res.Rows, FromEpoch: res.FromEpoch, ToEpoch: res.ToEpoch, Backup: res.Backup,
 		Archive: res.Archive, Held: res.Held, Layers: res.Layers, LayerNote: res.LayerNote}
+	if wasDry && gap != "" {
+		out.WouldRefuse, out.Raise = gap, raise
+	}
 	if pushes := gb.TakePushes(); len(pushes) > 0 { // the rewrite's push, named in the output
 		last := pushes[len(pushes)-1]
 		out.Commit, out.Branch = last.Short(), last.Branch
@@ -408,19 +419,20 @@ func (a *App) undoCompaction(ctx context.Context, gb *git.Backend, in opsstores.
 	return out, nil
 }
 
-// compactFloor refuses a compaction of an org's store while the org's
-// min_lore_version is below the release that verifies epochs
-// (formatgate.VerifiedEpochs): a lore older than that takes any higher
-// epoch unverified, so it must be read-only on the org's stores first
-// (coordinator decision for devco D-1003). A store of no org has no floor
-// to raise.
-func compactFloor(home, org, storeName string) error {
+// compactFloorGap says why a compaction of an org's store is refused
+// while the org's min_lore_version is below the release that verifies
+// epochs (formatgate.VerifiedEpochs): a lore older than that takes any
+// higher epoch unverified, so it must be read-only on the org's stores
+// first (coordinator decision for devco D-1003). raise is the command that
+// declares that floor. Both are "" when the floor allows it; a store of no
+// org has no floor to raise.
+func compactFloorGap(home, org, storeName string) (gap, raise string) {
 	if org == "" {
-		return nil
+		return "", ""
 	}
 	f, ok := formatgate.Lookup(formatgate.VerifiedEpochs)
 	if !ok {
-		return nil
+		return "", ""
 	}
 	floor := ""
 	if cfg, _, err := orgcfg.LoadConfig(home); err == nil && cfg != nil {
@@ -429,14 +441,19 @@ func compactFloor(home, org, storeName string) error {
 		}
 	}
 	if floor != "" && !formatgate.VersionBelow(floor, f.Since) {
-		return nil
+		return "", ""
 	}
 	have := "not set"
 	if floor != "" {
 		have = floor
 	}
-	return errs.New(errs.Refused, "store compact: org "+org+"'s min_lore_version is "+have+"; a compaction needs "+f.Since+" or later, so a lore too old to check the rewritten history is read-only on the org's stores instead of taking it unverified").
-		WithHint("lore org config set --org " + org + " --key min_lore_version --value " + f.Since + " --push --yes, then lore store compact --store " + storeName + " again")
+	return "org " + org + "'s min_lore_version is " + have + "; a compaction needs " + f.Since + " or later, so a lore too old to check the rewritten history is read-only on the org's stores instead of taking it unverified",
+		"lore org config set --org " + org + " --key min_lore_version --value " + f.Since + " --push --yes, then lore store compact --store " + storeName + " again"
+}
+
+// compactFloorErr is the real run's refusal for compactFloorGap's answer.
+func compactFloorErr(gap, raise string) error {
+	return errs.New(errs.Refused, "store compact: "+gap).WithHint(raise)
 }
 
 // shortID is a commit id cut to 12 characters ("" stays "").
@@ -541,7 +558,8 @@ func (b *storePush) autoCompact(ctx context.Context) {
 		return
 	}
 	if b.name != store.Source(attach.ReservedMe) {
-		if org := cloneOrg(b.res.home, gb.Dir()); org != "" && (!orgRosterAdmin(ctx, b.res.home, org) || compactFloor(b.res.home, org, string(b.name)) != nil) {
+		org := cloneOrg(b.res.home, gb.Dir())
+		if gap, _ := compactFloorGap(b.res.home, org, string(b.name)); org != "" && (!orgRosterAdmin(ctx, b.res.home, org) || gap != "") {
 			return // not an admin, or the org's floor below the release that verifies epochs
 		}
 		if len(otherClonesUnpushed(ctx, b.res.home, gb.Dir())) > 0 {

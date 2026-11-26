@@ -33,6 +33,9 @@ const (
 	omOldBody  = "an old lore must not write this"
 	omNewBody  = "the current lore writes this"
 	omOldStamp = "0.1.19"
+	// knownUpToFlag is the link-time switch of a loretest build that makes
+	// it know only the format features of the release it is stamped as.
+	knownUpToFlag = "github.com/thesatellite-ai/lore/logic/formatgate.knownUpTo"
 )
 
 var (
@@ -42,7 +45,9 @@ var (
 )
 
 // stampedLore is this tree's lore built with version omOldStamp (an old
-// client by its version: the format gate compares the stamp).
+// client by its version: the format gate compares the stamp), knowing
+// only the format features that release had: a feature from a later
+// release would count it as that release (devco:D-1010).
 func stampedLore(t testing.TB) string {
 	t.Helper()
 	stampedOnce.Do(func() {
@@ -52,7 +57,7 @@ func stampedLore(t testing.TB) string {
 			return
 		}
 		stampedPath = filepath.Join(dir, "lore")
-		c := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-tags", "loretest", "-ldflags", "-X main.version="+omOldStamp, "-o", stampedPath, "./cmd/lore")
+		c := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-tags", "loretest", "-ldflags", "-X main.version="+omOldStamp+" -X "+knownUpToFlag+"="+omOldStamp, "-o", stampedPath, "./cmd/lore")
 		c.Dir = filepath.Join("..", "..")
 		c.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if out, err := c.CombinedOutput(); err != nil {
