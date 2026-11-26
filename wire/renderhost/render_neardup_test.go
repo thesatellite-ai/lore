@@ -2,6 +2,7 @@ package renderhost
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,5 +49,41 @@ func TestPinnedNearDupsKeepsTheNewest(t *testing.T) {
 	}
 	if a := hidesAttr([]string{r1.ID.String()}); a != ` hides-duplicate="`+r1.ID.String()+`"` {
 		t.Errorf("hidesAttr = %q", a)
+	}
+}
+
+// TestPinnedNearDupsExactAmongCommonWords (devco:D-1016, bug hunt H-278):
+// lore doctor's and lore lint's whole-store near_duplicate draw
+// candidates only from words held by few rows, but render's hiding of
+// pinned near-duplicates is unchanged: a rule and its rewrite that share
+// only words 100 other pinned rules also hold are still one rule, and the
+// older is hidden.
+func TestPinnedNearDupsExactAmongCommonWords(t *testing.T) {
+	day := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	common := "deploy invoice billing release cache index schema migration rollback customer"
+	mk := func(n, age int, body string) row.Row {
+		id, err := ids.ParseAny(fmt.Sprintf("%s_019a0000000070008000%012x", ids.PrefixRule, n))
+		if err != nil {
+			t.Fatal(err)
+		}
+		tv, err := value.TextOf(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.Row{ID: id, Table: schema.TableRules, CreatedAt: day.AddDate(0, 0, age), Fields: map[string]value.Value{"body": tv}}
+	}
+	var rs []row.Row
+	for i := range 100 { // each holds every common word and fifteen of its own
+		var own []string
+		for k := range 15 {
+			own = append(own, fmt.Sprintf("u%dx%d", i, k))
+		}
+		rs = append(rs, mk(100+i, 1, common+" "+strings.Join(own, " ")))
+	}
+	older, newer := mk(1, 0, common), mk(2, 30, common+" webhook")
+	rs = append(rs, newer, older)
+	got := pinnedNearDups(rs)
+	if len(got) != 1 || got[older.ID.String()] != newer.ID.String() {
+		t.Fatalf("hidden → shown: %v, want only %s → %s", got, older.ID, newer.ID)
 	}
 }

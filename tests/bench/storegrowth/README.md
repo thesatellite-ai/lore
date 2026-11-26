@@ -23,7 +23,7 @@ Manual only: it never runs in `task check` or on push. A big size is a heavy run
 
 Each size writes `storegrowth-<commits>-<sha>.md` (one table, same rows every run, so two runs diff by eye) and `.json` (every run's wall time) to the report folder. Everything else lives in the test's temp folder and is deleted at exit: a temp HOME (never `~/.lore`), the bare remotes, the clone.
 
-**lore doctor** has its own run (`TestBenchDoctor`, devco:D-1012): per size it seeds and generates the store, clones it with `lore sync`, runs `lore doctor` once to fill the read caches, then times a second run with its peak RSS and checks the two planted changes are still held back. It writes `doctor.md` to the report folder and fails over 500 MB RSS, or over `STOREGROWTH_DOCTOR_MAX` (a duration) when that is set:
+**lore doctor** has its own run (`TestBenchDoctor`, devco:D-1012): per size it seeds and generates the store, clones it with `lore sync`, runs `lore doctor` once to fill the read caches, then times a second run with its peak RSS and checks the two planted changes are still held back. It writes `doctor.md` to the report folder and fails over 350 MB RSS (500 MB before devco:D-1016), or over `STOREGROWTH_DOCTOR_MAX` (a duration) when that is set:
 
 ```sh
 LORE_BENCH_BIN=<lore> STOREGROWTH_COMMITS=1000,100000 go test -tags bench -run '^TestBenchDoctor$' -timeout 300m ./tests/bench/storegrowth/

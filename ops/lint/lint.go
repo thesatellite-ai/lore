@@ -206,16 +206,33 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 
 // rows lists every live row of every built-in table in every store.
 func (o ops) rows(ctx context.Context) (map[row.Table][]sourced, error) {
+	return o.rowsOf(ctx, builtinTables())
+}
+
+// builtinTables is every built-in table's name, in schema order.
+func builtinTables() []row.Table {
 	tables := make([]row.Table, 0, len(schema.Builtin()))
 	for _, def := range schema.Builtin() {
 		tables = append(tables, def.Name)
 	}
-	return o.rowsOf(ctx, tables)
+	return tables
 }
 
 // rowsOf lists every live row of tables in every store.
 func (o ops) rowsOf(ctx context.Context, tables []row.Table) (map[row.Table][]sourced, error) {
 	out := map[row.Table][]sourced{}
+	err := o.eachRow(ctx, tables, func(t row.Table, s sourced) { out[t] = append(out[t], s) })
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// eachRow calls fn with every live row of tables in every store, in
+// rowsOf's order, reading one store's table at a time (devco:D-1016: lore
+// doctor's checks each held every decoded row of every folder; a check
+// that keeps only what it needs now holds one store's table at most).
+func (o ops) eachRow(ctx context.Context, tables []row.Table, fn func(row.Table, sourced)) error {
 	// devco:R-14: reads mask a stored secret match; secret_found must see
 	// the stored text to report it.
 	ctx = engine.WithEveryCopy(engine.WithRawRead(ctx)) // devco:D-929: copied_id sees both copies
@@ -223,16 +240,16 @@ func (o ops) rowsOf(ctx context.Context, tables []row.Table) (map[row.Table][]so
 		for _, src := range engine.ReadStoresOf(o.env) {
 			rs, err := o.env.List(ctx, src, t)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			for _, r := range rs {
 				if !r.Deleted {
-					out[t] = append(out[t], sourced{src: src, r: r})
+					fn(t, sourced{src: src, r: r})
 				}
 			}
 		}
 	}
-	return out, nil
+	return nil
 }
 
 // code spans and fenced blocks: unknown schemes there are code, not

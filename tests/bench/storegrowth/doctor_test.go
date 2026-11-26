@@ -6,7 +6,8 @@ package storegrowth
 // H-274): on a generated 1M-commit store doctor once ran 21+ minutes at
 // 3.3 GB RSS, because some checks walked or loaded the whole history.
 // Doctor must stay cheap whatever the history length (spec §8: no
-// full-history walks): at 1M commits under 30 s and under 500 MB RSS.
+// full-history walks): at 1M commits under 30 s, and under 350 MB RSS
+// at any size (bug hunt H-278: 100k commits under 8 s).
 //
 // Per size it seeds and generates the store, clones it with lore sync,
 // then times lore doctor (and its peak RSS) and checks the two planted
@@ -28,8 +29,9 @@ import (
 	"time"
 )
 
-// doctorMaxRSS is the most memory doctor may hold at any size (H-274).
-const doctorMaxRSS = 500 << 20
+// doctorMaxRSS is the most memory doctor may hold at any size (H-274;
+// H-278, devco:D-1016: 350 MB, from ~500 MB at 100k commits).
+const doctorMaxRSS = 350 << 20
 
 func TestBenchDoctor(t *testing.T) {
 	bin := os.Getenv("LORE_BENCH_BIN")

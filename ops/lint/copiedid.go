@@ -248,6 +248,14 @@ func keptCopy(group []sourced) sourced {
 // checks that compare rows with each other (near_duplicate) see one row
 // once, as list and search do.
 func oneCopyEach(rows []sourced) []sourced {
+	stale := staleCopies(rows)
+	return slices.DeleteFunc(slices.Clone(rows), func(s sourced) bool { return stale[s.src][s.r.ID.String()] })
+}
+
+// staleCopies is the ids of the stale copies among rows, per store: every
+// copy of a copied row but the one lists show (keptCopy). It reads ids,
+// stores, created_at and versions only, so rows may come without fields.
+func staleCopies(rows []sourced) map[store.Source]map[string]bool {
 	stale := map[store.Source]map[string]bool{}
 	for _, g := range copyGroups(rows) {
 		kept := keptCopy(g)
@@ -260,5 +268,5 @@ func oneCopyEach(rows []sourced) []sourced {
 			}
 		}
 	}
-	return slices.DeleteFunc(slices.Clone(rows), func(s sourced) bool { return stale[s.src][s.r.ID.String()] })
+	return stale
 }

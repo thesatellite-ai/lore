@@ -25,10 +25,14 @@
 // one row (an update, not a duplicate) and never pair.
 //
 // Speed: a bulk move can bring thousands of rows into a folder of
-// thousands. Titles are a map lookup; bodies use prefix filtering (two
-// word sets with Jaccard >= t share a word among the first
-// |x| - ceil(t*|x|) + 1 words of each, ordered rarest first), so only
-// rows sharing a rare word are compared in full.
+// thousands, and lore doctor checks a whole store (170k notes on a
+// 1M-commit history). Titles and bodies with the same words are a map
+// lookup; other bodies use prefix filtering (two word sets with Jaccard
+// >= t share a word among the first |x| - ceil(t*|x|) + 1 words of each,
+// ordered rarest first), so only rows sharing a rare word are compared in
+// full. A word held by more bodies than postingCap brings no candidates
+// (devco:D-1016): a small shared vocabulary made every note a candidate
+// of every other, so the check grew with the square of the notes.
 //
 // Layer L1: pure, no I/O, stdlib only.
 package neardup
@@ -81,6 +85,7 @@ type Match struct {
 	Existing Item
 	Why      Reason
 	Percent  int
+	at       [2]int // Within: the positions of Existing and New in the set
 }
 
 // MinHeadlineWords is the fewest words a body's first line needs to stand
@@ -123,12 +128,68 @@ func words(s string) []string {
 	})
 }
 
-// wordSet is the distinct words of s, sorted.
-func wordSet(s string) []string {
-	w := words(s)
-	slices.Sort(w)
-	return slices.Compact(w)
+// Vocab numbers the words of the bodies it has seen, so a body is kept as
+// a short sorted list of numbers instead of its text (devco:D-1016: lore
+// doctor held every scanned row decoded for the whole check, 111 MB live
+// at 20k notes; a Doc holds no body).
+type Vocab struct{ ids map[string]uint32 }
+
+// NewVocab is an empty Vocab; Docs compared with each other must come
+// from one Vocab.
+func NewVocab() *Vocab { return &Vocab{ids: map[string]uint32{}} }
+
+// Doc is one row prepared for the detector: its Item without the Body
+// (Item.Body is ""), the body kept as its distinct word numbers.
+type Doc struct {
+	Item
+	title string   // NormTitle(Item.Title)
+	words []uint32 // the body's distinct words (Vocab numbers), sorted
 }
+
+// Doc prepares it: the normalised title and the body's word numbers; the
+// body text is not kept, so a caller can stream rows into Docs and let
+// each row go.
+func (v *Vocab) Doc(it Item) Doc {
+	ws := words(it.Body)
+	set := make([]uint32, 0, len(ws))
+	for _, w := range ws {
+		id, ok := v.ids[w]
+		if !ok {
+			id = uint32(len(v.ids))
+			v.ids[strings.Clone(w)] = id // w is a slice of the lowered body: keep only the word
+		}
+		set = append(set, id)
+	}
+	slices.Sort(set)
+	it.Body = ""
+	return Doc{Item: it, title: NormTitle(it.Title), words: slices.Clip(slices.Compact(set))}
+}
+
+// MinPostings is the document-frequency cap of a small set: up to this
+// many bodies, every word can bring a candidate (so a folder of a few
+// dozen notes is compared as before the cap).
+const MinPostings = 50
+
+// MaxPostings bounds the cap at any size, so the comparisons per body
+// stay bounded and the check stays near linear in the number of bodies.
+const MaxPostings = 200
+
+// postingCap is how many bodies may hold a word before it stops bringing
+// candidates in a bounded join (WithinStore, devco:D-1016): 1% of the
+// bodies, between MinPostings and MaxPostings. A word in thousands of
+// bodies says nothing about two of them being copies, and pairing through
+// it is what made a whole store quadratic (every note of a small
+// vocabulary compared with every other). Two copies still pair through
+// the rarer words they share, and bodies with the same words through an
+// exact-set lookup.
+func postingCap(bodies int) int {
+	return min(max(MinPostings, bodies/100), MaxPostings)
+}
+
+// MaxCandidates is how many postings one body may visit in a bounded join
+// (rarest words first, so a copy sharing a rare word is met at once): it
+// bounds the work per body whatever the store's vocabulary (devco:D-1016).
+const MaxCandidates = MaxPostings
 
 // prefixLen is how many of the first words of a set of n words two sets
 // meeting the threshold must share one of.
@@ -136,104 +197,263 @@ func prefixLen(n int) int {
 	return n - int(math.Ceil(Threshold*float64(n))) + 1
 }
 
-// jaccard is |a∩b| / |a∪b| of two sorted word sets.
-func jaccard(a, b []string) float64 {
+// jaccard is |a∩b| / |a∪b| of two sorted word sets, 0 when it is under
+// Threshold (it stops once the words left cannot bring it there: most
+// candidates of a big store share a word or two and fail early).
+func jaccard(a, b []uint32) float64 {
+	// |a∩b| / (|a|+|b|-|a∩b|) >= t  ⇔  |a∩b| >= t(|a|+|b|)/(1+t)
+	need := int(math.Ceil(Threshold * float64(len(a)+len(b)) / (1 + Threshold)))
 	i, j, both := 0, 0, 0
 	for i < len(a) && j < len(b) {
-		switch c := strings.Compare(a[i], b[j]); {
-		case c == 0:
+		if both+min(len(a)-i, len(b)-j) < need {
+			return 0
+		}
+		switch {
+		case a[i] == b[j]:
 			both++
 			i++
 			j++
-		case c < 0:
+		case a[i] < b[j]:
 			i++
 		default:
 			j++
 		}
 	}
 	union := len(a) + len(b) - both
-	if union == 0 {
+	if union == 0 || both < need {
 		return 0
 	}
 	return float64(both) / float64(union)
 }
 
-// Find pairs each incoming row with the existing row of the same table it
-// near-duplicates (see the package comment), in the order of incoming.
-func Find(incoming, existing []Item) []Match {
-	if len(incoming) == 0 || len(existing) == 0 {
-		return nil
+// hit is one pairing find made: incoming[in] repeats existing[ex].
+type hit struct {
+	in, ex  int
+	why     Reason
+	percent int
+}
+
+// setKey is a body's table and word set as a map key (the exact-set
+// lookup: bodies with the same distinct words pair without a posting).
+func setKey(table string, ws []uint32) string {
+	var b strings.Builder
+	b.Grow(len(table) + 1 + 4*len(ws))
+	b.WriteString(table)
+	b.WriteByte(0)
+	for _, w := range ws {
+		b.WriteByte(byte(w))
+		b.WriteByte(byte(w >> 8))
+		b.WriteByte(byte(w >> 16))
+		b.WriteByte(byte(w >> 24))
 	}
-	type key struct{ table, title string }
-	byTitle := map[key]int{}
+	return b.String()
+}
+
+// titleKey is a normalised title within its table.
+type titleKey struct{ table, title string }
+
+// post is one posting list's key: a word within a table.
+type post struct {
+	table string
+	word  uint32
+}
+
+// matcher is a set of existing docs prepared for pairing (titles, word
+// frequencies, postings, exact word sets), so many incoming docs can be
+// matched without preparing the set again (Index).
+type matcher struct {
+	existing []Doc
+	byTitle  map[titleKey]int
+	df       []int32 // how many bodies hold each word (the rarest-first order and the cap)
+	capAt    int32
+	index    map[post][]int32
+	exact    map[string][]int32 // the first two existing docs of each word set
+	sizes    []int32            // word counts, read without touching each Doc
+	stamp    []int32            // stamp[j] == round: existing[j] already compared with this incoming doc
+	round    int32
+	budget   int // postings one incoming doc may visit (MaxCandidates when bounded)
+}
+
+// newMatcher prepares existing; the word frequencies count existing and
+// also (the incoming docs of a one-off Find; nil for Within and Index).
+// bounded applies postingCap and MaxCandidates (WithinStore: a whole
+// store's check); otherwise every shared prefix word brings candidates
+// and the answer is exact, as render, store adopt and docs import need.
+func newMatcher(existing, also []Doc, bounded bool) *matcher {
+	m := &matcher{existing: existing, byTitle: map[titleKey]int{}, index: map[post][]int32{}, exact: map[string][]int32{},
+		sizes: make([]int32, len(existing)), stamp: make([]int32, len(existing)), capAt: math.MaxInt32, budget: math.MaxInt}
 	for i, e := range existing {
-		if t := NormTitle(e.Title); t != "" {
-			if _, ok := byTitle[key{e.Table, t}]; !ok {
-				byTitle[key{e.Table, t}] = i
+		if e.title != "" {
+			if _, ok := m.byTitle[titleKey{e.Table, e.title}]; !ok {
+				m.byTitle[titleKey{e.Table, e.title}] = i
+			}
+		}
+		m.sizes[i] = int32(len(e.words))
+	}
+	count := func(docs []Doc) {
+		for _, d := range docs {
+			for _, w := range d.words {
+				if int(w) >= len(m.df) {
+					m.df = append(m.df, make([]int32, int(w)+1-len(m.df))...)
+				}
+				m.df[w]++
 			}
 		}
 	}
-	// word sets, and how many bodies hold each word (rarest first order)
-	freq := map[string]int{}
-	sets := func(items []Item) [][]string {
-		out := make([][]string, len(items))
-		for i, it := range items {
-			out[i] = wordSet(it.Body)
-			for _, w := range out[i] {
-				freq[w]++
-			}
-		}
-		return out
+	count(existing)
+	count(also)
+	if bounded {
+		m.capAt, m.budget = int32(postingCap(len(existing)+len(also))), MaxCandidates
 	}
-	inSets, exSets := sets(incoming), sets(existing)
-	rarest := func(ws []string) []string {
-		o := slices.Clone(ws)
-		slices.SortFunc(o, func(a, b string) int {
-			return cmp.Or(cmp.Compare(freq[a], freq[b]), strings.Compare(a, b))
-		})
-		return o
-	}
-	type post struct{ table, word string }
-	index := map[post][]int{}
-	for i, ws := range exSets {
-		if len(ws) < MinWords {
+	for i, e := range existing {
+		if len(e.words) < MinWords {
 			continue
 		}
-		r := rarest(ws)
-		for _, w := range r[:prefixLen(len(r))] {
-			p := post{existing[i].Table, w}
-			index[p] = append(index[p], i)
+		k := setKey(e.Table, e.words)
+		if len(m.exact[k]) < 2 {
+			m.exact[k] = append(m.exact[k], int32(i))
+		}
+		for _, w := range m.rarest(e.words) {
+			if m.freq(w) <= m.capAt {
+				p := post{e.Table, w}
+				m.index[p] = append(m.index[p], int32(i))
+			}
 		}
 	}
-	var out []Match
+	return m
+}
+
+// freq is how many prepared bodies hold w (0 for a word only an incoming
+// doc has).
+func (m *matcher) freq(w uint32) int32 {
+	if int(w) < len(m.df) {
+		return m.df[w]
+	}
+	return 0
+}
+
+// rarest is the prefix of ws (prefixLen words) in rarest-first order.
+func (m *matcher) rarest(ws []uint32) []uint32 {
+	o := slices.Clone(ws)
+	slices.SortFunc(o, func(a, b uint32) int { return cmp.Or(cmp.Compare(m.freq(a), m.freq(b)), cmp.Compare(a, b)) })
+	return o[:prefixLen(len(o))]
+}
+
+// match pairs each incoming doc with the existing doc of its table it
+// near-duplicates (see the package comment), in the order of incoming.
+func (m *matcher) match(incoming []Doc) []hit {
+	var out []hit
+	existing := m.existing
 	for i, in := range incoming {
-		if t := NormTitle(in.Title); t != "" {
-			if j, ok := byTitle[key{in.Table, t}]; ok && existing[j].ID != in.ID {
-				out = append(out, Match{New: in, Existing: existing[j], Why: SameTitle, Percent: 100})
+		if in.title != "" {
+			if j, ok := m.byTitle[titleKey{in.Table, in.title}]; ok && existing[j].ID != in.ID {
+				out = append(out, hit{in: i, ex: j, why: SameTitle, percent: 100})
 				continue
 			}
 		}
-		ws := inSets[i]
+		ws := in.words
 		if len(ws) < MinWords {
 			continue
 		}
-		r := rarest(ws)
-		best, bestScore := -1, 0.0
-		seen := map[int]bool{}
-		for _, w := range r[:prefixLen(len(r))] {
-			for _, j := range index[post{in.Table, w}] {
-				if seen[j] || existing[j].ID == in.ID {
+		if c := m.exact[setKey(in.Table, ws)]; len(c) > 0 {
+			if j := slices.IndexFunc(c, func(j int32) bool { return existing[j].ID != in.ID }); j >= 0 {
+				out = append(out, hit{in: i, ex: int(c[j]), why: SimilarBody, percent: 100})
+				continue
+			}
+		}
+		// a set of n words meets the threshold with one of m words only
+		// when Threshold*n <= m <= n/Threshold
+		lo, hi := int(math.Ceil(Threshold*float64(len(ws)))), int(math.Floor(float64(len(ws))/Threshold))
+		best, bestScore, budget := int32(-1), 0.0, m.budget
+		m.round++
+		for _, w := range m.rarest(ws) {
+			if m.freq(w) > m.capAt || budget <= 0 {
+				continue
+			}
+			for _, j := range m.index[post{in.Table, w}] {
+				if budget--; budget < 0 {
+					break
+				}
+				if m.stamp[j] == m.round {
 					continue
 				}
-				seen[j] = true
-				if s := jaccard(ws, exSets[j]); s >= Threshold && (s > bestScore || s == bestScore && j < best) {
+				m.stamp[j] = m.round
+				if n := int(m.sizes[j]); n < lo || n > hi || existing[j].ID == in.ID {
+					continue
+				}
+				if s := jaccard(ws, existing[j].words); s >= Threshold && (s > bestScore || s == bestScore && j < best) {
 					best, bestScore = j, s
 				}
 			}
 		}
 		if best >= 0 {
-			out = append(out, Match{New: in, Existing: existing[best], Why: SimilarBody, Percent: int(math.Floor(bestScore * 100))})
+			out = append(out, hit{in: i, ex: int(best), why: SimilarBody, percent: int(math.Floor(bestScore * 100))})
 		}
+	}
+	return out
+}
+
+// find pairs each incoming doc with the existing doc of its table it
+// near-duplicates; same says incoming and existing are one set (Within),
+// so each body counts once; bounded is newMatcher's.
+func find(incoming, existing []Doc, same, bounded bool) []hit {
+	if len(incoming) == 0 || len(existing) == 0 {
+		return nil
+	}
+	var also []Doc
+	if !same {
+		also = incoming
+	}
+	return newMatcher(existing, also, bounded).match(incoming)
+}
+
+// Index is a set of existing rows prepared once, for many Find calls
+// (devco:D-1016: lore docs import compared each drafted section and
+// paragraph with every stored note, preparing every note again each
+// time). Its word frequencies are the existing rows' own; not safe for
+// concurrent use.
+type Index struct {
+	items []Item
+	v     *Vocab
+	m     *matcher
+}
+
+// NewIndex prepares existing for Find.
+func NewIndex(existing []Item) *Index {
+	v := NewVocab()
+	return &Index{items: existing, v: v, m: newMatcher(v.docs(existing), nil, false)}
+}
+
+// Find is the package Find of incoming against the indexed rows.
+func (x *Index) Find(incoming []Item) []Match {
+	if len(incoming) == 0 || len(x.items) == 0 {
+		return nil
+	}
+	hits := x.m.match(x.v.docs(incoming))
+	out := make([]Match, len(hits))
+	for i, h := range hits {
+		out[i] = Match{New: incoming[h.in], Existing: x.items[h.ex], Why: h.why, Percent: h.percent}
+	}
+	return out
+}
+
+// docs prepares items with one Vocab.
+func (v *Vocab) docs(items []Item) []Doc {
+	out := make([]Doc, len(items))
+	for i, it := range items {
+		out[i] = v.Doc(it)
+	}
+	return out
+}
+
+// Find pairs each incoming row with the existing row of the same table it
+// near-duplicates (see the package comment), in the order of incoming.
+func Find(incoming, existing []Item) []Match {
+	v := NewVocab()
+	hits := find(v.docs(incoming), v.docs(existing), false, false)
+	out := make([]Match, len(hits))
+	for i, h := range hits {
+		out[i] = Match{New: incoming[h.in], Existing: existing[h.ex], Why: h.why, Percent: h.percent}
 	}
 	return out
 }
@@ -246,15 +466,36 @@ func Find(incoming, existing []Item) []Match {
 // first (RewriteOf, any table); otherwise the rules of Find apply. Each
 // unordered pair is listed once, in the order of its newer row.
 func Within(items []Item) []Match {
-	at := make(map[string]int, len(items))
-	for i, it := range items {
-		at[it.ID] = i
+	out := WithinDocs(NewVocab().docs(items))
+	for i := range out { // the caller's items, Body included
+		out[i].Existing, out[i].New = items[out[i].at[0]], items[out[i].at[1]]
+	}
+	return out
+}
+
+// WithinDocs is Within over prepared docs (one Vocab, age order): a
+// caller that streams rows keeps only their Docs (devco:D-1016). The
+// Items of each Match have no Body.
+func WithinDocs(docs []Doc) []Match { return within(docs, false) }
+
+// WithinStore is WithinDocs for a whole store's rows (lore doctor's and
+// lore lint's near_duplicate, devco:D-1016): candidates come only from
+// words held by at most postingCap bodies and each body visits at most
+// MaxCandidates postings, so the work grows near linearly with the rows.
+// Bodies with the same words, titles and source_ref still always pair;
+// two bodies that share only common words may not.
+func WithinStore(docs []Doc) []Match { return within(docs, true) }
+
+// within is WithinDocs (bounded: WithinStore).
+func within(docs []Doc, bounded bool) []Match {
+	at := make(map[string]int, len(docs))
+	for i, d := range docs {
+		at[d.ID] = i
 	}
 	type pair struct{ old, new int }
 	seen := map[pair]bool{}
 	var out []Match
-	add := func(m Match) {
-		a, b := at[m.Existing.ID], at[m.New.ID]
+	add := func(a, b int, why Reason, percent int) {
 		if a > b {
 			a, b = b, a
 		}
@@ -262,19 +503,18 @@ func Within(items []Item) []Match {
 			return
 		}
 		seen[pair{a, b}] = true
-		m.Existing, m.New = items[a], items[b]
-		out = append(out, m)
+		out = append(out, Match{Existing: docs[a].Item, New: docs[b].Item, Why: why, Percent: percent, at: [2]int{a, b}})
 	}
-	for _, it := range items {
-		if ref := strings.TrimSpace(it.SourceRef); ref != "" && ref != it.ID {
+	for i, d := range docs {
+		if ref := strings.TrimSpace(d.SourceRef); ref != "" && ref != d.ID {
 			if j, ok := at[ref]; ok {
-				add(Match{New: it, Existing: items[j], Why: RewriteOf, Percent: 100})
+				add(j, i, RewriteOf, 100)
 			}
 		}
 	}
-	for _, m := range Find(items, items) {
-		add(m)
+	for _, h := range find(docs, docs, true, bounded) {
+		add(at[docs[h.ex].ID], at[docs[h.in].ID], h.why, h.percent)
 	}
-	slices.SortStableFunc(out, func(x, y Match) int { return cmp.Compare(at[x.New.ID], at[y.New.ID]) })
+	slices.SortStableFunc(out, func(x, y Match) int { return cmp.Compare(x.at[1], y.at[1]) })
 	return out
 }

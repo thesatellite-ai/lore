@@ -50,7 +50,14 @@ func FindStaleFacts(ctx context.Context, env Env) ([]Finding, error) {
 	if chk == nil {
 		return nil, nil
 	}
-	all, err := ops{env: env}.rows(ctx)
+	// devco:D-1016: only the rows stating a checkable fact are kept, one
+	// store's table read at a time, not every row of every table
+	all := map[row.Table][]sourced{}
+	err := ops{env: env}.eachRow(ctx, builtinTables(), func(t row.Table, s sourced) {
+		if cl, ok := factstale.ClaimOf(s.r); ok && cl.Checkable() {
+			all[t] = append(all[t], s)
+		}
+	})
 	if err != nil {
 		return nil, err
 	}

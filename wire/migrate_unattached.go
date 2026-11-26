@@ -158,7 +158,9 @@ func (a *App) unattachedFolders(st *state) ([]unattachedFolder, error) {
 
 // unattachedV1 counts, per table, the v1 rows of one unattached folder,
 // reading its files offline (no open, no fetch). Rows that do not decode
-// are not counted: they are no v1 row lore can rewrite.
+// are not counted: they are no v1 row lore can rewrite. Only a file that
+// declares an older format is decoded (rowfs OldRows, devco:D-1016: lore
+// doctor decoded every row file of every unattached folder each run).
 func unattachedV1(ctx context.Context, u unattachedFolder) (map[row.Table]int, int, error) {
 	root, err := rowfs.Open(u.dir)
 	if err != nil {
@@ -168,19 +170,13 @@ func unattachedV1(ctx context.Context, u unattachedFolder) (map[row.Table]int, i
 	if err != nil {
 		return nil, 0, err
 	}
-	rows, _, err := f.Read(ctx, "")
+	v1, err := f.OldRows(ctx, row.FormatVersion)
 	if err != nil {
 		return nil, 0, errs.Prefix("migrate: read "+u.place, err)
 	}
-	v1 := map[row.Table]int{}
 	n := 0
-	for _, sr := range rows {
-		r, derr := sr.Decode()
-		if derr != nil || r.SourceVersion >= row.FormatVersion {
-			continue
-		}
-		v1[sr.Table]++
-		n++
+	for _, c := range v1 {
+		n += c
 	}
 	return v1, n, nil
 }

@@ -169,3 +169,59 @@ func TestRebuildDropsRowsUnderAnEarlierAttachmentName(t *testing.T) {
 		t.Fatalf("after the rebuild: %+v %v", again, err)
 	}
 }
+
+// TestCurrentTableRowsAreCurrentRowsOfOneTable (devco:D-1016, bug hunt
+// H-278): the search_index check now reads a store table by table, so
+// each table's current rows must be exactly the whole-store read's rows of
+// that table (same versions, purge and trash filters), and nothing else.
+func TestCurrentTableRowsAreCurrentRowsOfOneTable(t *testing.T) {
+	t.Parallel()
+	ctx := background()
+	a := newTestApp(t, gitRepo(t))
+	withProject(t, a)
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := a.Project(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := value.RefOf(pid.Any())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range []string{"the invoice queue drains every ten minutes", "the nightly export takes forty minutes"} {
+		body, err := value.TextOf(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kind, _ := value.TextOf(schema.MemoryKindCore)
+		src, _ := value.TextOf("test")
+		if _, err := eng.Create(ctx, store.SourceRepo, schema.TableMemories, map[string]value.Value{"body": body, "project_id": ref, "kind": kind, "source_kind": src}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := eng.CurrentRows(ctx, store.SourceRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[store.Key]string{}
+	for _, r := range all {
+		if r.Table == schema.TableMemories {
+			want[r.Key()] = r.HLC.String()
+		}
+	}
+	got, err := eng.CurrentTableRows(ctx, store.SourceRepo, schema.TableMemories)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) || len(want) < 2 {
+		t.Fatalf("memories: %d rows, want %d (of %d in the store)", len(got), len(want), len(all))
+	}
+	for _, r := range got {
+		if h, ok := want[r.Key()]; !ok || h != r.HLC.String() {
+			t.Errorf("%s %s: not the whole read's version (%q)", r.Table, r.ID, h)
+		}
+	}
+}

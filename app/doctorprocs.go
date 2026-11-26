@@ -35,13 +35,30 @@ func capDoctorProcs(args []string) {
 // more CPU and the same wall time.
 const doctorGCPercent = 100
 
-// paceDoctorGC sets doctorGCPercent for `lore doctor` unless the
-// environment chose its own GOGC (the person's tuning wins, as with
-// gcDefaults). It reports whether it set it, for the test.
-func paceDoctorGC(args []string, getenv func(string) string) bool {
-	if commandName(args) != doctorCommand || getenv("GOGC") != "" {
-		return false
+// doctorMemLimit is `lore doctor`'s soft memory limit: the CLI's gcLimit
+// (2 GiB) lowered. Why (bug hunt H-278, devco:D-1016): at the Go default
+// pace doctor's heap still grew to about twice what it kept (~210 MB kept
+// at 100k commits, ~400 MB heap, ~480 MB RSS) because its checks allocate
+// fast between collections; under this limit the collector runs earlier
+// once the heap nears it (~340 MB RSS, same wall time). It is soft: a
+// store whose doctor keeps more than this still finishes, the collector
+// then takes at most about half the CPU.
+const doctorMemLimit = 256 << 20
+
+// paceDoctorGC sets doctorGCPercent and doctorMemLimit for `lore doctor`
+// unless the environment chose its own GOGC or GOMEMLIMIT (the person's
+// tuning wins, as with gcDefaults). It reports what it set, for the test.
+func paceDoctorGC(args []string, getenv func(string) string) (percent bool, limit bool) {
+	if commandName(args) != doctorCommand {
+		return false, false
 	}
-	debug.SetGCPercent(doctorGCPercent)
-	return true
+	if getenv("GOGC") == "" {
+		debug.SetGCPercent(doctorGCPercent)
+		percent = true
+	}
+	if getenv("GOMEMLIMIT") == "" {
+		debug.SetMemoryLimit(doctorMemLimit)
+		limit = true
+	}
+	return percent, limit
 }

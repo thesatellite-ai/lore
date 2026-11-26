@@ -26,6 +26,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/neardup"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -61,13 +62,49 @@ func ArchiveNouns() []string {
 
 // FindNearDuplicates is the near_duplicate findings of every attached
 // store (lore doctor counts them and points at lore lint --code
-// near_duplicate, devco D-926); it reads only the tables it scans.
+// near_duplicate, devco D-926); it reads only the tables it scans, one
+// store's table at a time, and keeps each row as its id, version and
+// word numbers, never its text (devco:D-1016: a 1M-commit store held
+// every scanned row decoded for the whole check).
 func FindNearDuplicates(ctx context.Context, env Env) ([]Finding, error) {
-	all, err := ops{env: env}.rowsOf(ctx, slices.Sorted(maps.Keys(archiveNouns)))
+	v := neardup.NewVocab()
+	var rows []ndRow
+	err := ops{env: env}.eachRow(ctx, slices.Sorted(maps.Keys(archiveNouns)), func(_ row.Table, s sourced) {
+		if text(s.r, fArchivedAt) == "" {
+			rows = append(rows, newNDRow(v, s))
+		}
+	})
 	if err != nil {
 		return nil, err
 	}
-	return nearDuplicates(nearDupRows(all), false), nil
+	return nearDupFindings(oneNDCopyEach(rows), nil, true), nil
+}
+
+// ndRow is one row as near_duplicate keeps it: the row without its
+// fields (id, table, store, created_at and version: what ordering, copy
+// detection and the finding read) and its neardup doc.
+type ndRow struct {
+	sourced
+	doc neardup.Doc
+}
+
+// newNDRow prepares s for near_duplicate with v and lets its text go.
+func newNDRow(v *neardup.Vocab, s sourced) ndRow {
+	body := text(s.r, fBody)
+	doc := v.Doc(neardup.Item{Table: s.r.Table.String(), ID: s.r.ID.String(), Body: body, SourceRef: text(s.r, fSourceRef),
+		Title: neardup.Headline(text(s.r, fTitle), text(s.r, schema.FieldSummary), body)})
+	s.r.Fields, s.r.Meta, s.r.Reserved, s.r.Origin = nil, nil, nil, value.JSON{}
+	return ndRow{sourced: s, doc: doc}
+}
+
+// oneNDCopyEach is oneCopyEach over prepared rows.
+func oneNDCopyEach(rows []ndRow) []ndRow {
+	plain := make([]sourced, len(rows))
+	for i, r := range rows {
+		plain[i] = r.sourced
+	}
+	stale := staleCopies(plain) // devco:D-929: two copies of one row are copied_id, not a near duplicate
+	return slices.DeleteFunc(rows, func(r ndRow) bool { return stale[r.src][r.r.ID.String()] })
 }
 
 // nearDupRows is every live, unarchived row of the scanned tables.
@@ -86,22 +123,43 @@ func nearDupRows(all map[row.Table][]sourced) []sourced {
 // nearDuplicates reports each pair of rows that repeat each other, once,
 // on the older row; pinnedOnly adds the --context shingle overlap.
 func nearDuplicates(rows []sourced, pinnedOnly bool) []Finding {
+	v := neardup.NewVocab()
+	prepared := make([]ndRow, len(rows))
+	var sh map[string]map[string]bool
+	if pinnedOnly {
+		sh = make(map[string]map[string]bool, len(rows))
+	}
+	for i, s := range rows {
+		if pinnedOnly {
+			sh[s.r.ID.String()] = shingles(text(s.r, fBody))
+		}
+		prepared[i] = newNDRow(v, s)
+	}
+	return nearDupFindings(prepared, sh, !pinnedOnly) // --context (pinned rows) pairs exactly, as render does
+}
+
+// nearDupFindings is nearDuplicates over prepared rows; shingles (the
+// --context pinned rows', by id) adds the three-word overlap pairs; store
+// pairs a whole store's rows with neardup.WithinStore (devco:D-1016).
+func nearDupFindings(rows []ndRow, shingles map[string]map[string]bool, store bool) []Finding {
 	rows = slices.Clone(rows)
-	slices.SortFunc(rows, func(a, b sourced) int {
+	slices.SortFunc(rows, func(a, b ndRow) int {
 		return cmp.Or(a.r.CreatedAt.Compare(b.r.CreatedAt), cmp.Compare(a.r.ID.String(), b.r.ID.String()))
 	})
-	items := make([]neardup.Item, len(rows))
+	docs := make([]neardup.Doc, len(rows))
 	at := make(map[string]int, len(rows))
-	for i, s := range rows {
-		body := text(s.r, fBody)
-		items[i] = neardup.Item{Table: s.r.Table.String(), ID: s.r.ID.String(), Body: body, SourceRef: text(s.r, fSourceRef),
-			Title: neardup.Headline(text(s.r, fTitle), text(s.r, schema.FieldSummary), body)}
-		at[items[i].ID] = i
+	for i, r := range rows {
+		docs[i] = r.doc
+		at[r.doc.ID] = i
 	}
 	type pair struct{ old, new int }
 	var pairs []pair
 	why := map[pair]string{}
-	for _, m := range neardup.Within(items) {
+	join := neardup.WithinDocs
+	if store {
+		join = neardup.WithinStore
+	}
+	for _, m := range join(docs) {
 		p := pair{at[m.Existing.ID], at[m.New.ID]}
 		pairs = append(pairs, p)
 		why[p] = string(m.Why)
@@ -109,15 +167,11 @@ func nearDuplicates(rows []sourced, pinnedOnly bool) []Finding {
 			why[p] += " " + strconv.Itoa(m.Percent) + "%"
 		}
 	}
-	if pinnedOnly {
-		sh := make([]map[string]bool, len(rows))
-		for i, s := range rows {
-			sh[i] = shingles(text(s.r, fBody))
-		}
+	if shingles != nil {
 		for i := range rows {
 			for j := i + 1; j < len(rows); j++ {
 				p := pair{i, j}
-				if _, ok := why[p]; !ok && jaccard(sh[i], sh[j]) > nearDupOverlap {
+				if _, ok := why[p]; !ok && jaccard(shingles[rows[i].doc.ID], shingles[rows[j].doc.ID]) > nearDupOverlap {
 					pairs = append(pairs, p)
 					why[p] = "most of the wording is shared"
 				}

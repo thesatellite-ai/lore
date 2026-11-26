@@ -527,15 +527,16 @@ func str(r row.Row, field string) string {
 func dropRepeats(drafts []draft, existing []neardup.Item) ([]draft, []DocSkip) {
 	var keep []draft
 	skipped := []DocSkip{}
-	seen := map[string]string{} // folded text -> the doc line that said it first
-	var earlier []neardup.Item  // the kept blocks of this import (ID: their doc line)
-	var doc string              // the doc of the draft being checked
+	seen := map[string]string{}          // folded text -> the doc line that said it first
+	var earlier []neardup.Item           // the kept blocks of this import (ID: their doc line)
+	var doc string                       // the doc of the draft being checked
+	stored := neardup.NewIndex(existing) // devco:D-1016: the stored notes prepared once, not once per block
 	skip := func(ev, title, existingID, reason, why string) {
 		skipped = append(skipped, DocSkip{Evidence: ev, Title: title, Existing: existingID, Reason: reason, Why: why, doc: doc})
 	}
 	for i, d := range drafts {
 		doc = d.doc
-		if m := neardup.Find([]neardup.Item{pieceItem(i, d)}, existing); len(m) > 0 {
+		if m := stored.Find([]neardup.Item{pieceItem(i, d)}); len(m) > 0 {
 			skip(d.evidence, shortTitle(d.piece), m[0].Existing.ID, SkipStored, "already noted as "+m[0].Existing.ID+" ("+string(m[0].Why)+")")
 			continue
 		}
@@ -559,7 +560,7 @@ func dropRepeats(drafts []draft, existing []neardup.Item) ([]draft, []DocSkip) {
 				continue
 			}
 			it := blockItem(i, j, b)
-			if m := neardup.Find([]neardup.Item{it}, existing); len(m) > 0 {
+			if m := stored.Find([]neardup.Item{it}); len(m) > 0 {
 				skip(ref, title, m[0].Existing.ID, SkipStored, "already noted as "+m[0].Existing.ID+" ("+string(m[0].Why)+")")
 				continue
 			}

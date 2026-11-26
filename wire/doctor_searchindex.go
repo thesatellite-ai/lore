@@ -20,8 +20,11 @@ package wire
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -75,7 +78,9 @@ func (a *App) DoctorSearchIndex(ctx context.Context, fix bool) ([]DoctorFinding,
 }
 
 // staleIndexRows lists the ids of the live rows src's cache holds in
-// another version than its backend has now.
+// another version than its backend has now, table by table (devco:D-1016:
+// only the tables the cache holds are read, one at a time, so the check
+// holds one table's rows, never a whole store's).
 func (a *App) staleIndexRows(ctx context.Context, st *state, src store.Source) ([]string, error) {
 	c, err := st.caches.of(src)
 	if err != nil {
@@ -85,23 +90,24 @@ func (a *App) staleIndexRows(ctx context.Context, st *state, src store.Source) (
 	if err != nil {
 		return nil, err
 	}
-	rows, err := st.eng.CurrentRows(ctx, src)
-	if err != nil {
-		return nil, err
-	}
-	now := make(map[store.Key]store.Row, len(rows))
-	for _, r := range rows {
-		now[r.Key()] = r
+	tables := map[row.Table]bool{}
+	for k, h := range held {
+		if !h.Deleted { // a tombstone shows nothing in search or ask
+			tables[k.Table] = true
+		}
 	}
 	var stale []string
-	for k, h := range held {
-		if h.Deleted {
-			continue // a tombstone shows nothing in search or ask
+	for _, t := range slices.Sorted(maps.Keys(tables)) {
+		rows, err := st.eng.CurrentTableRows(ctx, src, t)
+		if err != nil {
+			return nil, err
 		}
-		// A file gone without a tombstone is not a delete (rowfs Missing,
-		// reported by its own checks): only a file in another version counts.
-		if r, ok := now[k]; ok && r.HLC.Compare(h.HLC) != 0 {
-			stale = append(stale, k.ID.String())
+		for _, r := range rows {
+			// A file gone without a tombstone is not a delete (rowfs Missing,
+			// reported by its own checks): only a file in another version counts.
+			if h, ok := held[r.Key()]; ok && !h.Deleted && r.HLC.Compare(h.HLC) != 0 {
+				stale = append(stale, r.ID.String())
+			}
 		}
 	}
 	return stale, nil

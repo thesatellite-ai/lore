@@ -56,6 +56,18 @@ func (e *Engine) CurrentRows(ctx context.Context, source store.Source) ([]store.
 	return rows, err
 }
 
+// CurrentTableRows is CurrentRows narrowed to one table: the same rows
+// (readTable applies the same purge and trash filters), read one table at
+// a time, so a check comparing a big store table by table holds one
+// table's rows, never the whole store's (devco:D-1016: lore doctor's
+// search_index check held every row of every folder at once).
+func (e *Engine) CurrentTableRows(ctx context.Context, source store.Source, table row.Table) ([]store.Row, error) {
+	if _, err := e.attached(source); err != nil {
+		return nil, err
+	}
+	return e.readTable(ctx, source, table)
+}
+
 // stillCurrent reports whether b holds r's version of its row now: the
 // store.CurrentCheck a refresh hands the cache. A row b no longer has
 // (gone, unreadable) is not current; a tombstone is current while b
