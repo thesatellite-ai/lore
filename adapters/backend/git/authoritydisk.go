@@ -162,6 +162,39 @@ func authorityFileFor(dir, home string, outside bool) string {
 	return filepath.Join(home, homeCacheDir, AuthorityCacheDir, filepath.Base(top)+"-"+hex.EncodeToString(sum[:authorityHashLen])+authorityExt)
 }
 
+// savedAuthorityFile is the replay file the opens of the clone at dir
+// keep (authorityFileFor), for a reader that has no open of it in this
+// process (cloneAuthority: AdminAt, OrgFileChanges); "" when it cannot be
+// told or nothing is saved there yet, and the replay stays in memory as
+// before. Only a clone in a lore home's stores folder is placed (its home
+// and clone record say whether it is a person's own); only a file that
+// exists is used, so a reader never starts one in a clone lore did not.
+// Why (bug hunt H-274, devco:D-1012): lore doctor checks the org file
+// before any store open, and that check replayed the whole history again
+// in memory on every run, reading every row version: 77 s and 2.1 GB at
+// 100k commits, 21+ minutes and 3.3 GB at 1M.
+func savedAuthorityFile(dir string) string {
+	home, ok := storesHomeOf(dir)
+	if !ok {
+		return ""
+	}
+	own := false
+	clean := filepath.Clean(dir)
+	for _, e := range ReadCloneRecord(home).Clones {
+		if e.Why == WhyOwn && filepath.Clean(e.Path) == clean {
+			own = true
+		}
+	}
+	p := authorityFileFor(dir, home, own)
+	if p == "" {
+		return ""
+	}
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	return p
+}
+
 // keepAuthorityAt records file as the replay file of b's clone (an open's
 // choice, authorityFileFor).
 func (b *Backend) keepAuthorityAt(file string) {

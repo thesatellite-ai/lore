@@ -269,6 +269,35 @@ func (a *App) List(ctx context.Context, source store.Source, table row.Table) ([
 	return eng.List(ctx, source, table)
 }
 
+// RowNames names the row files of the store source without reading a row
+// (engine RowNames); ok false when they cannot be named here, and the
+// caller lists the rows (lint's copied_id, devco:D-1014).
+func (a *App) RowNames(ctx context.Context, source store.Source) ([]store.RowName, bool, error) {
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	if source == store.SourceRepo && a.noRepoStoreHere(ctx, eng) {
+		return nil, false, nil // List answers no rows there (D-631): list them
+	}
+	return eng.RowNames(ctx, source)
+}
+
+// ListIDs is List of the rows of table in source whose id is in want
+// (engine ListIDs: only those rows are read).
+func (a *App) ListIDs(ctx context.Context, source store.Source, table row.Table, want []ids.AnyID) ([]row.Row, error) {
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if source == store.SourceRepo && a.noRepoStoreHere(ctx, eng) {
+		if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
+			return nil, nil // as List (D-631)
+		}
+	}
+	return eng.ListIDs(ctx, source, table, want)
+}
+
 // noRepoStoreHere reports a store-only open (runOnDefaultStore: a read
 // under a setup from a plain folder) where no attached store answers for
 // the repo store: there is no "this repo" to read rows or a project of.

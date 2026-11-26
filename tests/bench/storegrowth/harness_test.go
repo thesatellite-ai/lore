@@ -23,6 +23,8 @@ package storegrowth
 //	STOREGROWTH_GENERATE_ONLY=1  seed and generate, record the generation
 //	                     time, the remote's size and the org file log on
 //	                     it, and time nothing else (the 1M acceptance run)
+//	STOREGROWTH_KEEP=<dir>  make each world in a new folder under dir and
+//	                     leave it there (to profile a command again on it)
 
 import (
 	"context"
@@ -330,6 +332,17 @@ func firstLine(s string) string {
 func newWorld(t *testing.T, bin string) *world {
 	t.Helper()
 	root := t.TempDir()
+	if keep := os.Getenv("STOREGROWTH_KEEP"); keep != "" {
+		// a kept world outlives the run, for profiling (doctor_test.go)
+		if err := os.MkdirAll(keep, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		d, err := os.MkdirTemp(keep, "world-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		root = d
+	}
 	w := &world{t: t, root: root, bin: filepath.Join(root, "bin"), home: filepath.Join(root, "mira")}
 	t.Cleanup(w.stopReadServers) // runs before the temp folder goes (cleanups run last-in first)
 	for _, d := range []string{w.bin, w.home, filepath.Join(root, "tmp"), filepath.Join(root, "hosts", "github.com", "acme-co")} {

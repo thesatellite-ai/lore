@@ -398,24 +398,34 @@ type cloneFilterDoc struct {
 // not take is a full clone (lore config check reports a bad value; wire
 // refuses it before any open).
 func cloneFilterOfHome(dir string) string {
+	home, ok := storesHomeOf(dir)
+	if !ok {
+		return CloneFilterNone
+	}
+	raw, err := os.ReadFile(filepath.Join(home, homeConfigFile)) // #nosec G304 -- the lore home's own settings file
+	if err != nil {
+		return CloneFilterNone
+	}
+	var doc cloneFilterDoc
+	if yamlerr.Decode(raw, &doc, yamlerr.Lenient) != nil {
+		return CloneFilterNone
+	}
+	if v := strings.TrimSpace(doc.Store.CloneFilter); ValidCloneFilter(v) {
+		return v
+	}
+	return CloneFilterNone
+}
+
+// storesHomeOf is the lore home whose stores folder holds the clone at
+// dir (<home>/stores/…), ok false when dir is under no stores folder.
+func storesHomeOf(dir string) (home string, ok bool) {
 	for d := filepath.Dir(dir); ; {
 		parent := filepath.Dir(d)
 		if filepath.Base(d) == StoresDir {
-			raw, err := os.ReadFile(filepath.Join(parent, homeConfigFile)) // #nosec G304 -- the lore home's own settings file
-			if err != nil {
-				return CloneFilterNone
-			}
-			var doc cloneFilterDoc
-			if yamlerr.Decode(raw, &doc, yamlerr.Lenient) != nil {
-				return CloneFilterNone
-			}
-			if v := strings.TrimSpace(doc.Store.CloneFilter); ValidCloneFilter(v) {
-				return v
-			}
-			return CloneFilterNone
+			return parent, true
 		}
 		if parent == d {
-			return CloneFilterNone
+			return "", false
 		}
 		d = parent
 	}

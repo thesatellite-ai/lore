@@ -22,9 +22,11 @@ package lint
 
 import (
 	"context"
+	"hash/maphash"
 	"slices"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -34,13 +36,137 @@ import (
 const CopiedID Code = "copied_id"
 
 // FindCopiedIDs is the copied_id findings of every attached store (lore
-// doctor counts them and points at lore lint --code copied_id).
+// doctor counts them and points at lore lint --code copied_id). When
+// every store's row files can be named (rowNamer) only the rows whose id
+// two stores hold are read (copyCandidates), else every row.
 func FindCopiedIDs(ctx context.Context, env Env) ([]Finding, error) {
+	if n, ok := env.(rowNamer); ok {
+		all, named, err := copyCandidates(ctx, env, n)
+		if err != nil {
+			return nil, err
+		}
+		if named {
+			return copiedIDs(all), nil
+		}
+	}
 	all, err := ops{env: env}.rows(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return copiedIDs(all), nil
+}
+
+// rowNamer is an Env that names each store's row files without reading
+// them and reads rows by id (the wire App).
+type rowNamer interface {
+	RowNames(ctx context.Context, source store.Source) ([]store.RowName, bool, error)
+	ListIDs(ctx context.Context, source store.Source, table row.Table, want []ids.AnyID) ([]row.Row, error)
+}
+
+// copyCandidates is the live rows, in store order as rows lists them, of
+// every id of a copy-hiding table that two or more stores name (the only
+// rows copiedIDs can report); named is false when a store's rows cannot
+// be named, and the caller reads every row. Each store's names are seen
+// once and dropped; only a 64-bit hash of each (table, id) is kept (a
+// hash shared by two ids only reads a few rows more). Why (bug hunt
+// H-276, devco:D-1014): copied_id read every row of every folder of a
+// store attached whole, 67 s and 2 GB of lore doctor at 100k commits.
+func copyCandidates(ctx context.Context, env Env, n rowNamer) (map[row.Table][]sourced, bool, error) {
+	ctx = engine.WithEveryCopy(engine.WithRawRead(ctx)) // as rowsOf: both copies, the stored text
+	hides := map[row.Table]bool{}
+	for _, def := range schema.Builtin() {
+		hides[def.Name] = engine.CopiesHide(def)
+	}
+	srcs := engine.ReadStoresOf(env)
+	seed := maphash.MakeSeed()
+	first := map[uint64]int{}                            // (table, id) hash ─▶ the first store naming it
+	want := make([]map[row.Table][]ids.AnyID, len(srcs)) // per store: the ids to read
+	add := func(i int, name store.RowName) {
+		if want[i] == nil {
+			want[i] = map[row.Table][]ids.AnyID{}
+		}
+		want[i][name.Table] = append(want[i][name.Table], name.ID) // ListIDs reads an id named twice once
+	}
+	listed := make([]map[row.Table][]row.Row, len(srcs)) // the stores that cannot name their rows: listed whole
+	for i, src := range srcs {
+		names, ok, err := n.RowNames(ctx, src)
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			if listed[i], names, err = listHiding(ctx, env, src, hides); err != nil {
+				return nil, false, err
+			}
+		}
+		for _, name := range names {
+			if !hides[name.Table] {
+				continue // a machine-local table or actors: copiedIDs skips it
+			}
+			h := maphash.String(seed, string(name.Table)+"/"+name.ID.String())
+			j, seen := first[h]
+			if !seen {
+				first[h] = i
+				continue
+			}
+			if j != i {
+				add(j, name)
+				add(i, name)
+			}
+		}
+	}
+	out := map[row.Table][]sourced{}
+	for i, src := range srcs {
+		if listed[i] != nil {
+			for t, rs := range listed[i] {
+				for _, r := range rs {
+					out[t] = append(out[t], sourced{src: src, r: r}) // ids no other store holds group with nothing
+				}
+			}
+			continue
+		}
+		tables := make([]row.Table, 0, len(want[i]))
+		for t := range want[i] {
+			tables = append(tables, t)
+		}
+		slices.Sort(tables)
+		for _, t := range tables {
+			rs, err := n.ListIDs(ctx, src, t, want[i][t])
+			if err != nil {
+				return nil, false, err
+			}
+			for _, r := range rs {
+				if !r.Deleted {
+					out[t] = append(out[t], sourced{src: src, r: r})
+				}
+			}
+		}
+	}
+	return out, true, nil
+}
+
+// listHiding is the live rows of every copy-hiding table of src (List)
+// and their names: a store whose row files cannot be named (a code
+// repo's folder) is read whole, as before.
+func listHiding(ctx context.Context, env Env, src store.Source, hides map[row.Table]bool) (map[row.Table][]row.Row, []store.RowName, error) {
+	rows := map[row.Table][]row.Row{}
+	var names []store.RowName
+	for _, def := range schema.Builtin() {
+		if !hides[def.Name] {
+			continue
+		}
+		rs, err := env.List(ctx, src, def.Name)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, r := range rs {
+			if r.Deleted {
+				continue
+			}
+			rows[def.Name] = append(rows[def.Name], r)
+			names = append(names, store.RowName{Table: def.Name, ID: r.ID})
+		}
+	}
+	return rows, names, nil
 }
 
 // copiedIDs reports every stale copy of a row another store holds too.

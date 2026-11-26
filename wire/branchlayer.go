@@ -472,6 +472,32 @@ func (l *layerBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.R
 	return out, store.Cursor(layerCursorPrefix + nowTip + layerCursorSep + string(next)), nil
 }
 
+// RowNames implements store.RowNamer: the clone's names, plus every row
+// the layer holds while this command reads it (Read lays them over the
+// clone's rows or adds them); ok false when the clone cannot name its
+// rows.
+func (l *layerBackend) RowNames(ctx context.Context) ([]store.RowName, bool, error) {
+	names, ok, err := rowNamesOf(ctx, l.inner)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	iso, err := l.isolated(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	if !iso {
+		return names, true, nil
+	}
+	_, layer, err := l.layerRows(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	for k := range layer {
+		names = append(names, store.RowName(k)) // a name twice is harmless
+	}
+	return names, true, nil
+}
+
 // parseLayerCursor splits a layer cursor into the layer tip and the
 // clone's cursor; any other cursor is the clone's own.
 func parseLayerCursor(c store.Cursor) (tip string, inner store.Cursor) {

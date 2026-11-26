@@ -654,10 +654,16 @@ func cloneAuthority(ctx context.Context, dir string) (*Backend, *authority) {
 	if err != nil {
 		return nil, nil
 	}
-	// it reads the replay a lore-owned clone keeps in its git folder, and
-	// never writes one (a person's own clone has none: lore never writes
-	// there)
-	b := &Backend{git: runner{bin: bin}, work: dir, mode: modeClone, authorityReadAt: authorityFileFor(dir, "", false)}
+	// it reads the replay the clone's opens keep (savedAuthorityFile: the
+	// git folder of a lore-owned clone, the lore home cache for a person's
+	// own clone in the stores folder), else the one a lore-owned clone keeps
+	// in its git folder, and never writes one: a replay it carries on stays
+	// in memory (devco:D-1004, D-1012)
+	read := savedAuthorityFile(dir)
+	if read == "" {
+		read = authorityFileFor(dir, "", false)
+	}
+	b := &Backend{git: runner{bin: bin}, work: dir, mode: modeClone, authorityReadAt: read}
 	h, err := b.head(ctx)
 	if err != nil || h == "" {
 		return nil, nil

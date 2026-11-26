@@ -112,3 +112,21 @@ func storeOnOldLayout(b store.Backend) bool {
 	m, ok := concrete(b).(markerBackend)
 	return ok && m.Marker().Version != 0 && m.Marker().Version < rowfs.MarkerFirstStores
 }
+
+// RowNames implements store.RowNamer: reads pass unchanged.
+func (g formatGuard) RowNames(ctx context.Context) ([]store.RowName, bool, error) {
+	return rowNamesOf(ctx, g.Backend)
+}
+
+// RowNames implements store.RowNamer: reads pass unchanged.
+func (g storeFormatGuard) RowNames(ctx context.Context) ([]store.RowName, bool, error) {
+	return rowNamesOf(ctx, g.Backend)
+}
+
+// rowNamesOf is b's store.RowNamer answer (ok false when b has none).
+func rowNamesOf(ctx context.Context, b store.Backend) ([]store.RowName, bool, error) {
+	if n, ok := b.(store.RowNamer); ok {
+		return n.RowNames(ctx)
+	}
+	return nil, false, nil
+}

@@ -51,6 +51,9 @@ type snapFill struct {
 	rows []store.Row
 	next store.Cursor
 	err  error
+	// byTable is rows grouped by table (table), made on first use.
+	groupOnce sync.Once
+	byTable   map[row.Table][]store.Row
 }
 
 type readSnapshotKey struct{}
@@ -90,7 +93,7 @@ func WithTableSnapshot(ctx context.Context) context.Context {
 // whole store under it are made once and shared until a write through the
 // engine drops them. It replaces any snapshot ctx already had.
 func WithReadSnapshot(ctx context.Context) context.Context {
-	return context.WithValue(ctx, readSnapshotKey{}, &readSnapshot{full: map[store.Backend]*snapFill{}})
+	return context.WithValue(ctx, readSnapshotKey{}, &readSnapshot{full: map[store.Backend]*snapFill{}, tables: map[tableFillKey]*snapFill{}})
 }
 
 // EnsureReadSnapshot is ctx when it has a read snapshot already (a doctor
@@ -111,9 +114,23 @@ func snapshotOf(ctx context.Context) *readSnapshot {
 // The slice is the caller's own (callers rewrite rows in place); the rows'
 // bytes are shared and never written to.
 func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error) {
+	f, ok, err := sharedFull(ctx, st)
+	if !ok {
+		return readAllOf(ctx, st)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	return slices.Clone(f.rows), f.next, nil
+}
+
+// sharedFull is st's full read through ctx's whole-store snapshot, filled
+// by the first reader and shared by the rest; ok is false when ctx has no
+// such snapshot (or st cannot key one) and the caller reads by itself.
+func sharedFull(ctx context.Context, st Attached) (*snapFill, bool, error) {
 	s := snapshotOf(ctx)
 	if s == nil || s.tablesOnly || !keyable(st.Backend) {
-		return readAllOf(ctx, st)
+		return nil, false, nil
 	}
 	s.mu.Lock()
 	f, ok := s.full[st.Backend]
@@ -128,16 +145,57 @@ func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error
 		select {
 		case <-f.done:
 		case <-ctx.Done():
-			return nil, "", ctx.Err()
+			return nil, true, ctx.Err()
 		}
 		if f.err != nil {
-			return readAllOf(ctx, st) // the filler's failure (its own context, say) is not this reader's
+			return nil, false, nil // the filler's failure (its own context, say) is not this reader's
 		}
 	}
 	if f.err != nil {
-		return nil, "", f.err
+		return nil, true, f.err
 	}
-	return slices.Clone(f.rows), f.next, nil
+	return f, true, nil
+}
+
+// table is f's rows of one table, grouped once per fill (byTable), so a
+// one-table read under a whole-store snapshot costs that table's rows,
+// not the store's. Why (bug hunt H-274, devco:D-1012): opening a store
+// with many folders lists the actors of every other folder once per
+// folder (hideMoveLeftovers); each of those reads cloned and scanned the
+// folder's whole row slice, so lore doctor's open grew with folders² x
+// rows: 81 s at 100k commits (23 folders), 21+ minutes at 1M (233).
+func (f *snapFill) table(t row.Table) []store.Row {
+	f.groupOnce.Do(func() {
+		f.byTable = map[row.Table][]store.Row{}
+		for _, r := range f.rows {
+			f.byTable[r.Table] = append(f.byTable[r.Table], r)
+		}
+	})
+	return slices.Clone(f.byTable[t])
+}
+
+// startedFull is st's full read in s when a reader started one already
+// (sharedFull), waited for; ok is false when none was started (or the one
+// started failed): the caller reads by itself and starts none.
+func (s *readSnapshot) startedFull(ctx context.Context, st Attached) (*snapFill, bool, error) {
+	if !keyable(st.Backend) {
+		return nil, false, nil
+	}
+	s.mu.Lock()
+	f, ok := s.full[st.Backend]
+	s.mu.Unlock()
+	if !ok {
+		return nil, false, nil
+	}
+	select {
+	case <-f.done:
+	case <-ctx.Done():
+		return nil, true, ctx.Err()
+	}
+	if f.err != nil {
+		return nil, false, nil
+	}
+	return f, true, nil
 }
 
 // fill runs f's read for st and publishes it (done closes even if the
@@ -204,17 +262,31 @@ func (s *readSnapshot) readTableShared(ctx context.Context, st Attached, table r
 var errFillAborted = errs.New(errs.Internal, "a shared store read did not finish")
 
 // readOneTable is the rows readTable filters for table: the run's shared
-// full read when ctx has a read snapshot (doctor's checks list ~80 tables,
-// so one full read serves them all), else a full read narrowed to table's
-// rows (store.WithTables). The backend may ignore the hint and return
-// every row; the caller keeps only table's rows either way.
+// full read when ctx has a read snapshot that read st already (doctor's
+// checks list ~80 tables, so one full read serves them all), else a read
+// narrowed to table's rows (store.WithTables), shared under a snapshot.
+// The backend may ignore the hint and return every row; the caller keeps
+// only table's rows either way.
+//
+// A one-table read never starts a whole-store read. Why (bug hunt H-276,
+// devco:D-1014): lore doctor's copied_id check opens every folder of a
+// store attached whole, and each open's identity read (the actors) filled
+// the folder's whole snapshot, so doctor read every row blob of every
+// folder: 67 s and 2 GB at 100k commits, minutes at 1M.
 func readOneTable(ctx context.Context, st Attached, table row.Table) ([]store.Row, error) {
 	if s := snapshotOf(ctx); s != nil {
 		if s.tablesOnly {
 			return s.readTableShared(ctx, st, table)
 		}
-		rows, _, err := readAll(ctx, st)
-		return rows, err
+		if f, ok, err := s.startedFull(ctx, st); ok {
+			if err != nil {
+				return nil, err
+			}
+			return f.table(table), nil
+		}
+		if keyable(st.Backend) {
+			return s.readTableShared(ctx, st, table)
+		}
 	}
 	rows, _, err := st.Backend.Read(store.WithTables(withMirror(ctx, st), table), "")
 	return rows, err

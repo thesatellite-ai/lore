@@ -702,6 +702,13 @@ func (b *storePush) Read(ctx context.Context, cursor store.Cursor) ([]store.Row,
 	return b.inner.Read(ctx, cursor)
 }
 
+// RowNames implements store.RowNamer: the inner backend's names after
+// the same refresh a Read makes.
+func (b *storePush) RowNames(ctx context.Context) ([]store.RowName, bool, error) {
+	b.refresh(ctx)
+	return rowNamesOf(ctx, b.inner)
+}
+
 // Get implements store.Backend.
 func (b *storePush) Get(ctx context.Context, table row.Table, id ids.AnyID) (store.Row, error) {
 	b.refresh(ctx)
