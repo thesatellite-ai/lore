@@ -20,7 +20,9 @@ package ask
 //	         ─▶ per kind, in bm25 order: searchrank.Order (words held,
 //	            names, title share, newest among full-title rows) ─▶ Score
 //	         ─▶ every kind merged by Score, a stale fact at 0.9 of it
-//	            (opssearch.RankScore), equal scores in kind order
+//	            (opssearch.RankScore) and its words held counted by their
+//	            rarity (opssearch.Rerank, devco:D-1007), equal scores in
+//	            kind order
 //
 // Calling `lore search` itself costs 200-300 ms a call (a full-text query
 // per word per kind and every hit's row file read), five times ask's
@@ -139,6 +141,9 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 	}
 	byTable := map[string][]cand{}
 	var tables []string
+	// df is how many rows hold each question word in the index, as each
+	// word's own search counts them in lore search (devco:D-1007)
+	df := make([]int, len(w.Terms))
 	for i := range rows {
 		r := &rows[i]
 		p, ok := at(r.ID)
@@ -155,6 +160,7 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 			if k >= len(w.Terms) || !got[k] {
 				continue
 			}
+			df[k]++
 			// a question term naming several words (E_QUOTA_MAX: several
 			// index terms; JobTimeLimit: one index term, its parts in
 			// q.parts) held as written names the asked thing as one thing:
@@ -208,14 +214,19 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 		byTable[r.Table] = append(byTable[r.Table], c)
 	}
 	distinctHeads(q, w.Terms, byTable, func(c *cand) ([]bool, []string, *int) { return c.got, c.headNames, &c.held })
+	// a stale fact's words count by their rarity, as in search
+	// (opssearch.Rerank, devco:D-1007): a stale row holding the question's
+	// common words does not pass a fresh row holding its rare one
+	share := searchrank.Share(df)
 	type hit struct {
-		id         string
-		held, fact int
-		heads      int
-		home       bool // a row of the repo's linked folder (q.home)
-		stale      bool
-		score      float64
-		table      int
+		id    string
+		held  float64
+		fact  int
+		heads int
+		home  bool // a row of the repo's linked folder (q.home)
+		stale bool
+		score float64
+		table int
 	}
 	// equal scores keep search's kind order (opssearch.Targets: by entity
 	// name, the same order as the table names ask reads)
@@ -242,10 +253,15 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 				s *= searchStaleRank
 			}
 			home := q.home != "" && c.row.Place == q.home
-			hits = append(hits, hit{id: c.row.ID, held: c.held, fact: c.fact, heads: c.heads, home: home, stale: c.row.Stale != "", score: s, table: ti})
+			held := float64(c.held)
+			if c.row.Stale != "" {
+				held *= searchrank.Weight(c.got[:len(w.Terms)], make([]bool, len(w.Terms)), share)
+			}
+			hits = append(hits, hit{id: c.row.ID, held: held, fact: c.fact, heads: c.heads, home: home, stale: c.row.Stale != "", score: s, table: ti})
 		}
 	}
-	// words held first (one more word always wins, as in Score), then
+	// words held first (one more word always wins, as in Score; a stale
+	// fact's words by their rarity, devco:D-1007), then
 	// the repo's linked folder before another folder or client, then
 	// what the row is (factOrder: an as-built note or a live fact before
 	// a planned one), then a fresh fact before a stale one, then Score.

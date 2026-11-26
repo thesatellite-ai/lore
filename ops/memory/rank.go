@@ -47,6 +47,36 @@ func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) 
 // word's search the any-word one does not cover), it runs again with
 // snippets, so the hits and counts are Match's exactly.
 func MatchCounting(ctx context.Context, match, bare MatchFunc, w searchrank.Words, limit int) ([]Hit, map[ids.AnyID]int, searchrank.Words, error) {
+	hits, words, w, err := MatchWords(ctx, match, bare, w, limit)
+	if err != nil {
+		return nil, nil, w, err
+	}
+	matched := make(map[ids.AnyID]int, len(words.Held))
+	for id, held := range words.Held {
+		for _, h := range held {
+			if h {
+				matched[id]++
+			}
+		}
+	}
+	return hits, matched, w, nil
+}
+
+// WordHits is which of a natural query's topic words each row holds by
+// its words' own searches (MatchWords): Held[id][k] for Terms[k], and DF[k]
+// how many rows word k's search found (at most the search's limit), the
+// counts searchrank.Share weighs a word's rarity by (devco:D-1007).
+type WordHits struct {
+	Held map[ids.AnyID][]bool
+	DF   []int
+}
+
+// MatchWords is MatchCounting keeping which words each row holds and how
+// many rows each word's search found (WordHits), not only a count per
+// row: lore search weighs a stale fact's and a card's words by their
+// rarity (devco:D-1007). Empty WordHits for a query that is not Natural.
+func MatchWords(ctx context.Context, match, bare MatchFunc, w searchrank.Words, limit int) ([]Hit, WordHits, searchrank.Words, error) {
+	var words WordHits
 	hits, err := match(ctx, w.FTS, limit)
 	if errs.Has(err, errs.InvalidInput) {
 		if plain, ok := w.Plain(); ok {
@@ -60,12 +90,13 @@ func MatchCounting(ctx context.Context, match, bare MatchFunc, w searchrank.Word
 		}
 	}
 	if err != nil {
-		return nil, nil, w, err
+		return nil, words, w, err
 	}
-	matched := map[ids.AnyID]int{}
+	words.Held = map[ids.AnyID][]bool{}
 	if !w.Natural {
-		return hits, matched, w, nil
+		return hits, words, w, nil
 	}
+	words.DF = make([]int, len(w.Terms))
 	found := make(map[ids.AnyID]bool, len(hits))
 	for _, h := range hits {
 		found[h.ID] = true
@@ -73,23 +104,29 @@ func MatchCounting(ctx context.Context, match, bare MatchFunc, w searchrank.Word
 	if len(hits) >= limit {
 		bare = nil // the any-word search was cut: a word can find rows past it
 	}
-	for _, term := range w.Terms {
+	for k, term := range w.Terms {
 		th, terr := termHits(ctx, match, bare, w.TermFTS(term), limit, found)
 		if errs.Has(terr, errs.InvalidInput) {
 			continue // a word FTS5 cannot read on its own counts nowhere
 		}
 		if terr != nil {
-			return nil, nil, w, terr
+			return nil, WordHits{}, w, terr
 		}
+		words.DF[k] = len(th)
 		for _, h := range th {
-			matched[h.ID]++
+			held := words.Held[h.ID]
+			if held == nil {
+				held = make([]bool, len(w.Terms))
+				words.Held[h.ID] = held
+			}
+			held[k] = true
 			if !found[h.ID] {
 				found[h.ID] = true
 				hits = append(hits, h)
 			}
 		}
 	}
-	return hits, matched, w, nil
+	return hits, words, w, nil
 }
 
 // termHits is one topic word's search: bare when it is set and finds no

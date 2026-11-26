@@ -177,6 +177,13 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	// known (Result.More) and the list can say more rows match
 	perTable := r.PerTable
 	r.PerTable++
+	// devco:D-1007: how many knowledge rows each topic word's own search
+	// found, over every kind but the cards (their words are what is
+	// weighed), for each word's rarity (searchrank.Share, Rerank)
+	var df []int
+	if words.Natural {
+		df = make([]int, len(words.Terms))
+	}
 	for _, t := range r.Targets {
 		var hits []opssearch.Hit
 		switch {
@@ -193,7 +200,13 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		case len(conds) > 0 && ftsText == "":
 			continue // only field conditions (and negated words): nothing for other tables
 		default:
-			hits, err = a.searchCoreTable(ctx, eng, t, words, sc, r.PerTable)
+			var tdf []int
+			hits, tdf, err = a.searchCoreTable(ctx, eng, t, words, sc, r.PerTable)
+			if len(tdf) == len(df) && !opssearch.Card(t.Entity) {
+				for k := range df {
+					df[k] += tdf[k]
+				}
+			}
 		}
 		if err != nil {
 			return opssearch.Result{}, err
@@ -216,11 +229,15 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	// first hit is what an agent takes as the answer.
 	// devco:D-941: a stale fact ranks below a fresh hit with the same match
 	a.markStaleHits(ctx, res.Hits)
+	// devco:D-1007: a stale fact's and a card's description words count
+	// by their rarity, and a card follows a knowledge row of equal rank,
+	// so neither leads on the question's common words
+	opssearch.Rerank(res.Hits, len(df), searchrank.Share(df))
 	sort.SliceStable(res.Hits, func(i, j int) bool {
 		if hi, hj := res.Hits[i].History != "", res.Hits[j].History != ""; hi != hj {
 			return hj
 		}
-		return opssearch.RankScore(res.Hits[i]) > opssearch.RankScore(res.Hits[j])
+		return opssearch.Before(res.Hits[i], res.Hits[j]) < 0
 	})
 	// D-942: a comment is history, listed under the row it is on (that row
 	// listed first when only the comment matched), before the cut so a
@@ -339,14 +356,17 @@ func quoteSearch(s string) string { return `"` + s + `"` }
 // words FTS5 rejects are retried once with every word quoted (v0.1.17's
 // fallback); both in opsmemory.Match, as in every `<kind> search`.
 // Syntax with no topic word left (`"`, `(`, `AND`) is E_INVALID_INPUT.
-func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssearch.Target, w searchrank.Words, sc searchScope, perTable int) ([]opssearch.Hit, error) {
+//
+// df is how many rows each topic word's own search found in t (nil for
+// a query that is not Natural), for the words' rarity (devco:D-1007).
+func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssearch.Target, w searchrank.Words, sc searchScope, perTable int) ([]opssearch.Hit, []int, error) {
 	// D-435: how many topic words each row holds, by each word's own
 	// search (the index's stemming and segmentation, so a word counts
 	// exactly where the any-word search found it); a row only a word's
 	// search finds (the filled-in text of row_expanded) is a hit too.
 	// devco:D-808: each word's own search runs without snippets
 	// (MatchCounting) when the any-word search holds every row it finds.
-	hits, matched, w, err := opsmemory.MatchCounting(ctx, func(ctx context.Context, m string, n int) ([]opsmemory.Hit, error) {
+	hits, byWord, w, err := opsmemory.MatchWords(ctx, func(ctx context.Context, m string, n int) ([]opsmemory.Hit, error) {
 		return a.Search(ctx, t.Table, m, n)
 	}, func(ctx context.Context, m string, n int) ([]opsmemory.Hit, error) {
 		return a.SearchBare(ctx, t.Table, m, n)
@@ -354,7 +374,7 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 	if err != nil {
 		// a refused query keeps the cache's message (the query and FTS5's
 		// reason) and hint: the same error as every `<kind> search` (D-475)
-		return nil, err
+		return nil, nil, err
 	}
 	// The words a row's own text holds count too (opsmemory.Held).
 	// Resources are left to the index: their text is field values,
@@ -364,12 +384,45 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 	if def, ok := eng.Registry().Table(t.Table); ok && t.Entity != opssearch.EntityResource {
 		ftsFields = def.FTS
 	}
-	held := func(id ids.AnyID, r row.Row) int {
+	textOf := func(r row.Row) string {
 		var text strings.Builder
 		for _, f := range ftsFields {
 			text.WriteString(searchField(r, f) + "\n")
 		}
-		return opsmemory.Held(w, matched[id], text.String())
+		return text.String()
+	}
+	held := func(id ids.AnyID, r row.Row) int {
+		n := 0
+		for _, h := range byWord.Held[id] {
+			if h {
+				n++
+			}
+		}
+		return opsmemory.Held(w, n, textOf(r))
+	}
+	// wordsOf marks the hit's words (devco:D-1007): those its words' own
+	// searches found, or its text covers (as held counts them); and for a
+	// resource the words its name holds, which count in full
+	wordsOf := func(h *opssearch.Hit, id ids.AnyID, r row.Row) {
+		if !w.Natural {
+			return
+		}
+		h.Held = slices.Clone(byWord.Held[id])
+		if h.Held == nil {
+			h.Held = make([]bool, len(w.Terms))
+		}
+		text := textOf(r)
+		for k, term := range w.Terms {
+			if !h.Held[k] && text != "" && querywords.Coverage(text, []string{term}) == 1 {
+				h.Held[k] = true
+			}
+		}
+		if t.Entity == opssearch.EntityResource {
+			h.NameHeld = make([]bool, len(w.Terms))
+			for k, term := range w.Terms {
+				h.NameHeld[k] = querywords.Coverage(h.Title, []string{term}) == 1
+			}
+		}
 	}
 	// devco:D-797: only the hit rows are read (eng.ListIDs), per store,
 	// never the whole table: a 5,000-row folder read every row file here
@@ -383,7 +436,7 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 	for src, idList := range want {
 		list, err := eng.ListIDs(ctx, src, t.Table, idList)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		byID := make(map[ids.AnyID]row.Row, len(list))
 		for _, r := range list {
@@ -402,7 +455,9 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		if h.Source == store.SourceRepo {
 			if sc.keeps(t, r) {
-				out = append(out, rankedHit{hit: hitOf(t, h.ID.String(), h.Snippet, r, a.Now()), matched: held(h.ID, r), at: schema.RowDate(r)})
+				hit := hitOf(t, h.ID.String(), h.Snippet, r, a.Now())
+				wordsOf(&hit, h.ID, r)
+				out = append(out, rankedHit{hit: hit, matched: held(h.ID, r), at: schema.RowDate(r)})
 			}
 			continue
 		}
@@ -413,11 +468,12 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		hit := hitOf(t, h.ID.String(), h.Snippet, r, a.Now())
 		hit.Source = a.DescribeSource(h.Source)
+		wordsOf(&hit, h.ID, r)
 		out = append(out, rankedHit{hit: hit, matched: held(h.ID, r), at: schema.RowDate(r)})
 	}
 	// devco:D-929: one copy per row id: eng.ListIDs lists a row two stores
 	// hold (store adopt keeps ids) at its newest copy only (stale_copy.go)
-	return rankTable(out, w, perTable), nil
+	return rankTable(out, w, perTable), byWord.DF, nil
 }
 
 // hitLabel is what names a hit for ranking (searchrank.Label): its title,

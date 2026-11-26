@@ -114,7 +114,16 @@ func GroupComments(hits []Hit, parent CommentParent) []Hit {
 			}
 			return 1
 		}
-		return cmp.Compare(b.rank, a.rank)
+		if c := cmp.Compare(b.rank, a.rank); c != 0 {
+			return c
+		}
+		if a.card != b.card { // devco:D-1007: as Before orders the hits
+			if b.card {
+				return -1
+			}
+			return 1
+		}
+		return 0
 	})
 	out := make([]Hit, 0, len(hits)+len(rows))
 	for _, g := range groups {
@@ -129,6 +138,7 @@ type hitGroup struct {
 	hits    []Hit
 	history bool    // the group stands after the current hits
 	rank    float64 // the group's place among groups of its kind, best first
+	card    bool    // head is a card: after a knowledge group of the same rank (Before)
 }
 
 // groupOf ranks head and its comments as one: a row that is history
@@ -136,18 +146,20 @@ type hitGroup struct {
 // hits; otherwise the group takes its best match (the row rises to its
 // best comment), cut by staleRank when head is a stale fact (RankScore).
 func groupOf(head Hit, comments []Hit) hitGroup {
-	g := hitGroup{hits: append([]Hit{head}, comments...)}
+	g := hitGroup{hits: append([]Hit{head}, comments...), card: Card(head.Entity)}
 	if head.History != "" && head.ViaComment == "" {
 		g.history, g.rank = true, RankScore(head)
 		return g
 	}
-	best := head.Score
+	// the head at its own rank (RankScore: weighed by Rerank, cut when
+	// stale), a comment at its score, cut too when head is stale
+	g.rank = RankScore(head)
 	for _, c := range comments {
-		best = max(best, c.Score)
-	}
-	g.rank = best
-	if head.Stale != "" {
-		g.rank = best * staleRank
+		s := c.Score
+		if head.Stale != "" {
+			s *= staleRank
+		}
+		g.rank = max(g.rank, s)
 	}
 	return g
 }

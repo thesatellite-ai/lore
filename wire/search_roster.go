@@ -26,28 +26,39 @@ import (
 //
 //	words ─▶ roster list ─▶ rows holding ≥1 word ─▶ rankTable (title = name)
 func (a *App) searchRoster(ctx context.Context, t opssearch.Target, w searchrank.Words, perTable int) ([]opssearch.Hit, error) {
-	terms := make([]string, 0, len(w.Terms))
-	for _, term := range w.Terms {
-		if term = strings.ToLower(strings.TrimSuffix(term, "*")); term != "" {
-			terms = append(terms, term)
-		}
+	// terms by w.Terms index ("" for a word that is only '*')
+	terms := make([]string, len(w.Terms))
+	some := false
+	for k, term := range w.Terms {
+		terms[k] = strings.ToLower(strings.TrimSuffix(term, "*"))
+		some = some || terms[k] != ""
 	}
-	if len(terms) == 0 {
+	if !some {
 		return nil, nil
 	}
 	var in []rankedHit
-	add := func(id, title, body string, fields ...string) {
-		hay := strings.ToLower(strings.Join(fields, "\n"))
+	// add lists one person or team holding a word in its fields; names
+	// are the fields that name it (devco:D-1007): a word there counts in
+	// full in the merged order, a word only the rest holds (a team's
+	// display name, which reads as a description) by its rarity
+	add := func(id, title, body string, names []string, fields ...string) {
+		hay := strings.ToLower(strings.Join(append(slices.Clone(names), fields...), "\n"))
+		named := strings.ToLower(strings.Join(names, "\n"))
+		heldW, nameW := make([]bool, len(terms)), make([]bool, len(terms))
 		n := 0
-		for _, term := range terms {
-			if strings.Contains(hay, term) {
+		for k, term := range terms {
+			if term != "" && strings.Contains(hay, term) {
 				n++
+				heldW[k], nameW[k] = true, strings.Contains(named, term)
 			}
 		}
 		if n == 0 {
 			return
 		}
 		h := opssearch.Hit{EntityTable: t.Table.String(), Entity: t.Entity, ID: id, Pretty: id, Title: title, Body: title, Snippet: body}
+		if w.Natural {
+			h.Held, h.NameHeld = heldW, nameW
+		}
 		in = append(in, rankedHit{hit: h, matched: n})
 	}
 	switch t.Entity {
@@ -58,7 +69,8 @@ func (a *App) searchRoster(ctx context.Context, t opssearch.Target, w searchrank
 			return nil, err
 		}
 		for _, m := range out.Members {
-			add(m.ID, m.Name, rosterHandle(m.Handle)+" "+m.Email, m.Name, m.Handle, m.Email, m.GitHub)
+			// a person's name, handle, email and GitHub login all name them
+			add(m.ID, m.Name, rosterHandle(m.Handle)+" "+m.Email, []string{m.Name, m.Handle, m.Email, m.GitHub})
 		}
 	case opssearch.EntityTeam:
 		var out opsteam.TeamListOut
@@ -68,7 +80,7 @@ func (a *App) searchRoster(ctx context.Context, t opssearch.Target, w searchrank
 		}
 		for _, tm := range out.Teams {
 			if tm.Active {
-				add(tm.ID, rosterHandle(tm.Handle), tm.Name, tm.Handle, tm.Name)
+				add(tm.ID, rosterHandle(tm.Handle), tm.Name, []string{tm.Handle}, tm.Name)
 			}
 		}
 	}

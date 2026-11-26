@@ -16,6 +16,7 @@
 package search
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"sort"
@@ -25,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/logic/factstale"
 	"github.com/thesatellite-ai/lore/logic/metaquery"
+	"github.com/thesatellite-ai/lore/logic/searchrank"
 	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -258,6 +260,16 @@ type Hit struct {
 	// Fact is the hit row's evidence claim (nil when it names none), read
 	// by the wire layer to set Stale; never in --json.
 	Fact *factstale.Claim `json:"-"`
+	// Held marks which of a natural query's topic words the hit holds
+	// (by searchrank.Words.Terms index) and NameHeld which of them its
+	// name or handle holds (a card: Card); nil for a query of one word,
+	// in FTS5 syntax or with conditions. Read by Rerank; never in --json.
+	Held     []bool `json:"-"`
+	NameHeld []bool `json:"-"`
+	// rank is the score the hit is ordered by (Rerank, devco:D-1007),
+	// set when ranked is; RankScore reads it.
+	rank   float64
+	ranked bool
 	// Text is the row's whole text (its body, else its longest searched
 	// field other than the title), set only with --full (devco D-758,
 	// owner P-8): the snippet stops after a few words, and reading a note
@@ -274,12 +286,70 @@ type Hit struct {
 const staleRank = 0.9
 
 // RankScore is the score a hit is ordered by: its score, cut for a stale
-// fact (Hit.Stale). The printed score stays the match's own.
+// fact (Hit.Stale), and, once Rerank weighed it, its common words
+// counted by rarity when it is a stale fact or a card. The printed score
+// stays the match's own.
 func RankScore(h Hit) float64 {
-	if h.Stale != "" {
-		return h.Score * staleRank
+	s := h.Score
+	if h.ranked {
+		s = h.rank
 	}
-	return h.Score
+	if h.Stale != "" {
+		return s * staleRank
+	}
+	return s
+}
+
+// Card reports whether entity is a card kind (devco:D-1007): a person,
+// a team or a resource, a row that says who or what something is rather
+// than how it works. Its name and handle count in full; a word only its
+// description or fields hold counts by its rarity (Rerank), and it ranks
+// after a knowledge row of the same score (Before).
+func Card(entity string) bool {
+	return entity == EntityMember || entity == EntityTeam || entity == EntityResource
+}
+
+// Rerank weighs the hits of a natural query of n words for the merged
+// order (devco:D-1007): a stale fact's words and a card's description
+// words count by their rarity (share, searchrank.Share by Terms index),
+// so neither outranks a fresh knowledge row on the question's common
+// words; a card's name and handle words, and every word of a fresh
+// knowledge row, count in full. Hits without Held keep their score.
+func Rerank(hits []Hit, n int, share []float64) {
+	for i := range hits {
+		h := &hits[i]
+		card := Card(h.Entity)
+		if len(h.Held) != n || (!card && h.Stale == "") {
+			continue
+		}
+		full := make([]bool, n)
+		matched := 0
+		for k, held := range h.Held {
+			if held {
+				matched++
+			}
+			full[k] = card && k < len(h.NameHeld) && h.NameHeld[k]
+		}
+		h.rank = searchrank.Weighted(h.Score, matched, n, searchrank.Weight(h.Held, full, share))
+		h.ranked = true
+	}
+}
+
+// Before is the merged order of two current hits (devco D-436, D-941,
+// D-1007): the higher RankScore first, and at an equal one a knowledge
+// row before a card. -1 when a goes first, 1 when b does, 0 to keep
+// their order (kind order).
+func Before(a, b Hit) int {
+	if c := cmp.Compare(RankScore(b), RankScore(a)); c != 0 {
+		return c
+	}
+	if ca, cb := Card(a.Entity), Card(b.Entity); ca != cb {
+		if cb {
+			return -1
+		}
+		return 1
+	}
+	return 0
 }
 
 // Result is what Env.GlobalSearch found: the merged, cut hits (trash tail

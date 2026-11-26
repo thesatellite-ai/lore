@@ -12,7 +12,9 @@ package stories
 // printed and clears it), doctor counts it, and search and ask mark it and
 // rank it below a fresh note with the same match, also when only a
 // comment on it matched (with D-942); show and ask about the file say it is
-// stale and print the same re-verify command (D-953).
+// stale and print the same re-verify command (D-953); a stale note holding
+// the question's common words ranks below a fresh note holding its rare
+// ones (D-1007).
 
 import (
 	"encoding/json"
@@ -226,6 +228,50 @@ func TestStoryOStaleFactFlagged(t *testing.T) {
 		}
 		if at+1 >= len(hits) || hits[at+1].CommentOn.ID != stale {
 			t.Fatalf("the comment is not directly under its row:\n%s", raw)
+		}
+	})
+
+	// devco:D-1007 (set 8 ask 6): the stale note holds three of the
+	// question's common words (refund, order, total), a fresh note its two
+	// rare ones (heron, export). The stale note ranked first in search and
+	// took ask's first slot: 0.9 of its score did not outweigh one more
+	// word. A stale fact's words now count by their rarity, so the fresh
+	// note leads in both.
+	s.Step("D-1007/a-stale-note-on-common-words-ranks-below-a-fresh-rare-one", func() {
+		heron := oAddedID(t, ada.Lore(pc.Dir, "memory", "add", "--body", "heron export writes one file per day", "--json").OK(t))
+		for _, b := range []string{"order total shows in the cart", "an order ships in two days", "the order page lists items", "total tax is per line", "the total is rounded up", "a grand total row closes the invoice"} {
+			ada.Lore(pc.Dir, "memory", "add", "--body", b).OK(t)
+		}
+		q := "how does the heron export handle the order total of a refund"
+		var sr struct {
+			Data struct {
+				Hits []struct {
+					ID string `json:"id"`
+				} `json:"hits"`
+			} `json:"data"`
+		}
+		raw := ada.Lore(pc.Dir, "search", "--query", q, "--json").OK(t).Stdout
+		if err := json.Unmarshal([]byte(raw), &sr); err != nil {
+			t.Fatalf("%v: %s", err, raw)
+		}
+		order := map[string]int{}
+		for i, h := range sr.Data.Hits {
+			order[h.ID] = i + 1
+		}
+		if order[heron] != 1 || order[stale] == 0 {
+			t.Fatalf("search: want the fresh note %s first and the stale %s listed:\n%s", heron, stale, raw)
+		}
+		var ar struct {
+			Rows []struct {
+				ID string `json:"id"`
+			} `json:"rows"`
+		}
+		ans := ada.Lore(pc.Dir, "ask", "--query", q, "--json").OK(t).Stdout
+		if err := json.Unmarshal([]byte(ans), &ar); err != nil {
+			t.Fatalf("%v: %s", err, ans)
+		}
+		if len(ar.Rows) == 0 || ar.Rows[0].ID != heron {
+			t.Fatalf("ask: want the fresh note %s first:\n%s", heron, ans)
 		}
 	})
 
