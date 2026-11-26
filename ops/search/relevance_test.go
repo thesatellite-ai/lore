@@ -38,6 +38,9 @@ var relevanceRows = []relevanceRow{
 	{"taskRotate", schema.TableTasks, map[string]string{"title": "Rotate the Pinecrest database password"}},
 	{"incOutage", schema.TableIncidents, map[string]string{"title": "Orbit outage after a failed migration", "body": "The migration locked the users table for ten minutes."}},
 	{"arcBilling", schema.TableArchitectureNotes, map[string]string{"title": "Orbit talks to the billing service over NATS", "body": "Events go through one subject per tenant."}},
+	// devco:D-1009: rows naming a code identifier in camelCase
+	{"memCronJobs", schema.TableMemories, map[string]string{"body": "The cron binary starts every job named in its enabledJobs list."}},
+	{"ruleCallback", schema.TableRules, map[string]string{"body": "Webhook replies go to the callbackHost each app sets."}},
 }
 
 // relevanceCases are the guard of D-435/D-436: a plain question finds its
@@ -76,6 +79,13 @@ var relevanceCases = []struct {
 	{query: "checkl*", first: "decChecklist"},
 	{query: "datab*", top: []string{"taskRotate", "pbkRestore"}},
 	{query: "orbi* outage", first: "incOutage"},
+	// devco:D-1009 (bug hunt H-271): an identifier written with _ - or .
+	// finds the row writing it in camelCase (the index reads enabledJobs
+	// as one word, enabled_jobs as two)
+	{query: "enabled_jobs", first: "memCronJobs"},
+	{query: "which jobs are in enabled-jobs", first: "memCronJobs"},
+	{query: "callback_host", first: "ruleCallback"},
+	{query: "callback.host", first: "ruleCallback"},
 }
 
 // seedRelevance writes relevanceRows and returns key -> id and id -> key.

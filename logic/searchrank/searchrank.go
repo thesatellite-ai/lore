@@ -228,7 +228,7 @@ func Forms(term string) []string {
 	}
 	for _, r := range term {
 		if r > 0x7f || !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
-			return []string{term}
+			return symbolForms(term)
 		}
 	}
 	stem := querywords.Stem(term)
@@ -242,6 +242,40 @@ func Forms(term string) []string {
 		}
 	}
 	return forms
+}
+
+// symbolForms is the forms of a word that is not plain ASCII letters
+// and digits: the word, and for a code identifier whose parts are joined
+// by _ - or . (enabled_jobs, callback-host) also its parts written
+// together (enabledjobs), the spelling camelCase gives it in the index.
+// Why (devco:D-1009, bug hunt H-271): the index reads enabledJobs as one
+// term and enabled_jobs as two, so a search for one spelling never found
+// a row writing the other.
+func symbolForms(term string) []string {
+	joined := strings.Map(func(r rune) rune {
+		if r == '_' || r == '-' || r == '.' {
+			return -1
+		}
+		return r
+	}, term)
+	if joined == term || len(joined) < minFormWord || strings.Trim(term, "_-.") != term {
+		return []string{term}
+	}
+	for _, r := range joined {
+		if r > 0x7f || !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
+			return []string{term}
+		}
+	}
+	named := 0 // parts holding a letter: v0.1.47 and 1-5 are no names
+	for _, p := range strings.FieldsFunc(term, func(r rune) bool { return r == '_' || r == '-' || r == '.' }) {
+		if strings.IndexFunc(p, func(r rune) bool { return r >= 'a' && r <= 'z' }) >= 0 {
+			named++
+		}
+	}
+	if named < 2 {
+		return []string{term}
+	}
+	return []string{term, joined}
 }
 
 // termMatch is the FTS5 text of one topic word: any of its forms

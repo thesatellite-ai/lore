@@ -269,3 +269,29 @@ func TestPlanColonIsWords(t *testing.T) {
 		t.Errorf("syntax plan %+v", w)
 	}
 }
+
+// TestFormsJoinIdentifier (devco:D-1009, bug hunt H-271): a code
+// identifier whose parts are joined by _ - or . is also searched with its
+// parts written together, the one index term camelCase gives it
+// (enabledJobs), so either spelling finds the other; a version or a
+// number range is no name and keeps its one form.
+func TestFormsJoinIdentifier(t *testing.T) {
+	cases := map[string][]string{
+		"enabled_jobs":  {"enabled_jobs", "enabledjobs"},
+		"callback-host": {"callback-host", "callbackhost"},
+		"pim.setvalues": {"pim.setvalues", "pimsetvalues"},
+		"v0.1.47":       {"v0.1.47"},
+		"1-5":           {"1-5"},
+		"e.g":           {"e.g"},
+		"_private":      {"_private"},
+		"café_menu":     {"café_menu"},
+	}
+	for term, want := range cases {
+		if got := Forms(term); !slices.Equal(got, want) {
+			t.Errorf("Forms(%q) = %q, want %q", term, got, want)
+		}
+	}
+	if got := Of("enabled_jobs").FTS; !strings.Contains(got, `"enabledjobs"`) {
+		t.Errorf("FTS of enabled_jobs = %q, want the joined form searched too", got)
+	}
+}

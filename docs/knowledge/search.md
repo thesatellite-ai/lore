@@ -135,7 +135,7 @@ memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.8
 
 ## Try it: whole words, prefixes and several words
 
-Search matches whole words, upper or lower case alike, with accents ignored (`cafe` finds "café"); the Turkish dotted and dotless i count as one letter, so `ISPANAK` finds "ıspanak" and `diyarbakır` finds "DİYARBAKIR", and the hit shows the text as it was written. Other forms of a word match too: `invoice` finds "invoices", `deploy` finds "deploying" and "deployment". Put `*` at the end to match every word that starts with those letters; a title word that starts with them counts as a word in the title. Several words list the rows that hold all of them first, then the rows that hold most of them.
+Search matches whole words, upper or lower case alike, with accents ignored (`cafe` finds "café"); the Turkish dotted and dotless i count as one letter, so `ISPANAK` finds "ıspanak" and `diyarbakır` finds "DİYARBAKIR", and the hit shows the text as it was written. Other forms of a word match too: `invoice` finds "invoices", `deploy` finds "deploying" and "deployment". A code name written with `_`, `-` or `.` also finds it written in one piece: `enabled_jobs` and `enabled-jobs` find "enabledJobs". Put `*` at the end to match every word that starts with those letters; a title word that starts with them counts as a word in the title. Several words list the rows that hold all of them first, then the rows that hold most of them.
 
 <!-- example: search#word-forms only=2,3,4,5 -->
 ```console
