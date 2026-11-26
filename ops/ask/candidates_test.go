@@ -88,38 +88,36 @@ func TestCandidatesAfterFullRows(t *testing.T) {
 	}
 }
 
-// TestCandidatesNextInSearchOrder: the rows cap leaves out are the list's
-// rows, in the answer's order, before the rows past --top.
+// TestCandidatesNextInSearchOrder: the list's rows are lore search's
+// next rows after the ones printed in full, in search's order (H-270,
+// devco D-1008: before, the rows cap left out in the answer's order).
 func TestCandidatesNextInSearchOrder(t *testing.T) {
 	t.Parallel()
 	q := parseQuestion("can two shop imports run at the same time for the same workflow and workspace", now)
 	q.home = "kb/app"
-	wide := build(q, manyRowsFixture(), 30, 100000) // every row in full
-	var order []string
-	for _, r := range wide.Ranked {
-		if r.Kind == KindRow {
-			order = append(order, r.ID)
+	o := build(q, manyRowsFixture(), 0, 900)
+	printed := map[string]bool{}
+	for _, r := range o.Ranked {
+		printed[r.ID] = true
+	}
+	var order []string // search's order without the rows printed in full
+	for _, id := range plainOrder(q, manyRowsFixture().rows, nil) {
+		if !printed[id] {
+			order = append(order, id)
 		}
 	}
-	o := build(q, manyRowsFixture(), 0, 900)
 	var rows []string
 	for _, c := range o.Candidates {
 		if c.Kind == KindRow {
 			rows = append(rows, c.ID)
 		}
 	}
-	shown := 0
-	for _, r := range o.Ranked {
-		if r.Kind == KindRow {
-			shown++
-		}
-	}
-	if len(rows) == 0 || shown+len(rows) > len(order) {
-		t.Fatalf("rows %v after %d shown; full order %v\n%s", rows, shown, order, o.Text())
+	if len(rows) == 0 || len(rows) > len(order) {
+		t.Fatalf("rows %v; search's next rows %v\n%s", rows, order, o.Text())
 	}
 	for i, id := range rows {
-		if order[shown+i] != id {
-			t.Errorf("candidate rows %v, want the next of search's order %v\n%s", rows, order[shown:], o.Text())
+		if order[i] != id {
+			t.Errorf("candidate rows %v, want the next of search's order %v\n%s", rows, order, o.Text())
 			break
 		}
 	}
@@ -136,9 +134,12 @@ func TestCandidatesJSONAndDeterministic(t *testing.T) {
 		t.Errorf("two runs differ:\n%s\n%s", a, b)
 	}
 	var got struct {
-		Candidates []map[string]string `json:"candidates"`
+		Candidates []struct {
+			Line string `json:"line"`
+			Rank int    `json:"rank"`
+		} `json:"candidates"`
 	}
-	if err := json.Unmarshal(a, &got); err != nil || len(got.Candidates) == 0 || got.Candidates[0]["line"] == "" {
+	if err := json.Unmarshal(a, &got); err != nil || len(got.Candidates) == 0 || got.Candidates[0].Line == "" || got.Candidates[0].Rank == 0 {
 		t.Errorf("--json has no candidates with a line: %v %s", err, a)
 	}
 	who := build(parseQuestion("who is shop_app", now), shopFixture(), 0, 0)

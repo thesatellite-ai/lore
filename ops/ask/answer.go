@@ -143,6 +143,8 @@ type rowSplit struct {
 	label   splitSlot[[]string]
 	idents  splitSlot[[][]string]
 	secs    splitSlot[[]rowSection]
+	// bases is the querywords.Base of every word of the row (coverOf)
+	bases splitSlot[map[string]bool]
 }
 
 // splitSlot is one word set of a rowSplit and whether it is built (a
@@ -465,6 +467,8 @@ func build(q question, d data, top, maxChars int) Out {
 		out.Rows = slices.DeleteFunc(rows, func(r Row) bool { return len(r.Matched) < 2 })
 		lead = len(out.Rows)
 	default:
+		q.search = &searchList{} // H-270: filled by topRows (plainOrder)
+		out.q.search = q.search
 		out.Rows, lead = topRows(q, ms, d.rows, d.view, top+maxCandidates)
 		out.Rows, more, lead = pastTop(out.Rows, top, lead)
 		if len(out.Rows) == 0 && len(ms) > 0 && !q.about {
@@ -482,6 +486,7 @@ func build(q question, d data, top, maxChars int) Out {
 		}
 	}
 	names := nameIndex(d.resources)
+	out.names = names // H-270: candidates past ask's own rows are read the same way
 	for _, rs := range [][]Row{out.Rows, more} {
 		for i := range rs {
 			r := &rs[i]
@@ -1164,6 +1169,14 @@ func topRows(q question, ms []match, rows []textRow, v *meaningView, top int) ([
 	// devco D-984: the rows in lore search's order (searchorder.go)
 	if !q.about && q.window.IsZero() && q.file == "" {
 		q.order = searchOrder(q, ms, rows, v)
+		if q.search != nil && q.order != nil {
+			// H-270: the candidate list follows search's own order
+			q.search.ids = plainOrder(q, rows, v)
+			q.search.rows = make(map[string]*textRow, len(rows))
+			for i := range rows {
+				q.search.rows[rows[i].ID] = &rows[i]
+			}
+		}
 	}
 	searched := q.order != nil
 	if searched {
@@ -1650,7 +1663,7 @@ func (o Out) cards() bool { return o.identity && o.answer == leadResources || o.
 // tasks under one "open tasks" heading, a run of rows under one rows
 // heading (a second run of rows, after the tasks of an everything-about
 // answer, under "more rows"), then the candidate list (candidates.go).
-func (o Out) body() string { return o.items() + candText(o.Candidates) }
+func (o Out) body() string { return o.items() + candText(o.Candidates) + dropText(o.Dropped) }
 
 // items is body without the candidate list.
 func (o Out) items() string {

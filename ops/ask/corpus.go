@@ -6,10 +6,13 @@ import (
 	"maps"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/thesatellite-ai/lore/logic/embed"
 	"github.com/thesatellite-ai/lore/logic/hybrid"
+	"github.com/thesatellite-ai/lore/logic/querywords"
 	"github.com/thesatellite-ai/lore/model/value"
 )
 
@@ -337,4 +340,59 @@ func embedAll(m *embed.Model, docs []hybrid.Doc, miss []int, vecs [][]float32) {
 		}()
 	}
 	wg.Wait()
+}
+
+// coverOf is querywords.Coverage(docText(r), terms), bases being
+// coverBases(terms): r's word bases (querywords.Base of every word) are
+// built once per row and kept on the kept corpus row (rowSplit), so a
+// served ask stems a note once, not once per question. Why (bug hunt
+// H-270): search's own order (plainOrder) reads the coverage of every row
+// holding a word, and stemming every long note per call cost 20 ms of a
+// warm ask. Without bases (a term that is not one plain word: a prefix,
+// an identifier with punctuation, a CJK word) Coverage reads the text.
+func coverOf(r *textRow, terms, bases []string) int {
+	if bases == nil {
+		return querywords.Coverage(docText(r), terms)
+	}
+	have := shareSplit(r.split, func(s *rowSplit) *splitSlot[map[string]bool] { return &s.bases }, func() map[string]bool {
+		out := map[string]bool{}
+		for _, w := range strings.FieldsFunc(strings.ToLower(docText(r)), func(c rune) bool { return !unicode.IsLetter(c) && !unicode.IsDigit(c) }) {
+			out[querywords.Base(w)] = true
+		}
+		return out
+	})
+	n := 0
+	for _, b := range bases {
+		if have[b] {
+			n++
+		}
+	}
+	return n
+}
+
+// coverBases is the querywords.Base of each of terms (lower case), nil
+// when one is not a plain word (coverOf then reads the text).
+func coverBases(terms []string) []string {
+	out := make([]string, 0, len(terms))
+	for _, t := range terms {
+		if !plainTerm(t) {
+			return nil
+		}
+		out = append(out, querywords.Base(strings.ToLower(t)))
+	}
+	return out
+}
+
+// plainTerm reports a term of ASCII letters and digits only (any case),
+// the words querywords.Base knows the forms of.
+func plainTerm(t string) bool {
+	if t == "" {
+		return false
+	}
+	for _, c := range t {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
+			return false
+		}
+	}
+	return true
 }

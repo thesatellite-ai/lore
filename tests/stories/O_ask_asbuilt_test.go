@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -247,6 +248,100 @@ func TestStoryOAskAsBuiltNotesFirst(t *testing.T) {
 		text.Says(t, "next candidates (lore show --id <id> prints one in full):")
 		if !strings.Contains(text.Out(), "  "+a.Candidates[0].ID+" ("+a.Candidates[0].Table+") ") {
 			t.Errorf("[O D-998] the text does not list %s:\n%s", a.Candidates[0].ID, text)
+		}
+	})
+
+	s.Step("D-1008/candidates-are-search-next-rows", func() {
+		// bug hunt H-270 (set 8 asks 4 and 7): the list followed ask's own
+		// order (the repo's linked folder first among equal matches), so
+		// the rows lore search ranks first were missing from it. Three
+		// untitled notes in the repo's folder and three of another client
+		// whose titles (architecture notes) name the asked words hold the same words: search
+		// ranks the titled notes first, ask's full row is the repo's note.
+		for i, title := range []string{"Export queue retry backoff", "Export queue retry", "Export queue"} {
+			ada.Lore(pc.Dir, "architecturenote", "add", "--title", title,
+				"--body", fmt.Sprintf("Client B: the export queue retry backoff doubles after each try, setup %d.", i), "--to", other, "--yes").OK(t)
+		}
+		for i := range 3 {
+			ada.Lore(pc.Dir, "memory", "add",
+				"--body", fmt.Sprintf("Feed app note %d.\nThe export queue retry backoff doubles after each try, up to %d minutes.", i, 10*(i+1)), "--yes").OK(t)
+		}
+		q := "how does the export queue retry backoff grow"
+		var a struct {
+			Ranked []struct {
+				ID string `json:"id"`
+			} `json:"ranked"`
+			Candidates []struct {
+				ID   string `json:"id"`
+				Kind string `json:"kind"`
+				Line string `json:"line"`
+				Rank int    `json:"rank"`
+			} `json:"candidates"`
+			Dropped []struct {
+				ID     string `json:"id"`
+				Reason string `json:"dropped_reason"`
+			} `json:"dropped"`
+		}
+		r := ada.Lore(pc.Dir, "ask", "--store", oOrg, "--query", q, "--top", "1", "--json").OK(t)
+		if err := json.Unmarshal([]byte(r.Out()), &a); err != nil {
+			t.Fatalf("[O D-1008] ask --json: %v\n%s", err, r)
+		}
+		var sr struct {
+			Data struct {
+				Hits []struct {
+					ID    string `json:"id"`
+					Table string `json:"entity_table"`
+				} `json:"hits"`
+			} `json:"data"`
+		}
+		sh := ada.Lore(pc.Dir, "search", "--store", oOrg, "--query", q, "--json").OK(t)
+		if err := json.Unmarshal([]byte(sh.Out()), &sr); err != nil {
+			t.Fatalf("[O D-1008] search --json: %v\n%s", err, sh)
+		}
+		shown := map[string]bool{}
+		for _, it := range a.Ranked {
+			shown[it.ID] = true
+		}
+		var next []string // search's next rows: its hits not printed in full
+		// the notes' kinds: search lists resources, people and tasks too,
+		// which ask prints as cards and task lines
+		hits := slices.DeleteFunc(sr.Data.Hits, func(h struct {
+			ID    string `json:"id"`
+			Table string `json:"entity_table"`
+		}) bool {
+			return h.Table != "memories" && h.Table != "architecture_notes"
+		})
+		for _, h := range hits {
+			if !shown[h.ID] {
+				next = append(next, h.ID)
+			}
+		}
+		var rows []string
+		last := 0
+		for _, c := range a.Candidates {
+			if c.Kind != "row" {
+				continue
+			}
+			rows = append(rows, c.ID)
+			if c.Rank <= last {
+				t.Errorf("[O D-1008] candidate %s has rank %d after %d: not in search's order\n%s", c.ID, c.Rank, last, r)
+			}
+			last = c.Rank
+			shown[c.ID] = true
+		}
+		if len(rows) < 3 || len(next) < 3 || fmt.Sprint(rows[:3]) != fmt.Sprint(next[:3]) {
+			t.Fatalf("[O D-1008] ask's candidates %v are not search's next rows %v:\n%s\n%s", rows, next, r, sh)
+		}
+		for _, d := range a.Dropped {
+			shown[d.ID] = true
+			if d.Reason == "" {
+				t.Errorf("[O D-1008] %s is dropped without a reason:\n%s", d.ID, r)
+			}
+		}
+		for _, h := range hits[:min(6, len(hits))] {
+			if !shown[h.ID] && slices.Index(next, h.ID) < len(rows) {
+				t.Errorf("[O D-1008] search's %s is neither printed, listed nor dropped with a reason:\n%s\n%s", h.ID, r, sh)
+			}
 		}
 	})
 }

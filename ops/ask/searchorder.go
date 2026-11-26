@@ -37,6 +37,8 @@ import (
 	"github.com/thesatellite-ai/lore/logic/hybrid"
 	"github.com/thesatellite-ai/lore/logic/querywords"
 	"github.com/thesatellite-ai/lore/logic/searchrank"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // searchStaleRank is the share of its score a stale fact ranks with, as
@@ -68,7 +70,7 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 	// a row holds a word when it holds every index term of one of the
 	// word's forms (searchrank.Forms: search's match of the word; a form
 	// of several terms, e_auth_failed or on-call, is a phrase there)
-	present := map[string][]float64{} // index term → its BM25 per text
+	present := q.search.bm25Of(ix) // index term → its BM25 per text
 	termsOf := func(form string) []string {
 		ts := hybrid.Terms(nil, form)
 		for _, t := range ts {
@@ -482,3 +484,271 @@ func searchIndex(rows []textRow, v *meaningView) (*hybrid.Index, func(id string)
 // searchDate is the day search orders a full-title tie by: the row's own
 // date (a memory's valid_at, else when it was written).
 func searchDate(r *textRow) time.Time { return r.At }
+
+// searchList is lore search's own order of the rows for a question, the
+// one the candidate list follows (plainOrder, bug hunt H-270, devco
+// D-1008). build sets it on the question before topRows fills it, so
+// every copy of the question shares it.
+type searchList struct {
+	// ids are the row ids in search's order (search's first hit first).
+	ids []string
+	// rows are the rows the order was read from, by id.
+	rows map[string]*textRow
+	// ix and present are the BM25 index both orders read and each index
+	// term's BM25 per text in it (bm25Of): searchOrder and plainOrder
+	// read the same terms, and each walk of a term's postings costs a
+	// slice as long as the store.
+	ix      *hybrid.Index
+	present map[string][]float64
+}
+
+// bm25Of is the per-term BM25 cache of index ix: s's own when s read ix
+// before, else a new one (kept on s when s is set).
+func (s *searchList) bm25Of(ix *hybrid.Index) map[string][]float64 {
+	if s == nil {
+		return map[string][]float64{}
+	}
+	if s.ix != ix || s.present == nil {
+		s.ix, s.present = ix, map[string][]float64{}
+	}
+	return s.present
+}
+
+// plainOrder is lore search's own order of rows for q, without what ask
+// adds to rank its full rows (topics read as words, a long row's best
+// section, identifiers, the linked folder, fact state): per kind, the
+// rows holding a form of a question word in bm25 order, each scored by
+// searchrank (words held, its text's coverage of the words as
+// opsmemory.Held, names, title share, rank), a stale fact at 0.9 of its
+// score, history after every current row, then every kind merged by
+// score, equal scores in kind order (wire's GlobalSearch). Why (bug hunt
+// H-270, a benchmark of 200 questions on a team store): ask's candidate
+// list followed ask's own order, which kept search's first hits out of
+// the list on 151 of 200 questions, so an agent reading search and ask
+// saw two different "next" rows. nil when the question has no word
+// search ranks by.
+func plainOrder(q question, rows []textRow, v *meaningView) []string {
+	w := searchWords(q.text)
+	if len(w.Terms) == 0 || len(rows) == 0 {
+		return nil
+	}
+	ix, at := searchIndex(rows, v)
+	present := q.search.bm25Of(ix) // the terms searchOrder read are read once
+	// each word's forms, each form its index terms and their BM25 per
+	// text, looked up once per call, not once per row
+	type form struct {
+		terms []string
+		bm    [][]float64
+	}
+	forms := make([][]form, len(w.Terms))
+	for i, t := range w.Terms {
+		for _, f := range searchrank.Forms(t) {
+			fm := form{terms: hybrid.Terms(nil, f)}
+			for _, x := range fm.terms {
+				b, ok := present[x]
+				if !ok {
+					b = ix.BM25([]string{x})
+					present[x] = b
+				}
+				fm.bm = append(fm.bm, b)
+			}
+			forms[i] = append(forms[i], fm)
+		}
+	}
+	bases := coverBases(w.Terms)
+	type cand struct {
+		row  *textRow
+		bm25 float64
+		held int
+	}
+	byTable := map[string][]cand{}
+	var tables []string
+	for i := range rows {
+		r := &rows[i]
+		p, ok := at(r.ID)
+		if !ok {
+			continue
+		}
+		c := cand{row: r}
+		var seq []string
+		for k := range forms {
+			got := false
+			for _, fm := range forms[k] {
+				if len(fm.terms) == 0 || slices.ContainsFunc(fm.bm, func(b []float64) bool { return b[p] == 0 }) {
+					continue
+				}
+				if len(fm.terms) > 1 {
+					if seq == nil {
+						t := docText(r)
+						seq = keptTerms(textHash(t), t)
+					}
+					if !hasRun(seq, fm.terms) {
+						continue
+					}
+				}
+				for _, b := range fm.bm {
+					c.bm25 += b[p]
+				}
+				got = true
+			}
+			if got {
+				c.held++
+			}
+		}
+		if c.held == 0 {
+			continue // search's any-word match does not find it
+		}
+		if _, seen := byTable[r.Table]; !seen {
+			tables = append(tables, r.Table)
+		}
+		byTable[r.Table] = append(byTable[r.Table], c)
+	}
+	// the words a row's text covers count too (opsmemory.Held), read for
+	// the rows that can reach the head of the order: coverage only adds
+	// a word or two the index missed, so a row holding fewer words by the
+	// index than the coverHead-th best row less one stays past it (the
+	// list reads the first rows; reading every row's coverage cost 10 ms
+	// of a warm ask on a 450-row folder)
+	var helds []int
+	for _, cs := range byTable {
+		for _, c := range cs {
+			helds = append(helds, c.held)
+		}
+	}
+	if len(helds) == 0 {
+		return nil
+	}
+	slices.SortFunc(helds, func(a, b int) int { return cmp.Compare(b, a) })
+	floor := helds[min(coverHead, len(helds)-1)] - 1
+	for _, cs := range byTable {
+		for i := range cs {
+			if c := &cs[i]; c.held < len(w.Terms) && c.held >= floor {
+				c.held = max(c.held, coverOf(c.row, w.Terms, bases))
+			}
+		}
+	}
+	type hit struct {
+		id      string
+		history bool
+		score   float64
+		table   int
+	}
+	slices.Sort(tables)
+	var hits []hit
+	for ti, t := range tables {
+		cs := byTable[t]
+		slices.SortStableFunc(cs, func(a, b cand) int {
+			if c := cmp.Compare(b.bm25, a.bm25); c != 0 {
+				return c
+			}
+			return cmp.Compare(a.row.ID, b.row.ID)
+		})
+		items := make([]searchrank.Item, len(cs))
+		for i, c := range cs {
+			items[i] = searchrank.Item{Label: searchLabel(c.row), Matched: c.held, At: searchDate(c.row)}
+		}
+		for _, rk := range w.Order(items, len(items)) {
+			c := cs[rk.Index]
+			s := rk.Score
+			if c.row.Stale != "" {
+				s *= searchStaleRank
+			}
+			hits = append(hits, hit{id: c.row.ID, history: staleNote(c.row, q.now) != "", score: s, table: ti})
+		}
+	}
+	slices.SortStableFunc(hits, func(a, b hit) int {
+		if a.history != b.history {
+			if a.history {
+				return 1
+			}
+			return -1
+		}
+		if c := cmp.Compare(b.score, a.score); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.table, b.table)
+	})
+	out := make([]string, len(hits))
+	for i, h := range hits {
+		out[i] = h.id
+	}
+	return out
+}
+
+// bodyLabelled are the kinds search labels by their body's first 80
+// bytes as written (opssearch.Targets: Label{Field: "body", Trunc: true}).
+var bodyLabelled = map[string]bool{
+	string(schema.TableComments): true, string(schema.TableHandoffs): true,
+	string(schema.TableRules): true, string(schema.TableTastePrefs): true,
+}
+
+// searchLabel is what names row r in search's ranking (wire's hitLabel):
+// a body-labelled kind's first line of its body's first 80 bytes; else
+// its title (or name) on one line; a row without one its body on one
+// line, cut to 80 bytes (the hit's fallback text). A memory is named by
+// its body's first words, not its first line: a note opening "Feed app
+// note 1." still names the words of the sentence after it.
+func searchLabel(r *textRow) string {
+	if bodyLabelled[r.Table] {
+		return searchrank.Label("", textcut.Cut(r.Body, labelBytes, labelBytes-len(textcut.Ellipsis)))
+	}
+	if t := strings.Join(strings.Fields(r.Title), " "); t != "" {
+		return searchrank.Label(t, "")
+	}
+	// the label is the first 80 bytes on one line: a long note's first
+	// kilobyte holds them (whitespace aside), not its whole text
+	body := r.Body
+	if len(body) > labelRead {
+		body = strings.ToValidUTF8(body[:labelRead], "")
+	}
+	flat := strings.Join(strings.Fields(body), " ")
+	return searchrank.Label("", textcut.Cut(flat, labelBytes, labelBytes-len(textcut.Ellipsis)))
+}
+
+// coverHead is how many of search's first rows plainOrder reads the
+// coverage of (with the rows holding as many words by the index).
+const coverHead = 30
+
+// labelRead is how much of a body searchLabel reads for its label.
+const labelRead = 1024
+
+// labelBytes is the length search cuts a body label to (opssearch.BodyMax).
+const labelBytes = 80
+
+// searchWords is how lore search reads question text: its words; a
+// question holding FTS5 syntax (a parenthesis, a quote: "why is the
+// master table (acme_masters) its own table?") that FTS5 refuses, as the
+// plain words search falls back to then (searchrank.Words.Plain,
+// opsmemory.MatchCounting). FTS5 refuses a question mark, comma, full
+// stop, semicolon or exclamation mark outside a phrase; a query FTS5
+// reads (deploy -friday, "exact phrase") stays syntax, as in search.
+// Why (bug hunt H-270): read as syntax the words are not natural, and
+// searchrank.Order counts every row as holding every word, so a row
+// holding one word of eleven ranked with the row holding seven, by its
+// title's share alone.
+func searchWords(text string) searchrank.Words {
+	w := searchrank.Of(text)
+	if !w.Syntax || !refusedByFTS(text) {
+		return w
+	}
+	if p, ok := w.Plain(); ok {
+		return p
+	}
+	return w
+}
+
+// refusedByFTS reports whether FTS5 refuses text as a query: it holds a
+// character no FTS5 bareword or operator may (? , . ; !) outside a
+// double-quoted phrase.
+func refusedByFTS(text string) bool {
+	quoted := false
+	for _, r := range text {
+		switch {
+		case r == '"':
+			quoted = !quoted
+		case !quoted && strings.ContainsRune("?,.;!", r):
+			return true
+		}
+	}
+	return false
+}

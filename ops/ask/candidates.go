@@ -54,13 +54,29 @@ type Candidate struct {
 	Table string `json:"table" desc:"a row's table (memories, decisions …) or a resource's kind (code_repo, person …)"`
 	Place string `json:"place" desc:"where it is stored (<store>/<folder>)"`
 	Title string `json:"title" desc:"a row's title (else its first line) or a resource's name"`
-	Line  string `json:"line" desc:"the one line of it that holds the most words of the question (a resource's field as name: value)"`
+	Line  string `json:"line" desc:"the sentence of it that best matches the question, the question's rare words weighing most, after its heading (heading › sentence); a resource's field as name: value"`
+	// Rank is the row's place in lore search's order for the question
+	// (1 = search's first hit; bug hunt H-270), 0 for a card.
+	Rank int `json:"rank,omitempty" desc:"a row's place in lore search's order for the question (1 = search's first hit); the list holds search's next rows in that order"`
 	// held is how many of the question's words the item holds: a card
 	// stands among the rows by it (merge).
 	held int
 	// named marks a resource the question names (not only touches).
 	named bool
 }
+
+// Dropped is a row search ranks among the candidates that the list
+// leaves out, and why (bug hunt H-270): the list is search's next rows,
+// so a row it skips says so instead of going missing.
+type Dropped struct {
+	ID     string `json:"id"`
+	Table  string `json:"table"`
+	Rank   int    `json:"rank" desc:"its place in lore search's order for the question"`
+	Reason string `json:"dropped_reason" desc:"why the list leaves it out: same text as <id> (the note is stored twice and the other copy is printed or listed)"`
+}
+
+// DroppedHeading leads the text answer's line naming the dropped rows.
+const DroppedHeading = "  left out of the list:"
 
 // isCard reports whether resource r prints as a candidate line instead of
 // a full item: whenever rows are in the answer and the question is not
@@ -106,20 +122,36 @@ func (o *Out) fitCandidates(order []Ranked, maxChars int, more []Row, cards []Ca
 	all := slices.Clone(o.Rows) // whole, before cap cuts them
 	o.cap(order, maxChars)
 	memo := map[string]Candidate{}
-	list := o.candidatesOf(all, more, cards, memo)
+	list, dropped := o.candidatesOf(all, more, cards, memo)
 	if len(list) == 0 {
 		return
 	}
 	items := len(o.items())
 	for len(o.Ranked) > 1 && items+len(candText(list[:min(minCandidates, len(list))])) > maxChars {
 		o.dropLast()
-		list = o.candidatesOf(all, more, cards, memo)
+		list, dropped = o.candidatesOf(all, more, cards, memo)
 		items = len(o.items())
 	}
-	for len(list) > 0 && items+len(candText(list)) > maxChars {
+	for len(list) > 0 && items+len(candText(list))+len(dropText(droppedBefore(dropped, list))) > maxChars {
 		list = list[:len(list)-1]
 	}
-	o.Candidates = list
+	o.Candidates, o.Dropped = list, droppedBefore(dropped, list)
+}
+
+// droppedBefore is the dropped rows search ranks before the list's last
+// row: a row ranked past the list's end was not dropped, the list ended.
+func droppedBefore(dropped []Dropped, list []Candidate) []Dropped {
+	last := 0
+	for _, c := range list {
+		last = max(last, c.Rank)
+	}
+	out := []Dropped{}
+	for _, d := range dropped {
+		if d.Rank < last {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // dropLast takes the last full item out of the answer, counted as left
@@ -143,15 +175,23 @@ func (o *Out) dropLast() {
 	}
 }
 
-// candidatesOf is the list after cap: the rows of all cap did not print,
-// in their order, then more, with the cards placed among them (merge),
-// at most maxCandidates; memo keeps each row's line across calls.
-func (o *Out) candidatesOf(all, more []Row, cards []Candidate, memo map[string]Candidate) []Candidate {
+// candidatesOf is the list after cap: search's next rows (the rows of
+// search's order cap did not print, plainOrder) when the question has
+// one, else the rows of all cap did not print, in their order, then
+// more; with the cards placed among them (merge), at most maxCandidates.
+// dropped are the rows of search's order the list leaves out, with why.
+// memo keeps each row's line across calls.
+func (o *Out) candidatesOf(all, more []Row, cards []Candidate, memo map[string]Candidate) ([]Candidate, []Dropped) {
 	printed := map[string]bool{}
 	for _, r := range o.Ranked {
 		if r.Kind == KindRow {
 			printed[r.ID] = true
 		}
+	}
+	if s := o.q.search; s != nil && len(s.ids) > 0 {
+		rows, dropped := o.searchCandidates(all, more, printed, memo)
+		list := merge(rows, cards)
+		return list[:min(len(list), maxCandidates)], dropped
 	}
 	var rows []Candidate
 	for _, rs := range [][]Row{all, more} {
@@ -168,7 +208,83 @@ func (o *Out) candidatesOf(all, more []Row, cards []Candidate, memo map[string]C
 		}
 	}
 	list := merge(rows, cards)
-	return list[:min(len(list), maxCandidates)]
+	return list[:min(len(list), maxCandidates)], nil
+}
+
+// searchCandidates is search's next rows (o.q.search) cap did not print,
+// in search's order, at most maxCandidates, each with its place in it;
+// a row whose text is the same as a row printed or listed before it (one
+// note stored twice) is dropped, with why. A row ask read in full (all,
+// more) keeps its readable text; another is read from search's rows.
+func (o *Out) searchCandidates(all, more []Row, printed map[string]bool, memo map[string]Candidate) ([]Candidate, []Dropped) {
+	s := o.q.search
+	read := map[string]*Row{}
+	var subject *subjectTerms
+	for _, rs := range [][]Row{all, more} {
+		for i := range rs {
+			read[rs[i].ID] = &rs[i]
+			subject = cmp.Or(subject, rs[i].subject)
+		}
+	}
+	seen := map[uint64]string{} // a row's text → the first row holding it
+	for _, r := range all {
+		if printed[r.ID] {
+			seen[sameKey(r)] = r.ID
+		}
+	}
+	var rows []Candidate
+	var dropped []Dropped
+	for i, id := range s.ids {
+		if len(rows) >= maxCandidates {
+			break
+		}
+		if printed[id] {
+			continue
+		}
+		r := read[id]
+		if r == nil {
+			tr := s.rows[id]
+			if tr == nil {
+				continue
+			}
+			one := rowOf(tr, nil)
+			one.readTitle, one.readBody = readable(one.Title, o.names), readable(one.Body, o.names)
+			one.subject = subject
+			r = &one
+		}
+		if first, ok := seen[sameKey(*r)]; ok {
+			dropped = append(dropped, Dropped{ID: id, Table: r.Table, Rank: i + 1, Reason: "same text as " + first})
+			continue
+		}
+		seen[sameKey(*r)] = id
+		c, ok := memo[id]
+		if !ok {
+			c = o.rowCandidate(r)
+			memo[id] = c
+		}
+		c.Rank = i + 1
+		rows = append(rows, c)
+	}
+	return rows, dropped
+}
+
+// sameKey is what makes two rows the same note: the hash of their title
+// and whole text (all and the rows read from search's list hold it
+// before cap cuts it).
+func sameKey(r Row) uint64 {
+	return textHash(r.Title + "\x00" + r.Body)
+}
+
+// dropText is the text answer's line naming the dropped rows.
+func dropText(ds []Dropped) string {
+	if len(ds) == 0 {
+		return ""
+	}
+	parts := make([]string, len(ds))
+	for i, d := range ds {
+		parts[i] = d.ID + " (" + d.Reason + ")"
+	}
+	return DroppedHeading + " " + strings.Join(parts, ", ") + "\n"
 }
 
 // merge places the cards among the rows (both in their own order): a card
@@ -200,7 +316,7 @@ func merge(rows, cards []Candidate) []Candidate {
 func (o *Out) rowCandidate(r *Row) Candidate {
 	title, body := r.readable()
 	title = cmp.Or(strings.TrimSpace(title), firstLine(body))
-	line, held := bestLine(body, o.q.words, candLineMax)
+	line, held := matchLine(body, title, o.q.words, r.subject, candLineMax)
 	return Candidate{ID: r.ID, Kind: KindRow, Table: r.Table, Place: r.Place, Title: clip(title, candTitleMax), Line: line, held: held}
 }
 
@@ -256,6 +372,87 @@ func bestLine(text string, words []string, width int) (string, int) {
 		}
 	}
 	return clipAround(best, words, width), max(held, 0)
+}
+
+// matchLine is the sentence of a row's text that best matches words, as
+// an excerpt picks its first sentence (sentenceScores' weights, cutWeight:
+// each word by its rarity within the row and across the store, an
+// identifier more), after
+// the heading it sits under when that is not the title ("Heading ›
+// sentence"), clipped to width runes around its first held word; and
+// the most distinct words one sentence of it holds. Without a sentence telling the words
+// apart it is bestLine's. Why (bug hunt H-270): the line held the most
+// question words, so a sentence repeating the common ones ("the sync
+// job runs …") stood for a row whose answer was the sentence naming the
+// rare one, and the agent skipped the row the answer was in.
+func matchLine(text, title string, words []string, st *subjectTerms, width int) (string, int) {
+	// every sentence counts in the row's IDF; only the ones that may hold
+	// a word (mayHold) are tokenized, as bestLine does: a long note is
+	// read once per candidate line within ask's 50 ms
+	n := 0
+	var ss []sentence
+	for _, s := range sentencesOf(text) {
+		t := strings.TrimSpace(s.text)
+		if t == "" || fenceOf(t) != "" {
+			continue
+		}
+		n++
+		if mayHold(asciiLower(t), words) {
+			ss = append(ss, s)
+		}
+	}
+	if len(ss) == 0 || len(words) == 0 {
+		return bestLine(text, words, width)
+	}
+	toks := make([]map[string]bool, len(ss))
+	for i, s := range ss {
+		toks[i] = tokensOf(s.text)
+	}
+	idents := identWords(text, words)
+	score, per := make([]float64, len(ss)), make([]int, len(ss))
+	held := 0 // the most words one sentence holds, as bestLine counts: merge places a card by it
+	for _, w := range words {
+		w = strings.ToLower(w)
+		var hold []int
+		for i := range ss {
+			if hasWord(toks[i], w) {
+				hold = append(hold, i)
+			}
+		}
+		for _, i := range hold {
+			per[i]++
+			held = max(held, per[i])
+		}
+		if len(hold) == 0 || len(hold) == n && n > 1 {
+			continue // a word every sentence holds tells none apart (sentenceScores)
+		}
+		wt := cutWeight(n, len(hold), w, st, idents[w])
+		for _, i := range hold {
+			score[i] += wt
+		}
+	}
+	best := -1
+	for i, sc := range score {
+		if sc > 0 && (best < 0 || sc > score[best]) {
+			best = i
+		}
+	}
+	if best < 0 {
+		return bestLine(text, words, width)
+	}
+	s := strings.TrimSpace(ss[best].text)
+	head := ""
+	if n := len(ss[best].heads); n > 0 {
+		head = strings.TrimSpace(strings.TrimLeft(ss[best].heads[n-1], "#"))
+		if strings.EqualFold(head, strings.TrimSpace(title)) {
+			head = ""
+		}
+	}
+	if head == "" {
+		return clipAround(s, words, width), held
+	}
+	head = clip(head, width/3)
+	return head + " › " + clipAround(s, words, width-utf8.RuneCountInString(head)-3), held
 }
 
 // clip cuts s to width runes, … marking the cut.

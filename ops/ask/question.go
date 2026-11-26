@@ -48,6 +48,10 @@ type question struct {
 	// has no word search ranks by (devco D-984: ask prints search's top
 	// rows in search's order).
 	order map[string]int
+	// search is lore search's own order of the rows (plainOrder), the
+	// order the candidate list follows; set by build, filled by topRows,
+	// nil for a question that lists no candidates by it.
+	search *searchList
 	// about is an everything-about-X question: the words say so
 	// ("everything about hollow"), or the question is only the name of a
 	// resource ("hollow"). Set by build once the resources are matched.

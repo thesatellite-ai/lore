@@ -6861,7 +6861,7 @@
                     },
                     "candidates": {
                       "type": "array",
-                      "description": "after the items printed in full, the next 5-7 candidates in search's order, one line each (id, kind, table, title and the line of it that holds the most words of the question); when a row answers the question, resource cards (code_repo and other resources) stand here, never among the full items; lore show --id \u003cid\u003e prints one in full",
+                      "description": "after the items printed in full, the next 5-7 candidates: lore search's next rows for the question in search's order (rank is the place search gives it), one line each (id, kind, table, title and the sentence of it that best matches the question, the question's rare words weighing most, after its heading); when a row answers the question, resource cards (code_repo and other resources) stand here, never among the full items; lore show --id \u003cid\u003e prints one in full",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -6874,11 +6874,15 @@
                           },
                           "line": {
                             "type": "string",
-                            "description": "the one line of it that holds the most words of the question (a resource's field as name: value)"
+                            "description": "the sentence of it that best matches the question, the question's rare words weighing most, after its heading (heading › sentence); a resource's field as name: value"
                           },
                           "place": {
                             "type": "string",
                             "description": "where it is stored (\u003cstore\u003e/\u003cfolder\u003e)"
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "description": "a row's place in lore search's order for the question (1 = search's first hit); the list holds search's next rows in that order"
                           },
                           "table": {
                             "type": "string",
@@ -6946,6 +6950,35 @@
                     "context": {
                       "type": "string",
                       "description": "lore context's text for that file (rules and hotfixes in full while they fit)"
+                    },
+                    "dropped": {
+                      "type": "array",
+                      "description": "rows lore search ranks among the candidates that the list leaves out, each with dropped_reason (same text as a row above: one note stored twice)",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "dropped_reason": {
+                            "type": "string",
+                            "description": "why the list leaves it out: same text as \u003cid\u003e (the note is stored twice and the other copy is printed or listed)"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "description": "its place in lore search's order for the question"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "rank",
+                          "dropped_reason"
+                        ]
+                      }
                     },
                     "file": {
                       "type": "string",

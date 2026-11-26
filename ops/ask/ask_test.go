@@ -176,8 +176,12 @@ func TestAnswers(t *testing.T) {
 				t.Errorf("%q: missing %q in\n%s", c.q, w, text)
 			}
 		}
+		// the candidate list names search's next rows (H-270, devco
+		// D-1008), whatever they are about: not is what the answer
+		// itself must not print
+		answer, _, _ := strings.Cut(text, CandidatesHeading)
 		for _, n := range c.not {
-			if strings.Contains(text, n) {
+			if strings.Contains(answer, n) {
 				t.Errorf("%q: holds %q in\n%s", c.q, n, text)
 			}
 		}

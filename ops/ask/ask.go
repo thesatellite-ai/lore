@@ -116,7 +116,7 @@ type Out struct {
 	// Candidates are search's next items after the full ones, one line
 	// each, and the resource cards when a row answers (candidates.go,
 	// bug hunt H-245): the agent reads one with lore show --id.
-	Candidates []Candidate `json:"candidates" desc:"after the items printed in full, the next 5-7 candidates in search's order, one line each (id, kind, table, title and the line of it that holds the most words of the question); when a row answers the question, resource cards (code_repo and other resources) stand here, never among the full items; lore show --id <id> prints one in full"`
+	Candidates []Candidate `json:"candidates" desc:"after the items printed in full, the next 5-7 candidates: lore search's next rows for the question in search's order (rank is the place search gives it), one line each (id, kind, table, title and the sentence of it that best matches the question, the question's rare words weighing most, after its heading); when a row answers the question, resource cards (code_repo and other resources) stand here, never among the full items; lore show --id <id> prints one in full"`
 	// File, Applies and Context answer a question that names a file
 	// (file.go, devco D-815): what lore context --for-file --for-prompt
 	// picks for it, printed before the ranked items.
@@ -133,8 +133,14 @@ type Out struct {
 	// one line each so an agent checks which is current instead of
 	// taking the first.
 	Conflicts []Conflict `json:"conflicts,omitempty" desc:"set when two rows the answer prints state different values for the same named field (a snake, kebab or dotted key, a camelCase name, a --flag or a word in backticks: X = V, X: V, X defaults to V, no default for X, X is V ms; units compared after normalising, 5 s = 5000 ms), at most 3; check which is current with lore show --id <id> and fix or supersede the other"`
-	maxChars  int
-	note      string
+	// Dropped are the rows search ranks among the candidates that the
+	// list leaves out, each with why (candidates.go, bug hunt H-270).
+	Dropped  []Dropped `json:"dropped,omitempty" desc:"rows lore search ranks among the candidates that the list leaves out, each with dropped_reason (same text as a row above: one note stored twice)"`
+	maxChars int
+	note     string
+	// names maps a ${res:…} reference to the resource's name (nameIndex):
+	// a candidate the full rows did not read is read with it
+	names map[string]string
 	// lead is how many of Rows (the first ones) are an everything-about
 	// answer's newest row of each folder, printed one line each (devco
 	// D-822); 0 for any other question.
