@@ -422,6 +422,7 @@ The values `lore store set` takes:
 | `squash` | `on`: a push folds the waiting commits into one commit per author (a hand edit, a roster change, `lore-org.yaml` and `lore-store.yaml` keep their own); `off`: one remote commit per write | `on` |
 | `compact` | `on` or `off`: fold old history by itself (below) | `off` |
 | `compact_after` | how old history must be to be folded, at least `1d` (such as `30d`); `compact=on` needs it | none |
+| `compact_archive` | `on`: compaction keeps the replaced history in an archive and every copy checks the rewrite (below); while this is new, a compaction needs it on and the run `LORE_COMPACT_V2=1` | `off` |
 
 ### What is refused, and why
 
@@ -460,25 +461,37 @@ ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
 
 `lore store compact --store <store>` turns every commit older than the cutoff into **one** snapshot commit, `lore: snapshot of the store history before <date>`, keeps the later commits as they were, and adds a commit `lore: compact store history (epoch N)`. Every note is kept; only the list of old commits is gone. The **epoch** is a counter in `lore-store.yaml` that goes up by one with each compaction, so every copy of the store can tell that the history was rewritten.
 
-- The cutoff is `--before` (such as `--before 30d`), else the store's `compact_after`, else `30d`.
+Compaction is behind a flag while it is new: the store needs `compact_archive=on` (`lore store set --store <store> --settings compact_archive=on`) and the run `LORE_COMPACT_V2=1`; without them `lore store compact` and `compact=on` refuse with `E_REFUSED` and change nothing. On an org's store the org's `min_lore_version` must also be 0.1.57 or later (`lore org config set --org <org> --key min_lore_version --value 0.1.57 --push --yes`): a lore older than that takes a higher epoch without checking it, so it has to be read-only on the org's stores first; until then the compaction refuses with that command.
+
+- The cutoff is `--before` (such as `--before 30d`), else the store's `compact_after`, else `30d`. A later merge whose other side started before the cutoff, or an open branch layer based before it, moves the cut back to where they start, so every kept merge keeps both parents and every open layer can still land.
 - `--dry-run` says what would change and changes nothing.
 - It asks first. Without a terminal it stops with `E_NEEDS_CONFIRM` (exit 26) until you pass `--yes`.
+- Before anything is rewritten, the old history is pushed to an **archive**: the ref `refs/lore-archive/epoch-<n>` in the store's own repo (no copy downloads it), or the repository `archive_url:` in `lore-store.yaml` names. If that push is refused, nothing is rewritten.
+- The snapshot is the store as lore reads it, not as the files are: a change lore holds back (a member making themselves admin by hand, say) is in the snapshot as its last accepted version, so a compaction never turns a held change into a trusted one. The output counts them (`held change(s) are in the snapshot as their last accepted version`).
+- Only an admin of the store's org compacts, checked against the store's own roster; your personal store is yours.
 - The rewrite is pushed only if nobody pushed since lore last looked (`E_CONTENDED` otherwise; run it again). Offline it is `E_OFFLINE`. In both cases nothing changes.
-- The old history stays on your machine under `refs/lore/backup/compact-<epoch>-<commit>`.
-- On an org store only the admin may compact; your personal store is yours.
+- Branch layers, open and in the trash, are moved onto the new history and pushed with it, so they still land and every copy downloads only the new history. A trashed layer older than the cut cannot move and keeps its ref; the output says how many (`layer ref(s) older than the cut still reach the old history`).
+- The old history also stays on your machine under `refs/lore/backup/compact-<epoch>-<commit>`.
 
-<!-- example: store-push#compact only=2,3,4 -->
+<!-- example: store-push#compact only=2,3,4,5 -->
 ```console
 # alice, in website
-$ lore store compact --store agency --before 30d --dry-run
-would squash 5 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 5 row file(s); epoch 0 → 1
-$ lore store compact --store agency --before 30d
+$ lore store set --store agency --settings compact_archive=on
+committed locally to store agency; lore sync sends it
+agency: push batch every 15m, compact off
+  set in    the store's lore-store.yaml (org agency; set by an org admin, which this machine is)
+  epoch     0
+  waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
+  pushed    2026-11-02T10:01:05Z
+$ LORE_COMPACT_V2=1 lore store compact --store agency --before 30d --dry-run
+would squash 5 commit(s) of agency before 2026-10-03 into one snapshot, keep 3 later commit(s) and every one of its 5 row file(s); epoch 0 → 1
+$ LORE_COMPACT_V2=1 lore store compact --store agency --before 30d
 ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 5 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore store compact --store agency --before 30d --yes
-✓ compacted agency: 5 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 5 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
-  pushed store agency: commit 05513aa to branch main
+$ LORE_COMPACT_V2=1 lore store compact --store agency --before 30d --yes
+✓ compacted agency: 5 commit(s) before 2026-10-03 are one snapshot, 3 later commit(s) kept, all 5 row file(s) kept; epoch 0 → 1 (old history archived as refs/lore-archive/epoch-0)
+  pushed store agency: commit 9b40ce7 to branch main
 ```
 <!-- /example -->
 
@@ -497,9 +510,9 @@ me: push manual, compact on after 90d
 
 ### What a member sees after a compaction
 
-Nothing to do. On Bob's next sync lore sees the higher epoch, moves his copy onto the new history instead of merging the two, and replays his unpushed notes on top as one commit, `lore: replay local work onto epoch N` (a note both sides changed is merged field by field, as always). His old copy stays under `refs/lore/backup/epoch-<n>-<commit>`. Here Bob had written a note that was still waiting for his next batch when Alice compacted:
+Nothing to do. On Bob's next sync lore sees the higher epoch and first checks the rewrite against his own copy: it re-does the compaction from his own history (fetching the archive when his copy lacks the old tip) and takes the new history only when every commit comes out the same and the person who compacted was an admin there. Then it moves his copy onto the new history instead of merging the two, and replays his unpushed notes on top as one commit, `lore: replay local work onto epoch N` (a note both sides changed is merged field by field, as always). His old copy stays under `refs/lore/backup/epoch-<n>-<commit>`. Here Bob had written a note that was still waiting for his next batch when Alice compacted:
 
-<!-- example: store-push#compact only=1,5,6,7 -->
+<!-- example: store-push#compact only=1,6,7,8 -->
 ```console
 # bob, in website
 $ lore memory add --body 'the client wants the invoice on the 1st' --to agency
@@ -508,8 +521,8 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e9…4603.json (st
 ✓ mem_05e9…4603 [agency/client]
   scope: [project]
 $ lore sync
-lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
-store agency/client: pushed (sent 1, received 4, merged 0, refused 0); rows: 0 received
+lore: pushed store agency/client: commit 05513aa to branch main (1 commit, 1 row file)
+store agency/client: pushed (sent 1, received 5, merged 0, refused 0); rows: 0 received
 store agency/org: up to date
 $ lore memory list
 mem_c0f3…b5b8 [retrieved] the client signs off designs on Thursdays [agency/client]
@@ -519,10 +532,23 @@ $ git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH
 lore: replay local work onto epoch 1
 lore: compact store history (epoch 1)
 lore: store set agency
+lore: store set agency
 lore: actor register act_d431…313a
 lore: snapshot of the store history before 2026-10-03
 ```
 <!-- /example -->
+
+A rewrite lore cannot re-do that way (a higher epoch someone pushed by hand, a compaction by a member, or a snapshot that differs from what the old history allows) is refused on every copy: the sync says `the store's history was rewritten to epoch N by <name> <email> and this clone cannot verify it (<why>); it stays on its own history: check it with lore store compact --store <url> --verify and ask an admin`, pushes nothing and keeps the copy as it was. A new copy made after a compaction starts from the snapshot and trusts it as any copy trusts a store's first commit; `lore store compact --store <store> --verify` fetches the archive, replays its roster and re-does the rewrite, back through every earlier compaction:
+
+<!-- example: store-push#compact only=9 -->
+```console
+# bob, in website
+$ lore store compact --store agency --verify
+✓ store agency: epoch 1 verified against its archive refs/lore-archive/epoch-0 (old tip dfd8dc87ab36): the snapshot is the trusted view of the old history and every kept commit is unchanged
+```
+<!-- /example -->
+
+To put the old history back, an admin runs `lore store compact --store <store> --undo-epoch <n>`, where `<n>` is the epoch the newest compaction replaced (`lore store show` names the current one): the archived history comes back with every write made since on top of it, as the next epoch (epochs only go up, so every copy takes it through the same check), and the compacted history is archived in turn. It asks first, like the compaction, and is behind the same flag.
 
 ## Try it
 

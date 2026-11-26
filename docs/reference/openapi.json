@@ -93103,6 +93103,14 @@
                     "type": "string",
                     "description": "the store: me (personal), an org's store (team, or its name), or a .lore/stores.yaml store"
                   },
+                  "undo_epoch": {
+                    "type": "string",
+                    "description": "put back the history the newest compaction archived (the epoch it replaced, e.g. 0) as a new epoch; writes made since are kept"
+                  },
+                  "verify": {
+                    "type": "boolean",
+                    "description": "check this clone's compacted history against its archive (fetches it, replays the roster, re-does the rewrite); changes nothing"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -93124,6 +93132,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "archive": {
+                      "type": "string"
+                    },
                     "backup": {
                       "type": "string"
                     },
@@ -93142,11 +93153,26 @@
                     "from_epoch": {
                       "type": "integer"
                     },
+                    "held": {
+                      "type": "integer"
+                    },
                     "kept": {
+                      "type": "integer"
+                    },
+                    "layer_note": {
+                      "type": "string"
+                    },
+                    "layers": {
                       "type": "integer"
                     },
                     "nothing": {
                       "type": "boolean"
+                    },
+                    "old_tip": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
                     },
                     "rows": {
                       "type": "integer"
@@ -93159,6 +93185,18 @@
                     },
                     "to_epoch": {
                       "type": "integer"
+                    },
+                    "undo": {
+                      "type": "boolean"
+                    },
+                    "undo_epoch": {
+                      "type": "integer"
+                    },
+                    "verified": {
+                      "type": "boolean"
+                    },
+                    "verify": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -93398,6 +93436,9 @@
                         "compact_after": {
                           "type": "string"
                         },
+                        "compact_archive": {
+                          "type": "string"
+                        },
                         "epoch": {
                           "type": "integer"
                         },
@@ -93466,6 +93507,7 @@
                         "push_every",
                         "squash",
                         "compact",
+                        "compact_archive",
                         "summary",
                         "epoch",
                         "unpushed"
@@ -94947,6 +94989,9 @@
                     "compact_after": {
                       "type": "string"
                     },
+                    "compact_archive": {
+                      "type": "string"
+                    },
                     "epoch": {
                       "type": "integer"
                     },
@@ -95015,6 +95060,7 @@
                     "push_every",
                     "squash",
                     "compact",
+                    "compact_archive",
                     "summary",
                     "epoch",
                     "unpushed"
@@ -95818,6 +95864,9 @@
                         "compact_after": {
                           "type": "string"
                         },
+                        "compact_archive": {
+                          "type": "string"
+                        },
                         "epoch": {
                           "type": "integer"
                         },
@@ -95886,6 +95935,7 @@
                         "push_every",
                         "squash",
                         "compact",
+                        "compact_archive",
                         "summary",
                         "epoch",
                         "unpushed"

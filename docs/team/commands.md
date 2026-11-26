@@ -379,6 +379,8 @@ Examples:
   lore store compact --store me --before 30d --dry-run
   # compact the personal store
   lore store compact --store me --yes
+  # check a compacted store against its archive
+  lore store compact --store me --verify
 
 Flags:
       --before string            squash history older than this age (e.g. 30d; default: the store's compact_after, else 30d)
@@ -389,6 +391,8 @@ Flags:
       --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
       --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
       --store string             the store: me (personal), an org's store (team, or its name), or a .lore/stores.yaml store (required)
+      --undo-epoch string        put back the history the newest compaction archived (the epoch it replaced, e.g. 0) as a new epoch; writes made since are kept
+      --verify                   check this clone's compacted history against its archive (fetches it, replays the roster, re-does the rewrite); changes nothing
       --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->

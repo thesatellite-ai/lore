@@ -61,6 +61,10 @@ const (
 	spCodeConfirm      = "E_NEEDS_CONFIRM"
 )
 
+// spEnvCompactV2 is the switch a compaction runs behind (with the store's
+// compact_archive=on): store growth item 6.
+const spEnvCompactV2 = "LORE_COMPACT_V2"
+
 // spPair is one store with two clones: a and b each run lore in their own
 // checkout of a code repo, with their own HOME.
 type spPair struct {
@@ -127,6 +131,25 @@ func (p *spPair) spPushNow(t *testing.T, store string) {
 	t.Helper()
 	p.ca.MustLore("store", "set", store, "push=now")
 	p.cb.MustLore("sync")
+}
+
+// spArchiveOn lets p.ca compact store: compaction is behind its flag
+// (store growth item 6), so a gets LORE_COMPACT_V2=1 and store gets
+// compact_archive=on. A shared store's setting is a commit that waits for
+// a's sync (C5), sent here so it lands before the history a test counts;
+// the personal store's setting is a's own machine config.
+func (p *spPair) spArchiveOn(t *testing.T, store string) {
+	t.Helper()
+	p.a.SetEnv(spEnvCompactV2, "1")
+	p.ca.MustLore("store", "set", store, "compact_archive=on")
+	if store == spOrgStore {
+		// an org store also needs the org's min_lore_version at the release
+		// that verifies epochs (devco D-1003)
+		p.ca.MustLore("org", "config", "set", "--org", spOrg, "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes")
+	}
+	if store != "me" {
+		p.ca.MustLore("sync")
+	}
 }
 
 // add writes one memory to store through c and returns its id.
@@ -394,6 +417,7 @@ func TestE43b_StorePushSquashOffKeepsEachCommit(t *testing.T) {
 func TestE44_StorePushCompactPersonalKeepsEveryRow(t *testing.T) {
 	p := newSPPersonal(t, spOld)
 	p.spPushNow(t, "me")
+	p.spArchiveOn(t, "me") // compaction is behind its flag (store growth item 6)
 	old := []string{"old fact one", "old fact two", "old fact three"}
 	for _, b := range old {
 		p.add(t, p.ca, "me", b)
@@ -450,6 +474,7 @@ func TestE45_StorePushRESTSetShowCompact(t *testing.T) {
 	p.b.SetNow(spNow)
 	p.add(t, p.ca, "me", "rest new")
 	p.ca.MustLore("sync")
+	p.a.SetEnv(spEnvCompactV2, "1") // compaction is behind its flag (store growth item 6); the API process inherits it
 	api := startAPI(t, p.ca)
 
 	var shown spPushView
@@ -458,7 +483,7 @@ func TestE45_StorePushRESTSetShowCompact(t *testing.T) {
 		t.Fatalf("GET /v1/stores/me: want me, personal, push manual, got %+v", shown.Push)
 	}
 	var set spSetOut
-	spDecode(t, api.spDo(t, http.MethodPost, "/v1/stores/set", spJSON(t, spSetBody{Store: "me", Settings: []string{"push=batch", "push_every=15m"}})), http.StatusOK, &set)
+	spDecode(t, api.spDo(t, http.MethodPost, "/v1/stores/set", spJSON(t, spSetBody{Store: "me", Settings: []string{"push=batch", "push_every=15m", "compact_archive=on"}})), http.StatusOK, &set)
 	if set.Push != "batch" || set.PushEvery != "15m" || !set.Changed {
 		t.Fatalf("POST /v1/stores/set: got %+v", set)
 	}
@@ -500,6 +525,7 @@ func TestE45_StorePushRESTSetShowCompact(t *testing.T) {
 func TestE46_StorePushOrgCompactReplaysMemberWork(t *testing.T) {
 	p := newSPOrg(t, spOld)
 	p.spPushNow(t, spOrgStore)
+	p.spArchiveOn(t, spOrgStore) // compaction is behind its flag (store growth item 6)
 	old := []string{"org old one", "org old two", "org old three"}
 	for _, b := range old {
 		p.add(t, p.ca, spOrgStore, b)
@@ -546,6 +572,7 @@ func TestE46_StorePushOrgCompactReplaysMemberWork(t *testing.T) {
 // her machine (devco:D-852, H-109: the old check asked for a setup).
 func TestE47_StorePushNonAdminRefused(t *testing.T) {
 	p := newSPOrg(t, spOld)
+	p.spArchiveOn(t, spOrgStore) // the creator's dry run below: compaction is behind its flag (store growth item 6)
 	p.add(t, p.ca, spOrgStore, "refusal old one")
 	p.add(t, p.ca, spOrgStore, "refusal old two")
 	p.a.SetNow(spNow)

@@ -806,6 +806,10 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	out := SyncOut{Stores: []Report{}}
 	var problems []string
 	pushRefused := true // every refusal is a push the remote refused (not a merge refusal)
+	// storeRefused: every refusal names no row (the store as a whole was
+	// refused, such as a rewritten history this clone cannot verify):
+	// nothing to settle with lore sync conflicts
+	storeRefused, refusals := true, 0
 	for _, d := range done {
 		n, rep := d.name, d.rep
 		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, SentCommits: rep.Commits, ReceivedCommits: rep.CommitsIn, Merged: len(rep.Merged), Offline: rep.Offline, OfflineDetail: rep.OfflineDetail, Pushed: rep.Pushed}
@@ -817,7 +821,11 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 			}
 			r.Refused++
 			pushRefused = pushRefused && x.Code == errs.PolicyDenied
+			storeRefused, refusals = storeRefused && x.ID.IsZero(), refusals+1
 			p := string(x.Code) + " " + x.ID.String() + ": " + x.Reason
+			if x.ID.IsZero() {
+				p = string(x.Code) + ": " + x.Reason
+			}
 			r.Problems = append(r.Problems, p)
 			problems = append(problems, string(n)+": "+p)
 		}
@@ -845,6 +853,10 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	out.Stores = attributeFolders(out.Stores, fs)
 	if serr != nil {
 		return out, serr
+	}
+	if len(problems) > 0 && storeRefused && refusals > 0 {
+		return out, errs.New(errs.Refused, "sync: "+strings.Join(problems, "; ")).
+			WithHint("nothing was merged or pushed for that store; the line above says why and what to run")
 	}
 	if len(problems) > 0 && pushRefused {
 		return out, errs.New(errs.Stale, "sync: "+strings.Join(problems, "; ")).

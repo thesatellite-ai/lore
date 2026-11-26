@@ -26,7 +26,9 @@ func TestE53_StorePushAutoCompactsPersonal(t *testing.T) {
 	if log := p.log(); strings.HasPrefix(log[0], spCompactSubject) {
 		t.Fatalf("compact off rewrote the history: %q", log)
 	}
-	p.ca.MustLore("store", "set", "me", "compact=on", "compact_after=30d").Says(t, "compact on after 30d")
+	// compaction is behind its flag (store growth item 6): compact_archive=on and LORE_COMPACT_V2=1
+	p.a.SetEnv(spEnvCompactV2, "1")
+	p.ca.MustLore("store", "set", "me", "compact=on", "compact_after=30d", "compact_archive=on").Says(t, "compact on after 30d")
 	r := p.ca.MustLore("memory", "add", "triggers the compaction", "--to", "me")
 	r.Says(t, "compacted its history")
 	p.spCompacted(t, 1, 2) // the two writes at spNow are kept
@@ -58,7 +60,13 @@ func TestE54_StorePushAutoCompactsOrgFromAdminOnly(t *testing.T) {
 	p.cb.MustLore("sync")
 	p.a.SetNow(spNow)
 	p.b.SetNow(spNow)
-	p.ca.MustLore("store", "set", spOrgStore, "compact=on", "compact_after=30d")
+	// compaction is behind its flag (store growth item 6): compact_archive=on
+	// and LORE_COMPACT_V2=1, on the member too, so the admin rule (not the
+	// flag) is what keeps the member's push from compacting
+	p.a.SetEnv(spEnvCompactV2, "1")
+	p.b.SetEnv(spEnvCompactV2, "1")
+	p.ca.MustLore("store", "set", spOrgStore, "compact=on", "compact_after=30d", "compact_archive=on")
+	p.ca.MustLore("org", "config", "set", "--org", spOrg, "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes") // the org floor a compaction needs (devco D-1003)
 	p.cb.MustLore("sync")
 	// The member writes: pushed, never compacted.
 	p.add(t, p.cb, spOrgStore, "member write")

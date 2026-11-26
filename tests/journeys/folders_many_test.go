@@ -157,7 +157,14 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.Lore(parent, "store", "show", "notes-three").OK(t).Says(t, "notes-three")
 		lee.Lore(parent, "store", "visibility", three.SSHURL(), "internal").OK(t)
 		lee.Lore(parent, "store", "set", three.SSHURL(), "push=batch").OK(t).Says(t, "push batch")
-		lee.Lore(parent, "store", "compact", three.SSHURL(), "--dry-run").OK(t)
+		// compaction is behind its flag (store growth item 6): the store
+		// setting and LORE_COMPACT_V2=1 for this one run
+		lee.Lore(parent, "store", "set", three.SSHURL(), "compact_archive=on").OK(t)
+		lee.SetEnv("LORE_COMPACT_V2", "1")
+		// resolved by its url, the org's store reaches the org floor check
+		// (devco D-1003); the floor itself is not raised in this journey
+		lee.Lore(parent, "store", "compact", three.SSHURL(), "--dry-run").Refused(t, "min_lore_version")
+		lee.SetEnv("LORE_COMPACT_V2", "")
 		lee.Lore(parent, "store", "set", three.SSHURL(), "push=now").OK(t)
 	})
 

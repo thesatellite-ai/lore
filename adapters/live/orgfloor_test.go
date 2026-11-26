@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"errors"
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
@@ -16,6 +17,8 @@ import (
 // one with nothing else to change; a lower floor never lowers the meta;
 // and with no live ref and nothing to write, no ref is made.
 func TestLiveRefCarriesOrgFloor(t *testing.T) {
+	// the stamped 0.1.19 and 0.1.20 below predate verified epochs (0.1.57)
+	t.Cleanup(formatgate.HideFeaturesFrom(formatgate.VerifiedEpochs))
 	ctx := context.Background()
 	for _, c := range []struct {
 		name  string

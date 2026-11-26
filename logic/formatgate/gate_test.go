@@ -92,6 +92,7 @@ func TestLockedTable(t *testing.T) {
 // without branch_layers, with a feature this build does not know, or a
 // higher floor still refuses.
 func TestLegacyBranchLayersFloorWritable(t *testing.T) {
+	knownBefore(t, VerifiedEpochs) // a 0.1.18 binary: no feature from later releases
 	legacy := Declared{Features: []string{BranchLayers, Meta}, MinLoreVersion: "0.1.19"}
 	if v := Check("0.1.18", legacy); !v.Writable {
 		t.Fatalf("0.1.18 may not write its previews' folder: %+v", v)

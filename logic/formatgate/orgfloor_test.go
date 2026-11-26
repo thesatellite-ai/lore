@@ -20,6 +20,7 @@ func TestOrgFloorDevBuild(t *testing.T) {
 			t.Errorf("MayWrite(%q, %s) = false", bin, SourceRelease)
 		}
 	}
+	knownBefore(t, VerifiedEpochs) // a stamped 0.1.19: no feature from later releases
 	v := Check("0.1.19", Declared{MinLoreVersion: "0.1.20"})
 	if v.Writable {
 		t.Fatal("lore 0.1.19 may write a folder that needs 0.1.20")
@@ -40,4 +41,11 @@ func TestValidVersion(t *testing.T) {
 			t.Errorf("ValidVersion(%q) = %v, want %v", v, got, want)
 		}
 	}
+}
+
+// knownBefore makes this binary know only the features before name for
+// the rest of the test (HideFeaturesFrom).
+func knownBefore(t *testing.T, name string) {
+	t.Helper()
+	t.Cleanup(HideFeaturesFrom(name))
 }

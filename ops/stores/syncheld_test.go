@@ -2,6 +2,7 @@ package stores
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -112,5 +113,29 @@ func TestSyncAllHeldByTwoFolders(t *testing.T) {
 	alone := "held: waiting on folder platform's conflict (" + a.String() + ") and folder web's conflict (" + b.String() + ")"
 	if !errs.Has(err, errs.Stale) || len(out.Stores) != 1 || out.Stores[0].Held != alone {
 		t.Fatalf("alone: %+v %v, want %q", out.Stores, err, alone)
+	}
+}
+
+// TestSyncAllStoreRefusalNamesNoRow (devco:D-1003): a refusal of the store
+// as a whole (a rewritten history the clone cannot verify) names no row:
+// the line carries no blank id, the error is E_REFUSED, and the hint never
+// sends the person to `lore sync conflicts`, which has nothing to settle.
+func TestSyncAllStoreRefusalNamesNoRow(t *testing.T) {
+	t.Parallel()
+	why := "the store's history was rewritten to epoch 1 by someone and this clone cannot verify it"
+	s := fakeSyncer{
+		names: []store.Source{"team"},
+		reps:  map[store.Source]store.SyncReport{"team": {Refused: []store.Refusal{{Code: errs.Refused, Reason: why}}}},
+	}
+	out, err := SyncAll(context.Background(), s, "")
+	if !errs.Has(err, errs.Refused) {
+		t.Fatalf("err = %v, want E_REFUSED", err)
+	}
+	var e *errs.Error
+	if !errors.As(err, &e) || strings.Contains(e.Hint, "sync conflicts") || strings.Contains(err.Error(), "E_REFUSED :") {
+		t.Fatalf("err = %v (hint %q); want no row id and no conflicts hint", err, e.Hint)
+	}
+	if len(out.Stores) != 1 || len(out.Stores[0].Problems) != 1 || out.Stores[0].Problems[0] != "E_REFUSED: "+why {
+		t.Fatalf("stores %+v", out.Stores)
 	}
 }

@@ -245,6 +245,10 @@ func spTestBin(t *testing.T) string {
 	return spTestBinPath
 }
 
+// spEnvCompactV2 is the switch a compaction runs behind (with the store's
+// compact_archive=on): store growth item 6.
+const spEnvCompactV2 = "LORE_COMPACT_V2"
+
 // spAt sets the clock of a loretest machine (LORE_NOW, RFC 3339).
 func spAt(m *Machine, now string) { spEnv(m, "LORE_NOW", now) }
 

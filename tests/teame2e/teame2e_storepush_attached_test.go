@@ -67,7 +67,11 @@ func TestE55_StorePushAttachedStoreSetBatchCompact(t *testing.T) {
 	spSameLog(t, "batched writes inside push_every", p.log(), before)
 	p.cb.MustLore("sync").Says(t, "store kb: pushed (sent ")
 	spOneBatchOnTop(t, before, p.log(), 2)
-	// The store's history compacts (asks first, then folds the old writes).
+	// The store's history compacts (asks first, then folds the old writes);
+	// compaction is behind its flag (store growth item 6), and the sync
+	// sends the compact_archive=on commit.
+	p.a.SetEnv(spEnvCompactV2, "1")
+	p.ca.MustLore("store", "set", spAttachedStore, "compact_archive=on")
 	p.ca.MustLore("sync")
 	p.ca.Lore("store", "compact", spAttachedStore).Fails(t, spExitNeedsConfirm, spCodeConfirm, "--yes")
 	p.ca.MustLore("store", "compact", spAttachedStore, "--yes").Says(t, "compacted kb", "epoch 0 → 1")

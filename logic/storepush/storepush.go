@@ -65,10 +65,17 @@ const (
 	KeyCompact      = "compact"
 	KeyCompactAfter = "compact_after"
 	KeySquash       = "squash"
+	// KeyCompactArchive turns on compaction with an archive (store growth
+	// item 6): the replaced history is kept at refs/lore-archive/epoch-<n>
+	// and every clone verifies the rewrite. While it is behind its flag a
+	// compaction needs it on (and LORE_COMPACT_V2=1).
+	KeyCompactArchive = "compact_archive"
 )
 
 // Keys lists every setting key.
-func Keys() []string { return []string{KeyPush, KeyPushEvery, KeySquash, KeyCompact, KeyCompactAfter} }
+func Keys() []string {
+	return []string{KeyPush, KeyPushEvery, KeySquash, KeyCompact, KeyCompactAfter, KeyCompactArchive}
+}
 
 // Defaults and bounds.
 const (
@@ -105,6 +112,9 @@ type Settings struct {
 	// author (store growth item 4: a busy store made ~600 commits a day);
 	// a team that wants per-write history in git turns it off.
 	NoSquash bool
+	// CompactArchive is compact_archive=on: compaction keeps the replaced
+	// history in an archive ref and clones verify the rewrite.
+	CompactArchive bool
 }
 
 // Default is a store with no settings: push manual (writes commit locally
@@ -117,16 +127,18 @@ func (s Settings) Squash() bool { return !s.NoSquash }
 
 // Raw is the settings as spelled in a file (each "" when unset).
 type Raw struct {
-	Push         string
-	PushEvery    string
-	Compact      string
-	CompactAfter string
-	Squash       string
+	Push           string
+	PushEvery      string
+	Compact        string
+	CompactAfter   string
+	Squash         string
+	CompactArchive string
 }
 
 // Pairs is r as key/value pairs in Keys order (unset values are "").
 func (r Raw) Pairs() [][2]string {
-	return [][2]string{{KeyPush, r.Push}, {KeyPushEvery, r.PushEvery}, {KeySquash, r.Squash}, {KeyCompact, r.Compact}, {KeyCompactAfter, r.CompactAfter}}
+	return [][2]string{{KeyPush, r.Push}, {KeyPushEvery, r.PushEvery}, {KeySquash, r.Squash}, {KeyCompact, r.Compact}, {KeyCompactAfter, r.CompactAfter},
+		{KeyCompactArchive, r.CompactArchive}}
 }
 
 // With returns r with key's value set to v (an unknown key leaves r).
@@ -142,6 +154,8 @@ func (r Raw) With(key, v string) Raw {
 		r.Compact = v
 	case KeyCompactAfter:
 		r.CompactAfter = v
+	case KeyCompactArchive:
+		r.CompactArchive = v
 	}
 	return r
 }
@@ -213,6 +227,9 @@ func (s Settings) Raw() Raw {
 	if s.NoSquash {
 		r.Squash = SquashOff
 	}
+	if s.CompactArchive {
+		r.CompactArchive = CompactOn
+	}
 	return r
 }
 
@@ -274,6 +291,12 @@ func (s Settings) Apply(key, value string) (Settings, error) {
 			return s, err
 		}
 		s.Compact = on
+	case KeyCompactArchive:
+		on, err := ParseCompact(value)
+		if err != nil {
+			return s, fmt.Errorf("compact_archive %q: use on or off", value)
+		}
+		s.CompactArchive = on
 	case KeySquash:
 		on, err := ParseSquash(value)
 		if err != nil {

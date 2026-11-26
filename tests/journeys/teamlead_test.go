@@ -405,6 +405,11 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 			ID string `json:"id"`
 		}
 		tlJSON(t, r, &o)
+		// compaction is behind its flag (store growth item 6): the store
+		// setting, and LORE_COMPACT_V2=1 on Ann's machine
+		tt.lore(tlAnn, "store", "set", tlOrg, "compact_archive=on").OK(t)
+		tt.lore(tlAnn, "org", "config", "set", "--org", tlOrg, "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes").OK(t) // the org floor a compaction needs (devco D-1003)
+		tt.m[tlAnn.Email].SetEnv("LORE_COMPACT_V2", "1")
 		before := tt.store.CommitCount("refs/heads/main")
 		// Ann squashes everything older than a week; every row is kept.
 		tt.lore(tlAnn, "store", "compact", tlOrg, "--before", "7d", "--yes").OK(t).

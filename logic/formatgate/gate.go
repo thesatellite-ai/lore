@@ -37,6 +37,12 @@ const (
 	// lore that does not know it must not write there, or a feature-branch
 	// note would land in the real notes.
 	BranchLayers = "branch_layers"
+	// VerifiedEpochs: the lore re-does a store compaction from its own
+	// history before it takes a higher epoch (store growth item 6, devco
+	// D-1003); an older one takes any higher epoch as it comes. A
+	// compaction requires the org's min_lore_version at its Since, so an
+	// older lore is read-only on the org's stores instead.
+	VerifiedEpochs = "verified_epochs"
 )
 
 // since018 is the release that introduced the 0.1.18 features.
@@ -88,6 +94,26 @@ var releaseFeatures = []Feature{
 	{Name: Vars, Since: since018},
 	{Name: PersonalFlat, Since: since018},
 	{Name: BranchLayers, Since: since018}, // branch layers ship in 0.1.18 (devco:V-1)
+	{Name: VerifiedEpochs, Since: "0.1.57"},
+}
+
+// HideFeaturesFrom makes this binary know only the features listed before
+// name, as an older stamped release did, and returns the undo. Why
+// exported: a test (here or in another package) that checks an old
+// version string such as a stamped 0.1.19 must not count as the newest
+// feature's release (effective raises every binary to the highest Since
+// it knows). Tests only; not safe beside parallel tests of the package.
+func HideFeaturesFrom(name string) (restore func()) {
+	saved := known
+	var keep []Feature
+	for _, f := range saved {
+		if f.Name == name {
+			break
+		}
+		keep = append(keep, f)
+	}
+	known = keep
+	return func() { known = saved }
 }
 
 // Known returns a copy of the features this binary understands.

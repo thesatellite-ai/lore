@@ -112,11 +112,13 @@ type Personal struct {
 	Compact      string `yaml:"compact,omitempty"`
 	CompactAfter string `yaml:"compact_after,omitempty"`
 	Squash       string `yaml:"squash,omitempty"`
+	// CompactArchive is compact_archive (store growth item 6).
+	CompactArchive string `yaml:"compact_archive,omitempty"`
 }
 
 // PushRaw is the personal store's push settings as written.
 func (p Personal) PushRaw() storepush.Raw {
-	return storepush.Raw{Push: p.Push, PushEvery: p.PushEvery, Compact: p.Compact, CompactAfter: p.CompactAfter, Squash: p.Squash}
+	return storepush.Raw{Push: p.Push, PushEvery: p.PushEvery, Compact: p.Compact, CompactAfter: p.CompactAfter, Squash: p.Squash, CompactArchive: p.CompactArchive}
 }
 
 // Org is one entry under `orgs:` (F13).

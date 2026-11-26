@@ -81,6 +81,10 @@ type Marker struct {
 	// compact`): a clone whose history carries a lower epoch re-fetches
 	// instead of merging. 0 = never compacted.
 	Epoch int
+	// ArchiveURL is where a compaction archives the replaced history
+	// (`lore store compact`, store growth item 6): "" keeps it in the
+	// store's own remote, as refs/lore-archive/epoch-<n>.
+	ArchiveURL string
 	// Push holds the store's shared push and compaction settings as
 	// written (storepush.Raw; set by an org admin with `lore store set`).
 	// They are read leniently: a bad value is reported by `lore store
@@ -115,12 +119,14 @@ type markerWire struct {
 	Org        string `yaml:"org,omitempty"`
 	OrgStore   string `yaml:"org_store,omitempty"`
 	Epoch      int    `yaml:"epoch,omitempty"`
+	ArchiveURL string `yaml:"archive_url,omitempty"`
 	// The storepush keys (storepush.Key*).
-	PushMode     string `yaml:"push,omitempty"`
-	PushEvery    string `yaml:"push_every,omitempty"`
-	Compact      string `yaml:"compact,omitempty"`
-	CompactAfter string `yaml:"compact_after,omitempty"`
-	Squash       string `yaml:"squash,omitempty"`
+	PushMode       string `yaml:"push,omitempty"`
+	PushEvery      string `yaml:"push_every,omitempty"`
+	Compact        string `yaml:"compact,omitempty"`
+	CompactAfter   string `yaml:"compact_after,omitempty"`
+	Squash         string `yaml:"squash,omitempty"`
+	CompactArchive string `yaml:"compact_archive,omitempty"`
 }
 
 // ParseMarker parses marker bytes.
@@ -142,7 +148,7 @@ func ParseMarker(b []byte) (Marker, error) {
 		return Marker{}, errs.New(errs.ConfigInvalid, "rowfs: "+MarkerFile+": epoch must not be negative")
 	}
 	m := Marker{Version: w.LoreStore, Visibility: Visibility(w.Visibility), Created: w.Created, OrgFolder: w.OrgFolder,
-		Org: w.Org, OrgStore: w.OrgStore, Epoch: w.Epoch, Push: storepush.Raw{Push: w.PushMode, PushEvery: w.PushEvery, Compact: w.Compact, CompactAfter: w.CompactAfter, Squash: w.Squash}}
+		Org: w.Org, OrgStore: w.OrgStore, Epoch: w.Epoch, ArchiveURL: w.ArchiveURL, Push: storepush.Raw{Push: w.PushMode, PushEvery: w.PushEvery, Compact: w.Compact, CompactAfter: w.CompactAfter, Squash: w.Squash, CompactArchive: w.CompactArchive}}
 	if m.Visibility == "" {
 		m.Visibility = VisibilityInternal
 	}
@@ -171,7 +177,7 @@ func (m Marker) Encode() ([]byte, error) {
 		return nil, errs.New(errs.InvalidInput, "rowfs: visibility must be internal or shareable")
 	}
 	w := markerWire{LoreStore: MarkerVersion, ID: m.ID.String(), Visibility: string(m.Visibility), Created: m.Created, OrgFolder: m.OrgFolder,
-		Org: m.Org, OrgStore: m.OrgStore, Epoch: m.Epoch, PushMode: m.Push.Push, PushEvery: m.Push.PushEvery, Compact: m.Push.Compact, CompactAfter: m.Push.CompactAfter, Squash: m.Push.Squash}
+		Org: m.Org, OrgStore: m.OrgStore, Epoch: m.Epoch, ArchiveURL: m.ArchiveURL, PushMode: m.Push.Push, PushEvery: m.Push.PushEvery, Compact: m.Push.Compact, CompactAfter: m.Push.CompactAfter, Squash: m.Push.Squash, CompactArchive: m.Push.CompactArchive}
 	b, err := yaml.Marshal(w)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "rowfs: encode "+MarkerFile, err)

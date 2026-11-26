@@ -322,6 +322,7 @@ type spCompactOut struct {
 	FromEpoch int    `json:"from_epoch"`
 	ToEpoch   int    `json:"to_epoch"`
 	Backup    string `json:"backup"`
+	Archive   string `json:"archive"`
 }
 
 func spCompactCLI(t *testing.T, m *Machine, cwd string, args ...string) spCompactOut {
@@ -379,6 +380,12 @@ func spCompactionLife(t *testing.T, shape string) {
 	lsRun(t, admin, aRepo, "sync")
 	lsRun(t, member, mRepo, "sync")
 	inTeam := lsOrg + "/" + spMemberFolder
+	// Compaction is behind its flag (store growth item 6): the admin runs
+	// lore with LORE_COMPACT_V2=1 and turns compact_archive=on (one commit in
+	// the old history, sent by the first sync below).
+	spEnv(admin, spEnvCompactV2, "1")
+	lsRun(t, admin, aRepo, "store", "set", lsOrg, "compact_archive=on")
+	lsRun(t, admin, aRepo, "org", "config", "set", "--org", lsOrg, "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes") // the org floor a compaction needs (devco D-1003)
 
 	// Old history: three rows written in September by the admin.
 	var ids []string
@@ -443,7 +450,7 @@ func spCompactionLife(t *testing.T, shape string) {
 
 	// The compaction.
 	out := spCompactCLI(t, admin, aRepo, "--before", "30d", "--yes")
-	if out.DryRun || out.Squashed != dry.Squashed || out.Kept != dry.Kept || out.ToEpoch != 1 || !strings.HasPrefix(out.Backup, "refs/lore/backup/compact-0-") {
+	if out.DryRun || out.Squashed != dry.Squashed || out.Kept != dry.Kept || out.ToEpoch != 1 || !strings.HasPrefix(out.Backup, "refs/lore/backup/compact-0-") || out.Archive != "refs/lore-archive/epoch-0" {
 		t.Errorf("compact: %+v (dry run said %+v)", out, dry)
 	}
 	compacted := spLog(t, bare)

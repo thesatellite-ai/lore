@@ -516,6 +516,10 @@ type replayCommit struct {
 	// merge marks a merge commit: changes are then only the files whose
 	// merged version neither parent had (git log -c)
 	merge bool
+	// snapshot marks the history's one root when it is a compaction's
+	// snapshot (TrailerSnapshot): every file accepted with the writer it
+	// states, as the trusted view it was made from (compactv2.go)
+	snapshot bool
 }
 
 // authority is the replay's result at one HEAD.
@@ -977,10 +981,38 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 	}
 	a := &authority{head: head, orgHead: orgHead, state: st, admins: map[string]*adminSet{}, held: map[string]HeldChange{}, trusted: map[string]string{}, refused: map[string]bool{}, credited: map[string]credit{},
 		accepted: map[string]string{}, snap: st.adminSnapshot()}
+	b.markSnapshotRoot(ctx, commits)
 	if err := b.replayOver(ctx, a, commits); err != nil {
 		return nil, err
 	}
 	return a, nil
+}
+
+// markSnapshotRoot marks the root of a full replay's commits as a
+// compaction snapshot when it is the history's only root and its message
+// carries TrailerSnapshot. Why: a compaction's snapshot holds every row
+// with the writer it states; judged as one commit by the compactor, a
+// client store would credit the compactor with every row (C35). A fresh
+// clone trusts its root commit anyway (it is where the history starts);
+// with two roots (an unrelated history merged in) none is trusted beyond
+// the usual rules.
+func (b *Backend) markSnapshotRoot(ctx context.Context, commits []replayCommit) {
+	root := -1
+	for i, c := range commits {
+		if len(c.parents) == 0 {
+			if root >= 0 {
+				return
+			}
+			root = i
+		}
+	}
+	if root < 0 {
+		return
+	}
+	m, err := b.metaOf(ctx, commits[root].id)
+	if err == nil && trailerValue(m.msg, TrailerSnapshot) != "" {
+		commits[root].snapshot = true
+	}
 }
 
 // replayedCommits counts the commits replayOver decided in this process:
@@ -1036,7 +1068,7 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 	for _, c := range commits {
 		rosterMoved := false
 		reason := ""
-		if !c.merge && !st.orgless {
+		if !c.merge && !st.orgless && !c.snapshot {
 			reason = st.refusal(c, docOf)
 		}
 		actor := st.authorActor(c, docOf)
@@ -1053,10 +1085,10 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 			}
 			reason := reason
 			credited := false
-			if reason == "" {
+			if reason == "" && !c.snapshot {
 				reason, credited = st.fileRefusal(c, actor, f, docOf)
 			}
-			if reason == "" {
+			if reason == "" && !c.snapshot {
 				reason = st.roleRefusal(c, actor, f, accepted[f.path], docOf)
 			}
 			if reason != "" {
@@ -1095,7 +1127,11 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 				if credited {
 					a.credited[f.path] = credit{actor: actor, claimed: d.UpdatedBy, hlc: d.HLC, created: zeroBlob(f.oldBlob), commit: c.id}
 				}
-				st.stamp(f.path, d.HLC, actor, d.content)
+				stamper := actor
+				if c.snapshot && d.UpdatedBy != "" {
+					stamper = d.UpdatedBy // the snapshot vouches for the writer each row states
+				}
+				st.stamp(f.path, d.HLC, stamper, d.content)
 				if t := tableOfPath(f.path); kept(t) && (!st.orgless || t == schema.TableProjects) {
 					st.docs[f.path] = d
 				}

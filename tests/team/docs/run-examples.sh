@@ -993,12 +993,17 @@ Y
   note "compact"
   # Bob's write waits for his next batch: his clone holds work the remote has not seen.
   on bob work/website "lore memory add --body 'the client wants the invoice on the 1st' --to agency"
-  on alice work/website "lore store compact --store agency --before 30d --dry-run"
-  on! alice work/website "lore store compact --store agency --before 30d"
-  on alice work/website "lore store compact --store agency --before 30d --yes"
+  # Compaction with an archive is behind a flag while it is new (store growth item 6): the store setting and LORE_COMPACT_V2=1.
+  on alice work/website "lore store set --store agency --settings compact_archive=on"
+  # the org's floor a compaction needs (this org entry is written by hand, so it goes into Alice's config.yaml)
+  quiet alice . "sed -i 's/^  - name: agency\$/  - name: agency\\n    min_lore_version: \"0.1.57\"/' .lore/config.yaml"
+  on alice work/website "LORE_COMPACT_V2=1 lore store compact --store agency --before 30d --dry-run"
+  on! alice work/website "LORE_COMPACT_V2=1 lore store compact --store agency --before 30d"
+  on alice work/website "LORE_COMPACT_V2=1 lore store compact --store agency --before 30d --yes"
   on bob work/website "lore sync"
   on bob work/website "lore memory list"
   on bob work/website "git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH_HEAD"
+  on bob work/website "lore store compact --store agency --verify"
 
   note "auto compact"
   on alice work/website "lore store set --store me --settings compact=on --settings compact_after=90d"

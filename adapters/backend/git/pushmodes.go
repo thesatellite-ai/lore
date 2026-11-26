@@ -21,6 +21,7 @@ package git
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -429,7 +430,11 @@ func (b *Backend) keepCommit(ctx context.Context, c localCommit, next string) (s
 	if c.parent == next {
 		return c.id, nil
 	}
-	return b.recommit(ctx, chainCommit{id: c.id, tree: c.id + "^{tree}"}, next)
+	m, err := b.metaOf(ctx, c.id)
+	if err != nil {
+		return "", err
+	}
+	return b.commitTree(ctx, c.id+"^{tree}", []string{next}, m.msg, m.env)
 }
 
 // squashSolo reports whether a commit with these changes keeps a commit
@@ -676,12 +681,16 @@ func (b *Backend) recoverMerge(ctx context.Context) error {
 	return b.abortMerge(ctx)
 }
 
-// adoptEpoch handles a remote whose history was compacted since this
-// clone last merged it (storepush.Refetch): the branch moves onto the
-// remote tip, and local work the remote does not hold is replayed on top
-// as one commit (rows both sides changed go through the Merger). The old
-// tip is kept in a backup ref. adopted is false when there was nothing to
-// adopt; refused rows leave the branch where it was.
+// adoptEpoch handles a remote whose history was compacted (or a
+// compaction undone) since this clone last merged it (storepush.Refetch):
+// the clone first re-does that rewrite from its own history
+// (verifyEpoch: the rewriter an admin, the snapshot the trusted view, every
+// kept commit unchanged); a rewrite it cannot reproduce is refused and the
+// clone stays on its own history. Verified, the branch moves onto the
+// remote tip, the clone's layers are re-made on the new ids, and local
+// work the remote does not hold is replayed on top as one commit (rows
+// both sides changed go through the Merger). The old tip is kept in a
+// backup ref. adopted is false when there was nothing to adopt.
 func (b *Backend) adoptEpoch(ctx context.Context, remote string) (adopted bool, refused []store.Refusal, err error) {
 	h, err := b.head(ctx)
 	if err != nil || h == "" || remote == "" {
@@ -694,44 +703,39 @@ func (b *Backend) adoptEpoch(ctx context.Context, remote string) (adopted bool, 
 	if !storepush.Refetch(b.epochAt(ctx, h), re) {
 		return false, nil, nil
 	}
-	base, err := b.replayBase(ctx, remote, h)
+	proof, why, err := b.verifyEpoch(ctx, remote, h, 0)
 	if err != nil {
 		return false, nil, err
+	}
+	if why != "" {
+		return false, refusalOf(adoptRefusal(b.RemoteURL(), why)), nil
 	}
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"update-ref", backupRefNS + "epoch-" + strconv.Itoa(re) + "-" + h[:12], h}}); err != nil {
 		return false, nil, errs.Wrap(errs.Internal, "git: keep a backup of the local history", err)
 	}
-	if base == h {
+	layers, err := b.openLayerRefs(ctx, true)
+	if err != nil {
+		return false, nil, err
+	}
+	if _, err := b.rebaseLayers(ctx, layers, proof.idMap, proof.oldTip); err != nil {
+		return false, nil, err
+	}
+	// this clone's own signals and live refs move the same way (their
+	// fetched copies come from the remote, which the compactor moved)
+	if err := b.moveOwnLoreRefs(ctx, remote, proof); err != nil {
+		return false, nil, err
+	}
+	if anc, aerr := b.isAncestor(ctx, h, proof.oldTip); aerr != nil {
+		return false, nil, aerr
+	} else if anc {
 		// Nothing local beyond what the remote holds: take the remote.
 		return true, nil, b.resetTo(ctx, remote)
 	}
-	return b.replayOnto(ctx, remote, h, base)
-}
-
-// replayBase finds the newest local commit whose tree the remote's
-// rewritten history holds (a compaction keeps every later tree as it
-// was): what this clone had in common with the remote. "" when none is
-// found (a clone further behind than the compaction cutoff).
-func (b *Backend) replayBase(ctx context.Context, remote, h string) (string, error) {
-	rt, err := b.git.run(ctx, call{dir: b.work, args: []string{"log", "--first-parent", "--format=%T", remote}})
-	if err != nil {
-		return "", errs.Wrap(errs.Internal, "git: read the remote history", err)
+	base, err := b.lines(ctx, "find the replay base", "merge-base", h, proof.oldTip)
+	if err != nil || len(base) != 1 {
+		return false, nil, errors.Join(errs.New(errs.Internal, "git: no common commit with the compacted history"), err)
 	}
-	trees := map[string]bool{}
-	for t := range strings.SplitSeq(trimmed(rt), "\n") {
-		trees[t] = true
-	}
-	lt, err := b.git.run(ctx, call{dir: b.work, args: []string{"log", "--topo-order", "--format=%H %T", h}})
-	if err != nil {
-		return "", errs.Wrap(errs.Internal, "git: read the local history", err)
-	}
-	for line := range strings.SplitSeq(trimmed(lt), "\n") {
-		c, t, ok := strings.Cut(line, " ")
-		if ok && trees[t] {
-			return c, nil
-		}
-	}
-	return "", nil
+	return b.replayOnto(ctx, remote, h, base[0])
 }
 
 // replayOnto merges local work (base..h) into the remote tip without
@@ -842,6 +846,17 @@ type CompactResult struct {
 	Rows int
 	// Backup is the local ref holding the old tip.
 	Backup string
+	// Archive is the ref (in the store's remote, or archive_url) holding
+	// the old tip for every clone.
+	Archive string
+	// Held is how many held changes the snapshot carries as their last
+	// accepted version.
+	Held int
+	// Layers is how many layers (open and trashed) were re-made on the
+	// new history; LayerNote says why pushing them failed, or how many
+	// still reach the old history ("" = all moved and pushed, or none).
+	Layers    int
+	LayerNote string
 }
 
 // chainCommit is one commit of the first-parent history.
@@ -933,25 +948,62 @@ func (b *Backend) compactLocked(ctx context.Context, req CompactRequest) (Compac
 		res.Rows += n // every folder's rows: the compaction rewrites the whole clone
 	}
 	cut := slices.IndexFunc(chain, func(c chainCommit) bool { return c.at.Before(req.Cutoff) })
+	if cut >= 0 && cut < len(chain)-1 {
+		if cut, err = b.closedCut(ctx, chain, cut, h); err != nil {
+			return CompactResult{}, err
+		}
+	}
 	if cut < 0 || cut == len(chain)-1 {
 		res.Nothing = true // nothing old, or only the root is old
 		return res, nil
 	}
 	res.Squashed, res.Kept = len(chain)-cut, cut
 	res.ToEpoch = res.FromEpoch + 1
+	res.Archive = archiveRef(res.FromEpoch)
 	if req.DryRun {
 		return res, nil
+	}
+	env, err := b.compactorCheck(ctx, h)
+	if err != nil {
+		return CompactResult{}, err
 	}
 	m, err := b.markerAt(ctx, h)
 	if err != nil {
 		return CompactResult{}, err
 	}
-	tip, err := b.rewrite(ctx, chain, cut, req.Cutoff)
+	c := chain[cut]
+	at, err := b.replayAt(ctx, c.id)
 	if err != nil {
 		return CompactResult{}, err
 	}
+	held, err := b.heldAt(ctx, at, c.id)
+	if err != nil {
+		return CompactResult{}, err
+	}
+	newTip, idMap, err := b.rewriteFrom(ctx, c.id, h, held, b.snapshotMeta(ctx, env, c, res.Squashed, req.Cutoff, res.ToEpoch))
+	if err != nil {
+		return CompactResult{}, err
+	}
+	cp := Checkpoint{V: checkpointVersion, Kind: CheckpointCompact, FromEpoch: res.FromEpoch, ToEpoch: res.ToEpoch, OldTip: h,
+		Archive: res.Archive, ArchiveURL: m.ArchiveURL, Cut: c.id, CutTree: c.tree, Cutoff: req.Cutoff.UTC().Format(time.DateOnly)}
+	for _, p := range slices.Sorted(maps.Keys(held)) {
+		cp.Held = append(cp.Held, CheckpointHeld{Path: p, Raw: held[p].raw, Trusted: held[p].trusted})
+	}
+	res.Held = len(held)
 	m.Epoch = res.ToEpoch
-	tip, err = b.epochCommit(ctx, tip, m)
+	tip, err := b.epochCommitV2(ctx, newTip, m, cp)
+	if err != nil {
+		return CompactResult{}, err
+	}
+	return b.publishRewrite(ctx, res, h, remote, tip, idMap[c.id], idMap)
+}
+
+// publishRewrite archives the old tip h, force-pushes tip over remote,
+// re-makes the layers on the new ids and moves the clone there: the end of
+// a compaction and of an undo. Nothing moves when the archive or the
+// force-push is refused.
+func (b *Backend) publishRewrite(ctx context.Context, res CompactResult, h, remote, tip, snap string, idMap map[string]string) (CompactResult, error) {
+	m, err := b.markerAt(ctx, h)
 	if err != nil {
 		return CompactResult{}, err
 	}
@@ -960,11 +1012,74 @@ func (b *Backend) compactLocked(ctx context.Context, req CompactRequest) (Compac
 		return CompactResult{}, errs.Wrap(errs.Internal, "git: keep a backup of the old history", err)
 	}
 	pruneRefs(ctx, b.git, b.work, compactBackupPrefix, CompactBackupsKept) // bounded (backupprune.go)
+	if err := b.pushArchive(ctx, m.ArchiveURL, res.Archive, h); err != nil {
+		return CompactResult{}, err
+	}
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"update-ref", res.Archive, h}}); err != nil {
+		return CompactResult{}, errs.Wrap(errs.Internal, "git: record the archive", err)
+	}
+	// every lore ref the remote holds, so none that reaches the old
+	// history is missed (the org link code fetches them all anyway)
+	_, _ = b.git.run(ctx, call{dir: b.work, args: []string{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--", RemoteName, "+refs/lore/*:" + loreTrackingNS + "*"}})
+	layers, err := b.openLayerRefs(ctx, true)
+	if err != nil {
+		return CompactResult{}, err
+	}
+	others, err := b.otherLoreRefs(ctx)
+	if err != nil {
+		return CompactResult{}, err
+	}
 	if err := b.forcePush(ctx, tip, remote); err != nil {
 		return CompactResult{}, err
 	}
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"update-ref", trackingRefNS + b.branch, tip}}); err != nil {
 		return CompactResult{}, errs.Wrap(errs.Internal, "git: record the pushed tip", err)
+	}
+	moved, err := b.rebaseLayers(ctx, layers, idMap, h)
+	stuck := map[string]string{}
+	if err == nil {
+		names := map[string]bool{}
+		for ref := range moved {
+			names[layerName(ref)] = true
+		}
+		res.Layers = len(names)
+		for ref, t := range layers {
+			if _, ok := moved[ref]; ok || names[layerName(ref)] {
+				continue
+			}
+			if mb, _ := b.lines(ctx, "compare a layer", "merge-base", t, h); len(mb) > 0 {
+				stuck[ref] = t // a trashed layer older than the cut: into the archive
+			}
+		}
+		for ref, t := range others {
+			n, ok, merr := b.moveOffHistory(ctx, t, h, snap, idMap)
+			if merr != nil {
+				err = merr
+				break
+			}
+			if ok {
+				if _, uerr := b.git.run(ctx, call{dir: b.work, args: []string{"update-ref", ref, n, t}}); uerr != nil {
+					err = errs.Wrap(errs.Internal, "git: move "+ref+" onto the compacted history", uerr)
+					break
+				}
+				moved[ref] = n
+			}
+		}
+	}
+	if err == nil {
+		was := maps.Clone(layers)
+		maps.Copy(was, others)
+		err = b.pushMovedRefs(ctx, moved, stuck, was, res.FromEpoch)
+		if err == nil && len(stuck) > 0 {
+			stuckNames := map[string]bool{}
+			for ref := range stuck {
+				stuckNames[layerName(ref)] = true
+			}
+			res.LayerNote = strconv.Itoa(len(stuckNames)) + " trashed layer(s) older than the cut moved to " + archivedRefPrefix + strconv.Itoa(res.FromEpoch) + "/"
+		}
+	}
+	if err != nil {
+		res.LayerNote = "not pushed (" + err.Error() + "): each one's next lore sync pushes it"
 	}
 	return res, b.resetTo(ctx, tip)
 }
@@ -1013,75 +1128,24 @@ func (b *Backend) markerAt(ctx context.Context, commit string) (rowfs.Marker, er
 	return m, nil
 }
 
-// rewrite makes chain[cut] (and everything before it) one parentless
-// snapshot with its tree and date, then rewrites each newer commit onto it
-// keeping its tree, author, committer, dates and message.
-func (b *Backend) rewrite(ctx context.Context, chain []chainCommit, cut int, cutoff time.Time) (string, error) {
-	old := chain[cut]
-	env, err := b.commitEnv(ctx, Signature{})
-	if err != nil {
-		return "", err
-	}
-	date := "@" + strconv.FormatInt(old.at.Unix(), 10) + " +0000"
-	env = append(env, "GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
-	msg := snapshotSubject + cutoff.UTC().Format(time.DateOnly) + "\n\n" + strconv.Itoa(len(chain)-cut) + " commits squashed; every row is kept"
-	prev, err := b.commitTree(ctx, old.tree, nil, b.cfg.withTrailers(ctx, msg), env)
-	if err != nil {
-		return "", err
-	}
-	for i := cut - 1; i >= 0; i-- {
-		if prev, err = b.recommit(ctx, chain[i], prev); err != nil {
-			return "", err
+// layerName is a layer or trash ref without its namespace: one name for a
+// layer's own ref and its fetched copy.
+func layerName(ref string) string {
+	for _, p := range []string{LayerTrackingPrefix, branchlayer.RefPrefix} {
+		if rest, ok := strings.CutPrefix(ref, p); ok {
+			return "layer/" + rest
 		}
 	}
-	return prev, nil
+	for _, p := range []string{LayerTrashTrackingPrefix, branchlayer.TrashPrefix} {
+		if rest, ok := strings.CutPrefix(ref, p); ok {
+			return "trash/" + rest
+		}
+	}
+	return ref
 }
 
-// commitMetaFields is the field count of recommit's log format.
+// commitMetaFields is the field count of metaOf's log format.
 const commitMetaFields = 7
-
-// recommit makes c again on parent with c's own tree, people, dates and
-// message.
-func (b *Backend) recommit(ctx context.Context, c chainCommit, parent string) (string, error) {
-	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"log", "-1", "--date=raw", "--format=%an%x00%ae%x00%ad%x00%cn%x00%ce%x00%cd%x00%B", c.id}})
-	if err != nil {
-		return "", errs.Wrap(errs.Internal, "git: read a commit", err)
-	}
-	f := strings.SplitN(string(out), "\x00", commitMetaFields)
-	if len(f) != commitMetaFields {
-		return "", errs.New(errs.Internal, "git: a commit did not read back")
-	}
-	env := []string{
-		envAuthorName + "=" + f[0], envAuthorEmail + "=" + f[1], "GIT_AUTHOR_DATE=" + f[2],
-		envCommitterName + "=" + f[3], envCommitterEmail + "=" + f[4], "GIT_COMMITTER_DATE=" + f[5],
-	}
-	return b.commitTree(ctx, c.tree, []string{parent}, strings.TrimRight(f[6], "\n"), env)
-}
-
-// epochCommit adds one commit on tip whose lore-store.yaml is m.
-func (b *Backend) epochCommit(ctx context.Context, tip string, m rowfs.Marker) (string, error) {
-	raw, err := m.Encode()
-	if err != nil {
-		return "", err
-	}
-	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"hash-object", "-w", "--stdin"}, stdin: raw})
-	if err != nil {
-		return "", errs.Wrap(errs.Internal, "git: write the marker", err)
-	}
-	t, err := b.treeOf(ctx, tip)
-	if err != nil {
-		return "", err
-	}
-	tree, err := b.withFile(ctx, t, rowfs.MarkerFile, trimmed(out))
-	if err != nil {
-		return "", err
-	}
-	env, err := b.commitEnv(ctx, Signature{})
-	if err != nil {
-		return "", err
-	}
-	return b.commitTree(ctx, tree, []string{tip}, b.cfg.withTrailers(ctx, compactSubject+strconv.Itoa(m.Epoch)+")"), env)
-}
 
 // leaseLost is git's refusal of a --force-with-lease whose expected value
 // no longer matches the remote.

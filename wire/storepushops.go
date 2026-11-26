@@ -24,7 +24,9 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -149,6 +151,10 @@ func (a *App) pushView(ctx context.Context, name string, gb *git.Backend, place 
 	}
 	if s.CompactAfter > 0 {
 		v.CompactAfter = storepush.FormatAge(s.CompactAfter)
+	}
+	v.CompactArchive = storepush.CompactOff
+	if s.CompactArchive {
+		v.CompactArchive = storepush.CompactOn
 	}
 	v.Squash = storepush.SquashOn
 	if !s.Squash() {
@@ -310,10 +316,28 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 	}
 	defer done()
 	place, org = refinePlace(gb.Dir(), place, org)
+	if in.Verify { // a read: anyone with a copy checks it against the archive
+		v, verr := gb.VerifyEpoch(ctx)
+		if verr != nil {
+			return opsstores.CompactOut{}, verr
+		}
+		return opsstores.CompactOut{Store: in.Store, Verify: true, Verified: v.Verified, Reason: v.Reason, FromEpoch: v.Epoch, ToEpoch: v.Epoch,
+			Archive: v.Archive, OldTip: shortID(v.OldTip)}, nil
+	}
 	if place == placeOrg && !orgRosterAdmin(ctx, a.opts.Home, org) {
 		return opsstores.CompactOut{}, errNotAdmin(a.opts.Home, "store compact", in.Store, org).WithHint("ask the org admin to run `lore store compact --store " + in.Store + "`; only an admin rewrites an org store's history")
 	}
 	s := a.storeSettings(gb, place)
+	if !s.CompactArchive || !git.CompactV2Enabled() {
+		return opsstores.CompactOut{}, errs.New(errs.Refused, "store compact: compaction with an archive is behind its flag; "+in.Store+" needs compact_archive=on and the run LORE_COMPACT_V2=1").
+			WithHint("lore store set --store " + in.Store + " --settings compact_archive=on, then LORE_COMPACT_V2=1 lore store compact --store " + in.Store + " --dry-run")
+	}
+	if err := compactFloor(a.opts.Home, org, in.Store); err != nil {
+		return opsstores.CompactOut{}, err
+	}
+	if in.UndoEpoch != "" {
+		return a.undoCompaction(ctx, gb, in, place, s)
+	}
 	before := in.Before
 	switch {
 	case before != "":
@@ -345,12 +369,82 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 		writeStamp(git.StateDirOf(gb.Dir()), pushStampFile, a.opts.Wall())
 	}
 	out := opsstores.CompactOut{Store: in.Store, DryRun: in.DryRun, Before: cutoff.UTC().Format(time.DateOnly), Nothing: res.Nothing,
-		Squashed: res.Squashed, Kept: res.Kept, Rows: res.Rows, FromEpoch: res.FromEpoch, ToEpoch: res.ToEpoch, Backup: res.Backup}
+		Squashed: res.Squashed, Kept: res.Kept, Rows: res.Rows, FromEpoch: res.FromEpoch, ToEpoch: res.ToEpoch, Backup: res.Backup,
+		Archive: res.Archive, Held: res.Held, Layers: res.Layers, LayerNote: res.LayerNote}
 	if pushes := gb.TakePushes(); len(pushes) > 0 { // the rewrite's push, named in the output
 		last := pushes[len(pushes)-1]
 		out.Commit, out.Branch = last.Short(), last.Branch
 	}
 	return out, nil
+}
+
+// undoCompaction is `lore store compact --undo-epoch <n>`: the archived
+// history of epoch n back as a new epoch, the writes since kept.
+func (a *App) undoCompaction(ctx context.Context, gb *git.Backend, in opsstores.CompactIn, place pushPlace, s storepush.Settings) (opsstores.CompactOut, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(in.UndoEpoch))
+	if err != nil || n < 0 {
+		return opsstores.CompactOut{}, errs.New(errs.InvalidInput, "store compact: --undo-epoch "+in.UndoEpoch+" is not an epoch number").
+			WithHint("lore store show --store " + in.Store + " names the epoch; pass the one before it")
+	}
+	if !in.DryRun && place != placePersonal {
+		if pending := otherClonesUnpushed(ctx, a.opts.Home, gb.Dir()); len(pending) > 0 {
+			return opsstores.CompactOut{}, errs.New(errs.Refused, "store compact: another clone of "+in.Store+" on this machine holds unpushed work ("+strings.Join(pending, ", ")+")").
+				WithHint("run `lore sync` in the repos that use that clone, then undo again")
+		}
+	}
+	res, err := gb.UndoEpoch(ctx, git.UndoRequest{Epoch: n, DryRun: in.DryRun, Squash: s.Squash()})
+	if err != nil {
+		return opsstores.CompactOut{}, err
+	}
+	if !in.DryRun {
+		writeStamp(git.StateDirOf(gb.Dir()), pushStampFile, a.opts.Wall())
+	}
+	out := opsstores.CompactOut{Store: in.Store, DryRun: in.DryRun, Undo: true, UndoEpoch: n, Kept: res.Kept, FromEpoch: res.FromEpoch, ToEpoch: res.ToEpoch,
+		Backup: res.Backup, Archive: res.Archive, Layers: res.Layers, LayerNote: res.LayerNote}
+	if pushes := gb.TakePushes(); len(pushes) > 0 {
+		last := pushes[len(pushes)-1]
+		out.Commit, out.Branch = last.Short(), last.Branch
+	}
+	return out, nil
+}
+
+// compactFloor refuses a compaction of an org's store while the org's
+// min_lore_version is below the release that verifies epochs
+// (formatgate.VerifiedEpochs): a lore older than that takes any higher
+// epoch unverified, so it must be read-only on the org's stores first
+// (coordinator decision for devco D-1003). A store of no org has no floor
+// to raise.
+func compactFloor(home, org, storeName string) error {
+	if org == "" {
+		return nil
+	}
+	f, ok := formatgate.Lookup(formatgate.VerifiedEpochs)
+	if !ok {
+		return nil
+	}
+	floor := ""
+	if cfg, _, err := orgcfg.LoadConfig(home); err == nil && cfg != nil {
+		if o := cfg.FindOrg(org); o != nil {
+			floor = strings.TrimSpace(o.MinLoreVersion)
+		}
+	}
+	if floor != "" && !formatgate.VersionBelow(floor, f.Since) {
+		return nil
+	}
+	have := "not set"
+	if floor != "" {
+		have = floor
+	}
+	return errs.New(errs.Refused, "store compact: org "+org+"'s min_lore_version is "+have+"; a compaction needs "+f.Since+" or later, so a lore too old to check the rewritten history is read-only on the org's stores instead of taking it unverified").
+		WithHint("lore org config set --org " + org + " --key min_lore_version --value " + f.Since + " --push --yes, then lore store compact --store " + storeName + " again")
+}
+
+// shortID is a commit id cut to 12 characters ("" stays "").
+func shortID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
 }
 
 // rawSettings is a store's settings as written: the personal: block for
@@ -439,16 +533,16 @@ func (b *storePush) autoCompact(ctx context.Context) {
 	b.compacted = true
 	s := b.pushSettings()
 	gb := gitOf(b.inner)
-	if !s.Compact || gb == nil {
-		return
+	if !s.Compact || gb == nil || !s.CompactArchive || !git.CompactV2Enabled() {
+		return // compaction runs only with its archive, behind its flag (store growth item 6)
 	}
 	now := b.res.now()
 	if !storepush.AutoCompactDue(readStamp(b.stateDir, compactStampFile), now) {
 		return
 	}
 	if b.name != store.Source(attach.ReservedMe) {
-		if org := cloneOrg(b.res.home, gb.Dir()); org != "" && !orgRosterAdmin(ctx, b.res.home, org) {
-			return
+		if org := cloneOrg(b.res.home, gb.Dir()); org != "" && (!orgRosterAdmin(ctx, b.res.home, org) || compactFloor(b.res.home, org, string(b.name)) != nil) {
+			return // not an admin, or the org's floor below the release that verifies epochs
 		}
 		if len(otherClonesUnpushed(ctx, b.res.home, gb.Dir())) > 0 {
 			return

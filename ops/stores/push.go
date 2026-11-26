@@ -70,6 +70,9 @@ type PushView struct {
 	Squash       string `json:"squash"`
 	Compact      string `json:"compact"`
 	CompactAfter string `json:"compact_after,omitempty"`
+	// CompactArchive is compact_archive (on: compaction keeps an archive
+	// and clones verify it; store growth item 6).
+	CompactArchive string `json:"compact_archive"`
 	// Summary is the one-line form ("push batch every 10m, compact off").
 	Summary string `json:"summary"`
 	// Problem names a setting that does not read (the store pushes as now).
@@ -171,6 +174,10 @@ type CompactIn struct {
 	Store  string `json:"store" arg:"0" desc:"the store: me (personal), an org's store (team, or its name), or a .lore/stores.yaml store"`
 	Before string `json:"before,omitempty" flag:"before" desc:"squash history older than this age (e.g. 30d; default: the store's compact_after, else 30d)"`
 	DryRun bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be squashed; change nothing"`
+	// Verify checks the compacted history against its archive instead.
+	Verify bool `json:"verify,omitempty" flag:"verify" desc:"check this clone's compacted history against its archive (fetches it, replays the roster, re-does the rewrite); changes nothing"`
+	// UndoEpoch puts the archived history of that epoch back.
+	UndoEpoch string `json:"undo_epoch,omitempty" flag:"undo-epoch" desc:"put back the history the newest compaction archived (the epoch it replaced, e.g. 0) as a new epoch; writes made since are kept"`
 }
 
 // CompactOut is the output of store.compact.
@@ -191,23 +198,74 @@ type CompactOut struct {
 	// new tip's short id, the store branch); "" for a dry run or nothing.
 	Commit string `json:"commit,omitempty"`
 	Branch string `json:"branch,omitempty"`
+	// Archive is the ref holding the replaced history (in the store's
+	// remote, or its archive_url); Held how many held changes the snapshot
+	// carries as their last accepted version; Layers how many open layers
+	// (open and trashed) were re-made on the new history; LayerNote says
+	// why pushing them failed, or how many still reach the old history.
+	Archive   string `json:"archive,omitempty"`
+	Held      int    `json:"held,omitempty"`
+	Layers    int    `json:"layers,omitempty"`
+	LayerNote string `json:"layer_note,omitempty"`
+	// Verify answers --verify: Verified, else Reason; OldTip is the
+	// archived tip the newest checkpoint names.
+	Verify   bool   `json:"verify,omitempty"`
+	Verified bool   `json:"verified,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+	OldTip   string `json:"old_tip,omitempty"`
+	// Undo answers --undo-epoch: UndoEpoch is the epoch put back.
+	Undo      bool `json:"undo,omitempty"`
+	UndoEpoch int  `json:"undo_epoch,omitempty"`
 }
 
 // Text prints the compaction.
 func (o CompactOut) Text() string {
 	switch {
+	case o.Verify && o.FromEpoch == 0:
+		return fmt.Sprintf("store %s was never compacted (epoch 0): nothing to verify\n", o.Store)
+	case o.Verify && o.Verified:
+		return fmt.Sprintf("✓ store %s: epoch %d verified against its archive %s (old tip %s): the snapshot is the trusted view of the old history and every kept commit is unchanged\n",
+			o.Store, o.FromEpoch, o.Archive, o.OldTip)
+	case o.Verify:
+		return fmt.Sprintf("✗ store %s: epoch %d does not verify: %s\n", o.Store, o.FromEpoch, o.Reason)
+	case o.Undo && o.DryRun:
+		return fmt.Sprintf("would put back the history of %s that epoch %d archived, keep the %d commit(s) made since, and archive the compacted history as %s; epoch %d → %d\n",
+			o.Store, o.UndoEpoch, o.Kept, o.Archive, o.FromEpoch, o.ToEpoch)
+	case o.Undo:
+		return fmt.Sprintf("✓ undid the compaction of %s: the history of epoch %d is back with the %d commit(s) made since; the compacted history is archived as %s; epoch %d → %d\n",
+			o.Store, o.UndoEpoch, o.Kept, o.Archive, o.FromEpoch, o.ToEpoch) + o.pushedLine() + o.layerLine()
 	case o.Nothing:
 		return fmt.Sprintf("nothing to compact in %s: no history before %s beyond one commit\n", o.Store, o.Before)
 	case o.DryRun:
 		return fmt.Sprintf("would squash %d commit(s) of %s before %s into one snapshot, keep %d later commit(s) and every one of its %d row file(s); epoch %d → %d\n",
 			o.Squashed, o.Store, o.Before, o.Kept, o.Rows, o.FromEpoch, o.ToEpoch)
 	}
-	pushed := ""
-	if o.Commit != "" {
-		pushed = fmt.Sprintf("  pushed store %s: commit %s to branch %s\n", o.Store, o.Commit, o.Branch)
+	held := ""
+	if o.Held > 0 {
+		held = fmt.Sprintf("; %d held change(s) are in the snapshot as their last accepted version", o.Held)
 	}
-	return fmt.Sprintf("✓ compacted %s: %d commit(s) before %s are one snapshot, %d later commit(s) kept, all %d row file(s) kept; epoch %d → %d (old history kept locally in %s)\n",
-		o.Store, o.Squashed, o.Before, o.Kept, o.Rows, o.FromEpoch, o.ToEpoch, o.Backup) + pushed
+	return fmt.Sprintf("✓ compacted %s: %d commit(s) before %s are one snapshot, %d later commit(s) kept, all %d row file(s) kept%s; epoch %d → %d (old history archived as %s)\n",
+		o.Store, o.Squashed, o.Before, o.Kept, o.Rows, held, o.FromEpoch, o.ToEpoch, o.Archive) + o.pushedLine() + o.layerLine()
+}
+
+// pushedLine names where the rewrite was pushed ("" when nowhere).
+func (o CompactOut) pushedLine() string {
+	if o.Commit == "" {
+		return ""
+	}
+	return fmt.Sprintf("  pushed store %s: commit %s to branch %s\n", o.Store, o.Commit, o.Branch)
+}
+
+// layerLine names the layers re-made on the new history and what the
+// note says about the rest.
+func (o CompactOut) layerLine() string {
+	switch {
+	case o.LayerNote != "":
+		return fmt.Sprintf("  %d layer(s) (open and trashed) re-made on the new history; %s\n", o.Layers, o.LayerNote)
+	case o.Layers > 0:
+		return fmt.Sprintf("  %d layer(s) (open and trashed) re-made on the new history\n", o.Layers)
+	}
+	return ""
 }
 
 // DefaultCompactBefore is store.compact's cutoff when neither --before
@@ -262,6 +320,10 @@ func hintStore(store string) string {
 
 // compactQuestion is what store.compact asks.
 func compactQuestion(o CompactOut) string {
+	if o.Undo {
+		return "rewrite the history of store " + o.Store + ": put back the history epoch " + strconv.Itoa(o.UndoEpoch) + " archived, with the " + strconv.Itoa(o.Kept) +
+			" commit(s) made since (every clone re-fetches at epoch " + strconv.Itoa(o.ToEpoch) + ")?"
+	}
 	return "rewrite the history of store " + o.Store + ": squash " + strconv.Itoa(o.Squashed) + " commit(s) before " + o.Before +
 		" into one snapshot (every row is kept; every clone re-fetches at epoch " + strconv.Itoa(o.ToEpoch) + ")?"
 }
@@ -295,6 +357,7 @@ func pushOps(m Manager) []op.Entry {
 			Examples: []op.Example{
 				{Title: "see what would be squashed", CLI: "lore store compact --store me --before 30d --dry-run", Want: ""},
 				{Title: "compact the personal store", CLI: "lore store compact --store me --yes", Want: ""},
+				{Title: "check a compacted store against its archive", CLI: "lore store compact --store me --verify", Want: ""},
 			},
 		}, func(ctx context.Context, in CompactIn) (CompactOut, error) {
 			p, err := pusher(m, "compact")
@@ -302,6 +365,13 @@ func pushOps(m Manager) []op.Entry {
 				return CompactOut{}, err
 			}
 			in.Store = strings.TrimSpace(in.Store)
+			if in.Verify {
+				if in.UndoEpoch != "" || in.Before != "" || in.DryRun {
+					return CompactOut{}, errs.New(errs.InvalidInput, "store compact: --verify only reads; it takes no --before, --dry-run or --undo-epoch").
+						WithHint("lore store compact --store " + hintStore(in.Store) + " --verify")
+				}
+				return p.CompactStore(ctx, in)
+			}
 			if in.Before != "" {
 				if _, perr := storepush.ParseAge(in.Before); perr != nil {
 					return CompactOut{}, errs.New(errs.InvalidInput, "store compact: --before "+perr.Error()).WithHint("e.g. --before 30d")
