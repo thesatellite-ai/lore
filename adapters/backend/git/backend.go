@@ -73,6 +73,11 @@ type Backend struct {
 	// (authorityFileFor: never inside a clone lore does not own); ""
 	// looks up the choice of an open of the same clone (authorityPath).
 	authorityAt string
+	// authorityReadAt is a replay file this backend may read but never
+	// writes: a temporary backend (cloneAuthority) reads the replay kept in
+	// the clone's own git folder when no open of the clone named its file
+	// in this process, instead of replaying the whole history in memory
+	authorityReadAt string
 
 	// beforePush, when set (tests only), runs before each push attempt so a
 	// test can push from another clone and make this one lose the race.

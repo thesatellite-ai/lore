@@ -12,11 +12,20 @@ package stories
 // which the teammate adopts the same way; a higher epoch the teammate forces
 // onto the remote by hand is refused by the admin's lore, which stays on
 // its own history (no checkpoint). Before the fix any higher epoch was taken as it came.
+//
+// devco D-1004 (bug hunt H-266, SG-6 follow-up): a note the teammate fixed
+// with plain git before the cut (the row still names the admin, the commit
+// is his, so lore credits him, C35) keeps that writer after the compaction
+// on the compacting machine and on the teammate's adopting one: each
+// carries its roster replay over the old ─▶ new id map. Before, both
+// replayed the new history from the snapshot, which vouches for the writer
+// each row states, and the note read as the admin's.
 
 import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -65,6 +74,34 @@ func oCaForgeEpoch(t *testing.T, r *teamharness.Remote, email string) {
 	oCaGit(t, r, nil, "", "update-ref", "refs/heads/main", forged)
 }
 
+// oCaFind is the store clone among clones holding a memory whose body is
+// body, and the row file's path in it.
+func oCaFind(t *testing.T, clones []string, body string) (string, string) {
+	t.Helper()
+	for _, c := range clones {
+		var found string
+		_ = filepath.WalkDir(c, func(p string, d os.DirEntry, err error) error {
+			if err != nil || (d.IsDir() && d.Name() == ".git") {
+				return filepath.SkipDir
+			}
+			if !d.IsDir() && filepath.Base(filepath.Dir(p)) == "memories" && filepath.Ext(p) == ".json" {
+				if b, rerr := os.ReadFile(p); rerr == nil && strings.Contains(string(b), `"`+body+`"`) {
+					found = p
+				}
+			}
+			return nil
+		})
+		if found != "" {
+			return c, found
+		}
+	}
+	t.Fatalf("no memory %q in the store clones %v", body, clones)
+	return "", ""
+}
+
+// oCaWriter is the updated_by a `memory show --json` prints.
+var oCaWriter = regexp.MustCompile(`"updated_by":\s*"([^"]+)"`)
+
 func TestStoryOCompactArchive(t *testing.T) {
 	s := New(t, "O")
 	team := s.Remote("github.com/" + oOwner + "/lore-team")
@@ -98,6 +135,36 @@ func TestStoryOCompactArchive(t *testing.T) {
 		ada.Lore(pc.Dir, "org", "config", "set", "--org", oOrg, "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes").OK(t)
 	})
 
+	var fixedID, credited string
+	s.Step("D-1004/a-hand-fix-before-the-cut-is-credited", func() {
+		// for this one fix mo is a member (an admin's commit is judged as
+		// his own word, never credited): he fixes one of ada's notes with
+		// plain git; the row still names ada as its writer, the commit is
+		// his, so lore shows him as the writer (C35)
+		ada.LoreIn(pc, "member", "edit", "--who", oMemOrg.Email, "--role", "member", "--yes").OK(t)
+		ada.LoreIn(pc, "sync").OK(t)
+		mo.Lore(mwc.Dir, "sync", "--setup", oOrg).OK(t)
+		clone, p := oCaFind(t, mo.StoreClones(t), "widget history note 0")
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stated := oCaWriter.FindStringSubmatch(string(raw))
+		writeFile(t, p, strings.Replace(string(raw), "widget history note 0", "widget history note 0, fixed by hand", 1))
+		s.Git(clone, "-c", "user.name="+oMemOrg.Name, "-c", "user.email="+oMemOrg.Email, "commit", "-q", "--no-verify", "-am", "fix a note by hand")
+		mo.Lore(mwc.Dir, "sync", "--setup", oOrg).OK(t)
+		ada.LoreIn(pc, "sync").OK(t)
+		ada.LoreIn(pc, "member", "edit", "--who", oMemOrg.Email, "--role", "admin", "--yes").OK(t)
+		ada.LoreIn(pc, "sync").OK(t)
+		mo.Lore(mwc.Dir, "sync", "--setup", oOrg).OK(t)
+		fixedID = strings.TrimSuffix(filepath.Base(p), ".json")
+		got := oCaWriter.FindStringSubmatch(ada.LoreIn(pc, "memory", "show", "--id", fixedID, "--json").OK(t).Stdout)
+		if len(stated) < 2 || len(got) < 2 || got[1] == stated[1] {
+			t.Fatalf("[O D-1004] the hand-fixed note reads as written by %v; want its committer, not the stated %v", got, stated)
+		}
+		credited = got[1]
+	})
+
 	s.Step("D-1003/compact-archives-then-member-adopts", func() {
 		s.AdvanceDays(40) // the history above is now older than --before 30d
 		// mo's two writes wait for his next sync (push manual)
@@ -112,6 +179,21 @@ func TestStoryOCompactArchive(t *testing.T) {
 		mo.Lore(mwc.Dir, "--setup", oOrg, "store", "show", "--store", oOrg).OK(t).Says(t, "epoch     1")
 		ada.LoreIn(pc, "sync").OK(t)
 		ada.Lore(pc.Dir, "memory", "list", "--store", oOrg).OK(t).Says(t, "widget history note 0", "widget offline note one", "widget offline note two")
+	})
+
+	s.Step("D-1004/the-credit-survives-the-compaction", func() {
+		// the compacting machine and the adopting one read the hand-fixed
+		// note with the same writer as before the cut
+		for who, show := range map[string]func() string{
+			"ada (compacted)": func() string { return ada.LoreIn(pc, "memory", "show", "--id", fixedID, "--json").OK(t).Stdout },
+			"mo (adopted)": func() string {
+				return mo.Lore(mwc.Dir, "--setup", oOrg, "memory", "show", "--id", fixedID, "--json").OK(t).Stdout
+			},
+		} {
+			if got := oCaWriter.FindStringSubmatch(show()); len(got) < 2 || got[1] != credited {
+				t.Errorf("[O D-1004] after the compaction %s reads the hand-fixed note as written by %v, want %s as before the cut", who, got, credited)
+			}
+		}
 	})
 
 	s.Step("D-1003/verify-against-the-archive", func() {

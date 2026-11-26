@@ -77,6 +77,9 @@ func TestBenchCompaction(t *testing.T) {
 
 	// the flag, and an existing clone kept aside for the adoption
 	w.must("store", "set", "--store", "agency", "--settings", "compact_archive=on")
+	// an org store compacts only once the org's version floor lets no lore
+	// too old to verify the rewrite write to it (format feature verified_epochs)
+	w.must("org", "config", "set", "--org", "acme-co", "--key", "min_lore_version", "--value", "0.1.57", "--push", "--yes")
 	w.must("sync")
 	existing := filepath.Join(w.root, "existing-clone")
 	if out, err := exec.Command("cp", "-a", w.clone, existing).CombinedOutput(); err != nil {

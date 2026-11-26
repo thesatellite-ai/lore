@@ -548,6 +548,20 @@ type authority struct {
 	// walking the whole history with its own git log on every open
 	// (devco:D-999, store growth item 5)
 	orgFile []orgFileChange
+	// holds is every time a file became held or stopped being held, in
+	// the replay's order: the held files at any commit of head's
+	// first-parent line are these events without the commits after it
+	// (heldAtCut), so a compaction or an adopting clone never replays
+	// the history again to the cut (devco:D-1004, store growth SG-6)
+	holds []holdEvent
+}
+
+// holdEvent is one change of a file's hold: held (with the trusted
+// version it reads instead) or released, by commit.
+type holdEvent struct {
+	commit, path string
+	held         bool
+	trusted      string
 }
 
 // orgFileName is the base name of an org's config file (lore-org.yaml;
@@ -640,7 +654,10 @@ func cloneAuthority(ctx context.Context, dir string) (*Backend, *authority) {
 	if err != nil {
 		return nil, nil
 	}
-	b := &Backend{git: runner{bin: bin}, work: dir, mode: modeClone}
+	// it reads the replay a lore-owned clone keeps in its git folder, and
+	// never writes one (a person's own clone has none: lore never writes
+	// there)
+	b := &Backend{git: runner{bin: bin}, work: dir, mode: modeClone, authorityReadAt: authorityFileFor(dir, "", false)}
 	h, err := b.head(ctx)
 	if err != nil || h == "" {
 		return nil, nil
@@ -835,7 +852,8 @@ func (a *authority) clone() *authority {
 		st.stamps[p] = m
 	}
 	return &authority{head: a.head, orgHead: a.orgHead, state: st, held: maps.Clone(a.held), trusted: maps.Clone(a.trusted), refused: maps.Clone(a.refused),
-		credited: maps.Clone(a.credited), admins: maps.Clone(a.admins), accepted: maps.Clone(a.accepted), snap: a.snap, orgFile: slices.Clip(a.orgFile)}
+		credited: maps.Clone(a.credited), admins: maps.Clone(a.admins), accepted: maps.Clone(a.accepted), snap: a.snap, orgFile: slices.Clip(a.orgFile),
+		holds: slices.Clip(a.holds)}
 }
 
 // replayFromDisk is the replay at head from the one kept on disk
@@ -847,7 +865,7 @@ func (b *Backend) replayFromDisk(ctx context.Context, head, orgHead string) (*au
 	// the replay saved last, then the one saved at the remote tip: after a
 	// push squashed the waiting commits only the second lies on HEAD's
 	// history (authorityBaseSuffix)
-	saved := b.authorityPath()
+	saved := b.authorityReadPath()
 	for _, p := range []string{saved, saved + authorityBaseSuffix} {
 		if saved == "" {
 			break
@@ -1097,8 +1115,7 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 			if reason != "" && f.newBlob == accepted[f.path] {
 				// back to the accepted content (a revert of a held change):
 				// nothing to hold
-				delete(a.held, f.path)
-				delete(a.trusted, f.path)
+				a.release(c.id, f.path)
 				continue
 			}
 			if reason != "" {
@@ -1108,13 +1125,13 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 						prev = f.oldBlob
 					}
 					a.trusted[f.path] = prev
+					a.holds = append(a.holds, holdEvent{commit: c.id, path: f.path, held: true, trusted: prev})
 				}
 				a.held[f.path] = HeldChange{Path: f.path, Table: tableOfPath(f.path), ID: strings.TrimSuffix(path.Base(f.path), ".json"),
 					Commit: c.id, Author: c.author, Reason: reason}
 				continue
 			}
-			delete(a.held, f.path)
-			delete(a.trusted, f.path)
+			a.release(c.id, f.path)
 			delete(a.credited, f.path) // a held change keeps serving the accepted version, credit and all
 			rosterMoved = rosterMoved || rosterTables[tableOfPath(f.path)]
 			if zeroBlob(f.newBlob) {
@@ -1144,6 +1161,17 @@ func (b *Backend) replayOver(ctx context.Context, a *authority, commits []replay
 	}
 	a.snap = snap
 	return nil
+}
+
+// release ends p's hold by commit (nothing when p was not held).
+func (a *authority) release(commit, p string) {
+	if _, ok := a.held[p]; !ok {
+		delete(a.trusted, p)
+		return
+	}
+	delete(a.held, p)
+	delete(a.trusted, p)
+	a.holds = append(a.holds, holdEvent{commit: commit, path: p})
 }
 
 // refusal is why commit c has no authority over what it changes ("" =

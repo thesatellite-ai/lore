@@ -16,7 +16,18 @@ import (
 
 // Limit is the longest a measured command may take; a slower one is
 // recorded as over it and the run goes on (spec: `>600 s`).
-const Limit = 10 * time.Minute
+// STOREGROWTH_LIMIT (a Go duration, e.g. 90m) raises it for a run at 1M
+// commits, whose cold first clone alone takes longer.
+var Limit = limitFromEnv()
+
+// limitFromEnv is STOREGROWTH_LIMIT when it is a positive duration, else
+// 10 minutes.
+func limitFromEnv() time.Duration {
+	if d, err := time.ParseDuration(strings.TrimSpace(os.Getenv("STOREGROWTH_LIMIT"))); err == nil && d > 0 {
+		return d
+	}
+	return 10 * time.Minute
+}
 
 // Sample is one measured command: every run's wall time, or why it has
 // none (not run at this size, failed).

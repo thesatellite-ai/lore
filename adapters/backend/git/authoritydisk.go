@@ -57,8 +57,8 @@ const authorityHashLen = 8
 
 // authorityFormat is the layout of authorityFile: bump it when
 // savedAuthority changes shape (2: the clone path, devco:D-812; 3: the
-// org file's changes, devco:D-999).
-const authorityFormat = 3
+// org file's changes, devco:D-999; 4: the hold log, devco:D-1004).
+const authorityFormat = 4
 
 // authorityFiles maps a clone folder to the replay file its open chose
 // (authorityFileFor), so a Backend made without an open uses the same
@@ -90,6 +90,14 @@ type savedAuthority struct {
 	Accepted map[string]string
 	// OrgFile is every change to an org file, in the replay's order
 	OrgFile []savedOrgChange
+	// Holds is the hold log (authority.holds), in the replay's order
+	Holds []savedHold
+}
+
+// savedHold is a holdEvent.
+type savedHold struct {
+	Commit, Path, Trusted string
+	Held                  bool
 }
 
 // savedOrgChange is an orgFileChange.
@@ -174,6 +182,20 @@ func (b *Backend) authorityPath() string {
 		}
 	}
 	return ""
+}
+
+// authorityReadPath is the replay file b reads: authorityPath, else the
+// read-only one a temporary backend was given (authorityReadAt). Why
+// (devco:D-1004): the org file check at every open replays through a
+// temporary backend; before any open of the clone in the process it
+// replayed the whole history in memory, and that replay (of a compacted
+// history: from the snapshot) replaced the one carried over the
+// compaction.
+func (b *Backend) authorityReadPath() string {
+	if p := b.authorityPath(); p != "" {
+		return p
+	}
+	return b.authorityReadAt
 }
 
 // heldSeenPath is the heldSeenFile of the folder named folder, kept where
@@ -290,6 +312,9 @@ func (s savedAuthority) authority() *authority {
 	}
 	for _, c := range s.OrgFile {
 		a.orgFile = append(a.orgFile, orgFileChange{commit: c.Commit, parent: c.Parent, author: c.Author, path: c.Path, blob: c.Blob, merge: c.Merge})
+	}
+	for _, h := range s.Holds {
+		a.holds = append(a.holds, holdEvent{commit: h.Commit, path: h.Path, held: h.Held, trusted: h.Trusted})
 	}
 	return a
 }
@@ -441,6 +466,9 @@ func (a *authority) saved(bin string) (savedAuthority, bool) {
 	}
 	for _, c := range a.orgFile {
 		s.OrgFile = append(s.OrgFile, savedOrgChange{Commit: c.commit, Parent: c.parent, Author: c.author, Path: c.path, Blob: c.blob, Merge: c.merge})
+	}
+	for _, h := range a.holds {
+		s.Holds = append(s.Holds, savedHold{Commit: h.commit, Path: h.path, Held: h.held, Trusted: h.trusted})
 	}
 	index := map[*adminSet]int{}
 	at := func(set *adminSet) int {

@@ -725,17 +725,36 @@ func (b *Backend) adoptEpoch(ctx context.Context, remote string) (adopted bool, 
 	if err := b.moveOwnLoreRefs(ctx, remote, proof); err != nil {
 		return false, nil, err
 	}
+	// the clone's replay at the old tip, read now (from the saved replay)
+	// before anything on the new history replaces the saved one: it is
+	// carried over the old ─▶ new map once the clone stands on the new
+	// history, so rows from before the cut keep their verdicts and credit
+	// (spec 9)
+	oldReplay, _ := b.replayAt(ctx, proof.oldTip)
+	snap := ""
+	if roots, rerr := b.lines(ctx, "find the snapshot", "rev-list", "--max-parents=0", remote); rerr == nil && len(roots) == 1 {
+		snap = roots[0]
+	}
+	carry := func() { b.carryReplay(ctx, oldReplay, proof.oldTip, snap, proof.idMap) }
 	if anc, aerr := b.isAncestor(ctx, h, proof.oldTip); aerr != nil {
 		return false, nil, aerr
 	} else if anc {
 		// Nothing local beyond what the remote holds: take the remote.
-		return true, nil, b.resetTo(ctx, remote)
+		if err := b.resetTo(ctx, remote); err != nil {
+			return true, nil, err
+		}
+		carry()
+		return true, nil, nil
 	}
 	base, err := b.lines(ctx, "find the replay base", "merge-base", h, proof.oldTip)
 	if err != nil || len(base) != 1 {
 		return false, nil, errors.Join(errs.New(errs.Internal, "git: no common commit with the compacted history"), err)
 	}
-	return b.replayOnto(ctx, remote, h, base[0])
+	ok, refused, err := b.replayOnto(ctx, remote, h, base[0])
+	if err == nil && ok {
+		carry()
+	}
+	return ok, refused, err
 }
 
 // replayOnto merges local work (base..h) into the remote tip without
@@ -963,7 +982,7 @@ func (b *Backend) compactLocked(ctx context.Context, req CompactRequest) (Compac
 	if req.DryRun {
 		return res, nil
 	}
-	env, err := b.compactorCheck(ctx, h)
+	env, tipReplay, err := b.compactorCheck(ctx, h)
 	if err != nil {
 		return CompactResult{}, err
 	}
@@ -972,11 +991,9 @@ func (b *Backend) compactLocked(ctx context.Context, req CompactRequest) (Compac
 		return CompactResult{}, err
 	}
 	c := chain[cut]
-	at, err := b.replayAt(ctx, c.id)
-	if err != nil {
-		return CompactResult{}, err
-	}
-	held, err := b.heldAt(ctx, at, c.id)
+	// the files held at the cut, from the replay at h (the cut is on h's
+	// first-parent line): no second replay of the history
+	held, err := b.heldAtCut(ctx, tipReplay, c.id)
 	if err != nil {
 		return CompactResult{}, err
 	}
@@ -995,7 +1012,13 @@ func (b *Backend) compactLocked(ctx context.Context, req CompactRequest) (Compac
 	if err != nil {
 		return CompactResult{}, err
 	}
-	return b.publishRewrite(ctx, res, h, remote, tip, idMap[c.id], idMap)
+	res, err = b.publishRewrite(ctx, res, h, remote, tip, idMap[c.id], idMap)
+	if err == nil {
+		// the replay goes on over the old ─▶ new map: rows from before the
+		// cut keep their verdicts and credit (spec 9)
+		b.carryReplay(ctx, tipReplay, h, idMap[c.id], idMap)
+	}
+	return res, err
 }
 
 // publishRewrite archives the old tip h, force-pushes tip over remote,

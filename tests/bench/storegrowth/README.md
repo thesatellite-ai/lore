@@ -17,6 +17,7 @@ Manual only: it never runs in `task check` or on push. A big size is a heavy run
 | `STOREGROWTH_COMMITS` | `1000` | sizes, comma separated (at least 100) |
 | `STOREGROWTH_REPEAT` | `3` | runs per timing; sizes of 1M and up run once |
 | `STOREGROWTH_OUT` | `tmp/bench` | report folder |
+| `STOREGROWTH_LIMIT` | `10m` | the longest one measured command may take (a Go duration); a run at 1M commits needs more (`90m`) |
 | `LORE_BENCH_BIN` | set by the task | the lore binary to measure |
 
 Each size writes `storegrowth-<commits>-<sha>.md` (one table, same rows every run, so two runs diff by eye) and `.json` (every run's wall time) to the report folder. Everything else lives in the test's temp folder and is deleted at exit: a temp HOME (never `~/.lore`), the bare remotes, the clone.
@@ -33,9 +34,21 @@ Each size writes `storegrowth-<commits>-<sha>.md` (one table, same rows every ru
    - at the end `refs/lore/signals/main`, 15 layer refs and 30 layer-trash refs.
    
    This is about 1.3 rows per commit and one file changed per commit, the shape of the busiest measured stores.
-3. **Timings** (median of the runs): first clone (the clone is removed and `lore sync` makes it again), fetch of 100 new remote commits, write and push, `lore ask` and `lore search` cold (the store just changed) and warm, the authority replay cold (no saved replay) and warm, the org file's path-limited `git log`, a 50-row `lore batch apply` and its `lore batch undo`, `lore task history --git` of an edited task, `lore trash list --from-history`, the clone's `.git` size, packs and loose objects after the clone and at the end, the remote commits for 100 writes synced every 20 and for a 500-row batch undo, and the `.git` growth per 1,000 writes (100 one-row writes synced every 20, once with `squash=off` and once with `squash=on`, the setting checked with `lore store show`; the remote and the clone are repacked with `git gc --prune=now` before and after; objects added are exact, the packed size moves with how git deltifies the whole history and can even shrink; the clone's numbers include the commits its reflog still holds after a squashing push). A command over 10 minutes is recorded as `>600 s` and the run goes on.
+3. **Timings** (median of the runs): first clone (the clone is removed and `lore sync` makes it again), fetch of 100 new remote commits, write and push, `lore ask` and `lore search` cold (the store just changed) and warm, the authority replay cold (no saved replay) and warm, the org file's path-limited `git log`, a 50-row `lore batch apply` and its `lore batch undo`, `lore task history --git` of an edited task, `lore trash list --from-history`, the clone's `.git` size, packs and loose objects after the clone and at the end, the remote commits for 100 writes synced every 20 and for a 500-row batch undo, and the `.git` growth per 1,000 writes (100 one-row writes synced every 20, once with `squash=off` and once with `squash=on`, the setting checked with `lore store show`; the remote and the clone are repacked with `git gc --prune=now` before and after; objects added are exact, the packed size moves with how git deltifies the whole history and can even shrink; the clone's numbers include the commits its reflog still holds after a squashing push). A command over the limit (10 minutes, `STOREGROWTH_LIMIT`) is recorded as `>600 s` and the run goes on.
 
 Not timed yet: landing and promoting a layer (the harness has no layer flow) and the git process count per command.
+
+## Compaction
+
+`TestBenchCompaction` measures `lore store compact` (behind its flag) on the same generated store, keeping the newest 1% of the commits (1M → 10k is the spec's acceptance row): first fetch bytes and a cold `lore sync` before; the compaction itself; an existing clone (copied before the compaction) adopting it with `lore sync`; first fetch bytes and a cold `lore sync` of a fresh clone after; that the planted held changes stay held; `lore store compact --verify`. It sets `compact_archive=on`, the org's `min_lore_version` and `LORE_COMPACT_V2=1` itself, and writes `compaction-<commits>.md` to the report folder.
+
+```sh
+go build -o /tmp/lore-bench/lore ./cmd/lore
+LORE_BENCH_BIN=/tmp/lore-bench/lore STOREGROWTH_COMMITS=100000 go test -tags bench -run '^TestBenchCompaction$' -timeout 180m ./tests/bench/storegrowth/
+LORE_BENCH_BIN=/tmp/lore-bench/lore STOREGROWTH_COMMITS=1000000 STOREGROWTH_LIMIT=90m go test -tags bench -run '^TestBenchCompaction$' -timeout 600m ./tests/bench/storegrowth/
+```
+
+`STOREGROWTH_TRACE=1` prints the compaction's output with `LORE_TRACE=1`. Like every big size, run it under the machine's test lock and memory limit.
 
 ## Tests
 

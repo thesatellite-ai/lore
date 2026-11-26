@@ -219,20 +219,66 @@ func (b *Backend) hasCommit(ctx context.Context, id string) bool {
 	return err == nil
 }
 
-// replayAt is the roster replay at rev, never saved: the saved replay
-// carried on when rev extends it on its first-parent line, else a full
-// replay of rev's history.
+// replayAt is the roster replay at rev, never saved: a saved replay (the
+// clone's own, else the one kept at the remote tip) as is or carried on
+// when rev extends it on its first-parent line, else a full replay of
+// rev's history.
 func (b *Backend) replayAt(ctx context.Context, rev string) (*authority, error) {
-	if saved := b.loadAuthority(); saved != nil && saved.orgHead == b.rosterHead(ctx) {
-		if saved.head == rev {
-			return saved, nil
-		}
-		if commits, ok := b.replayRangeAfter(ctx, saved.head, rev); ok {
-			if err := b.replayOver(ctx, saved, commits); err != nil {
-				return nil, err
+	if saved := b.authorityPath(); saved != "" {
+		orgHead := b.rosterHead(ctx)
+		for _, p := range []string{saved, saved + authorityBaseSuffix} {
+			a := b.loadAuthorityAt(p)
+			if a == nil || a.orgHead != orgHead {
+				continue
 			}
-			saved.head = rev
-			return saved, nil
+			if a.head == rev {
+				return a, nil
+			}
+			if commits, ok := b.replayRangeAfter(ctx, a.head, rev); ok {
+				if err := b.replayOver(ctx, a, commits); err != nil {
+					return nil, err
+				}
+				a.head = rev
+				return a, nil
+			}
+		}
+	}
+	commits, err := b.replayCommits(ctx, rev)
+	if err != nil {
+		return nil, err
+	}
+	return b.replay(ctx, rev, commits)
+}
+
+// replayCovering is a replay that reached rev with rev on its head's
+// first-parent line: one of the saved replays (the clone's own, or the one
+// kept at the remote tip) at rev, carried on to rev, or already past it;
+// else the full replay of rev. Its adminAt(rev) and its hold log up to rev
+// (heldAtCut) are those of the replay at rev. Why (devco:D-1004): a clone
+// with writes of its own after the compacted tip replayed the whole old
+// history to verify the compaction.
+func (b *Backend) replayCovering(ctx context.Context, rev string) (*authority, error) {
+	saved := b.authorityPath()
+	if saved != "" {
+		orgHead := b.rosterHead(ctx)
+		for _, p := range []string{saved, saved + authorityBaseSuffix} {
+			a := b.loadAuthorityAt(p)
+			if a == nil || a.orgHead != orgHead {
+				continue
+			}
+			if a.head == rev {
+				return a, nil
+			}
+			if commits, ok := b.replayRangeAfter(ctx, a.head, rev); ok {
+				if err := b.replayOver(ctx, a, commits); err != nil {
+					return nil, err
+				}
+				a.head = rev
+				return a, nil
+			}
+			if _, ok := b.afterOnFirstParentLine(ctx, rev, a.head); ok {
+				return a, nil
+			}
 		}
 	}
 	commits, err := b.replayCommits(ctx, rev)
@@ -280,6 +326,121 @@ func (b *Backend) heldAt(ctx context.Context, a *authority, commit string) (map[
 	return out, nil
 }
 
+// heldAtCut is heldAt(cut) read from a, the replay at a commit whose
+// first-parent line holds cut: a's hold log without the commits after
+// cut. Why (devco:D-1004): the replay at the cut was a second full replay
+// of the history on the compacting clone and again on every adopting
+// clone (9 s at 10k commits, minutes at 1M), though the replay each
+// already holds at its tip saw the cut on the way. A full replay of cut
+// is the fallback when cut is not on that line.
+//
+// Held org files (lore-org.yaml changes the org file check holds back)
+// are among them: a snapshot is the trusted view of the org file too.
+func (b *Backend) heldAtCut(ctx context.Context, a *authority, cut string) (map[string]heldBlob, error) {
+	if a == nil {
+		return nil, nil
+	}
+	var skip map[string]bool
+	trusted := maps.Clone(a.trusted)
+	if a.head != cut {
+		after, ok := b.afterOnFirstParentLine(ctx, cut, a.head)
+		if ok {
+			skip, trusted = after, holdsWithout(a.holds, after)
+		} else {
+			at, err := b.replayAt(ctx, cut)
+			if err != nil {
+				return nil, err
+			}
+			a, trusted = at, maps.Clone(at.trusted)
+		}
+	}
+	if trusted == nil {
+		trusted = map[string]string{}
+	}
+	maps.Copy(trusted, orgFileHolds(a, skip))
+	return b.heldAt(ctx, &authority{trusted: trusted}, cut)
+}
+
+// orgFileHolds is the org files (lore-org.yaml) held back after a's
+// replay without the commits in skip, by the rule of the org file check
+// (adapters/orgcfg acceptedOrgFileIndexed): a version is accepted when it
+// is the history's first one at a root commit, puts back the accepted
+// version, or its author is an admin at its parent (or the roster decides
+// nothing there); a removal is not judged. It returns path ─▶ the last
+// accepted version ("" = none) for each file whose newest version is
+// held. Why (devco:D-1004): the snapshot replaced held row files only, so
+// a member's held edit of the org file became the snapshot's version, and
+// a fresh clone trusts the snapshot root.
+func orgFileHolds(a *authority, skip map[string]bool) map[string]string {
+	accepted := map[string]string{}
+	seen := map[string]bool{}
+	held := map[string]string{}
+	for _, c := range a.orgFile {
+		if skip[c.commit] || zeroBlob(c.blob) {
+			continue
+		}
+		admin, decided := false, false
+		if c.parent != "" {
+			admin, decided = a.adminAt(c.parent, c.author)
+		}
+		ok := (seen[c.path] && c.blob == accepted[c.path]) || (!seen[c.path] && c.parent == "") || admin || !decided
+		if !ok {
+			held[c.path] = accepted[c.path]
+			continue
+		}
+		accepted[c.path], seen[c.path] = c.blob, true
+		delete(held, c.path)
+	}
+	return held
+}
+
+// holdsWithout folds a hold log, leaving out the commits in skip: held
+// path ─▶ trusted version.
+func holdsWithout(holds []holdEvent, skip map[string]bool) map[string]string {
+	trusted := map[string]string{}
+	for _, h := range holds {
+		switch {
+		case skip[h.commit]:
+		case h.held:
+			trusted[h.path] = h.trusted
+		default:
+			delete(trusted, h.path)
+		}
+	}
+	return trusted
+}
+
+// afterOnFirstParentLine is the set of commits of cut..head when cut is
+// on head's first-parent line (ok false otherwise): then a replay of
+// head decided every commit of cut's history before any of these
+// (replayRangeAfter), so leaving them out leaves the replay at cut.
+func (b *Backend) afterOnFirstParentLine(ctx context.Context, cut, head string) (map[string]bool, bool) {
+	ls, err := b.lines(ctx, "list the commits after the cut", "rev-list", "--parents", cut+".."+head)
+	if err != nil {
+		return nil, false
+	}
+	first := make(map[string]string, len(ls))
+	after := make(map[string]bool, len(ls))
+	for _, l := range ls {
+		f := strings.Fields(l)
+		after[f[0]] = true
+		if len(f) > 1 {
+			first[f[0]] = f[1]
+		} else {
+			first[f[0]] = ""
+		}
+	}
+	for id := head; id != cut; {
+		fp, ok := first[id]
+		if !ok || fp == "" {
+			return nil, false
+		}
+		delete(first, id) // each commit once: a broken listing cannot loop
+		id = fp
+	}
+	return after, true
+}
+
 // blobsAt is, for each commit (or tree), the blob of each path ("" when
 // absent), read with one cat-file process. Only the object names are
 // asked for, so git reads trees and never the blobs: a blobless clone
@@ -321,21 +482,12 @@ func (b *Backend) blobsAt(ctx context.Context, revs, paths []string) (map[string
 // one); tree itself when nothing changes.
 func (b *Backend) overlaid(ctx context.Context, tree string, cur map[string]string, held map[string]heldBlob) (string, error) {
 	var edits strings.Builder
-	for _, p := range slices.Sorted(func(yield func(string) bool) {
-		for p := range held {
-			if !yield(p) {
-				return
-			}
-		}
-	}) {
-		h := held[p]
-		if cur[p] != h.raw || h.raw == h.trusted {
-			continue
-		}
-		if h.trusted == "" {
+	set := overlayEdits(cur, held)
+	for _, p := range sortedKeys(set) {
+		if set[p] == "" {
 			edits.WriteString("0 " + strings.Repeat("0", len(emptyTree)) + "\t" + p + "\n")
 		} else {
-			edits.WriteString("100644 " + h.trusted + "\t" + p + "\n")
+			edits.WriteString("100644 " + set[p] + "\t" + p + "\n")
 		}
 	}
 	if edits.Len() == 0 {
@@ -367,6 +519,23 @@ func (b *Backend) overlaid(ctx context.Context, tree string, cur map[string]stri
 		return "", errs.Wrap(errs.Internal, "git: write the trusted tree", err)
 	}
 	return trimmed(out), nil
+}
+
+// overlayEdits is what overlaid changes in a tree whose held files read
+// cur: path ─▶ trusted blob ("" = removed) for each held file still at
+// its raw held version.
+func overlayEdits(cur map[string]string, held map[string]heldBlob) map[string]string {
+	var set map[string]string
+	for p, h := range held {
+		if cur[p] != h.raw || h.raw == h.trusted {
+			continue
+		}
+		if set == nil {
+			set = map[string]string{}
+		}
+		set[p] = h.trusted
+	}
+	return set
 }
 
 // keptCommit is one commit after the cut: id, tree, parents.
@@ -430,30 +599,60 @@ func (b *Backend) rewriteFrom(ctx context.Context, cut, tip string, held map[str
 		return "", nil, err
 	}
 	idMap := map[string]string{cut: s}
-	for _, k := range kept {
-		parents := make([]string, 0, len(k.parents))
+	parents := make([][]string, len(kept))
+	edits := make([]map[string]string, len(kept))
+	for i, k := range kept {
 		for _, p := range k.parents {
 			np, ok := idMap[p]
 			if !ok {
 				return "", nil, errs.New(errs.Internal, "git: commit "+short(k.id)+" has a parent older than the compaction cut")
 			}
-			parents = append(parents, np)
+			parents[i] = append(parents[i], np)
 		}
-		tree, err := b.overlaid(ctx, k.tree, cur[k.id], held)
-		if err != nil {
-			return "", nil, err
-		}
-		m, err := b.metaOf(ctx, k.id)
-		if err != nil {
-			return "", nil, err
-		}
-		n, err := b.commitTree(ctx, tree, parents, m.msg, m.env)
-		if err != nil {
-			return "", nil, err
-		}
-		idMap[k.id] = n
+		edits[i] = overlayEdits(cur[k.id], held)
+		idMap[k.id] = markOf(i)
+	}
+	if err := b.writeKept(ctx, kept, parents, edits, nil, idMap); err != nil {
+		return "", nil, err
 	}
 	return idMap[tipOr(kept, cut)], idMap, nil
+}
+
+// writeKept re-makes kept (each with its tree plus edits[i], parents[i]
+// as ids or marks of earlier ones, its people, dates and message, msg
+// changing the message when set) in one fastWrite, and sets idMap of
+// each to its new id (callers stored its mark there).
+func (b *Backend) writeKept(ctx context.Context, kept []keptCommit, parents [][]string, edits []map[string]string, msg func(string) string, idMap map[string]string) error {
+	if len(kept) == 0 {
+		return nil
+	}
+	ids := make([]string, len(kept))
+	for i, k := range kept {
+		ids[i] = k.id
+	}
+	metas, err := b.metasOf(ctx, ids)
+	if err != nil {
+		return err
+	}
+	fc := make([]fastCommit, len(kept))
+	for i, k := range kept {
+		m := metas[k.id]
+		if msg != nil {
+			m.msg = msg(m.msg)
+		}
+		fc[i] = fastCommit{tree: k.tree, parents: parents[i], meta: m}
+		if edits != nil {
+			fc[i].edits = edits[i]
+		}
+	}
+	made, err := b.fastWrite(ctx, fc)
+	if err != nil {
+		return err
+	}
+	for i, k := range kept {
+		idMap[k.id] = made[i]
+	}
+	return nil
 }
 
 // tipOr is the last kept commit's id, or cut when nothing is kept.
@@ -472,24 +671,19 @@ func (b *Backend) remakeOnto(ctx context.Context, from, tip, onto string) (strin
 		return "", nil, err
 	}
 	idMap := map[string]string{from: onto}
-	for _, k := range kept {
-		parents := make([]string, 0, len(k.parents))
+	parents := make([][]string, len(kept))
+	for i, k := range kept {
 		for _, p := range k.parents {
 			np, ok := idMap[p]
 			if !ok {
 				return "", nil, errs.New(errs.Internal, "git: commit "+short(k.id)+" has a parent older than the compaction")
 			}
-			parents = append(parents, np)
+			parents[i] = append(parents[i], np)
 		}
-		m, err := b.metaOf(ctx, k.id)
-		if err != nil {
-			return "", nil, err
-		}
-		n, err := b.commitTree(ctx, k.tree, parents, m.msg, m.env)
-		if err != nil {
-			return "", nil, err
-		}
-		idMap[k.id] = n
+		idMap[k.id] = markOf(i)
+	}
+	if err := b.writeKept(ctx, kept, parents, nil, nil, idMap); err != nil {
+		return "", nil, err
 	}
 	return idMap[tipOr(kept, from)], idMap, nil
 }
@@ -625,32 +819,33 @@ func (b *Backend) rebaseLayers(ctx context.Context, refs map[string]string, idMa
 			return nil, err
 		}
 		m := map[string]string{base: nb}
+		var made []keptCommit
+		var parents [][]string
 		for _, c := range commits {
-			parents := make([]string, 0, len(c.parents))
+			var ps []string
 			for _, p := range c.parents {
 				np, ok := m[p]
 				if !ok {
 					np, ok = idMap[p]
 				}
 				if !ok {
-					parents = nil
+					ps = nil
 					break
 				}
-				parents = append(parents, np)
+				ps = append(ps, np)
 			}
-			if parents == nil {
-				break
+			if ps == nil {
+				break // a parent outside the layer and the rewrite: the rest stays
 			}
-			meta, err := b.metaOf(ctx, c.id)
-			if err != nil {
-				return nil, err
-			}
-			msg := strings.ReplaceAll(meta.msg, TrailerStoreBase+": "+base, TrailerStoreBase+": "+nb)
-			n, err := b.commitTree(ctx, c.tree, parents, msg, meta.env)
-			if err != nil {
-				return nil, err
-			}
-			m[c.id] = n
+			m[c.id] = markOf(len(made))
+			made = append(made, c)
+			parents = append(parents, ps)
+		}
+		rebase := func(msg string) string {
+			return strings.ReplaceAll(msg, TrailerStoreBase+": "+base, TrailerStoreBase+": "+nb)
+		}
+		if err := b.writeKept(ctx, made, parents, nil, rebase, m); err != nil {
+			return nil, err
 		}
 		if n, ok := m[tip]; ok {
 			if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"update-ref", ref, n, tip}}); err != nil {
@@ -809,18 +1004,20 @@ func (b *Backend) verifyEpoch(ctx context.Context, remote, own string, depth int
 	default:
 		return refuse("the old history it names is older than this clone's epoch")
 	}
-	old, err := b.replayAt(ctx, cp.OldTip)
+	old, err := b.replayCovering(ctx, cp.OldTip)
 	if err != nil {
 		return epochProof{}, "", err
 	}
 	if why := adminVerdict(old, cp.OldTip, em.authorEmail(), who); why != "" {
 		return refuse(why)
 	}
-	verify := b.verifyUndo
+	var proof epochProof
+	var why string
 	if cp.Kind == CheckpointCompact {
-		verify = b.verifyCompact
+		proof, why, err = b.verifyCompact(ctx, cp, p, old, refuse)
+	} else {
+		proof, why, err = b.verifyUndo(ctx, cp, p, refuse)
 	}
-	proof, why, err := verify(ctx, cp, p, refuse)
 	if err != nil || why != "" || inner == nil {
 		return proof, why, err
 	}
@@ -837,8 +1034,9 @@ func (b *Backend) verifyEpoch(ctx context.Context, remote, own string, depth int
 }
 
 // verifyCompact checks a compaction: the clone's own rewrite of cp.OldTip
-// at cp.Cut, with the snapshot's people and message, must be p.
-func (b *Backend) verifyCompact(ctx context.Context, cp Checkpoint, p string, refuse func(string) (epochProof, string, error)) (epochProof, string, error) {
+// at cp.Cut, with the snapshot's people and message, must be p. old is
+// the clone's replay at cp.OldTip: the files held at the cut come from it.
+func (b *Backend) verifyCompact(ctx context.Context, cp Checkpoint, p string, old *authority, refuse func(string) (epochProof, string, error)) (epochProof, string, error) {
 	if anc, _ := b.isAncestor(ctx, cp.Cut, cp.OldTip); !anc {
 		return refuse("its cut is not in the old history")
 	}
@@ -853,11 +1051,7 @@ func (b *Backend) verifyCompact(ctx context.Context, cp Checkpoint, p string, re
 	if err != nil {
 		return epochProof{}, "", err
 	}
-	at, err := b.replayAt(ctx, cp.Cut)
-	if err != nil {
-		return epochProof{}, "", err
-	}
-	held, err := b.heldAt(ctx, at, cp.Cut)
+	held, err := b.heldAtCut(ctx, old, cp.Cut)
 	if err != nil {
 		return epochProof{}, "", err
 	}
@@ -972,28 +1166,28 @@ const undoSubject = "lore: undo the compaction of the store history (back to epo
 
 // compactorCheck refuses a compactor the replay at h does not hold for an
 // admin, and returns the compactor's commit people.
-func (b *Backend) compactorCheck(ctx context.Context, h string) ([]string, error) {
+func (b *Backend) compactorCheck(ctx context.Context, h string) ([]string, *authority, error) {
 	env, err := b.commitEnv(ctx, Signature{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// the author git will write (the env above, else the clone's git user)
 	ident, err := b.git.run(ctx, call{dir: b.work, args: []string{"var", "GIT_AUTHOR_IDENT"}, env: env})
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "git: read the compactor's identity", err)
+		return nil, nil, errs.Wrap(errs.Internal, "git: read the compactor's identity", err)
 	}
 	_, rest, _ := strings.Cut(string(ident), "<")
 	email, _, _ := strings.Cut(rest, ">")
 	email = strings.ToLower(strings.TrimSpace(email))
 	a, err := b.replayAt(ctx, h)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if why := adminVerdict(a, h, email, email); why != "" {
-		return nil, errs.New(errs.Refused, "store compact: "+why+" by the store's own roster; only an admin rewrites the store history").
+		return nil, nil, errs.New(errs.Refused, "store compact: "+why+" by the store's own roster; only an admin rewrites the store history").
 			WithHint("ask an org admin to run it")
 	}
-	return env, nil
+	return env, a, nil
 }
 
 // snapshotMeta is the snapshot commit's people, date (the cut's) and
@@ -1066,30 +1260,29 @@ func (b *Backend) moveOffHistory(ctx context.Context, tip, h, snap string, idMap
 		return "", false, err
 	}
 	m := map[string]string{}
+	var made []keptCommit
+	var parents [][]string
 	for _, l := range ls {
 		f := strings.Fields(l)
 		if len(f) < 2 {
 			continue
 		}
-		var parents []string
+		var ps []string
 		for _, p := range f[2:] {
 			if np, ok := m[p]; ok {
-				parents = append(parents, np)
+				ps = append(ps, np)
 			} else if np, ok := idMap[p]; ok {
-				parents = append(parents, np)
-			} else if snap != "" && !slices.Contains(parents, snap) {
-				parents = append(parents, snap) // a squashed parent: the snapshot stands for it
+				ps = append(ps, np)
+			} else if snap != "" && !slices.Contains(ps, snap) {
+				ps = append(ps, snap) // a squashed parent: the snapshot stands for it
 			}
 		}
-		meta, err := b.metaOf(ctx, f[0])
-		if err != nil {
-			return "", false, err
-		}
-		n, err := b.commitTree(ctx, f[1], parents, meta.msg, meta.env)
-		if err != nil {
-			return "", false, err
-		}
-		m[f[0]] = n
+		m[f[0]] = markOf(len(made))
+		made = append(made, keptCommit{id: f[0], tree: f[1]})
+		parents = append(parents, ps)
+	}
+	if err := b.writeKept(ctx, made, parents, nil, nil, m); err != nil {
+		return "", false, err
 	}
 	n, ok := m[tip]
 	return n, ok, nil
@@ -1234,7 +1427,7 @@ func (b *Backend) undoLocked(ctx context.Context, req UndoRequest) (CompactResul
 	if req.DryRun {
 		return res, nil
 	}
-	if _, err := b.compactorCheck(ctx, h); err != nil {
+	if _, _, err := b.compactorCheck(ctx, h); err != nil {
 		return CompactResult{}, err
 	}
 	newTip, idMap, err := b.remakeOnto(ctx, e, h, cp.OldTip)
