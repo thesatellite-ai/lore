@@ -50,7 +50,7 @@ const (
 // Codes lists every finding code.
 func Codes() []Code {
 	return []Code{UnknownScheme, DanglingRef, VarOldName, VarShadowed, VarShareableDiffers,
-		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate, CopiedID, StaleFact}
+		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate, CopiedID, StaleFact, StaleClaim}
 }
 
 // ManyTimeEntries is where lint warns that a task should be split (TQ4,
@@ -179,6 +179,8 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	out = append(out, copiedIDs(all)...)
 	// devco:D-941: a fact whose evidence changed after it was verified
 	out = append(out, o.staleFactsOf(ctx, all)...)
+	// devco:D-1027: a planned claim a newer row says is done
+	out = append(out, staleClaims(all, opclock.Now(o.env))...)
 	// SECRETS 5.2: stale holder labels
 	out = append(out, holderFindings(all)...)
 	secrets, err := o.secretScan(ctx, all) // SQ12: re-scan with today's team rules

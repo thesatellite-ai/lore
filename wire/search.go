@@ -30,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/logic/querywords"
 	"github.com/thesatellite-ai/lore/logic/searchrank"
+	"github.com/thesatellite-ai/lore/logic/staleclaim"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -229,6 +230,9 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	// first hit is what an agent takes as the answer.
 	// devco:D-941: a stale fact ranks below a fresh hit with the same match
 	a.markStaleHits(ctx, res.Hits)
+	// devco:D-1027: a row saying something is planned that a newer hit on
+	// the same subject says is done is marked stale too, never dropped
+	opssearch.MarkContradicted(res.Hits)
 	// devco:D-1007: a stale fact's and a card's description words count
 	// by their rarity, and a card follows a knowledge row of equal rank,
 	// so neither leads on the question's common words
@@ -656,6 +660,10 @@ func hitOf(t opssearch.Target, id, snippet string, r row.Row, now time.Time) ops
 	// sensitive: resource show prints those, masked.
 	if t.Entity != opssearch.EntityResource && !t.Roster {
 		h.Text = opssearch.FullText(func(n string) string { return searchField(r, n) }, searchedFields(t.Table), t.Label.Field)
+		if t.Table != schema.TableComments && h.History == "" {
+			// devco:D-1027: a planned claim a newer hit says is done
+			h.Claim = &staleclaim.Doc{ID: id, Title: h.Title, Body: h.Text, At: schema.RowDate(r), State: staleclaim.StateOf(r)}
+		}
 	}
 	return h
 }

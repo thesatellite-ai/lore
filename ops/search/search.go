@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/factstale"
 	"github.com/thesatellite-ai/lore/logic/metaquery"
 	"github.com/thesatellite-ai/lore/logic/searchrank"
+	"github.com/thesatellite-ai/lore/logic/staleclaim"
 	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -260,6 +261,14 @@ type Hit struct {
 	// Fact is the hit row's evidence claim (nil when it names none), read
 	// by the wire layer to set Stale; never in --json.
 	Fact *factstale.Claim `json:"-"`
+	// ContradictedBy is set on a row whose planned / not-yet claim a newer
+	// hit on the same subject states as done (devco:D-1027, bug hunt
+	// H-289): that row's id; Stale then says so too.
+	ContradictedBy string `json:"contradicted_by,omitempty" desc:"set when the row says something is planned or not done yet and a newer row on the same subject says it is done (shipped, released, live): that newer row's id; stale then reads stale: a newer row says it is done: <id> (<day>); read both with lore show --id before relying on either"`
+	// Claim is the hit row's text and time as staleclaim reads them (nil
+	// for a card, a comment or a row in the trash), read by the wire layer
+	// to set ContradictedBy; never in --json.
+	Claim *staleclaim.Doc `json:"-"`
 	// Held marks which of a natural query's topic words the hit holds
 	// (by searchrank.Words.Terms index) and NameHeld which of them its
 	// name or handle holds (a card: Card); nil for a query of one word,
@@ -929,4 +938,44 @@ func (o RebuildOut) Text() string {
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// MarkContradicted marks each hit whose planned / not-yet claim a newer
+// hit on the same subject states as done (devco:D-1027, bug hunt H-289):
+// ContradictedBy names the newer hit and Stale says so, so the hit ranks
+// below a fresh one with the same match (RankScore) and is never dropped.
+// Only the hits are compared: a newer row on the subject holds its words,
+// so it is a hit of the same query. Hits without a Claim (cards,
+// comments, rows in the trash, history) neither are marked nor mark.
+func MarkContradicted(hits []Hit) {
+	docs := make([]staleclaim.Doc, 0, len(hits))
+	for _, h := range hits {
+		if h.Claim != nil && !h.InTrash {
+			docs = append(docs, *h.Claim)
+		}
+	}
+	if len(docs) < 2 {
+		return
+	}
+	found := staleclaim.NewIndex(docs, nil).FindAll()
+	if len(found) == 0 {
+		return
+	}
+	by := make(map[string]staleclaim.Finding, len(found))
+	for _, f := range found {
+		by[f.ID] = f
+	}
+	for i := range hits {
+		h := &hits[i]
+		f, ok := by[h.ID]
+		if !ok || h.Claim == nil || h.InTrash {
+			continue
+		}
+		h.ContradictedBy = f.By
+		if h.Stale == "" {
+			h.Stale = f.Note()
+		} else {
+			h.Stale += "; " + f.Note()
+		}
+	}
 }

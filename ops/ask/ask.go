@@ -270,6 +270,10 @@ type Row struct {
 	// Reverify is what clears Stale after reading the row and the code
 	// again (devco:D-953), the words lore lint and lore show print.
 	Reverify string `json:"reverify,omitempty" desc:"set with stale: when it still holds: lore meta set --id <id> [--store <store>] --pair fact_verified_at=<day>; when it does not: edit the row and its fact_evidence"`
+	// ContradictedBy is set on a row whose planned / not-yet claim a newer
+	// row on the same subject states as done (devco:D-1027, bug hunt
+	// H-289): that row's id; Stale then says so too.
+	ContradictedBy string `json:"contradicted_by,omitempty" desc:"set when the row says something is planned or not done yet and a newer row on the same subject says it is done (shipped, released, live): that newer row's id; stale then reads stale: a newer row says it is done: <id> (<day>); read both with lore show --id before relying on either"`
 	// readTitle and readBody are Title and Body as the text answer prints
 	// them: each ${res:…} naming a resource the ask read replaced by the
 	// resource's name (refs.Readable, devco D-822). --json keeps the
@@ -326,6 +330,7 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 		q.home = h.AskHome(ctx)
 	}
 	var d data
+	var corp *corpus // every live row the call read (markContradicted)
 	err := env.AskLens(ctx, in.Store == string(store.SourceRepo), func(run Query, keeps bool) error {
 		var lerr error
 		if d.resources, d.tasks, lerr = loadTyped(ctx, run); lerr != nil {
@@ -338,6 +343,7 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 		var c *corpus
 		var fill func(*textRow)
 		d.rows, c, fill, lerr = loadRows(ctx, run, q, ms, keeps)
+		corp = c
 		if lerr == nil && c != nil {
 			vf, _ := env.(VectorFile)
 			d.view = viewOf(q, c, vf)
@@ -354,6 +360,7 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 		return Out{}, err
 	}
 	markStale(ctx, env, d.rows, d.facts)
+	markContradicted(corp, d.view, d.rows, d.facts) // devco:D-1027: a planned claim a newer row says is done
 	markFacts(d.rows, d.facts)
 	maxChars := in.MaxChars
 	if maxChars <= 0 {

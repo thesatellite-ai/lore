@@ -47,6 +47,9 @@ type textRow struct {
 	// (markStale, devco:D-941), "" when fresh or unchecked; Reverify is
 	// the command that clears it (devco:D-953).
 	Stale, Reverify string
+	// NewerBy is the newer row that says this row's planned claim is
+	// done (markContradicted, devco:D-1027), "" when none.
+	NewerBy string
 	// FactState and Verified are the row's fact_state and
 	// fact_verified_at (markFacts, devco D-963): a live or fixed fact
 	// ranks above a planned or rejected one, a recently verified one
@@ -1440,7 +1443,7 @@ func rowDay(r *textRow) string {
 
 // rowOf is row r as the answer prints it.
 func rowOf(r *textRow, matched []string) Row {
-	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale, Reverify: r.Reverify, factState: r.FactState, verified: r.Verified}
+	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale, Reverify: r.Reverify, ContradictedBy: r.NewerBy, factState: r.FactState, verified: r.Verified}
 	if r.Day != "" {
 		out.At = r.Day
 	} else if !r.At.IsZero() {

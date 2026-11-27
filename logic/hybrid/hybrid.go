@@ -172,6 +172,31 @@ func (ix *Index) TermIDF(w string) float64 {
 	return best
 }
 
+// Holders is the place of every text holding w's rarest term (w analysed
+// as the index reads text), a superset of the texts holding w itself; nil
+// when no text holds it. Why (devco:D-1027): lore ask's stale-claim check
+// needs how many rows hold a word and which, for every call, and the
+// postings already know; scanning each row's text for each word cost
+// ~70 ms over 2,000 rows.
+func (ix *Index) Holders(w string) []int32 {
+	var best []posting
+	found := false
+	for _, t := range Terms(nil, w) {
+		ps := ix.post[t]
+		if !found || len(ps) < len(best) {
+			best, found = ps, true
+		}
+	}
+	if len(best) == 0 {
+		return nil
+	}
+	out := make([]int32, len(best))
+	for i, p := range best {
+		out[i] = p.doc
+	}
+	return out
+}
+
 // Cosine scores every text against the question's vector (0 for a text
 // without a vector).
 func (ix *Index) Cosine(q []float32) []float64 {

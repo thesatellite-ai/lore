@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/embed"
 	"github.com/thesatellite-ai/lore/logic/hybrid"
 	"github.com/thesatellite-ai/lore/logic/querywords"
+	"github.com/thesatellite-ai/lore/logic/staleclaim"
 	"github.com/thesatellite-ai/lore/model/value"
 )
 
@@ -62,6 +63,15 @@ type corpus struct {
 	once sync.Once
 	ci   *corpusIndex // built on first use (index)
 	used uint64       // corpusTick at its last use (maxKeptCorpora)
+	// claims is every stale-claim finding of rows (markContradicted,
+	// devco:D-1027) by the older row's id, for the fact states hashed
+	// in claimKey: question-independent, so a kept corpus finds them once
+	// and every later call reads them (~20 ms a call on a store of long
+	// notes otherwise). claimMu guards the three.
+	claimMu  sync.Mutex
+	claimOK  bool
+	claimKey uint64
+	claims   map[string]staleclaim.Finding
 }
 
 // maxKeptCorpora bounds the corpora kept per process (one per set of
