@@ -38,7 +38,10 @@ import (
 //	1      ${res:<kind>/<name>} and ${res:<place>:<kind>/<name>} (D-764),
 //	       and a reference from one folder of the personal store to a
 //	       resource or kind in another folder of it (D-793)
-const refsVersion = "1"
+//	2      ${row:<id>} of a row in another folder of the personal store,
+//	       and a row_refs line for every ${row:<id>}, resolved or not
+//	       (D-1021)
+const refsVersion = "2"
 
 // refsEpochFile is the file beside a personal store's cache files whose
 // content moves on every resource or kind write in one of its folders.

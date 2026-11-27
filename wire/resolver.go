@@ -357,6 +357,13 @@ func (rv *resolver) resolveRow(ref refs.Ref) (refs.Resolved, error) {
 		return refs.Resolved{}, refs.ErrUnresolved
 	}
 	src, r, err := eng.Get(context.Background(), engine.Ref{ID: id})
+	if (errs.Has(err, errs.NotFound) || (err == nil && r.Deleted)) && !eng.IsClient(store.SourceRepo) {
+		// not in an attached folder, or only its tombstone is (a row
+		// moved to another folder): look in the personal store's others
+		if s2, r2, err2 := rv.siblingRow(context.Background(), id); !errs.Has(err2, errs.NotFound) {
+			src, r, err = s2, r2, err2
+		}
+	}
 	switch {
 	case errs.Has(err, errs.NotFound), errs.Has(err, errs.AmbiguousID):
 		return refs.Resolved{}, refs.ErrUnresolved
@@ -374,6 +381,74 @@ func (rv *resolver) resolveRow(ref refs.Ref) (refs.Resolved, error) {
 		return refs.Resolved{Text: refScalar(v), ID: id}, nil
 	}
 	return refs.Resolved{Text: rowTitle(r) + " (" + id.String() + ")", ID: id}, nil
+}
+
+// siblingGetter is the optional backend upgrade (git and folder backends)
+// that reads one row of every other data folder of the store.
+type siblingGetter interface {
+	GetSiblingRow(ctx context.Context, table row.Table, id ids.AnyID) ([]rowfs.FolderRow, error)
+}
+
+// siblingRow is ${row:<id>} in a folder of the personal store the command
+// did not attach (bug hunt H-283, devco:D-1021), as siblingRows widens
+// resources (D-793): `lore memory add --to me/archive` opens me/archive
+// only, so a note there citing a me/work note filled in nothing while a
+// cache built with every folder attached filled it in, and search found
+// the citing note by the cited note's words only after a rebuild. Every
+// folder of the personal store is the same person's; an org store is not
+// widened. A copy in two such folders is ambiguous, as two attached
+// copies are. Nothing found is errs.NotFound; a folder that cannot be
+// read is left out, as siblingRows leaves it.
+func (rv *resolver) siblingRow(ctx context.Context, id ids.AnyID) (store.Source, row.Row, error) {
+	eng := rv.st.eng
+	notFound := errs.New(errs.NotFound, "no folder of the personal store holds "+id.String())
+	def, ok := eng.Registry().ByPrefix(id.Prefix())
+	if !ok {
+		return "", row.Row{}, notFound
+	}
+	var hits []located
+	done := map[store.Source]bool{}
+	attached := map[store.Source]bool{}
+	srcs := eng.ReadStores()
+	for _, src := range srcs {
+		attached[src] = true
+	}
+	for _, src := range srcs {
+		base, ok := personalBase(src)
+		if !ok || done[base] {
+			continue
+		}
+		g, ok := concrete(rv.st.byName[src]).(siblingGetter)
+		if !ok {
+			continue
+		}
+		done[base] = true
+		got, err := g.GetSiblingRow(ctx, def.Name, id)
+		if err != nil {
+			continue
+		}
+		for _, fr := range got {
+			name := base
+			if fr.Folder != rowfs.FolderRoot {
+				name = store.Source(string(base) + targetSep + fr.Folder)
+			}
+			if attached[name] || fr.Row.Deleted {
+				continue // an attached folder's copy is engine.Get's answer
+			}
+			r, err := fr.Row.Decode()
+			if err != nil {
+				continue
+			}
+			hits = append(hits, located{src: name, r: r, sibling: true})
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return "", row.Row{}, notFound
+	case 1:
+		return hits[0].src, eng.MaskRow(ctx, hits[0].src, hits[0].r), nil
+	}
+	return "", row.Row{}, errs.New(errs.AmbiguousID, id.String()+" is in more than one folder of the personal store")
 }
 
 // sensitiveRowField: fields never filled in from a row reference.
@@ -591,11 +666,19 @@ func (c reexpandCache) Apply(ctx context.Context, source store.Source, rows []st
 	if err := c.reexpand(ctx, changed, needles); err != nil {
 		return err
 	}
-	if _, personal := personalBase(source); personal && slices.ContainsFunc(rows, func(sr store.Row) bool {
+	_, personal := personalBase(source)
+	switch {
+	case !personal:
+	case slices.ContainsFunc(rows, func(sr store.Row) bool {
 		return sr.Table == schema.TableResources || sr.Table == schema.TableKinds || sr.Table == schema.TableKindFields
-	}) {
+	}):
 		// the other folders of the personal store read these rows too
 		// (siblingRows): their caches expand again on their next open
+		return c.caches.bumpRefsEpoch(ctx, source)
+	case c.caches.siblingsCite(ctx, source, changed):
+		// a note in another folder cites a row just applied (siblingRow,
+		// rowcites.go, devco:D-1021): that folder's cache fills it in
+		// again on its next open
 		return c.caches.bumpRefsEpoch(ctx, source)
 	}
 	return nil

@@ -363,7 +363,7 @@ func (a *App) deletedCache(ctx context.Context, sc lensScope) (string, func(), e
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
 	path := filepath.Join(dir, "deleted"+cacheExt)
-	c, err := cacheOpen(ctx, path, st.eng.Registry(), refs.Expander{Resolver: newResolver(st)})
+	c, err := cacheOpen(ctx, path, st.eng.Registry(), cacheExpander{rv: newResolver(st)})
 	if err != nil {
 		cleanup()
 		return "", nil, err

@@ -318,3 +318,11 @@ func (e *Engine) maskStoreRows(ctx context.Context, src store.Source, rows []sto
 	}
 	return out
 }
+
+// MaskRow masks r as Get masks every row it reads. Why (devco:D-1021):
+// the reference resolver reads a ${row:<id>} kept in a folder of the
+// personal store this command did not attach straight from its file, and
+// the text it fills in must be what show prints, never the stored secret.
+func (e *Engine) MaskRow(ctx context.Context, src store.Source, r row.Row) row.Row {
+	return e.maskRead(ctx, src, r)
+}

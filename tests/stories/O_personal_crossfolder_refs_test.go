@@ -13,13 +13,15 @@ package stories
 // folder; journal notes name a person added before them and one added
 // after them, graph --up from the whole store lists every note, and a
 // cache whose reference lines are gone (as an older lore left it) gets
-// them back on its next open.
+// them back on its next open. A journal note citing a work note as
+// ${row:<id>} is found by that note's words (devco:D-1021).
 
 import (
 	"context"
 	"database/sql"
 	"io/fs"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -56,6 +58,29 @@ func TestStoryOPersonalCrossFolderRefs(t *testing.T) {
 		}
 	}
 	s.Step("personal-store/graph-up-lists-journal-notes", func() { listed("after the writes") })
+	s.Step("personal-store/journal-cites-a-work-note", func() {
+		// devco:D-1021 (bug hunt H-283): a journal note citing a work note
+		// as ${row:<id>} is found by the work note's words right after the
+		// write, and again after the work note was in the trash
+		out := ada.Lore(ada.Home, "memory", "add", "--body", "Gateway timeouts are 30 s.", "--to", "me/work", "--json").OK(t).Stdout
+		m := regexp.MustCompile(`"id": "(mem_[0-9a-f]+)"`).FindStringSubmatch(out)
+		if m == nil {
+			t.Fatalf("no memory id in: %s", out)
+		}
+		ada.Lore(ada.Home, "memory", "add", "--body", "Check ${row:"+m[1]+"} before the orbit deploy.", "--to", "me/journal", "--yes").OK(t)
+		found := func(when string) {
+			t.Helper()
+			r := ada.Lore(ada.Home, "search", "--query", "gateway", "--store", "me")
+			r.OK(t)
+			if !strings.Contains(r.Out(), "Check Gateway timeouts") {
+				t.Errorf("[O D-1021] %s: `lore search --query gateway --store me` misses the journal note citing the work note:\n%s", when, r)
+			}
+		}
+		found("after the journal note was written")
+		ada.Lore(ada.Home, "memory", "delete", "--id", m[1], "--yes").OK(t)
+		ada.Lore(ada.Home, "trash", "restore", "--id", m[1], "--yes").OK(t)
+		found("after the work note came back from the trash")
+	})
 	s.Step("personal-store/older-cache-catches-up", func() {
 		var files []string
 		if err := filepath.WalkDir(ada.Home, func(p string, d fs.DirEntry, err error) error {

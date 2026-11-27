@@ -188,6 +188,12 @@ func dumpCache(t *testing.T, c *Cache) []string {
 		parts := make([]string, len(cols))
 		for i, col := range cols {
 			parts[i] = `quote("` + col + `")`
+			if tbl == tblKindsGood && col == "built_at" {
+				// the wall-clock second each build ran at: two builds a
+				// second apart differ there and nowhere else (a flake on a
+				// busy CI runner, devco:D-1021)
+				parts[i] = `'built_at'`
+			}
 		}
 		out = append(out, strings1(t, c, `SELECT ? || '|' || `+strings.Join(parts, ` || '|' || `)+` FROM "`+tbl+`"`, tbl)...)
 	}

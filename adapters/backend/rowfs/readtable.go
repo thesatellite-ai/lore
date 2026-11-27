@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -101,6 +102,56 @@ func (r *Root) ReadSiblingTable(ctx context.Context, except string, table row.Ta
 		if len(rows) > 0 {
 			out = append(out, FolderRows{Folder: name, Rows: rows})
 		}
+	}
+	return out, nil
+}
+
+// FolderRow is one row file and the data folder holding it.
+type FolderRow struct {
+	Folder string // the folder's name (FolderRoot for the store root)
+	Row    store.Row
+}
+
+// GetSiblingRow reads table/id in every data folder of this store except
+// the folder named except, in ReadSiblingTable's order, and returns each
+// copy found (tombstones included). Why (bug hunt H-283, devco:D-1021):
+// a ${row:<id>} reference written in one folder of a personal store to a
+// row kept in another folder resolved only when both folders were
+// attached, so a search's answer depended on how its cache was built; one
+// file per folder is looked at, nothing is scanned. A code repo
+// (LayoutRepo) has no sibling folders.
+func (r *Root) GetSiblingRow(ctx context.Context, except string, table row.Table, id ids.AnyID) ([]FolderRow, error) {
+	if r.layout != LayoutStore {
+		return nil, nil
+	}
+	skip, err := CleanFolder(except)
+	if err != nil {
+		return nil, err
+	}
+	names, err := StoreFolders(r.dir)
+	if err != nil {
+		return nil, err
+	}
+	var out []FolderRow
+	for _, name := range append([]string{FolderRoot}, names...) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if name == skip {
+			continue
+		}
+		f, err := r.Folder(name)
+		if err != nil {
+			return nil, err
+		}
+		got, err := f.Get(table, id)
+		if errors.Is(err, store.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, FolderRow{Folder: name, Row: got})
 	}
 	return out, nil
 }

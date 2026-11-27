@@ -29,7 +29,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/policy"
-	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/schema"
@@ -242,7 +241,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	// SQ3 / VARS ARE DATA: var, res and row references resolve from the row
 	// files (wire/resolver.go); st.eng is read lazily, set below.
 	rv := newResolver(st)
-	exp := refs.Expander{Resolver: rv}
+	exp := cacheExpander{rv: rv} // rowcites.go: every ${row:<id>} keeps a row_refs line
 	// The repo store's cache lives under the lore home, never in the work
 	// tree (owner item 16): a read then creates nothing in the repo, so it
 	// has nothing to hide through .git/info/exclude.
@@ -1434,7 +1433,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	}
 	st.caches = newCachesFor(opts.Home)
 	rv := newResolver(st)
-	exp := refs.Expander{Resolver: rv}
+	exp := cacheExpander{rv: rv} // rowcites.go: every ${row:<id>} keeps a row_refs line
 	st.byName = map[store.Source]store.Backend{}
 	st.folders = map[store.Source]string{}
 	for _, o := range attached {

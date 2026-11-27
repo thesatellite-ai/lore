@@ -37,3 +37,17 @@ func (b *Backend) ReadSiblingTable(ctx context.Context, table row.Table) ([]rowf
 	}
 	return b.root.ReadSiblingTable(ctx, b.folder.Name(), table)
 }
+
+// GetSiblingRow is table/id in every other data folder of this clone's
+// worktree (rowfs.Root.GetSiblingRow): the reference resolver fills in a
+// ${row:<id>} kept in another folder of a personal store without opening
+// that folder (devco:D-1021). A code repo has none.
+func (b *Backend) GetSiblingRow(ctx context.Context, table row.Table, id ids.AnyID) ([]rowfs.FolderRow, error) {
+	if err := b.usable(ctx); err != nil {
+		return nil, err
+	}
+	if b.mode == modeRepo {
+		return nil, nil
+	}
+	return b.root.GetSiblingRow(ctx, b.folder.Name(), table, id)
+}

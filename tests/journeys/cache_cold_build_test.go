@@ -36,9 +36,10 @@ func TestJourneyCacheBuiltFromNothingAnswersTheSame(t *testing.T) {
 	var cited string
 	reads := [][]string{
 		{"search", "--query", "deploy", "--json"},
-		// not "gateway": the note citing ${row:…} is found by the cited
-		// note's words only after a build from nothing (a separate finding)
 		{"search", "--query", "retries", "--json"},
+		// the note citing ${row:…} is found by the cited note's words in
+		// every build (devco:D-1021)
+		{"search", "--query", "gateway", "--json"},
 		{"memory", "list", "--store", "me", "--json"},
 		{"task", "list", "--store", "me", "--json"},
 	}
