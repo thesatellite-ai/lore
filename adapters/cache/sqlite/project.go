@@ -36,13 +36,18 @@ const (
 	fieldValues       = "values" // kind_fields.values: the allowed values
 )
 
-// project brings the typed tables in line with one applied row.
-func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.Source, sr store.Row) error {
+// project brings the typed tables in line with one applied row. fresh
+// says no copy of sr's id was in the file before this Apply (keepRaw,
+// freshrow.go): then nothing is cleared first. A resource is never
+// projected fresh (its kind table, FTS text and referrers have side paths
+// of their own).
+func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.Source, sr store.Row, fresh bool) error {
 	p, known := st.plans[sr.Table]
 	isResource := sr.Table == schema.TableResources
 	if !known && !isResource {
 		return nil // unknown table: kept in _rows only
 	}
+	fresh = fresh && !isResource && !wasTouched(tx, sr.Table.String(), sr.ID.String())
 	if isResource {
 		for _, k := range st.kinds {
 			if err := c.deleteTyped(ctx, tx, st.plans[k.table], string(source), sr.ID); err != nil {
@@ -51,7 +56,7 @@ func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.
 		}
 	}
 	if sr.Deleted {
-		if known {
+		if known && !fresh {
 			return c.deleteTyped(ctx, tx, p, string(source), sr.ID)
 		}
 		return nil
@@ -60,13 +65,13 @@ func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.
 	if err != nil {
 		// A document this binary cannot read (a newer _v) stays in _rows
 		// only; a newer lore will project it.
-		if known {
+		if known && !fresh {
 			return c.deleteTyped(ctx, tx, p, string(source), sr.ID)
 		}
 		return nil
 	}
 	if known {
-		if err := c.upsertTyped(ctx, tx, p, string(source), r, r.Fields); err != nil {
+		if err := c.upsertTyped(ctx, tx, p, string(source), r, r.Fields, fresh); err != nil {
 			return err
 		}
 	}
@@ -134,7 +139,7 @@ func (c *Cache) upsertKind(ctx context.Context, tx *sql.Tx, st state, kind ids.I
 	// RES 3.15: a quarantined resource is left out of res_<kind> (project
 	// already removed its old copy) and, through indexResource, search.
 	if !quarantined(r, info.quar) {
-		if err := c.upsertTyped(ctx, tx, st.plans[info.table], source, r, vals); err != nil {
+		if err := c.upsertTyped(ctx, tx, st.plans[info.table], source, r, vals, false); err != nil {
 			return err
 		}
 	}
@@ -179,7 +184,14 @@ func entryValue(f schema.FieldDef, entry []byte, q resquar.Field) (value.Value, 
 
 // upsertTyped replaces r's row in p's table (and FTS, and references) with
 // vals as the field values (see tableSQL.insert for how values travel).
-func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source string, r row.Row, vals map[string]value.Value) error {
+// fresh skips clearing r's old FTS entry, join pairs and references: the
+// caller knows there are none (project, freshrow.go). Every other write
+// marks the row touched, so a later fresh projection of it in the same
+// transaction replaces it instead.
+func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source string, r row.Row, vals map[string]value.Value, fresh bool) error {
+	if !fresh {
+		markTouched(tx, p.def.Name.String(), source, r.ID.String())
+	}
 	cells := make([]json.RawMessage, 0, len(p.columns))
 	for _, col := range p.columns {
 		cells = append(cells, cellFor(col, source, r, vals))
@@ -210,25 +222,27 @@ func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 		if metaErr != nil {
 			return metaErr
 		}
-		ftsErr = upsertFTS(ctx, tx, p, source, r.ID, ftsVals)
+		ftsErr = upsertFTS(ctx, tx, p, source, r.ID, ftsVals, fresh)
 	}
 	if ftsErr != nil {
 		return ftsErr
 	}
-	if err := fillJoins(ctx, tx, p, source, r.ID, vals); err != nil {
+	if err := fillJoins(ctx, tx, p, source, r.ID, vals, fresh); err != nil {
 		return err
 	}
-	return c.refreshRefs(ctx, tx, p, r.ID, vals)
+	return c.refreshRefs(ctx, tx, p, r.ID, vals, fresh)
 }
 
 // fillJoins replaces the pairs of one row in every join table of p from
 // its list-of-ref fields (decision O11). An item that is not a valid id
 // (an old or hand-edited row) is skipped: the cache mirrors, the validator
-// reports it.
-func fillJoins(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID, vals map[string]value.Value) error {
+// reports it. fresh: the row has no pairs to clear (upsertTyped).
+func fillJoins(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID, vals map[string]value.Value, fresh bool) error {
 	for _, j := range p.joins {
-		if _, err := txExec(ctx, tx, j.deleteFrom, source, id.String()); err != nil {
-			return dbErr("clear pairs of "+j.rel.JoinTable.String(), err)
+		if !fresh {
+			if _, err := txExec(ctx, tx, j.deleteFrom, source, id.String()); err != nil {
+				return dbErr("clear pairs of "+j.rel.JoinTable.String(), err)
+			}
 		}
 		// ItemStrings: a list of refs (in memory), of text (decoded from
 		// the file) or a JSON array all give the same ids.
@@ -325,13 +339,16 @@ func valueCell(v value.Value) json.RawMessage {
 	return canon.String(v.String())
 }
 
-// upsertFTS replaces id's entry in p's FTS table.
-func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID, vals map[string]value.Value) error {
+// upsertFTS replaces id's entry in p's FTS table; fresh: id has none yet
+// (upsertTyped).
+func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID, vals map[string]value.Value, fresh bool) error {
 	if p.fts == "" {
 		return nil
 	}
-	if _, err := txExec(ctx, tx, p.sql.ftsDeleteID, source, id.String()); err != nil {
-		return dbErr("fts delete", err)
+	if !fresh {
+		if _, err := txExec(ctx, tx, p.sql.ftsDeleteID, source, id.String()); err != nil {
+			return dbErr("fts delete", err)
+		}
 	}
 	cells := []json.RawMessage{canon.String(id.String()), canon.String(source)}
 	for _, f := range p.def.FTS {
@@ -345,6 +362,9 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 	if err != nil {
 		return errs.Wrap(errs.Internal, "sqlite cache: encode fts row", err)
 	}
+	if fresh {
+		return queueFTS(ctx, tx, p, source, id.String(), arr)
+	}
 	if _, err = txExec(ctx, tx, p.sql.ftsInsert, string(arr)); err != nil {
 		return dbErr("fts insert", err)
 	}
@@ -357,6 +377,7 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 // E_AMBIGUOUS_ID state) deleting one copy also drops the other's until it
 // is applied again.
 func (c *Cache) deleteTyped(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID) error {
+	markTouched(tx, p.def.Name.String(), source, id.String())
 	// FTS first: its entry is found through the typed row (addFTS).
 	if p.fts != "" {
 		if _, err := txExec(ctx, tx, p.sql.ftsDeleteID, source, id.String()); err != nil {
@@ -420,13 +441,13 @@ func textFields(p plan) []string {
 }
 
 // refreshRefs re-expands every text field of one row.
-func (c *Cache) refreshRefs(ctx context.Context, tx *sql.Tx, p plan, id ids.AnyID, vals map[string]value.Value) error {
+func (c *Cache) refreshRefs(ctx context.Context, tx *sql.Tx, p plan, id ids.AnyID, vals map[string]value.Value, fresh bool) error {
 	for _, f := range textFields(p) {
 		text := ""
 		if v, ok := vals[f]; ok && v.Kind() == value.KindText {
 			text = v.String()
 		}
-		if err := c.expandField(ctx, tx, p.def.Name, id.String(), f, text); err != nil {
+		if err := c.expandField(ctx, tx, p.def.Name, id.String(), f, text, fresh); err != nil {
 			return err
 		}
 	}
@@ -435,12 +456,15 @@ func (c *Cache) refreshRefs(ctx context.Context, tx *sql.Tx, p plan, id ids.AnyI
 
 // expandField replaces the row_refs and row_expanded rows of one field.
 // A field without references keeps no row_expanded row (readers fall back
-// to the column).
-func (c *Cache) expandField(ctx context.Context, tx *sql.Tx, table row.Table, id, field, text string) error {
+// to the column). fresh: the row has no lines to clear (upsertTyped).
+func (c *Cache) expandField(ctx context.Context, tx *sql.Tx, table row.Table, id, field, text string, fresh bool) error {
 	for _, q := range []string{
 		`DELETE FROM "` + tblRefs + `" WHERE entity_table = ? AND entity_id = ? AND field = ?`,
 		`DELETE FROM "` + tblExpanded + `" WHERE entity_table = ? AND entity_id = ? AND field = ?`,
 	} {
+		if fresh {
+			break
+		}
 		if _, err := txExec(ctx, tx, q, table.String(), id, field); err != nil {
 			return dbErr("clear references", err)
 		}
@@ -577,7 +601,7 @@ func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row
 	if vals, err = withMeta(ctx, tx, source, vals, r); err != nil {
 		return err
 	}
-	return upsertFTS(ctx, tx, p, source, r.ID, vals)
+	return upsertFTS(ctx, tx, p, source, r.ID, vals, false)
 }
 
 // resourceValueText is the searchable text of r's indexable field values,

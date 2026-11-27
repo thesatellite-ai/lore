@@ -47,16 +47,15 @@ func (st *state) refreshUnlessDeferred(ctx context.Context) error {
 }
 
 // refreshAll brings every attached store's cache up to date, then the
-// machine store's when attached (it is never one of Stores()).
+// machine store's when attached (it is never one of Stores()): in order,
+// each store's rows read while the one before is applied (RefreshAll).
 func (st *state) refreshAll(ctx context.Context) error {
 	names := st.eng.Stores()
 	if st.eng.HasMachineStore() {
 		names = append(names, store.SourceMachine)
 	}
-	for _, name := range names {
-		if _, err := st.eng.Refresh(ctx, name); err != nil {
-			return errs.Prefix("wire: refresh the cache of store "+string(name), err)
-		}
+	if name, err := st.eng.RefreshAll(ctx, names); err != nil {
+		return errs.Prefix("wire: refresh the cache of store "+string(name), err)
 	}
 	return nil
 }

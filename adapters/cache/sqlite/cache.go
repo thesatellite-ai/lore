@@ -108,6 +108,9 @@ type Cache struct {
 	// finds the file current writes the stamp for this binary
 	// (devco:D-865, stamp.go).
 	adoptStamp bool
+	// noFresh turns the fresh-row path off (freshrow.go), so a test can
+	// build the same rows both ways and compare every table.
+	noFresh bool
 }
 
 var _ store.Cache = (*Cache)(nil)
@@ -479,10 +482,11 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 			return err
 		}
 		applied := make([]store.Row, 0, len(rows))
+		fresh := make([]bool, 0, len(rows)) // per applied row: its id is new to the file (freshrow.go)
 		kindsChanged := false
 		var taskIDs []string // the applied tasks rows, for the closure (P3-PERF-1)
 		for _, r := range rows {
-			newer, err := keepRaw(ctx, tx, source, r)
+			newer, isNew, err := keepRaw(ctx, tx, source, r)
 			if err != nil {
 				return err
 			}
@@ -490,6 +494,7 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 				continue
 			}
 			applied = append(applied, r)
+			fresh = append(fresh, isNew && !c.noFresh)
 			if r.Table == schema.TableTasks {
 				taskIDs = append(taskIDs, r.ID.String())
 			}
@@ -506,13 +511,16 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 				return err
 			}
 		}
-		for _, r := range applied {
-			if err := c.project(ctx, tx, st, source, r); err != nil {
+		for i, r := range applied {
+			if err := c.project(ctx, tx, st, source, r, fresh[i]); err != nil {
 				return err
 			}
 		}
+		if err := flushFTS(ctx, tx, ""); err != nil { // the fresh rows' FTS entries (freshrow.go)
+			return err
+		}
 		// METADATA 3.13: quarantined metadata, counted and kept out of row_meta
-		if err := refreshMetaQuarantine(ctx, tx, source, applied); err != nil {
+		if err := refreshMetaQuarantine(ctx, tx, source, applied, fresh); err != nil {
 			return err
 		}
 		if kindsChanged {
@@ -544,26 +552,32 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 }
 
 // keepRaw stores r in `_rows` unless the held copy is newer; it reports
-// whether r was stored.
-func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) (bool, error) {
+// whether r was stored and whether no copy of r's id (any source, any
+// table) was held before (fresh, freshrow.go).
+func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) (stored, fresh bool, err error) {
 	if !r.Table.Valid() || r.ID.IsZero() || r.HLC.IsZero() || len(r.Doc) == 0 {
-		return false, errs.New(errs.InvalidInput, "sqlite cache: row without table, id, hlc or document")
+		return false, false, errs.New(errs.InvalidInput, "sqlite cache: row without table, id, hlc or document")
 	}
 	var (
 		held    string
 		heldDel int
 		heldDoc []byte
 	)
-	err := txQueryRow(ctx, tx, `SELECT hlc, deleted, doc FROM "`+tblRows+`" WHERE source = ? AND tbl = ? AND id = ?`,
+	err = txQueryRow(ctx, tx, `SELECT hlc, deleted, doc FROM "`+tblRows+`" WHERE source = ? AND tbl = ? AND id = ?`,
 		string(source), r.Table.String(), r.ID.String()).Scan(&held, &heldDel, &heldDoc)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
+		other, herr := idHeld(ctx, tx, r.ID.String())
+		if herr != nil {
+			return false, false, herr
+		}
+		fresh = !other
 	case err != nil:
-		return false, dbErr("read held row", err)
+		return false, false, dbErr("read held row", err)
 	default:
 		h, err := hlc.Parse(held)
 		if err != nil {
-			return false, errs.Wrap(errs.DBCorrupt, "sqlite cache: held row has a bad hlc", err)
+			return false, false, errs.Wrap(errs.DBCorrupt, "sqlite cache: held row has a bad hlc", err)
 		}
 		switch c := r.HLC.Compare(h); {
 		case c < 0:
@@ -574,13 +588,13 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 			// are the truth and the held copy, which no file has any more,
 			// goes.
 			if check := store.CurrentCheckOf(ctx); check == nil || !check(ctx, r) {
-				return false, nil
+				return false, false, nil
 			}
 		case c == 0 && (heldDel == 1) == r.Deleted && bytes.Equal(heldDoc, r.Doc):
 			// The same row again: a full re-read (the live ref moved, D-159)
 			// hands every row back, and re-projecting identical rows was a
 			// tenth of a second of every agent command under the live lock.
-			return false, nil
+			return false, false, nil
 		}
 	}
 	deleted := 0
@@ -590,9 +604,9 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 	if _, err := txExec(ctx, tx,
 		`INSERT OR REPLACE INTO "`+tblRows+`" (source, tbl, id, hlc, deleted, doc) VALUES (?, ?, ?, ?, ?, ?)`,
 		string(source), r.Table.String(), r.ID.String(), r.HLC.String(), deleted, r.Doc); err != nil {
-		return false, dbErr("store row", err)
+		return false, false, dbErr("store row", err)
 	}
-	return true, nil
+	return true, fresh, nil
 }
 
 // Cursor implements store.Cache.

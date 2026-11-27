@@ -1140,6 +1140,7 @@ func (a *App) RebuildSearch(ctx context.Context, only string) ([]string, error) 
 	order := append([]store.Source(nil), st.caches.order...)
 	st.caches.mu.Unlock()
 	names := make([]string, 0, len(order))
+	var rebuilt []store.Source
 	for _, s := range order {
 		if !opsmemory.FromStore(want, s) {
 			continue
@@ -1147,10 +1148,12 @@ func (a *App) RebuildSearch(ctx context.Context, only string) ([]string, error) 
 		if err := st.caches.Rebuild(ctx, s); err != nil {
 			return nil, err
 		}
-		if _, err := st.eng.Refresh(ctx, s); err != nil {
-			return nil, err
-		}
+		rebuilt = append(rebuilt, s)
 		names = append(names, string(s))
+	}
+	// each store's rows read while the one before is applied (RefreshAll)
+	if _, err := st.eng.RefreshAll(ctx, rebuilt); err != nil {
+		return nil, err
 	}
 	return names, nil
 }

@@ -377,7 +377,7 @@ func (c *Cache) createAndFill(ctx context.Context, tx *sql.Tx, st state, p plan)
 			continue
 		}
 		if p.def.Kind.IsZero() {
-			err = c.upsertTyped(ctx, tx, p, h.source, r, r.Fields)
+			err = c.upsertTyped(ctx, tx, p, h.source, r, r.Fields, false)
 		} else {
 			err = c.upsertKind(ctx, tx, st, p.def.Kind, h.source, r)
 		}

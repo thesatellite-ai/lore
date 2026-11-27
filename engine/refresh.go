@@ -14,33 +14,109 @@ import (
 // outside lore (a git pull, a hand edit, another process) reach search and
 // render. Returns the number of rows applied.
 func (e *Engine) Refresh(ctx context.Context, source store.Source) (int, error) {
+	return e.applyRefresh(ctx, e.readRefresh(ctx, source))
+}
+
+// RefreshAll is Refresh for each of sources in order, the rows of the next
+// source read (and masked) while the cache applies the current one's: a
+// cache built from nothing spends about as long reading a store's row
+// files as writing them, and the two now overlap (bug hunt H-282,
+// devco:D-1020). At most two sources are read ahead of the one being
+// applied, so memory holds three sources' rows at most. It stops at the
+// first failure and returns the source that failed with the error; the
+// sources before it stay applied, as with Refresh one by one.
+func (e *Engine) RefreshAll(ctx context.Context, sources []store.Source) (store.Source, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	// one finished read waits while the next is read: an unbuffered hand-off
+	// kept the writer waiting on big folders (1.26M rows: 790 s, not 505 s)
+	ahead := make(chan refreshRead, 1)
+	go func() {
+		defer close(ahead)
+		for _, s := range sources {
+			select {
+			case ahead <- e.readRefresh(ctx, s):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	done := 0
+	for rr := range ahead {
+		if _, err := e.applyRefresh(ctx, rr); err != nil {
+			cancel()
+			for range ahead { // let the reader stop before returning
+			}
+			return rr.source, err
+		}
+		done++
+	}
+	if done < len(sources) { // the reader stopped: ctx ended
+		return sources[done], ctx.Err()
+	}
+	return "", nil
+}
+
+// refreshRead is the read half of one Refresh: source's rows changed
+// since the cache's cursor, masked, with the backend's new cursor.
+type refreshRead struct {
+	source    store.Source
+	backend   store.Backend
+	rows      []store.Row
+	cur, next store.Cursor
+	err       error
+}
+
+// readRefresh reads what Refresh applies for source.
+func (e *Engine) readRefresh(ctx context.Context, source store.Source) refreshRead {
+	rr := refreshRead{source: source}
 	a, err := e.attached(source)
 	if err != nil {
-		return 0, err
+		rr.err = err
+		return rr
 	}
+	rr.backend = a.Backend
 	cur, err := e.cache.Cursor(ctx, source)
 	if err != nil {
-		return 0, err
+		rr.err = err
+		return rr
 	}
 	if cur, err = e.dropLostCursor(ctx, source, a.Backend, cur); err != nil {
-		return 0, err
+		rr.err = err
+		return rr
 	}
 	rows, next, err := e.readRows(ctx, source, cur) // purged ids reach the cache as tombstones
 	if err != nil {
-		return 0, err
+		rr.err = err
+		return rr
 	}
+	rr.cur, rr.next = cur, next
 	if len(rows) == 0 && next == cur && cur != "" {
-		return 0, nil // nothing changed: the cache is current, not rewritten (B1-16)
+		return rr // nothing changed: the cache is current, not rewritten (B1-16)
 	}
 	// devco:R-14: search and sql read the cache, so they see the same
-	// masked text show does (readmask.go). The rows are the backend's
-	// current state: one older than the cache's copy replaces it when the
-	// backend still holds it (stillCurrent, devco D-920).
-	ctx = store.WithCurrentCheck(ctx, func(ctx context.Context, r store.Row) bool { return stillCurrent(ctx, a.Backend, r) })
-	if err := e.cache.Apply(ctx, source, e.maskStoreRows(ctx, source, rows), next); err != nil {
+	// masked text show does (readmask.go).
+	rr.rows = e.maskStoreRows(ctx, source, rows)
+	return rr
+}
+
+// applyRefresh applies what readRefresh read; returns the rows applied.
+func (e *Engine) applyRefresh(ctx context.Context, rr refreshRead) (int, error) {
+	if rr.err != nil {
+		return 0, rr.err
+	}
+	if len(rr.rows) == 0 && rr.next == rr.cur && rr.cur != "" {
+		return 0, nil // nothing changed: the cache is current, not rewritten (B1-16)
+	}
+	// The rows are the backend's current state: one older than the
+	// cache's copy replaces it when the backend still holds it
+	// (stillCurrent, devco D-920).
+	b := rr.backend
+	ctx = store.WithCurrentCheck(ctx, func(ctx context.Context, r store.Row) bool { return stillCurrent(ctx, b, r) })
+	if err := e.cache.Apply(ctx, rr.source, rr.rows, rr.next); err != nil {
 		return 0, err
 	}
-	return len(rows), nil
+	return len(rr.rows), nil
 }
 
 // CurrentRows is every row source's backend holds now, as a refresh from

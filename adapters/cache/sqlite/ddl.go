@@ -95,6 +95,9 @@ type tableSQL struct {
 	// slices.
 	insert    string
 	ftsInsert string
+	// ftsInsertMany adds the FTS rows of a JSON array of ftsInsert's
+	// arrays in one statement (the fresh rows of an Apply, freshrow.go).
+	ftsInsertMany string
 	// deleteID / ftsDeleteID take (source, row id).
 	deleteID    string
 	ftsDeleteID string
@@ -445,6 +448,12 @@ func (p *plan) addFTS() error {
 	p.sql.snipSearch = "SELECT " + snip(sq) + " FROM temp." + sq + " WHERE " + sq + " MATCH ? ORDER BY rowid LIMIT 1"
 	p.sql.ftsInsert = "INSERT INTO " + fq + " (rowid, " + strings.Join(names, ", ") + ") SELECT t." + typedRowidCol + ", " + extractList(len(names)) +
 		" FROM " + tq + ` AS t WHERE t."` + colSource + `" = json_extract(?1, '$[1]') AND t."` + colID + `" = json_extract(?1, '$[0]')`
+	many := make([]string, len(names))
+	for i := range names {
+		many[i] = "json_extract(j.value, '$[" + strconv.Itoa(i) + "]')"
+	}
+	p.sql.ftsInsertMany = "INSERT INTO " + fq + " (rowid, " + strings.Join(names, ", ") + ") SELECT t." + typedRowidCol + ", " + strings.Join(many, ", ") +
+		" FROM json_each(?1) AS j JOIN " + tq + ` AS t ON t."` + colSource + `" = json_extract(j.value, '$[1]') AND t."` + colID + `" = json_extract(j.value, '$[0]')`
 	p.objects = append(p.objects, dbObject{Type: objFTS, Name: p.fts})
 	return nil
 }

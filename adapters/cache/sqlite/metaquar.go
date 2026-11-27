@@ -45,11 +45,15 @@ const (
 	problemSep = "\n"
 )
 
-// refreshMetaQuarantine records (or clears) the quarantine of applied rows.
-func refreshMetaQuarantine(ctx context.Context, tx *sql.Tx, source store.Source, applied []store.Row) error {
-	for _, sr := range applied {
-		if _, err := txExec(ctx, tx, metaQuarDelete, string(source), sr.Table.String(), sr.ID.String()); err != nil {
-			return dbErr("clear meta quarantine", err)
+// refreshMetaQuarantine records (or clears) the quarantine of applied rows;
+// fresh[i] says applied[i]'s id was new to the file, so it has no old
+// line to clear (freshrow.go).
+func refreshMetaQuarantine(ctx context.Context, tx *sql.Tx, source store.Source, applied []store.Row, fresh []bool) error {
+	for i, sr := range applied {
+		if !fresh[i] {
+			if _, err := txExec(ctx, tx, metaQuarDelete, string(source), sr.Table.String(), sr.ID.String()); err != nil {
+				return dbErr("clear meta quarantine", err)
+			}
 		}
 		if sr.Deleted {
 			continue

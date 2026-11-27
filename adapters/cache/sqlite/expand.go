@@ -3,7 +3,9 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"slices"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -45,13 +47,9 @@ func (c *Cache) ReexpandIDs(ctx context.Context, refIDs []string) (int, error) {
 		if st, err = c.current(ctx, tx); err != nil { // another handle may have changed the tables (devco:D-667)
 			return err
 		}
-		var targets []refTarget
-		for _, refID := range refIDs {
-			got, err := referrers(ctx, tx, refID)
-			if err != nil {
-				return err
-			}
-			targets = append(targets, got...)
+		targets, err := referrersOfAll(ctx, tx, refIDs)
+		if err != nil {
+			return err
 		}
 		for _, t := range targets {
 			p, ok := st.plans[t.table]
@@ -70,7 +68,7 @@ func (c *Cache) ReexpandIDs(ctx context.Context, refIDs []string) (int, error) {
 			if err != nil {
 				return dbErr("read referencing row", err)
 			}
-			if err := c.expandField(ctx, tx, t.table, t.id, t.field, text.String); err != nil {
+			if err := c.expandField(ctx, tx, t.table, t.id, t.field, text.String, false); err != nil {
 				return err
 			}
 			n++
@@ -91,12 +89,46 @@ type refTarget struct {
 	field string
 }
 
-// referrers lists the fields referencing refID. Table and field names come
-// back from the database, so callers validate them against the current
-// plans before using them in SQL.
-func referrers(ctx context.Context, tx *sql.Tx, refID string) ([]refTarget, error) {
-	rs, err := txQuery(ctx, tx,
-		`SELECT DISTINCT entity_table, entity_id, field FROM "`+tblRefs+`" WHERE ref_id = ? ORDER BY 1, 2, 3`, refID)
+// referrersBatch is how many ids one referrersOfAll query asks for.
+const referrersBatch = 500
+
+// qReferrersOf lists the fields referencing any id of a JSON array of ids
+// (ix_row_refs_ref through the IN list).
+const qReferrersOf = `SELECT DISTINCT entity_table, entity_id, field FROM "` + tblRefs +
+	`" WHERE ref_id IN (SELECT value FROM json_each(?)) ORDER BY 1, 2, 3`
+
+// referrersOfAll lists the fields referencing any of refIDs, each field
+// once, referrersBatch ids per query. Why (bug hunt H-282, devco:D-1020):
+// a refresh re-expands for every row it applied, and one query per id
+// (parsed again each time) was ~98 s of the first cache build of a
+// 1.26M-row store.
+func referrersOfAll(ctx context.Context, tx *sql.Tx, refIDs []string) ([]refTarget, error) {
+	var out []refTarget
+	seen := map[refTarget]bool{}
+	for chunk := range slices.Chunk(refIDs, referrersBatch) {
+		arr, err := json.Marshal(chunk)
+		if err != nil {
+			return nil, errs.Wrap(errs.Internal, "sqlite cache: encode ids", err)
+		}
+		got, err := scanReferrers(txQuery(ctx, tx, qReferrersOf, string(arr)))
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range got {
+			if !seen[t] {
+				seen[t] = true
+				out = append(out, t)
+			}
+		}
+	}
+	return out, nil
+}
+
+// scanReferrers reads the (entity_table, entity_id, field) rows of a
+// referrers query and closes them. Table and field names come back from
+// the database, so callers validate them against the current plans
+// before using them in SQL.
+func scanReferrers(rs *sql.Rows, err error) ([]refTarget, error) {
 	if err != nil {
 		return nil, dbErr("find referencing rows", err)
 	}
@@ -286,7 +318,7 @@ func (c *Cache) reexpandWhere(ctx context.Context, tx *sql.Tx, p plan, f, query,
 		return 0, dbErr("find referencing text", err)
 	}
 	for _, h := range hits {
-		if err := c.expandField(ctx, tx, p.def.Name, h.id, f, h.text); err != nil {
+		if err := c.expandField(ctx, tx, p.def.Name, h.id, f, h.text, false); err != nil {
 			return 0, err
 		}
 	}

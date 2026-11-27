@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -22,7 +23,20 @@ type txStmts struct {
 	mu sync.Mutex
 	tx *sql.Tx
 	by map[string]*sql.Stmt
+	// touched holds table+"\x00"+id of every row the transaction wrote
+	// through the full replace path (upsertTyped and friends with fresh
+	// false): such a row is no longer fresh (freshrow.go).
+	touched map[string]struct{}
+	// fts queues the FTS rows of fresh rows by FTS table, ftsAt each
+	// queued row by table, source and id (freshrow.go).
+	fts   map[string]*ftsQueue
+	ftsAt map[string]*ftsQueued
 }
+
+// deletesRun counts the DELETE statements txExec ran and queriesRun the
+// queries txQuery ran, so a test can tell that a first build clears
+// nothing and a re-expansion asks in batches (freshrow.go, H-282).
+var deletesRun, queriesRun atomic.Int64
 
 // prepares counts the statements stmt prepared, so a test can tell that a
 // refresh prepares each statement once, not once per row (migfix:n2).
@@ -71,6 +85,9 @@ func errArgs(n int) error {
 // txExec runs q in tx with args: prepared once per transaction inTx opened
 // (stmt), else a plain tx call.
 func txExec(ctx context.Context, tx *sql.Tx, q string, a ...driver.Value) (sql.Result, error) {
+	if strings.HasPrefix(q, "DELETE") {
+		deletesRun.Add(1)
+	}
 	st := stmt(ctx, tx, q)
 	switch len(a) {
 	case 0:
@@ -115,6 +132,7 @@ func txExec(ctx context.Context, tx *sql.Tx, q string, a ...driver.Value) (sql.R
 // txQuery stays unprepared: the rows of a shared statement would stay
 // open while a loop over them ran the same query again.
 func txQuery(ctx context.Context, tx *sql.Tx, q string, a ...driver.Value) (*sql.Rows, error) {
+	queriesRun.Add(1)
 	switch len(a) {
 	case 0:
 		return tx.QueryContext(ctx, q)

@@ -381,7 +381,7 @@ func (c *Cache) reindexMetaKey(ctx context.Context, tx *sql.Tx, st state, keyID 
 		if h.sr.Table == schema.TableMetaKeys {
 			continue // never recurse through a key row
 		}
-		if err := c.project(ctx, tx, st, h.source, h.sr); err != nil {
+		if err := c.project(ctx, tx, st, h.source, h.sr, false); err != nil {
 			return err
 		}
 	}
