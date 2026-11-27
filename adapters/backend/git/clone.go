@@ -612,7 +612,20 @@ func (b *Backend) fetch(ctx context.Context, dir string) error {
 	if b.openFetchFresh(ctx) {
 		return nil // the open's own fetch just brought every head (openFetch)
 	}
-	return b.runFetch(ctx, dir, "fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", "--", RemoteName, headsRefspec, layerRefspec, layerTrashRefspec)
+	return b.runFetch(ctx, dir, storeFetchArgs()...)
+}
+
+// storeFetchArgs is fetch's command line, shared with the early fetch of a
+// read (StartPrefetch), so both bring the same refs.
+func storeFetchArgs() []string {
+	return []string{"fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", "--", RemoteName, headsRefspec, layerRefspec, layerTrashRefspec}
+}
+
+// fetchSucceeded is what fetch does after git succeeded, also for a fetch the run made earlier
+// (prefetched): the stamp and the remote tip runFetch writes after git.
+func (b *Backend) fetchSucceeded(ctx context.Context, dir string) {
+	b.stampFetch(ctx, dir)   // RES 3.6: the remote answered (fresh.go)
+	b.noteRemoteTip(ctx, "") // remotereset.go: what the remote held, kept past a later prune
 }
 
 // runFetch runs one git fetch (args are the whole command line) and maps
@@ -630,8 +643,7 @@ func (b *Backend) runFetch(ctx context.Context, dir string, args ...string) erro
 	}
 	_, err := b.git.run(ctx, call{dir: dir, args: args})
 	if err == nil {
-		b.stampFetch(ctx, dir)   // RES 3.6: the remote answered (fresh.go)
-		b.noteRemoteTip(ctx, "") // remotereset.go: what the remote held, kept past a later prune
+		b.fetchSucceeded(ctx, dir)
 		return nil
 	}
 	if _, ran := exitCode(err); !ran {

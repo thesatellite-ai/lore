@@ -134,6 +134,14 @@ type LiveConfig struct {
 	// (quarantined rows, registries past their key cap; FA-META-11);
 	// cmd/lore passes wire.App.MetaStatusLines. nil prints none.
 	MetaStatus func(ctx context.Context) (quarantined, overCap []string)
+	// StoreFetches starts a read's due fetches of the store clones no org
+	// lookup fetches (stores.yaml, the personal store) before the repo's
+	// fetch and the org lookup, so they overlap (devco:D-1029): it returns
+	// ctx carrying them for the stores' syncs and a wait run when the
+	// operation ends. root is the project folder ("" = none). cmd/lore
+	// passes wire.App.StartStoreFetches; nil starts none (each store then
+	// fetches at its first read).
+	StoreFetches func(ctx context.Context, root string, now time.Time) (context.Context, func())
 	// ClientRepo reports whether the repo of WorkDir resolves as a client
 	// repo of an org (J-11: a link of a repo with no .lore/ installs the
 	// leak guard there, clientguard.go; devco:D-754: the git wiring and
@@ -1029,8 +1037,16 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		ctx = withPinHooks(ctx) // D-795: the one explicit ask to pin the hooks to this build
 	}
 	defer r.finish(ctx)
+	root := liveProjectRoot(h.cfg.WorkDir)
+	if r.read && !r.still && h.cfg.StoreFetches != nil {
+		// the stores' fetches overlap the repo's and the org lookup's
+		// (storefetch_early.go, devco:D-1029); none outlives the run
+		var wait func()
+		ctx, wait = h.cfg.StoreFetches(ctx, root, h.clock().Now())
+		defer wait()
+	}
 	wired := false
-	if root := liveProjectRoot(h.cfg.WorkDir); root != "" {
+	if root != "" {
 		top, _ := livePlace(root)
 		if s := r.session(ctx, top); s != nil {
 			if !leavesWorkRepo(spec.Name) { // repoleave.go: a store-only command leaves the repo's git alone

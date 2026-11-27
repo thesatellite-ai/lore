@@ -243,6 +243,10 @@ func run(ctx context.Context, args []string) int {
 		PushHold: func(ctx context.Context) (time.Time, string, bool) { return app.LivePushHold(ctx) },
 		// J-11: a link of a client repo with no .lore/ installs the leak guard there.
 		ClientRepo: clientRepo,
+		// devco:D-1029: a read fetches its stores.yaml and personal store clones at once.
+		StoreFetches: func(ctx context.Context, root string, now time.Time) (context.Context, func()) {
+			return app.StartStoreFetches(ctx, root, now)
+		},
 		// P3-MODEB-2: the resolved org entry's live: block overrides the top level.
 		OrgLive: func(ctx context.Context) *orgconf.Live {
 			if sit, err := org.Situation(ctx); err == nil && sit != nil && sit.Result.Org != nil {

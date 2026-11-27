@@ -93,9 +93,11 @@ func fetchLocked(ctx context.Context, r Router, dir string, now time.Time, branc
 		return err
 	}
 	defer unlock()
+	before := gitbackend.TrackingTips(lctx, dir) // a read's: the store's sync takes this fetch (D-1029)
 	if err := fetch(lctx, r, dir); err != nil {
 		return err
 	}
+	gitbackend.NoteFetched(ctx, dir, before)
 	clearNoAccess(dir) // D-726: the store answers this login again
 	want := recordFetch(lctx, r, dir, now)
 	if len(branch) > 0 && branch[0] != "" {

@@ -78,6 +78,9 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 	if b.unwritable {
 		return store.SyncReport{}, b.refusedWrite() // devco:U-4: it names the folder and the fix
 	}
+	// a read's early fetch of this clone (prefetch.go) holds the clone lock
+	// until it ends: wait for it first, then take the lock
+	early := prefetched(ctx, b.work)
 	lock, err := b.root.Lock(ctx)
 	if err != nil {
 		return store.SyncReport{}, err
@@ -110,10 +113,15 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 	if err != nil {
 		return store.SyncReport{}, err
 	}
+	if early != nil {
+		tracked = early.trackedBefore(trackingRefNS + b.branch) // the early fetch moved it already
+	}
 	reuse := fetchedClone(ctx) == b.work // fetched earlier in this run (WithFetchedClone)
 	for attempt := 0; ; attempt++ {
 		// a reused fetch (attempt 0 only) is this run's earlier upload-pack
-		if attempt > 0 || !reuse {
+		if attempt == 0 && early != nil && !reuse {
+			b.fetchSucceeded(ctx, b.work) // the read's early fetch is this fetch (devco:D-1029)
+		} else if attempt > 0 || !reuse {
 			if ferr := b.fetch(ctx, b.work); ferr != nil {
 				if !isOffline(ferr) {
 					return rep, ferr

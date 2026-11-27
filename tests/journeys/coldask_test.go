@@ -17,6 +17,8 @@ package journeys
 //	day 1  online: an org store holds a note of the code repo, linked to it
 //	day 2  over a slow link, after a pause: the first ask fetches the store
 //	       and the code repo at the same time, once each, and answers
+//	day 3  a teammate pushed to the store: still once each, at once
+//	       (devco:D-1029)
 
 import (
 	"os"
@@ -32,6 +34,45 @@ import (
 // (git-upload-pack is a fetch) here.
 const overlapSSH = "#!/bin/sh\nfor a; do cmd=$a; done\nd=$FAKE_SSH_DIR\n: > \"$d/run.$$\"\nsleep 1\nn=$(ls \"$d\" | grep -c '^run\\.')\necho \"$n $cmd\" >> \"$d/log\"\nrm -f \"$d/run.$$\"\nexec sh -c \"$cmd\"\n"
 
+// slowLink sends every git call of m to the fake GitHub over overlapSSH,
+// logging into sshDir (sshFetches reads it).
+func slowLink(t *testing.T, w *World, m *Machine, sshDir string) {
+	t.Helper()
+	bin := fakeexec.Write(t, filepath.Join(t.TempDir(), "ssh"), overlapSSH, 0o755)
+	m.SetEnv("GIT_SSH_COMMAND", bin)
+	m.SetEnv("GIT_SSH_VARIANT", "simple")
+	m.SetEnv("FAKE_SSH_DIR", sshDir)
+	gc := filepath.Join(m.Home, ".gitconfig")
+	hosts := filepath.Join(w.Root, "hosts", "github.com")
+	for _, args := range [][]string{
+		{"--remove-section", "url." + hosts + "/"},
+		{"--add", "url.ssh://slowhost" + hosts + "/.insteadOf", "https://github.com/"},
+		{"--add", "url.ssh://slowhost" + hosts + "/.insteadOf", "git@github.com:"},
+	} {
+		if r := w.TryGit(m.Home, append([]string{"config", "--file", gc}, args...)...); r.Code != 0 {
+			t.Fatalf("slow link %v: %s", args, r.Stderr)
+		}
+	}
+}
+
+// sshFetches returns the fetches overlapSSH logged in sshDir since the
+// last call, how many of them saw another call in flight, and the log.
+func sshFetches(sshDir string) (fetches, overlapped int, log string) {
+	b, _ := os.ReadFile(filepath.Join(sshDir, "log")) // no file yet: no call
+	_ = os.Remove(filepath.Join(sshDir, "log"))
+	log = string(b)
+	for _, l := range strings.Split(strings.TrimSpace(log), "\n") {
+		if !strings.Contains(l, "git-upload-pack") {
+			continue
+		}
+		fetches++
+		if !strings.HasPrefix(l, "1 ") {
+			overlapped++
+		}
+	}
+	return fetches, overlapped, log
+}
+
 func TestJourneyColdFirstAskFetchesAtOnce(t *testing.T) {
 	t.Parallel()
 	w := NewWorld(t)
@@ -41,22 +82,9 @@ func TestJourneyColdFirstAskFetchesAtOnce(t *testing.T) {
 	tools := jPlainRepo(t, lap, w.Remote("github.com/acme-co/tools"), filepath.Join(lap.Home, "work", "tools"))
 	code := jPlainRepo(t, lap, w.Remote("github.com/acme-co/orbit"), filepath.Join(lap.Home, "work", "orbit"))
 	sshDir := t.TempDir()
-	// calls returns the fetches logged since the last call, and how many
-	// of them saw another call in flight.
 	var last string
 	calls := func() (fetches, overlapped int) {
-		b, _ := os.ReadFile(filepath.Join(sshDir, "log")) // no file yet: no call
-		_ = os.Remove(filepath.Join(sshDir, "log"))
-		last = string(b)
-		for _, l := range strings.Split(strings.TrimSpace(last), "\n") {
-			if !strings.Contains(l, "git-upload-pack") {
-				continue
-			}
-			fetches++
-			if !strings.HasPrefix(l, "1 ") {
-				overlapped++
-			}
-		}
+		fetches, overlapped, last = sshFetches(sshDir)
 		return fetches, overlapped
 	}
 
@@ -70,22 +98,7 @@ func TestJourneyColdFirstAskFetchesAtOnce(t *testing.T) {
 		code.CommitAll("add lore")
 		code.Git("push", "-q", "origin", "HEAD:main")
 		lap.LoreIn(code, "sync").OK(t)
-		// from now on every git call to the fake GitHub goes over the slow ssh
-		bin := fakeexec.Write(t, filepath.Join(t.TempDir(), "ssh"), overlapSSH, 0o755)
-		lap.SetEnv("GIT_SSH_COMMAND", bin)
-		lap.SetEnv("GIT_SSH_VARIANT", "simple")
-		lap.SetEnv("FAKE_SSH_DIR", sshDir)
-		gc := filepath.Join(lap.Home, ".gitconfig")
-		hosts := filepath.Join(w.Root, "hosts", "github.com")
-		for _, args := range [][]string{
-			{"--remove-section", "url." + hosts + "/"},
-			{"--add", "url.ssh://slowhost" + hosts + "/.insteadOf", "https://github.com/"},
-			{"--add", "url.ssh://slowhost" + hosts + "/.insteadOf", "git@github.com:"},
-		} {
-			if r := w.TryGit(lap.Home, append([]string{"config", "--file", gc}, args...)...); r.Code != 0 {
-				t.Fatalf("slow link %v: %s", args, r.Stderr)
-			}
-		}
+		slowLink(t, w, lap, sshDir) // from now on every git call to the fake GitHub goes over the slow ssh
 		lap.LoreIn(code, "sync").OK(t)
 		if fe, _ := calls(); fe == 0 {
 			t.Fatal("the fake ssh logged no fetch: the counts below would prove nothing")
@@ -107,6 +120,24 @@ func TestJourneyColdFirstAskFetchesAtOnce(t *testing.T) {
 		lap.LoreIn(code, "ask", "--query", "when does the orbit release train leave").OK(t).Says(t, "every second tuesday")
 		if fe, _ := calls(); fe != 0 {
 			t.Errorf("an ask right after made %d fetch(es), want none:\n%s", fe, last)
+		}
+	})
+
+	// devco:D-1029: a teammate pushed to the team store; the org's link
+	// index fetches it and the store's sync takes that fetch (it fetched
+	// the store a second time, after the others)
+	w.Step("day3/a-teammates-push-is-fetched-once", func() {
+		w.AdvanceDays(1)
+		tip := pushToStore(t, w, notes.Dir, "a teammate's commit")
+		calls()
+		r := lap.LoreIn(code, "ask", "--query", "when does the orbit release train leave").OK(t).Says(t, "every second tuesday")
+		fe, over := calls()
+		if fe != 2 || over == 0 {
+			t.Errorf("the first ask after a teammate's push made %d fetch(es) (%d in parallel), want 2 at once (the team store and the code repo):\n%s\n%s", fe, over, last, r.Out())
+		}
+		clone := filepath.Join(lap.Home, ".lore", "stores", "acme-co", "lore-notes")
+		if got := w.Git(clone, "rev-list", "HEAD"); !strings.Contains(got, tip) {
+			t.Errorf("the teammate's commit %s was not merged into the team store's clone", tip)
 		}
 	})
 }

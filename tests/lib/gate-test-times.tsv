@@ -43,7 +43,8 @@ tests/journeys	TestJourneyClientRepoPrePushAddedLines	16.5	parallel
 tests/journeys	TestJourneyClientRepoPrePushGuard	33.7	parallel
 tests/journeys	TestJourneyClientRepoStaysQuiet	6.2	parallel
 tests/journeys	TestJourneyCLIInputChecks	3.6	parallel
-tests/journeys	TestJourneyColdFirstAskFetchesAtOnce	20.4	parallel
+tests/journeys	TestJourneyColdFirstAskFetchesAtOnce	28.3	parallel
+tests/journeys	TestJourneyColdFirstAskFetchesAStoreOnlyStoreAtOnce	9.5	parallel
 tests/journeys	TestJourneyCommitAfterFix	12.7	parallel
 tests/journeys	TestJourneyContractorScope	92.5	serial
 tests/journeys	TestJourneyCrossRepoRow	8.6	parallel
