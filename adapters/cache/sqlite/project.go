@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/logic/resquar"
 
@@ -225,15 +227,8 @@ func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 	if !fresh {
 		markTouched(tx, p.def.Name.String(), source, r.ID.String())
 	}
-	cells := make([]json.RawMessage, 0, len(p.columns))
-	for _, col := range p.columns {
-		cells = append(cells, cellFor(col, source, r, vals))
-	}
-	arr, err := json.Marshal(cells)
-	if err != nil {
-		return errs.Wrap(errs.Internal, "sqlite cache: encode row", err)
-	}
-	if _, err = txExec(ctx, tx, p.sql.insert, string(arr)); err != nil {
+	args := cellArgs(make([]driver.Value, 0, 2*len(p.columns)), p.columns, source, r, vals)
+	if _, err := txExecN(ctx, tx, p.sql.insert, args); err != nil {
 		return dbErr("upsert "+p.def.Name.String(), err)
 	}
 	ftsErr := error(nil)
@@ -301,76 +296,121 @@ func extractList(n int) string {
 	return strings.Join(parts, ", ")
 }
 
-// jsonNull is the JSON null cell.
-var jsonNull = json.RawMessage("null")
+// bindList returns the VALUES list of a typed insert of n columns. Column
+// i takes two anonymous parameters: its value bound as is (TEXT, INTEGER
+// or NULL), then a number's JSON literal, read with json_extract so a
+// number is stored exactly as SQLite reads a JSON number (INTEGER, or REAL
+// by SQLite's own conversion); a column binds one of the two, the other is
+// NULL (json_extract of NULL is NULL). Anonymous, not ?NNN: the driver
+// matches a numbered parameter to its argument by name, a string per
+// parameter and argument pair. Why (bug hunt H-285, devco:D-1023): the
+// row travelled as one JSON array read back with json_extract once per
+// column, a third of the typed upsert of a cache built from nothing; the
+// values stored are the same (TestBoundCellsStoreTheSame).
+func bindList(n int) string {
+	return strings.TrimSuffix(strings.Repeat("coalesce(?, json_extract(?, '$')), ", n), ", ")
+}
 
-// cellFor is the JSON cell of one column.
-func cellFor(col column, source string, r row.Row, vals map[string]value.Value) json.RawMessage {
+// cellArgs appends the two parameters (bindList) of each of cols for r.
+func cellArgs(args []driver.Value, cols []column, source string, r row.Row, vals map[string]value.Value) []driver.Value {
+	for _, col := range cols {
+		v, num := cellFor(col, source, r, vals)
+		args = append(args, v, num)
+	}
+	return args
+}
+
+// cellFor is the pair of parameters of one column (bindList): its value,
+// or a number's literal.
+func cellFor(col column, source string, r row.Row, vals map[string]value.Value) (v, num driver.Value) {
 	switch col.name {
 	case colID:
-		return canon.String(r.ID.String())
+		return textArg(r.ID.String()), nil
 	case colSource:
-		return canon.String(source)
+		return textArg(source), nil
 	case colHLC:
-		return canon.String(r.HLC.String())
+		return textArg(r.HLC.String()), nil
 	case row.KeyCreatedAt:
-		return timeCell(r.CreatedAt)
+		return timeArg(r.CreatedAt), nil
 	case row.KeyUpdatedAt:
-		return timeCell(r.UpdatedAt)
+		return timeArg(r.UpdatedAt), nil
 	case row.KeyCreatedBy:
-		return idCell(r.CreatedBy.Any())
+		return idArg(r.CreatedBy.Any()), nil
 	case row.KeyUpdatedBy:
-		return idCell(r.UpdatedBy.Any())
+		return idArg(r.UpdatedBy.Any()), nil
 	}
-	return valueCell(vals[col.name])
+	return valueArg(vals[col.name])
 }
 
-// timeCell renders an audit time (zero = NULL).
-func timeCell(t time.Time) json.RawMessage {
+// timeArg is an audit time (zero = NULL).
+func timeArg(t time.Time) driver.Value {
 	if t.IsZero() {
-		return jsonNull
+		return nil
 	}
-	return canon.String(value.DateTimeFrom(t).String())
+	return textArg(value.DateTimeFrom(t).String())
 }
 
-// idCell renders an audit actor (zero = NULL).
-func idCell(id ids.AnyID) json.RawMessage {
+// idArg is an audit actor (zero = NULL).
+func idArg(id ids.AnyID) driver.Value {
 	if id.IsZero() {
-		return jsonNull
+		return nil
 	}
-	return canon.String(id.String())
+	return textArg(id.String())
 }
 
-// valueCell renders a field value per the affinity table of the package
-// doc. It switches on the value's own kind, not the column's: a value of
-// another kind than declared (an old row) is still stored, never dropped.
-func valueCell(v value.Value) json.RawMessage {
+// valueArg is a field value per the affinity table of the package doc:
+// its parameters (cellFor). It switches on the value's own kind, not the
+// column's: a value of another kind than declared (an old row) is still
+// stored, never dropped.
+func valueArg(v value.Value) (val, num driver.Value) {
 	if v == nil {
-		return jsonNull
+		return nil, nil
 	}
 	switch v.Kind() {
 	case value.KindNull:
-		return jsonNull
+		return nil, nil
 	case value.KindBool:
 		if b, ok := v.(value.Bool); ok && b.Bool() {
-			return json.RawMessage("1")
+			return int64(1), nil
 		}
-		return json.RawMessage("0")
+		return int64(0), nil
 	case value.KindNumber:
-		return json.RawMessage(v.String())
+		return nil, v.String()
 	case value.KindJSON, value.KindList:
 		raw, err := v.MarshalJSON()
 		if err != nil {
-			return jsonNull
+			return nil, nil
 		}
-		return canon.String(string(raw))
-	case value.KindText, value.KindDate, value.KindDateTime, value.KindDuration,
-		value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL, value.KindEmail, value.KindRef,
-		value.KindSecretRef: // the entry name as TEXT (RESOURCES 4); never a secret value
-		return canon.String(v.String())
+		return textArg(string(raw)), nil
 	}
-	return canon.String(v.String())
+	// text, date, datetime, duration, ip, cidr, dns, url, email, ref and
+	// secret_ref (the entry name as TEXT, RESOURCES 4; never a secret value)
+	return textArg(v.String()), nil
 }
+
+// textArg is s as a TEXT parameter, spelled as the JSON cell it replaces
+// read back: each byte that is not valid UTF-8 becomes U+FFFD, as
+// encoding/json writes it.
+func textArg(s string) driver.Value {
+	if utf8.ValidString(s) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	for i := 0; i < len(s); {
+		r, n := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && n == 1 {
+			b.WriteRune(utf8.RuneError)
+		} else {
+			b.WriteString(s[i : i+n])
+		}
+		i += n
+	}
+	return b.String()
+}
+
+// jsonNull is the JSON null cell (the FTS rows' arrays).
+var jsonNull = json.RawMessage("null")
 
 // upsertFTS replaces id's entry in p's FTS table; fresh: id has none yet
 // (upsertTyped).

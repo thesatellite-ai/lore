@@ -88,11 +88,10 @@ type plan struct {
 // built once in planFor from validated, quoted identifiers, so no SQL text
 // is ever assembled at a call site or from row data.
 type tableSQL struct {
-	// insert replaces one typed row; ftsInsert adds one FTS row. Both take
-	// a single bound parameter, a JSON array with one cell per column
-	// (the columns in order; for FTS id, _source, then the FTS fields),
-	// read back with json_extract: dynamic arity without untyped argument
-	// slices.
+	// insert replaces one typed row: two parameters per column, its value
+	// or a number's literal (bindList). ftsInsert adds one FTS row: a
+	// single bound parameter, a JSON array with one cell per FTS column
+	// (id, _source, then the FTS fields), read back with json_extract.
 	insert    string
 	ftsInsert string
 	// ftsInsertMany adds the FTS rows of a JSON array of ftsInsert's
@@ -227,7 +226,7 @@ func planFor(def schema.TableDef, view string) (plan, error) {
 			sets = append(sets, quoted[i]+" = excluded."+quoted[i])
 		}
 	}
-	p.sql.insert = "INSERT INTO " + tq + " (" + strings.Join(quoted, ", ") + ") VALUES (" + extractList(len(quoted)) + `) ON CONFLICT ("` + colSource + `", "` + colID + `") DO UPDATE SET ` + strings.Join(sets, ", ")
+	p.sql.insert = "INSERT INTO " + tq + " (" + strings.Join(quoted, ", ") + ") VALUES (" + bindList(len(quoted)) + `) ON CONFLICT ("` + colSource + `", "` + colID + `") DO UPDATE SET ` + strings.Join(sets, ", ")
 	p.sql.deleteID = "DELETE FROM " + tq + ` WHERE "` + colSource + `" = ? AND "` + colID + `" = ?`
 	p.sql.clearSource = "DELETE FROM " + tq + ` WHERE "` + colSource + `" = ?`
 	bySource := ` WHERE entity_table = ? AND entity_id IN (SELECT "` + colID + `" FROM ` + tq + ` WHERE "` + colSource + `" = ?)`

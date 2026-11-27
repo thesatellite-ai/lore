@@ -195,3 +195,19 @@ func txQueryRow(ctx context.Context, tx *sql.Tx, q string, a ...driver.Value) *s
 	}
 	return tx.QueryRowContext(ctx, q)
 }
+
+// txExecN is txExec for a statement whose argument count is known only at
+// run time (a typed insert: two per column, bindList), prepared the same
+// way. Why the []any (TestNoAny allowlist): ExecContext takes ...any and
+// the arity is the table's column count; every element is a driver.Value
+// built by cellArgs, copied over as is.
+func txExecN(ctx context.Context, tx *sql.Tx, q string, a []driver.Value) (sql.Result, error) {
+	args := make([]any, len(a))
+	for i, v := range a {
+		args[i] = v
+	}
+	if st := stmt(ctx, tx, q); st != nil {
+		return st.ExecContext(ctx, args...)
+	}
+	return tx.ExecContext(ctx, q, args...)
+}

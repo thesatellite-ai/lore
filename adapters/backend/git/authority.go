@@ -94,6 +94,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
@@ -217,33 +218,149 @@ const contentSumLen = 16
 // value compacted, the format version left out. Two files with the same
 // row content (a revert, a partial push, a conflict settled with the
 // other side's version, re-encoded by another lore) have the same key.
+//
+// It reads the file in place: it validates it, splits its top-level
+// members and hashes them sorted, with no map and no copy of a value
+// (the digest of decoding the file into a map of its members, unchanged:
+// TestContentKeyMatchesMapDecode, FuzzContentKey). Why (bug hunt H-285,
+// devco:D-1023): the replay keys every version of every row file, and
+// the map decode was 36 s CPU and ~4 GB allocated on a 1.26M-row store.
+// Not JSON, or JSON that is not an object (null: no members), has the
+// zero sum, as before.
 func contentKey(raw []byte) contentSum {
-	var obj map[string]json.RawMessage
-	if json.Unmarshal(bytes.TrimSpace(raw), &obj) != nil {
+	raw = bytes.TrimSpace(raw)
+	if !json.Valid(raw) {
 		return contentSum{}
 	}
-	keys := make([]string, 0, len(obj))
-	for k := range obj {
-		if k != contentFormatKey {
-			keys = append(keys, k)
-		}
+	var ms []member
+	switch raw[0] {
+	case 'n': // null decodes to no members
+	case '{':
+		ms = members(raw)
+	default:
+		return contentSum{}
 	}
-	sort.Strings(keys)
+	// sorted by key; of a key given twice the last one counts
+	slices.SortStableFunc(ms, func(a, b member) int { return strings.Compare(a.key, b.key) })
 	h := sha256.New()
-	var buf bytes.Buffer
-	for _, k := range keys {
-		buf.Reset()
-		if json.Compact(&buf, obj[k]) != nil {
-			buf.Write(obj[k])
+	var buf []byte
+	for i, m := range ms {
+		if m.key == contentFormatKey || (i+1 < len(ms) && ms[i+1].key == m.key) {
+			continue
 		}
-		h.Write([]byte(strconv.Quote(k)))
-		h.Write([]byte{0})
-		h.Write(buf.Bytes())
-		h.Write([]byte{0})
+		buf = strconv.AppendQuote(buf[:0], m.key)
+		buf = append(buf, 0)
+		buf = appendCompact(buf, m.val)
+		buf = append(buf, 0)
+		h.Write(buf)
 	}
 	var sum contentSum
 	copy(sum[:], h.Sum(nil))
 	return sum
+}
+
+// member is one top-level member of a row file: its key decoded, its
+// value as written.
+type member struct {
+	key string
+	val []byte
+}
+
+// members splits a valid JSON object into its members, in file order.
+func members(obj []byte) []member {
+	var out []member
+	i := skipSpace(obj, 1)
+	for i < len(obj) && obj[i] == '"' {
+		kEnd := skipString(obj, i)
+		key := decodeKey(obj[i:kEnd])
+		i = skipSpace(obj, kEnd)
+		i = skipSpace(obj, i+1) // the colon
+		vEnd := skipValue(obj, i)
+		out = append(out, member{key: key, val: obj[i:vEnd]})
+		i = skipSpace(obj, vEnd)
+		if i < len(obj) && obj[i] == ',' {
+			i = skipSpace(obj, i+1)
+		}
+	}
+	return out
+}
+
+// decodeKey decodes a JSON string token as encoding/json does: as written
+// when it has no escape and is valid UTF-8, else through the decoder
+// (escapes, and U+FFFD for each byte that is not UTF-8).
+func decodeKey(tok []byte) string {
+	in := tok[1 : len(tok)-1]
+	if bytes.IndexByte(in, '\\') < 0 && utf8.Valid(in) {
+		return string(in)
+	}
+	var k string
+	if json.Unmarshal(tok, &k) != nil {
+		return string(in) // unreachable: tok is a valid JSON string
+	}
+	return k
+}
+
+// skipSpace returns the index of the first byte at or after i that is not
+// JSON whitespace.
+func skipSpace(b []byte, i int) int {
+	for i < len(b) && (b[i] == ' ' || b[i] == '\t' || b[i] == '\n' || b[i] == '\r') {
+		i++
+	}
+	return i
+}
+
+// skipString returns the index just past the JSON string starting at i.
+func skipString(b []byte, i int) int {
+	for i++; i < len(b); i++ {
+		switch b[i] {
+		case '\\':
+			i++
+		case '"':
+			return i + 1
+		}
+	}
+	return len(b)
+}
+
+// skipValue returns the index just past the valid JSON value starting at
+// i.
+func skipValue(b []byte, i int) int {
+	switch b[i] {
+	case '"':
+		return skipString(b, i)
+	case '{', '[':
+		depth := 0
+		for ; i < len(b); i++ {
+			switch b[i] {
+			case '"':
+				i = skipString(b, i) - 1
+			case '{', '[':
+				depth++
+			case '}', ']':
+				if depth--; depth == 0 {
+					return i + 1
+				}
+			}
+		}
+		return len(b)
+	}
+	for i < len(b) && !strings.ContainsRune(",}] \t\n\r", rune(b[i])) {
+		i++
+	}
+	return i
+}
+
+// appendCompact appends v (valid JSON) with its insignificant whitespace
+// left out, as json.Compact writes it.
+func appendCompact(dst, v []byte) []byte {
+	if !bytes.ContainsAny(v, " \t\n\r") {
+		return append(dst, v...)
+	}
+	buf := bytes.NewBuffer(dst)
+	if json.Compact(buf, v) != nil {
+		buf.Write(v) // unreachable: v is valid JSON
+	}
+	return buf.Bytes()
 }
 
 // deleted reports a tombstone.

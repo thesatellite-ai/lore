@@ -20,6 +20,10 @@ var anyAllowlist = map[string]bool{
 	// (*sql.Rows).Scan takes ...any and a query's column count is known only
 	// at run time; every cell is narrowed to value.Value in the same loop.
 	"adapters/cache/sqlite/scan.go#scanAll": true,
+	// (*sql.Tx).ExecContext takes ...any and a typed insert binds two
+	// parameters per column of a table known only at run time (H-285);
+	// every element is a driver.Value copied over as is.
+	"adapters/cache/sqlite/stmtcache.go#txExecN": true,
 	// The scenarios' sqlite3 stand-in prints any query's rows: the same
 	// (*sql.Rows).Scan ...any, every cell narrowed to sql.NullString.
 	"tests/tools/sqlite3/main.go#run": true,

@@ -486,8 +486,12 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 		fresh := make([]bool, 0, len(rows)) // per applied row: its id is new to the file (freshrow.go)
 		kindsChanged := false
 		var taskIDs []string // the applied tasks rows, for the closure (P3-PERF-1)
+		seen, err := newRawSeen(ctx, tx, source)
+		if err != nil {
+			return err
+		}
 		for _, r := range rows {
-			newer, isNew, err := keepRaw(ctx, tx, source, r)
+			newer, isNew, err := keepRaw(ctx, tx, source, r, seen)
 			if err != nil {
 				return err
 			}
@@ -559,8 +563,9 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 
 // keepRaw stores r in `_rows` unless the held copy is newer; it reports
 // whether r was stored and whether no copy of r's id (any source, any
-// table) was held before (fresh, freshrow.go).
-func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) (stored, fresh bool, err error) {
+// table) was held before (fresh, freshrow.go). seen (may be nil) skips
+// the lookups that cannot find anything (rawSeen).
+func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row, seen *rawSeen) (stored, fresh bool, err error) {
 	if !r.Table.Valid() || r.ID.IsZero() || r.HLC.IsZero() || len(r.Doc) == 0 {
 		return false, false, errs.New(errs.InvalidInput, "sqlite cache: row without table, id, hlc or document")
 	}
@@ -569,13 +574,22 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 		heldDel int
 		heldDoc []byte
 	)
-	err = txQueryRow(ctx, tx, `SELECT hlc, deleted, doc FROM "`+tblRows+`" WHERE source = ? AND tbl = ? AND id = ?`,
-		string(source), r.Table.String(), r.ID.String()).Scan(&held, &heldDel, &heldDoc)
+	id := r.ID.String()
+	err = sql.ErrNoRows
+	if !seen.none(id) {
+		heldLookups.Add(1)
+		err = txQueryRow(ctx, tx, `SELECT hlc, deleted, doc FROM "`+tblRows+`" WHERE source = ? AND tbl = ? AND id = ?`,
+			string(source), r.Table.String(), id).Scan(&held, &heldDel, &heldDoc)
+	}
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		other, herr := idHeld(ctx, tx, r.ID.String())
-		if herr != nil {
-			return false, false, herr
+		other := false
+		if !seen.noneElsewhere(id) {
+			heldLookups.Add(1)
+			var herr error
+			if other, herr = idHeld(ctx, tx, id); herr != nil {
+				return false, false, herr
+			}
 		}
 		fresh = !other
 	case err != nil:
@@ -609,9 +623,10 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 	}
 	if _, err := txExec(ctx, tx,
 		`INSERT OR REPLACE INTO "`+tblRows+`" (source, tbl, id, hlc, deleted, doc) VALUES (?, ?, ?, ?, ?, ?)`,
-		string(source), r.Table.String(), r.ID.String(), r.HLC.String(), deleted, r.Doc); err != nil {
+		string(source), r.Table.String(), id, r.HLC.String(), deleted, r.Doc); err != nil {
 		return false, false, dbErr("store row", err)
 	}
+	seen.add(id)
 	return true, fresh, nil
 }
 
