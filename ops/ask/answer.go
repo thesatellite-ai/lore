@@ -103,6 +103,12 @@ type textRow struct {
 	// the same row in one call (devco D-984)
 	best    *bestSec
 	bestFor string
+	// pass, passaged, bestPass and passFor are the same for the
+	// passages of a long row with no sections (passagesOf, bestPassageOf)
+	pass     []rowSection
+	passaged bool
+	bestPass *bestSec
+	passFor  string
 }
 
 // tokens is the word set of r's title and body (tokensOf), built on the
@@ -146,6 +152,7 @@ type rowSplit struct {
 	label   splitSlot[[]string]
 	idents  splitSlot[[][]string]
 	secs    splitSlot[[]rowSection]
+	pass    splitSlot[[]rowSection]
 	// bases is the querywords.Base of every word of the row (coverOf)
 	bases splitSlot[map[string]bool]
 }

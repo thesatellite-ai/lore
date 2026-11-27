@@ -92,4 +92,51 @@ func TestStoryOAskSetNine(t *testing.T) {
 			t.Errorf("[O D-1028] ask %q: a note under 2,500 characters was cut:\n%s", q, r)
 		}
 	})
+
+	// devco D-1030 (bug hunt H-292): long notes written as paragraphs
+	// with no headings hold more of the question's words, one in every
+	// other paragraph; the short memory holds fewer, in one place, and
+	// answers. A note ranks by its best passage, so the memory comes first.
+	const purge = "Stale widget exports are removed by scripts/purge-exports.sh: it empties the archive bucket in eu-west-1 unless REGION is set."
+	s.Step("D-1030/short-row-above-notes-holding-the-words-apart", func() {
+		words := []string{"tool", "purges", "stale", "widget", "exports", "archive", "bucket", "target", "default", "change"}
+		fill := []string{
+			"The parcel desk prints zebra labels at the dock and carriers collect parcels twice daily.",
+			"Invoices go out on the first weekday; the ledger closes when finance signs the monthly sheet.",
+			"Theme colours come from the brand palette; the admin screens use the compact density.",
+			"Search synonyms are curated by merchandising and pushed to the index each night.",
+		}
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf(`{"op":"memory add","input":{"body":%q}}`, purge) + "\n")
+		for i, lead := range []string{"Ledger desk as built", "Dock board as built", "Media worker as built"} {
+			var note strings.Builder
+			note.WriteString(lead + ".\n\n")
+			for n := 0; note.Len() < 7000 || n < 2*len(words); n++ {
+				if n%2 == 0 && n/2 < len(words) {
+					fmt.Fprintf(&note, "Here the %s comes up once. ", words[n/2])
+				}
+				fmt.Fprintf(&note, "%s %s %s\n\n", fill[n%len(fill)], fill[(n+1)%len(fill)], fill[(n+i+2)%len(fill)])
+			}
+			raw, err := json.Marshal(map[string]any{"op": "architecturenote add", "input": map[string]any{"title": lead, "body": note.String()}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			b.Write(raw)
+			b.WriteByte('\n')
+		}
+		batch := filepath.Join(t.TempDir(), "notes.jsonl")
+		if err := os.WriteFile(batch, []byte(b.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		ada.Lore(pc.Dir, "batch", "apply", "--file", batch, "--yes").OK(t)
+		q := "Which tool purges stale widget exports from the archive bucket, which region does it target by default, and how do I change the region?"
+		r := ada.Lore(pc.Dir, "ask", "--query", q).OK(t)
+		out := r.Out()
+		at := strings.Index(out, purge)
+		for _, lead := range []string{"Ledger desk as built", "Dock board as built", "Media worker as built"} {
+			if n := strings.Index(out, lead); at < 0 || (n >= 0 && n < at) {
+				t.Errorf("[O D-1030] ask %q: the memory stating the answer is not above the note %q holding the words apart:\n%s", q, lead, r)
+			}
+		}
+	})
 }

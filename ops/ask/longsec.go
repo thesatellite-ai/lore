@@ -1,6 +1,9 @@
 package ask
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // Long rows rank by their best section (devco D-969, bug hunt H-228, Sync
 // benchmark set 5 asks 2 and 4). A row longer than longRow characters
@@ -122,7 +125,13 @@ func bestSectionOf(q question, ms []match, r *textRow) *bestSec {
 // the asked command (files resync, vault-rekey) that lore search
 // ranks first. A section answers by what it holds itself.
 func bestSection(q question, ms []match, r *textRow) *bestSec {
-	secs := r.sectionsOf()
+	return pickSection(q, ms, r.sectionsOf())
+}
+
+// pickSection is the one of secs holding the most of q's words and topics
+// in its heading path and text, a heading word counting twice, the first
+// on a tie; nil for no sections.
+func pickSection(q question, ms []match, secs []rowSection) *bestSec {
 	if len(secs) == 0 {
 		return nil
 	}
@@ -158,3 +167,116 @@ func bestSection(q question, ms []match, r *textRow) *bestSec {
 // first (bestSections): the one that answers the question best, so an
 // agent reading a long note starts at the part that holds the answer.
 const matchingMark = " (matching section)"
+
+// Long rows with no sections rank by their best passage (devco
+// D-1030, bug hunt H-292, set 9 ask a). An as-built note of 5-13 KB
+// written as paragraphs, with no markdown headings, held a question's
+// common words somewhere in its whole text (8-10 of 18), so six such
+// notes ranked above the short memory holding 7 of them in one place,
+// the one that answered. The best-section rule (D-972) needs two
+// headings; such a note now ranks by its best passage instead: its
+// paragraphs joined up to passageSize characters, as many as a short row
+// holds. Only in search's order (searchOrder): what a cut row prints is
+// chosen as before. Why these sizes (realeval TUNE, sets 2-6): passages
+// for every row over longRow, or of 1,000-1,500 characters, raised the
+// first row's hits less (122-124 of 198) than passages of shortRow
+// characters for rows over passageMin (127, base 123).
+
+// passageMin is the shortest row with no sections ranked by its best
+// passage: twice what ask prints whole (shortRow), a note that is cut to
+// its answering part whenever it is printed.
+const passageMin = 2 * shortRow
+
+// passageSize is the most characters of a passage: what ask prints whole
+// (shortRow), so a note's passage and a short row are weighed on as much
+// text.
+const passageSize = shortRow
+
+// rankSectionOf is the part of r lore ask ranks r by in search's order
+// (searchOrder): its best section (bestSectionOf), or for a long row with
+// no sections its best passage (bestPassageOf); nil for a short row.
+func rankSectionOf(q question, ms []match, r *textRow) *bestSec {
+	if sec := bestSectionOf(q, ms, r); sec != nil {
+		return sec
+	}
+	return bestPassageOf(q, ms, r)
+}
+
+// bestPassageOf is the passage of r (passagesOf) holding the most of q's
+// words, kept on r for q and ms like bestSectionOf; nil when r has none.
+func bestPassageOf(q question, ms []match, r *textRow) *bestSec {
+	ps := r.passagesOf()
+	if len(ps) == 0 {
+		return nil
+	}
+	key := q.text
+	for _, m := range ms {
+		key += "\x00" + m.res.Name
+	}
+	if r.passFor != key {
+		r.bestPass, r.passFor = pickSection(q, ms, ps), key
+	}
+	return r.bestPass
+}
+
+// passagesOf is the word sets of r's passages (passages of passageSize),
+// nil when r is not longer than passageMin, has sections (sectionsOf
+// ranks it) or makes one passage; built once per row and shared with
+// every later call's copy of a kept corpus row, like sectionsOf.
+func (r *textRow) passagesOf() []rowSection {
+	if len(r.Body) <= passageMin || r.sectionsOf() != nil {
+		return nil
+	}
+	if !r.passaged {
+		r.pass = shareSplit(r.split, func(s *rowSplit) *splitSlot[[]rowSection] { return &s.pass }, func() []rowSection {
+			ps := passages(r.Body, passageSize)
+			if len(ps) < 2 {
+				return nil
+			}
+			out := make([]rowSection, len(ps))
+			for i, p := range ps {
+				out[i] = rowSection{words: tokensOf(p)}
+			}
+			return out
+		})
+		r.passaged = true
+	}
+	return r.pass
+}
+
+// passages is text cut into passages of at most size characters: its
+// paragraphs (blank-line separated), a longer paragraph by its lines,
+// the pieces next to each other joined while they fit; one line longer
+// than size stays one passage.
+func passages(text string, size int) []string {
+	var pieces []string
+	for _, para := range strings.Split(text, "\n\n") {
+		if strings.TrimSpace(para) == "" {
+			continue
+		}
+		if len(para) <= size {
+			pieces = append(pieces, para)
+			continue
+		}
+		pieces = append(pieces, strings.SplitAfter(para, "\n")...)
+	}
+	var out []string
+	var cur strings.Builder
+	for _, p := range pieces {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		if cur.Len() > 0 && cur.Len()+len(p)+1 > size {
+			out = append(out, cur.String())
+			cur.Reset()
+		}
+		if cur.Len() > 0 {
+			cur.WriteString("\n")
+		}
+		cur.WriteString(p)
+	}
+	if cur.Len() > 0 {
+		out = append(out, cur.String())
+	}
+	return out
+}

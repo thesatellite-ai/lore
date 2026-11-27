@@ -90,6 +90,18 @@ func (o *Out) grow(all, more []Row, cards []Candidate, memo map[string]Candidate
 				}
 				*r = cut
 			}
+			// devco D-1030: then the later rows holding far fewer of the
+			// question's words than the first row (yieldRows)
+			if l, d, ok := o.yieldRows(it.ID, all, more, cards, memo, w, fits); ok {
+				list, dropped = l, d
+				i = slices.IndexFunc(o.Rows, func(r Row) bool { return r.ID == it.ID })
+				r = &o.Rows[i]
+				*r = w
+				if fits(list) {
+					continue
+				}
+				*r = cut
+			}
 		}
 		o.widen(i, w, maxChars-len(o.items())-len(candText(list[:min(minCandidates, len(list))])))
 	}
@@ -259,4 +271,72 @@ func (o *Out) onSubject(r Row) bool {
 		}
 	}
 	return false
+}
+
+// yieldGap is how many fewer question words than the first row a later
+// row holds (search's order, searchList.held) when yieldRows takes it out
+// for the first row's room: more than two, so three whole words (a stale
+// row's words count by their rarity, so a share of one).
+//
+// Why (devco D-1030, bug hunt H-292): once a long note with no sections
+// ranks by its best passage (longsec.go), short rows rank second and
+// third under the answering note, and a short row is never cut, so
+// yieldCuts freed no room and the first note was cut to 1,000 characters.
+// On the realeval TUNE flips, every later row that answered held at most
+// two words fewer than the first row, every one that only took its room
+// three or more (with a gap of two: one answering memory lost).
+const yieldGap = 2.5
+
+// yieldRows takes the printed rows after first that hold at least
+// yieldGap fewer question words than it (a row of the now: line stays)
+// out of the answer, last first, until first printed whole (w) fits; when
+// it never fits they all go, so its excerpt is widened to their room, as
+// yieldCuts does for long rows. Each is counted as left out and listed as
+// a candidate line. ok is false (o unchanged) when no row may go.
+func (o *Out) yieldRows(first string, all, more []Row, cards []Candidate, memo map[string]Candidate, w Row, fits func([]Candidate) bool) ([]Candidate, []Dropped, bool) {
+	if o.q.search == nil {
+		return nil, nil, false
+	}
+	held := o.q.search.held
+	top, ok := held[first]
+	if !ok {
+		return nil, nil, false
+	}
+	chain := map[string]bool{} // the rows the now: line names
+	for _, r := range o.Rows {
+		if r.replaces != "" {
+			chain[r.ID], chain[r.replaces] = true, true
+		}
+	}
+	mayGo := func(it Ranked) bool {
+		h, ok := held[it.ID]
+		return it.Kind == KindRow && it.ID != first && !chain[it.ID] && ok && top-h >= yieldGap
+	}
+	if !slices.ContainsFunc(o.Ranked, mayGo) {
+		return nil, nil, false
+	}
+	var list []Candidate
+	var dropped []Dropped
+	for {
+		j := len(o.Ranked) - 1 // the last row that may go
+		for j >= 0 && !mayGo(o.Ranked[j]) {
+			j--
+		}
+		if j < 0 {
+			return list, dropped, true
+		}
+		id := o.Ranked[j].ID
+		o.Ranked = slices.Delete(o.Ranked, j, j+1)
+		o.Rows = slices.DeleteFunc(o.Rows, func(r Row) bool { return r.ID == id })
+		o.Left++
+		list, dropped = o.candidatesOf(all, more, cards, memo)
+		fi := slices.IndexFunc(o.Rows, func(r Row) bool { return r.ID == first })
+		cut := o.Rows[fi]
+		o.Rows[fi] = w
+		whole := fits(list)
+		o.Rows[fi] = cut
+		if whole {
+			return list, dropped, true
+		}
+	}
 }

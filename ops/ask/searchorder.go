@@ -174,10 +174,11 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 		identExtra, identBM := identHeld(q, r, w.Terms, got, ix, p)
 		identExtra += phraseExtra
 		c.bm25 += identBM
-		sec := bestSectionOf(q, ms, r)
+		sec := rankSectionOf(q, ms, r)
 		if sec != nil {
-			// a long row holds a word only when its best section (or its
-			// title and first line) does (longsec.go, devco D-972)
+			// a long row holds a word only when its best section or, with
+			// no sections, its best passage (or its title and first line)
+			// does (longsec.go, devco D-972, D-1030)
 			for k := range got {
 				if got[k] && !sectionHolds(q, r, sec, w.Terms, k) {
 					got[k] = false
@@ -325,6 +326,12 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 	out := make(map[string]int, len(hits))
 	for i, h := range hits {
 		out[h.id] = i
+	}
+	if q.search != nil {
+		q.search.held = make(map[string]float64, len(hits))
+		for _, h := range hits {
+			q.search.held[h.id] = h.held
+		}
 	}
 	return out
 }
@@ -542,6 +549,9 @@ type searchList struct {
 	// slice as long as the store.
 	ix      *hybrid.Index
 	present map[string][]float64
+	// held is the question words each row holds in search's order
+	// (searchOrder), by id: grow's yieldRows reads it
+	held map[string]float64
 }
 
 // bm25Of is the per-term BM25 cache of index ix: s's own when s read ix
