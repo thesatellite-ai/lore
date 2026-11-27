@@ -32,7 +32,11 @@ func TestStoryOAskExcerptKeepsAskedSentence(t *testing.T) {
 		ada.Lore(pc.Dir, "store", "folder", "add", "--store", oOrg, "--folder", "stockapp").OK(t)
 		ada.Lore(pc.Dir, "org", "config", "set", "--org", oOrg, "--key", "own", "--add", "github.com/"+oOwner+"/*", "--yes").OK(t)
 		ada.Lore(pc.Dir, "org", "link", "--org", oOrg, "--project", "stockapp", "--own", "--yes").OK(t)
-		note := "# As built: warehouse stock sync\n\n## Overview\n\n" + filler + "\n\n## Write path\n\n" + filler + "\n\n" + filler + "\n\n" + filler + "\n\nBatches are claimed with a two-minute lease. " + caller + " Leases are swept hourly.\n\n## Operations\n\n" + filler
+		note := "# As built: warehouse stock sync\n\n## Overview\n\n" + filler + "\n\n## Write path\n\n" + filler + "\n\n" + filler + "\n\n" + filler + "\n\nBatches are claimed with a two-minute lease. " + caller + " Leases are swept hourly.\n\n## Operations\n\n" + filler +
+			"\n\n## Release notes\n\n" + strings.Repeat("Each release is tagged on Tuesday and rolled out after the review. ", 8)
+		if len(note) <= 2500 {
+			t.Fatalf("[O D-970] fixture note is %d characters; a note up to 2,500 is never cut (devco D-1028)", len(note))
+		}
 		ada.Lore(pc.Dir, "architecturenote", "add", "--title", "As built: warehouse stock sync", "--body", note, "--meta", "fact_state=live", "--yes").OK(t)
 		ada.Lore(pc.Dir, "decision", "add", "--title", "Order export retries whole batches",
 			"--body", "The order export sends orders in batches of 100 and a batch lands whole or not at all. A failed order export batch is retried with backoff up to five times. Each batch reads from a snapshot taken when it starts; a snapshot older than the newest change ends the batch with ErrStaleSnapshot. Operators see parked order export batches on the dashboard.", "--yes").OK(t)

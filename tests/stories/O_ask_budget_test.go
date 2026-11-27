@@ -62,9 +62,21 @@ func TestStoryOAskDefaultBudgetPrintsThreeRows(t *testing.T) {
 		if out := r.Out(); strings.Contains(out, "prints it whole") {
 			t.Errorf("[O D-1013] a note was printed cut at the default --max-chars:\n%s", r)
 		}
-		// the old cap of 4,000 cannot hold the three whole
+		// the old cap of 4,000 cannot hold the three whole: fewer than
+		// three notes are printed (a note up to 2,500 characters is never
+		// cut since devco D-1028: one that does not fit is a candidate line)
 		cut := ada.Lore(pc.Dir, "ask", "--query", q, "--max-chars", "4000").OK(t).Out()
-		if !strings.Contains(cut, "prints it whole") {
+		notes := 0
+		for l := range strings.SplitSeq(cut, "\n") {
+			if rest, ok := strings.CutPrefix(l, "cited: "); ok {
+				for _, id := range strings.Fields(rest) {
+					if strings.HasPrefix(id, "anr_") {
+						notes++
+					}
+				}
+			}
+		}
+		if notes >= len(parts) {
 			t.Errorf("[O D-1013] at --max-chars 4000 the three notes printed whole; the fixture no longer needs the larger default:\n%s", cut)
 		}
 	})

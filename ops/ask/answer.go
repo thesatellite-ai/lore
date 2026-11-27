@@ -1548,7 +1548,7 @@ func (o *Out) cutRow(i, maxChars int) bool {
 		room, alone = minCut, true
 	}
 	words := cutWords(r.Matched, o.asked)
-	text, cut := cutBody(cmp.Or(wholeRead, whole.Body), words, room, r.subject)
+	text, cut := cutKeeping(cmp.Or(wholeRead, whole.Body), whole.Title, words, o.q.words, room, r.subject)
 	if !cut {
 		// its text fits: what is above it leaves no room, unless nothing
 		// is above it (a long row chunkLong already cut to its best
@@ -1560,7 +1560,7 @@ func (o *Out) cutRow(i, maxChars int) bool {
 	if wholeRead == "" || wholeRead == whole.Body {
 		r.Body = text // the same text: cut once (devco D-984)
 	} else {
-		r.Body, _ = cutBody(whole.Body, words, room, r.subject)
+		r.Body, _ = cutKeeping(whole.Body, whole.Title, words, o.q.words, room, r.subject)
 	}
 	if wholeRead != "" {
 		r.readBody = text

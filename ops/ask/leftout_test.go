@@ -79,7 +79,12 @@ func TestCutNoteNamesLeftOutWords(t *testing.T) {
 	d := data{rows: []textRow{mem(t, "mem_q1", "acme/eng", "2026-11-20", runqNote)}}
 	q := "how does the job queue handle a dedup key while the first run is not terminal"
 	sawLeftOut := false
-	for _, maxChars := range []int{0, 900, 600, 400} {
+	// devco D-1028: at the default --max-chars the note (under shortRow
+	// characters) is printed whole; a smaller cap cuts it
+	if o := build(parseQuestion(q, now), d, 0, 0); len(o.Rows) == 0 || o.Rows[0].FullChars != 0 {
+		t.Fatalf("max 0: the %d-character note was cut, want it whole\n%s", len(runqNote), o.Text())
+	}
+	for _, maxChars := range []int{900, 600, 400} {
 		o := build(parseQuestion(q, now), d, 0, maxChars)
 		if len(o.Rows) == 0 || o.Rows[0].FullChars == 0 {
 			t.Fatalf("max %d: rows %v not cut\n%s", maxChars, rowIDs(o.Rows), o.Text())

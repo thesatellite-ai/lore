@@ -294,12 +294,21 @@ func dropText(ds []Dropped) string {
 // the question names first, else a card before the first row that holds
 // fewer of the question's words, so a card stands where the words it
 // shares with the question put it, as search's word count does.
+//
+// Search's own first row, when the answer does not print it, follows the
+// cards the question names, before every other card (devco D-1028, bug
+// hunt H-288, set 9 ask a): a card sharing more of the question's words
+// pushed the row a reader's own search opens first down the list, and
+// past its end when the list was cut to fit.
 func merge(rows, cards []Candidate) []Candidate {
 	out := make([]Candidate, 0, len(rows)+len(cards))
 	for _, c := range cards {
 		if c.named {
 			out = append(out, c)
 		}
+	}
+	if len(rows) > 0 && rows[0].Rank == 1 {
+		out, rows = append(out, rows[0]), rows[1:]
 	}
 	i := 0
 	for _, c := range cards {
@@ -389,6 +398,29 @@ func bestLine(text string, words []string, width int) (string, int) {
 // job runs …") stood for a row whose answer was the sentence naming the
 // rare one, and the agent skipped the row the answer was in.
 func matchLine(text, title string, words []string, st *subjectTerms, width int) (string, int) {
+	best, held, ok := bestSentence(text, words, st)
+	if !ok {
+		return bestLine(text, words, width)
+	}
+	s := strings.TrimSpace(best.text)
+	head := ""
+	if n := len(best.heads); n > 0 {
+		head = strings.TrimSpace(strings.TrimLeft(best.heads[n-1], "#"))
+		if strings.EqualFold(head, strings.TrimSpace(title)) {
+			head = ""
+		}
+	}
+	if head == "" {
+		return clipAround(s, words, width), held
+	}
+	head = clip(head, width/3)
+	return head + " › " + clipAround(s, words, width-utf8.RuneCountInString(head)-3), held
+}
+
+// bestSentence is the sentence of text that best matches words (matchLine)
+// and the most distinct words one sentence of it holds; ok is false when
+// no sentence tells the words apart (matchLine then reads bestLine's).
+func bestSentence(text string, words []string, st *subjectTerms) (sentence, int, bool) {
 	// every sentence counts in the row's IDF; only the ones that may hold
 	// a word (mayHold) are tokenized, as bestLine does: a long note is
 	// read once per candidate line within ask's 50 ms
@@ -405,7 +437,7 @@ func matchLine(text, title string, words []string, st *subjectTerms, width int) 
 		}
 	}
 	if len(ss) == 0 || len(words) == 0 {
-		return bestLine(text, words, width)
+		return sentence{}, 0, false
 	}
 	toks := make([]map[string]bool, len(ss))
 	for i, s := range ss {
@@ -441,21 +473,9 @@ func matchLine(text, title string, words []string, st *subjectTerms, width int) 
 		}
 	}
 	if best < 0 {
-		return bestLine(text, words, width)
+		return sentence{}, 0, false
 	}
-	s := strings.TrimSpace(ss[best].text)
-	head := ""
-	if n := len(ss[best].heads); n > 0 {
-		head = strings.TrimSpace(strings.TrimLeft(ss[best].heads[n-1], "#"))
-		if strings.EqualFold(head, strings.TrimSpace(title)) {
-			head = ""
-		}
-	}
-	if head == "" {
-		return clipAround(s, words, width), held
-	}
-	head = clip(head, width/3)
-	return head + " › " + clipAround(s, words, width-utf8.RuneCountInString(head)-3), held
+	return ss[best], held, true
 }
 
 // clip cuts s to width runes, … marking the cut.

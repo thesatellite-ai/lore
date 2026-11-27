@@ -224,6 +224,10 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 		fact  int
 		heads int
 		home  bool // a row of the repo's linked folder (q.home)
+		span  bool // it writes a code span of the question (spans.go)
+		// rare is the rarity share (searchrank.Share) of the rarest
+		// question word it holds, 1 for a word the fewest rows hold
+		rare  float64
 		stale bool
 		score float64
 		table int
@@ -257,12 +261,23 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 			if c.row.Stale != "" {
 				held *= searchrank.Weight(c.got[:len(w.Terms)], make([]bool, len(w.Terms)), share)
 			}
-			hits = append(hits, hit{id: c.row.ID, held: held, fact: c.fact, heads: c.heads, home: home, stale: c.row.Stale != "", score: s, table: ti})
+			rare := 0.0
+			for k, g := range c.got[:len(w.Terms)] {
+				if g {
+					rare = max(rare, share[k])
+				}
+			}
+			hits = append(hits, hit{id: c.row.ID, held: held, fact: c.fact, heads: c.heads, home: home, span: holdsSpan(c.row, q.spans), rare: rare, stale: c.row.Stale != "", score: s, table: ti})
 		}
 	}
-	// words held first (one more word always wins, as in Score; a stale
+	// a row writing a code span of the question first (spans.go), then
+	// words held (one more word always wins, as in Score; a stale
 	// fact's words by their rarity, devco:D-1007), then
-	// the repo's linked folder before another folder or client, then
+	// the repo's linked folder before another folder or client, then the
+	// row holding the rarer question word (devco D-1028, bug hunt H-288:
+	// a large as-built note holding as many of the question's common
+	// words led over the short decision holding the one word only it
+	// held; realeval TUNE answer first 119 -> 123 of 198), then
 	// what the row is (factOrder: an as-built note or a live fact before
 	// a planned one), then a fresh fact before a stale one, then Score.
 	// Why the folder (devco D-963, kept by D-984): the owner's set-4 rule
@@ -270,6 +285,14 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 	// only when nothing local matches" scopes the order, it is not a
 	// relevance boost; it never outweighs one more question word.
 	slices.SortStableFunc(hits, func(a, b hit) int {
+		if a.span != b.span {
+			// the row writing the command the question quotes names the
+			// asked thing (spans.go, devco D-1028)
+			if a.span {
+				return -1
+			}
+			return 1
+		}
 		if c := cmp.Compare(b.held, a.held); c != 0 {
 			return c
 		}
@@ -278,6 +301,9 @@ func searchOrder(q question, ms []match, rows []textRow, v *meaningView) map[str
 				return -1
 			}
 			return 1
+		}
+		if c := cmp.Compare(b.rare, a.rare); c != 0 {
+			return c
 		}
 		if c := cmp.Compare(b.fact, a.fact); c != 0 {
 			return c

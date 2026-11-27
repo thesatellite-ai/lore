@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Long rows: a row longer than longRow characters is printed as the part
+// Long rows: a row longer than shortRow characters is printed as the part
 // of it that answers the question, at most longRoom characters unless
 // the answer has room for more (grow.go, devco D-1006): a markdown row as its best sections by heading, any other as its
 // best paragraph (chunkLong); it is ranked by its best section too
@@ -17,13 +17,22 @@ import (
 // what the agent needed (long-note bench: 128 of 152 questions answered
 // at 1,847 characters with the best sections, against 17,288 for whole
 // notes). The recall gate's rows are all shorter than longRow, so short
-// notes print exactly as before.
+// notes print exactly as before. longRow still marks a long row for
+// ranking by its best section (longsec.go) and for a wider slot (grow.go).
 const (
 	longRow  = 1500
 	longRoom = 1000
+	// shortRow is the longest row ask never cuts: one up to it is printed
+	// whole or left out as a candidate line (only the answer's one row,
+	// when it alone is over --max-chars, is cut to fit, cutRow). Why (devco D-1028, bug hunt
+	// H-288, set 9 ask c): a note of about 2,000 characters cut to its
+	// best 1,000 lost the rule asked about on two questions, while the
+	// whole note costs little more than its cut and the "lore show" it
+	// saves.
+	shortRow = 2500
 )
 
-// chunkLong replaces the body of every row of o longer than longRow by
+// chunkLong replaces the body of every row of o longer than shortRow by
 // the part of it that answers the question (cutBody, at most longRoom
 // characters): a row with markdown headings by its best sections
 // (bestSections: each after a "§ <heading path>" line, best first, the
@@ -53,7 +62,7 @@ func (o *Out) chunkLong() {
 // cut.
 func (o *Out) unchunked(i int) bool {
 	r := &o.Rows[i]
-	return o.chunk && len(r.Body) > longRow && r.FullChars == 0
+	return o.chunk && len(r.Body) > shortRow && r.FullChars == 0
 }
 
 // chunkRow cuts long row i to its best sections (chunkLong).
@@ -63,14 +72,14 @@ func (o *Out) chunkRow(i int) {
 	}
 	r := &o.Rows[i]
 	words := cutWords(r.Matched, o.asked)
-	body, _ := cutBody(r.Body, words, longRoom, r.subject)
+	body, _ := cutKeeping(r.Body, r.Title, words, o.q.words, longRoom, r.subject)
 	read := ""
 	switch r.readBody {
 	case "":
 	case r.Body:
 		read = body // no reference to name: the same text, cut once (D-984)
 	default:
-		read, _ = cutBody(r.readBody, words, longRoom, r.subject)
+		read, _ = cutKeeping(r.readBody, r.Title, words, o.q.words, longRoom, r.subject)
 	}
 	r.FullChars, r.Body, r.readBody = len(r.Body), body, read
 	r.LeftOut = leftOutOf(o.q, r.Matched, r.Title, r.Body, r.Comments) // leftout.go

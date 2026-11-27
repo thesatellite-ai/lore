@@ -705,11 +705,11 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		var doc strings.Builder
 		doc.WriteString("# Vela weekly sync\n\n")
 		for _, topic := range []string{"Hiring", "Support queue", "Design review"} {
-			doc.WriteString("## " + topic + "\n\n" + strings.Repeat("The vela "+strings.ToLower(topic)+" items were walked through in plain terms and everyone kept the current plan. ", 6) + "\n\n")
+			doc.WriteString("## " + topic + "\n\n" + strings.Repeat("The vela "+strings.ToLower(topic)+" items were walked through in plain terms and everyone kept the current plan. ", 9) + "\n\n")
 		}
 		doc.WriteString("## Office move\n\nThe vela office move is booked for 2026-07-14 with the movers from Northfield.\n\n")
-		if n := doc.Len(); n <= 1500 || n >= 4000 {
-			t.Fatalf("[O D-892] fixture note is %d characters, want 1,500-4,000", n)
+		if n := doc.Len(); n <= 2500 || n >= 4000 {
+			t.Fatalf("[O D-892] fixture note is %d characters, want 2,500-4,000 (a note up to 2,500 is never cut, devco D-1028)", n)
 		}
 		add := ada.Lore(ada.Home, "memory", "add", "--body", doc.String(), "--to", to, "--yes", "--json")
 		add.OK(t)
@@ -749,6 +749,29 @@ func TestStoryOPersonalAsk(t *testing.T) {
 		}
 		if strings.Contains(out, "[history: replaced by") || strings.HasPrefix(out, "now: ") {
 			t.Errorf("[O D-893] the note holding the answer is printed as history of the short status row:\n%s", out)
+		}
+	})
+	// devco:D-1028 (bug hunt H-288, set 9 ask c): a markdown note of
+	// 1,500-2,500 characters was cut to its best 1,000 and lost the asked
+	// rule; it is now printed whole.
+	s.Step("personal-store/short-note-prints-whole", func() {
+		var doc strings.Builder
+		doc.WriteString("# Nimbus weekly sync\n\n")
+		for _, topic := range []string{"Hiring", "Support queue", "Design review"} {
+			doc.WriteString("## " + topic + "\n\n" + strings.Repeat("The nimbus "+strings.ToLower(topic)+" items were walked through and everyone kept the plan. ", 7) + "\n\n")
+		}
+		doc.WriteString("## Parking\n\nNimbus parking passes renew on the first Monday of each quarter.\n")
+		if n := doc.Len(); n <= 1500 || n > 2500 {
+			t.Fatalf("[O D-1028] fixture note is %d characters, want 1,500-2,500", n)
+		}
+		add := ada.Lore(ada.Home, "memory", "add", "--body", doc.String(), "--to", to, "--yes", "--json")
+		add.OK(t)
+		id := regexp.MustCompile(`mem_[0-9a-f]{20,}`).FindString(add.Out())
+		r := ada.Lore(ada.Home, "ask", "--store", "me", "--query", "when do nimbus parking passes renew")
+		r.OK(t)
+		out := r.Out()
+		if id == "" || !strings.Contains(out, "renew on the first Monday") || !strings.Contains(out, "nimbus support queue items were walked") || strings.Contains(out, "lore show --id "+id+" prints it whole") {
+			t.Errorf("[O D-1028] the %d-character note is not printed whole:\n%s", doc.Len(), out)
 		}
 	})
 	// devco:D-894 (bug hunt H-149): lore's score counts the question

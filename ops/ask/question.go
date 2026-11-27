@@ -63,6 +63,9 @@ type question struct {
 	// identifier (JobTimeLimit: job time limit; idents.go, bug hunt
 	// H-230): a row spelling them all out holds the word.
 	parts map[string][]string
+	// spans are the question's code spans of two or more words, as
+	// written (spans.go): a row holding one names the asked command.
+	spans []string
 }
 
 // oweDir is the direction of a debt question.
@@ -143,6 +146,7 @@ var reWord = regexp.MustCompile(`[\p{L}\p{N}]+(?:[-.'’][\p{L}\p{N}]+)*`)
 func parseQuestion(q string, now time.Time) question {
 	out := question{text: strings.TrimSpace(q), now: now}
 	out.file = fileOf(out.text)
+	out.spans = spansOf(out.text)
 	low := strings.ToLower(out.text)
 	if out.file != "" {
 		low = strings.Replace(low, strings.ToLower(out.file), " ", 1)

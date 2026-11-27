@@ -180,12 +180,12 @@ func (o *Out) widen(i int, w Row, spare int) {
 	words := cutWords(w.Matched, o.asked)
 	room := len(was) + spare
 	src := cmp.Or(w.readBody, w.Body)
-	text, cut := cutBody(src, words, room, w.subject)
+	text, cut := cutKeeping(src, w.Title, words, o.q.words, room, w.subject)
 	if !cut {
 		return
 	}
 	if lost := o.dropped(text, was, words); lost != "" {
-		text, _ = cutBody(src, words, max(room-len(lost)-len(elision)-2, 1), w.subject)
+		text, _ = cutKeeping(src, w.Title, words, o.q.words, max(room-len(lost)-len(elision)-2, 1), w.subject)
 		lost = o.dropped(text, was, words)
 		if lost == "" {
 			return
@@ -203,7 +203,7 @@ func (o *Out) widen(i int, w Row, spare int) {
 	if w.readBody != "" && w.readBody != w.Body {
 		// the stored body (--json) keeps its references: cut it the same
 		// way, the narrow cut's lost lines left to the read text
-		r.Body, _ = cutBody(w.Body, words, room, w.subject)
+		r.Body, _ = cutKeeping(w.Body, w.Title, words, o.q.words, room, w.subject)
 	}
 	r.LeftOut = leftOutOf(o.q, r.Matched, r.Title, r.Body+"\n"+r.readBody, r.Comments) // leftout.go
 }

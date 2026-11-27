@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// midDoc is a markdown note between longRow and DefaultMaxChars long: it
+// midDoc is a markdown note between shortRow and DefaultMaxChars long: it
 // fits under the cap whole, and only its Operations section answers the
 // backup question.
 func midDoc() string {
@@ -14,7 +14,7 @@ func midDoc() string {
 	b.WriteString("# Vela design notes\n\n")
 	for _, topic := range []string{"Request routing", "Session handling", "Search indexing"} {
 		fmt.Fprintf(&b, "## %s\n\n", topic)
-		for i := 1; i <= 3; i++ {
+		for i := 1; i <= 7; i++ {
 			fmt.Fprintf(&b, "This part of the design covers %s in plain terms. The team reviewed the %s plan in sprint %d and agreed to keep the layout. ", topic, topic, i)
 		}
 		b.WriteString("\n\n")
@@ -25,17 +25,17 @@ func midDoc() string {
 }
 
 // TestLongRowPrintsBestSections (devco D-892): a markdown row longer than
-// longRow characters prints its best sections by heading, not whole, even
-// when it fits under --max-chars, says how long it is whole and how to
-// read it whole; a shorter row stays whole, a long row without headings
-// is cut to its best paragraph (devco D-969).
+// shortRow characters (devco D-1028) prints its best sections by heading,
+// not whole, even when it fits under --max-chars, says how long it is
+// whole and how to read it whole; a shorter row stays whole, a long row
+// without headings is cut to its best paragraph (devco D-969).
 func TestLongRowPrintsBestSections(t *testing.T) {
 	t.Parallel()
 	doc := midDoc()
-	if len(doc) <= longRow || len(doc) >= DefaultMaxChars {
-		t.Fatalf("fixture is %d characters, want between %d and %d", len(doc), longRow, DefaultMaxChars)
+	if len(doc) <= shortRow || len(doc) >= DefaultMaxChars {
+		t.Fatalf("fixture is %d characters, want between %d and %d", len(doc), shortRow, DefaultMaxChars)
 	}
-	plain := strings.Repeat("The billing database backup is described in the runbook. ", 30)
+	plain := strings.Repeat("The billing database backup is described in the runbook. ", 50)
 	d := data{rows: []textRow{
 		{Table: "memories", ID: "mem_long", Place: "repo", Body: doc, At: now.AddDate(0, 0, -1)},
 		{Table: "memories", ID: "mem_plain", Place: "repo", Body: plain, At: now.AddDate(0, 0, -2)},
@@ -62,10 +62,10 @@ func TestLongRowPrintsBestSections(t *testing.T) {
 	if p := o.Rows[1]; p.FullChars != len(plain) || len(p.Body) > longRoom || !strings.Contains(p.Body, "billing database backup") {
 		t.Errorf("a long row without headings: full_chars %d body %d, want %d and at most %d", p.FullChars, len(p.Body), len(plain), longRoom)
 	}
-	short := midDoc()[:longRow-100]
+	short := midDoc()[:shortRow-100]
 	o = build(parseQuestion("when does the nightly backup of the billing database run", now), data{rows: []textRow{{Table: "memories", ID: "mem_short", Place: "repo", Body: short, At: now}}}, 0, 0)
 	if len(o.Rows) == 1 && (o.Rows[0].FullChars != 0 || o.Rows[0].Body != short) {
-		t.Errorf("a row under %d characters was cut: %+v", longRow, o.Rows[0])
+		t.Errorf("a row under %d characters was cut: %+v", shortRow, o.Rows[0])
 	}
 }
 
