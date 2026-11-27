@@ -1081,7 +1081,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 		b.keepTables(h, tables, rows, store.SharedDocs(ctx))
 		return rows, "", nil
 	}
-	if from == "" {
+	if from == "" && !store.PassingRead(ctx) { // a passing read is not kept (store.WithPassingRead, H-284)
 		b.keepFull(h, rows, store.SharedDocs(ctx))
 	}
 	return rows, store.Cursor(h), nil

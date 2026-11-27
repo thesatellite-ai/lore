@@ -154,8 +154,9 @@ func run(ctx context.Context, args []string) int {
 		fast.SetCacheDir(filepath.Join(home.Dir, "cache")) // kept answers live in the lore home, never in a repo
 	}
 	ctx = gitfast.With(ctx, fast)
-	defer gitfast.Install(fast)()        // callers that start from context.Background()
-	if err := refuseRoot(); err != nil { // guard.go: E_ROOT_REFUSED unless LORE_ALLOW_ROOT=1
+	ctx = withCacheBuildPace(ctx, os.Getenv) // gcbuild.go: a cache built from nothing collects in proportion to what it keeps (H-284)
+	defer gitfast.Install(fast)()            // callers that start from context.Background()
+	if err := refuseRoot(); err != nil {     // guard.go: E_ROOT_REFUSED unless LORE_ALLOW_ROOT=1
 		return printHostError(err)
 	}
 	if err := refuseRelativeHome(); err != nil { // home.go: E_INVALID_INPUT for a relative HOME (E-GAPS-1 S2)

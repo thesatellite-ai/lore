@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/resquar"
@@ -42,6 +43,38 @@ const (
 // projected fresh (its kind table, FTS text and referrers have side paths
 // of their own).
 func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.Source, sr store.Row, fresh bool) error {
+	return c.projectDecoded(ctx, tx, st, source, sr, decodeApplied(sr), fresh)
+}
+
+// appliedDecode is one applied row's document decoded once (decodeApplied):
+// Apply hands it to project and to the meta quarantine, so a cache build
+// from nothing decodes each row file once, not once per step (bug hunt
+// H-284, devco:D-1022: the decode memo, cleared by the build's own reads,
+// missed and the meta quarantine decoded each row again).
+type appliedDecode struct {
+	r   row.Row
+	err error
+}
+
+// errTombstone marks a tombstone's decode: a deleted row is never decoded.
+var errTombstone = errs.New(errs.Internal, "sqlite cache: a tombstone is not decoded")
+
+// appliedDecodes counts the documents decodeApplied decoded, so a test can
+// tell that Apply decodes each applied row once.
+var appliedDecodes atomic.Int64
+
+// decodeApplied decodes sr unless it is a tombstone.
+func decodeApplied(sr store.Row) appliedDecode {
+	if sr.Deleted {
+		return appliedDecode{err: errTombstone}
+	}
+	appliedDecodes.Add(1)
+	r, err := sr.Decode()
+	return appliedDecode{r: r, err: err}
+}
+
+// projectDecoded is project with sr's document already decoded (d).
+func (c *Cache) projectDecoded(ctx context.Context, tx *sql.Tx, st state, source store.Source, sr store.Row, d appliedDecode, fresh bool) error {
 	p, known := st.plans[sr.Table]
 	isResource := sr.Table == schema.TableResources
 	if !known && !isResource {
@@ -61,7 +94,7 @@ func (c *Cache) project(ctx context.Context, tx *sql.Tx, st state, source store.
 		}
 		return nil
 	}
-	r, err := sr.Decode()
+	r, err := d.r, d.err
 	if err != nil {
 		// A document this binary cannot read (a newer _v) stays in _rows
 		// only; a newer lore will project it.

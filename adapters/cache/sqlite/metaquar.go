@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/metafilter"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -47,22 +49,20 @@ const (
 
 // refreshMetaQuarantine records (or clears) the quarantine of applied rows;
 // fresh[i] says applied[i]'s id was new to the file, so it has no old
-// line to clear (freshrow.go).
-func refreshMetaQuarantine(ctx context.Context, tx *sql.Tx, source store.Source, applied []store.Row, fresh []bool) error {
+// line to clear (freshrow.go); metas[i] is applied[i]'s metadata as Apply
+// decoded it (nil: a tombstone, an unreadable document or no metadata),
+// so no row is decoded here again (H-284).
+func refreshMetaQuarantine(ctx context.Context, tx *sql.Tx, source store.Source, applied []store.Row, fresh []bool, metas []map[ids.ID[ids.MetaKey]]value.JSON) error {
 	for i, sr := range applied {
 		if !fresh[i] {
 			if _, err := txExec(ctx, tx, metaQuarDelete, string(source), sr.Table.String(), sr.ID.String()); err != nil {
 				return dbErr("clear meta quarantine", err)
 			}
 		}
-		if sr.Deleted {
+		if sr.Deleted || len(metas[i]) == 0 {
 			continue
 		}
-		r, err := sr.Decode()
-		if err != nil || len(r.Meta) == 0 {
-			continue
-		}
-		probs := metafilter.Quarantine(r.Meta)
+		probs := metafilter.Quarantine(metas[i])
 		if len(probs) == 0 {
 			continue
 		}

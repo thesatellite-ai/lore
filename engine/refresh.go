@@ -34,9 +34,11 @@ func (e *Engine) RefreshAll(ctx context.Context, sources []store.Source) (store.
 	go func() {
 		defer close(ahead)
 		for _, s := range sources {
+			rr := e.readRefresh(ctx, s)
 			select {
-			case ahead <- e.readRefresh(ctx, s):
+			case ahead <- rr:
 			case <-ctx.Done():
+				rr.finish() // never applied
 				return
 			}
 		}
@@ -45,7 +47,8 @@ func (e *Engine) RefreshAll(ctx context.Context, sources []store.Source) (store.
 	for rr := range ahead {
 		if _, err := e.applyRefresh(ctx, rr); err != nil {
 			cancel()
-			for range ahead { // let the reader stop before returning
+			for left := range ahead { // let the reader stop before returning
+				left.finish()
 			}
 			return rr.source, err
 		}
@@ -65,6 +68,48 @@ type refreshRead struct {
 	rows      []store.Row
 	cur, next store.Cursor
 	err       error
+	// endBuild ends the cache-build phase the read began (CacheBuildPace);
+	// nil when it began none
+	endBuild func()
+}
+
+// finish ends rr's cache-build phase, if it began one: once its rows are
+// applied, or when they never will be.
+func (rr *refreshRead) finish() {
+	if rr.endBuild != nil {
+		rr.endBuild()
+		rr.endBuild = nil
+	}
+}
+
+// CacheBuildPace is told when a refresh starts building a store's cache
+// from nothing (the cache holds no cursor for it: a new machine, a removed
+// cache, lore search rebuild) and returns the function that ends that
+// phase, called once the store's rows are applied. Phases may overlap
+// (RefreshAll reads the next store while it applies one). Why (bug hunt
+// H-284, devco:D-1022): such a build allocates fast for minutes on a big
+// store while keeping little, and the command's collector pace (lore
+// doctor: a 256 MB limit, and GOGC 50 once a long history was replayed)
+// collected about every 100 MB: 42% of the CPU. The CLI paces the
+// collector for the phase (app); the engine only says when it runs.
+type CacheBuildPace func() (end func())
+
+type cacheBuildPaceKey struct{}
+
+// WithCacheBuildPace returns ctx whose refreshes tell p when they build a
+// store's cache from nothing.
+func WithCacheBuildPace(ctx context.Context, p CacheBuildPace) context.Context {
+	return context.WithValue(ctx, cacheBuildPaceKey{}, p)
+}
+
+// beginCacheBuild tells ctx's CacheBuildPace, if any, that a cache build
+// from nothing starts, and returns its end (nil without a pace).
+func beginCacheBuild(ctx context.Context) func() {
+	p, _ := ctx.Value(cacheBuildPaceKey{}).(CacheBuildPace)
+	if p == nil {
+		return nil
+	}
+	return p()
 }
 
 // readRefresh reads what Refresh applies for source.
@@ -85,7 +130,15 @@ func (e *Engine) readRefresh(ctx context.Context, source store.Source) refreshRe
 		rr.err = err
 		return rr
 	}
-	rows, next, err := e.readRows(ctx, source, cur) // purged ids reach the cache as tombstones
+	rctx := ctx
+	if cur == "" {
+		// a cache built from nothing uses each row once: the read is not
+		// kept for later readers (store.WithPassingRead), and the
+		// collector is paced for the build (CacheBuildPace, H-284)
+		rctx = store.WithPassingRead(ctx)
+		rr.endBuild = beginCacheBuild(ctx)
+	}
+	rows, next, err := e.readRows(rctx, source, cur) // purged ids reach the cache as tombstones
 	if err != nil {
 		rr.err = err
 		return rr
@@ -101,7 +154,9 @@ func (e *Engine) readRefresh(ctx context.Context, source store.Source) refreshRe
 }
 
 // applyRefresh applies what readRefresh read; returns the rows applied.
+// It ends the read's cache-build phase, if any, when it returns.
 func (e *Engine) applyRefresh(ctx context.Context, rr refreshRead) (int, error) {
+	defer rr.finish()
 	if rr.err != nil {
 		return 0, rr.err
 	}

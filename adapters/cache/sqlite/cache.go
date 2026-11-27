@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -511,16 +512,21 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 				return err
 			}
 		}
+		metas := make([]map[ids.ID[ids.MetaKey]]value.JSON, len(applied)) // per applied row: its metadata, for the quarantine
 		for i, r := range applied {
-			if err := c.project(ctx, tx, st, source, r, fresh[i]); err != nil {
+			d := decodeApplied(r) // once for project and the quarantine (H-284)
+			if err := c.projectDecoded(ctx, tx, st, source, r, d, fresh[i]); err != nil {
 				return err
+			}
+			if d.err == nil {
+				metas[i] = d.r.Meta
 			}
 		}
 		if err := flushFTS(ctx, tx, ""); err != nil { // the fresh rows' FTS entries (freshrow.go)
 			return err
 		}
 		// METADATA 3.13: quarantined metadata, counted and kept out of row_meta
-		if err := refreshMetaQuarantine(ctx, tx, source, applied, fresh); err != nil {
+		if err := refreshMetaQuarantine(ctx, tx, source, applied, fresh, metas); err != nil {
 			return err
 		}
 		if kindsChanged {

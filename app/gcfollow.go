@@ -41,11 +41,24 @@ var heapFloor atomic.Int64
 // follower stopped by a zero floor is armed again by followLiveHeap.
 var followArmed atomic.Bool
 
+// bigHeapHeadroom is the least room the limit leaves above a kept heap
+// that outgrew its floor (never more than the floor itself). Why (bug
+// hunt H-284, devco:D-1022): a quarter of the kept heap is little room
+// for a command that allocates fast: lore doctor building the cache of a
+// 1.26M-row store from nothing allocated ~185 MB/s over ~600 MB kept, so
+// it collected about once a second and the collector took 35% of its CPU
+// (540 s; with ~300 MB of room: 326 s at the same peak memory).
+const bigHeapHeadroom = 256 << 20
+
 // limitFor is the soft memory limit for a heap that keeps live bytes
 // under floor: floor, or live plus liveHeapHeadroom of it when that is
-// higher.
+// higher; once live passes floor, at least bigHeapHeadroom (or floor,
+// if smaller) above live.
 func limitFor(live, floor int64) int64 {
-	return max(floor, live+live/liveHeapHeadroom)
+	if live <= floor {
+		return max(floor, live+live/liveHeapHeadroom)
+	}
+	return live + max(live/liveHeapHeadroom, min(floor, bigHeapHeadroom))
 }
 
 // followLiveHeap sets the soft memory limit to floor and, after every
@@ -57,6 +70,17 @@ func followLiveHeap(floor int64) {
 	if followArmed.CompareAndSwap(false, true) {
 		armAfterGC(new(gcSentinel))
 	}
+}
+
+// liveHeap is the heap the last collection kept; ok is false when the
+// runtime does not report it.
+func liveHeap() (int64, bool) {
+	sample := []metrics.Sample{{Name: liveHeapMetric}}
+	metrics.Read(sample)
+	if sample[0].Value.Kind() != metrics.KindUint64 {
+		return 0, false
+	}
+	return int64(min(sample[0].Value.Uint64(), uint64(1<<62))), true
 }
 
 // gcSentinel is an object nothing refers to: its finalizer runs after
@@ -78,11 +102,12 @@ func afterGC(s *gcSentinel) {
 		}
 		return
 	}
-	sample := []metrics.Sample{{Name: liveHeapMetric}}
-	metrics.Read(sample)
-	if sample[0].Value.Kind() == metrics.KindUint64 {
-		live := int64(min(sample[0].Value.Uint64(), uint64(1<<62)))
-		debug.SetMemoryLimit(limitFor(live, floor))
+	if live, ok := liveHeap(); ok {
+		if cacheBuilding.Load() {
+			debug.SetMemoryLimit(buildLimitFor(live, floor, buildPercent())) // gcbuild.go: a cache build's room (H-284)
+		} else {
+			debug.SetMemoryLimit(limitFor(live, floor))
+		}
 	}
 	armAfterGC(s)
 }

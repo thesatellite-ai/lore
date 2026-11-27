@@ -31,13 +31,19 @@ func keep(n int) [][]byte {
 }
 
 // TestLimitFor: the limit is the floor until the kept heap plus its
-// headroom passes it.
+// headroom passes it; a heap that outgrew the floor gets at least
+// bigHeapHeadroom (bug hunt H-284, devco:D-1022).
 func TestLimitFor(t *testing.T) {
 	for _, c := range []struct{ live, floor, want int64 }{
 		{0, 256 << 20, 256 << 20},
 		{200 << 20, 256 << 20, 256 << 20},
-		{400 << 20, 256 << 20, 500 << 20},
+		{256 << 20, 256 << 20, 320 << 20},
+		// past the floor: at least bigHeapHeadroom of room (H-284)
+		{300 << 20, 256 << 20, 556 << 20},
+		{400 << 20, 256 << 20, 656 << 20},
+		{2 << 30, 256 << 20, 2<<30 + 512<<20},
 		{4 << 30, 2 << 30, 5 << 30},
+		{64 << 20, 4 << 20, 80 << 20}, // a small floor bounds the room
 	} {
 		if got := limitFor(c.live, c.floor); got != c.want {
 			t.Errorf("limitFor(%d, %d) = %d, want %d", c.live, c.floor, got, c.want)

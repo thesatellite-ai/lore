@@ -11,11 +11,20 @@ package journeys
 // the same as from the cache the writes built row by row: search, lists,
 // the sub-task tree and a note's filled-in reference, after the cache is
 // removed and after `lore search rebuild`.
+//
+// devco:D-1022 (bug hunt H-284): the build no longer keeps each store
+// folder's rows for later readers, decodes each row once, and collects
+// less often while it runs. lore doctor run on a removed cache (it builds
+// the cache first) must report what it reports on the built cache.
 
 import (
+	"encoding/json"
 	"os"
 	"regexp"
+	"slices"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 func TestJourneyCacheBuiltFromNothingAnswersTheSame(t *testing.T) {
@@ -60,7 +69,27 @@ func TestJourneyCacheBuiltFromNothingAnswersTheSame(t *testing.T) {
 		}
 	}
 
-	var want []string
+	// doctorOf is a doctor report as status, exit and each check's
+	// target and status (their wording may name times).
+	doctorOf := func(r teamharness.Result) []string {
+		t.Helper()
+		var d doctorReport
+		if err := json.Unmarshal([]byte(r.Stdout), &d); err != nil || d.Status == "" {
+			t.Fatalf("lore doctor --json printed no report (%v): %s", err, r)
+		}
+		out := []string{d.Status}
+		for _, ch := range append(slices.Clone(d.Machine.Checks), d.Checks...) {
+			out = append(out, ch.Check+" "+ch.Target+" "+ch.Status)
+		}
+		for _, su := range d.Setups {
+			for _, ch := range su.Checks {
+				out = append(out, ch.Check+" "+ch.Target+" "+ch.Status)
+			}
+		}
+		slices.Sort(out[1:])
+		return out
+	}
+	var want, wantDoctor []string
 	w.Step("day1/notes-tasks-and-a-reference", func() {
 		lap.Lore(lap.Home, "store", "init", "--name", "me", "--url", me.SSHURL(), "--yes").OK(t)
 		for _, f := range []string{"work", "archive"} {
@@ -75,6 +104,7 @@ func TestJourneyCacheBuiltFromNothingAnswersTheSame(t *testing.T) {
 		parent := jID(t, lap.Lore(lap.Home, "task", "add", "Ship the gateway fix", "--to", "me/work", "--json").OK(t))
 		lap.Lore(lap.Home, "task", "add", "Write the gateway test", "--parent", parent, "--to", "me/work", "--json").OK(t)
 		want = answers()
+		wantDoctor = doctorOf(lap.Lore(lap.Home, "doctor", "--json"))
 	})
 
 	w.Step("day2/cache-removed-then-read", func() {
@@ -87,5 +117,16 @@ func TestJourneyCacheBuiltFromNothingAnswersTheSame(t *testing.T) {
 	w.Step("day2/search-rebuild", func() {
 		lap.Lore(lap.Home, "search", "rebuild", "--store", "me").OK(t)
 		same("after lore search rebuild", want, answers())
+	})
+
+	w.Step("day3/doctor-builds-the-removed-cache", func() {
+		if err := os.RemoveAll(lap.LorePath("cache")); err != nil {
+			t.Fatal(err)
+		}
+		got := doctorOf(lap.Lore(lap.Home, "doctor", "--json"))
+		if !slices.Equal(got, wantDoctor) {
+			t.Errorf("lore doctor on a removed cache reports differently from the built cache:\nbefore: %v\nnow:    %v", wantDoctor, got)
+		}
+		same("after lore doctor built the removed cache", want, answers())
 	})
 }

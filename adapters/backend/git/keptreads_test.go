@@ -65,3 +65,39 @@ func TestKeptReadsShareOneBudget(t *testing.T) {
 		t.Error("a backend whose read was dropped answered without asking git")
 	}
 }
+
+// TestPassingReadIsNotKept (bug hunt H-284, devco:D-1022): a full read
+// marked passing (store.WithPassingRead: a cache built from nothing) is
+// not kept for later readers, and a later plain read asks git again and
+// is kept. Before, the cache build of a 1.26M-row store kept each folder
+// it had just written, up to the kept-read budget.
+func TestPassingReadIsNotKept(t *testing.T) {
+	ctx := context.Background()
+	b := clone(t, newRemote(t, true))
+	g := newGen(t)
+	for _, body := range []string{"one", "two"} {
+		write(t, b, store.Change{Row: g.row(newID(t), body, hlc.HLC{})})
+	}
+	kept := func() bool {
+		b.fullMu.Lock()
+		defer b.fullMu.Unlock()
+		return b.fullRows != nil
+	}
+	b.fullMu.Lock()
+	b.fullHead, b.fullRows = "", nil // the writes above may have kept a read
+	b.fullMu.Unlock()
+	rows, _, err := b.Read(store.WithPassingRead(ctx), "")
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("passing read: %d rows, %v", len(rows), err)
+	}
+	if kept() {
+		t.Fatal("the backend kept a passing read")
+	}
+	calls := countGit(t, b)
+	if _, _, err := b.Read(ctx, ""); err != nil {
+		t.Fatal(err)
+	}
+	if calls("ls-tree") != 1 || !kept() {
+		t.Fatalf("plain read after a passing one: %d ls-tree calls, kept %v; want 1 and kept", calls("ls-tree"), kept())
+	}
+}

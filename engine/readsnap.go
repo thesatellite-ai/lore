@@ -120,7 +120,14 @@ func snapshotOf(ctx context.Context) *readSnapshot {
 // readAll is st.Backend.Read(ctx, "") through ctx's read snapshot, if any.
 // The slice is the caller's own (callers rewrite rows in place); the rows'
 // bytes are shared and never written to.
+//
+// A passing read (store.WithPassingRead: a cache built from nothing) uses
+// a full read another reader already started and starts none: its rows
+// go to the cache and are let go, never kept in the snapshot (H-284).
 func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error) {
+	if store.PassingRead(ctx) {
+		return readPassing(ctx, st)
+	}
 	f, ok, err := sharedFull(ctx, st)
 	if !ok {
 		return readAllOf(ctx, st)
@@ -129,6 +136,21 @@ func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error
 		return nil, "", err
 	}
 	return slices.Clone(f.rows), f.next, nil
+}
+
+// readPassing is readAll for a passing read: the snapshot's full read of
+// st when a reader started one, else st's backend read by itself (the
+// rows are only read: the backend may share the documents it holds).
+func readPassing(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error) {
+	if s := snapshotOf(ctx); s != nil && !s.tablesOnly {
+		if f, ok, err := s.startedFull(ctx, st); ok {
+			if err != nil {
+				return nil, "", err
+			}
+			return slices.Clone(f.rows), f.next, nil
+		}
+	}
+	return readAllOf(store.WithSharedDocs(ctx), st)
 }
 
 // sharedFull is st's full read through ctx's whole-store snapshot, filled
