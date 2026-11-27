@@ -320,7 +320,9 @@ func (r *liveRun) session(ctx context.Context, top string) *liveSession {
 	cache := gitref.NewReadCache(r.h.git())
 	repo, err := gitref.Open(ctx, top, cache)
 	if err == nil && !repo.Bare() {
-		s, err = openLiveSession(ctx, r.h, repo, top, r.kind)
+		// a read starts its live lock and fetch before the org's live
+		// settings resolve (live_prefetch.go, devco:D-1026)
+		s, err = openLiveSession(ctx, r.h, repo, top, r.kind, r.read && !r.still)
 		if s != nil {
 			s.agent = r.agent
 			s.read = r.read

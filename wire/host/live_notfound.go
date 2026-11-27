@@ -212,7 +212,7 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 	if root := liveProjectRoot(h.cfg.WorkDir); root != "" && !liveDisabled() {
 		top, folder := livePlace(root)
 		if repo, rerr := gitref.Open(ctx, top, h.git()); rerr == nil && !repo.Bare() {
-			if s, serr := openLiveSession(ctx, h, repo, top, live.FetchCached); serr == nil {
+			if s, serr := openLiveSession(ctx, h, repo, top, live.FetchCached, false); serr == nil {
 				if code, why := s.whyMissingCode(ctx, folder, id); why != "" {
 					explained := errs.New(code, why)
 					if code == errs.Purged {

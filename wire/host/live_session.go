@@ -195,46 +195,84 @@ type liveSession struct {
 	// commit read (liveFiles), so a run that Gets thousands of rows decodes
 	// the tree once per commit, not once per Get.
 	decoded liveDecoded
+	// prefetch is a read's live lock and fetch started before the org's
+	// live settings were known (openLiveSession early); prepare takes it.
+	prefetch *livePrefetch
 }
 
 // openLiveSession opens the live session of the repository at top.
-func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top string, kind live.FetchKind) (*liveSession, error) {
+//
+// early (a read's session, liveRun.session) starts the read's live lock
+// and fetch at once, before the org's live settings are resolved
+// (livePrefetch, devco:D-1026): resolving them can fetch the org store
+// clone (its link index), so the two network round trips of a session's
+// first read overlap instead of adding up.
+func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top string, kind live.FetchKind, early bool) (*liveSession, error) {
 	out, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-common-dir"}})
 	if err != nil {
 		return nil, fmt.Errorf("locate .git: %w", err)
 	}
 	cfg := loadLiveSettings(h.cfg.Home)
-	if h.cfg.OrgLive != nil {
-		cfg.override(h.cfg.OrgLive(ctx)) // P3-MODEB-2: the repo's org entry wins per key
-	}
 	s := &liveSession{
 		h: h, top: top, repo: repo, cfg: cfg, clk: h.clock(), kind: kind,
 		stateDir: filepath.Join(strings.TrimSpace(string(out)), liveStateDirName),
-		autopush: cfg.Autopush && os.Getenv(EnvLiveAutopush) != envOff,
 		offline:  os.Getenv(EnvLiveAutopush) == envOff,
 	}
-	remoteName := cfg.Remote
-	if v := os.Getenv(EnvLiveRemote); v != "" {
-		remoteName = v
-	}
-	var remote gitremote.Remote
-	if u, err := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + remoteName + ".url"}}); err == nil {
-		remote = &gitremote.Git{Repo: repo, Name: remoteName}
-		s.remoteURL = strings.TrimSpace(string(u))
-	}
+	remote, remoteName := s.liveRemote(ctx)
 	sig, ok := repo.GitIdentity(ctx)
 	if !ok {
 		sig = h.loreSignature(ctx)
 	}
-	s.ref = &live.Ref{
-		Repo: repo, Name: live.RefLive, Remote: remote, RemoteName: remoteName, RemoteURL: s.remoteURL,
-		StateDir: s.stateDir, Clock: s.clk, Signature: sig,
-		IgnoreKeys: []string{updatedAtKey}, PushRetries: cfg.PushRetries, Backoff: liveBackoff,
+	s.ref = s.newRef(remote, remoteName, sig)
+	if early {
+		s.prefetch = startLivePrefetch(ctx, s)
 	}
+	if h.cfg.OrgLive != nil {
+		s.cfg.override(h.cfg.OrgLive(ctx)) // P3-MODEB-2: the repo's org entry wins per key
+		if s.liveRemoteName() != remoteName {
+			// the org names another remote: a new ref (the early fetch kept
+			// the first one, and prepare does not take its fetch)
+			remote, remoteName = s.liveRemote(ctx)
+			s.ref = s.newRef(remote, remoteName, sig)
+		}
+	}
+	s.autopush = s.cfg.Autopush && os.Getenv(EnvLiveAutopush) != envOff
 	if h.cfg.OrgFloor != nil {
 		s.ref.Floor = h.cfg.OrgFloor(ctx) // devco:D-735
 	}
 	return s, nil
+}
+
+// liveRemote is the remote s.cfg names (or LORE_LIVE_REMOTE) and its name;
+// a nil remote when the repo has none by that name. It sets s.remoteURL.
+func (s *liveSession) liveRemote(ctx context.Context) (gitremote.Remote, string) {
+	remoteName := s.liveRemoteName()
+	s.remoteURL = ""
+	u, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + remoteName + ".url"}})
+	if err != nil {
+		return nil, remoteName
+	}
+	s.remoteURL = strings.TrimSpace(string(u))
+	return &gitremote.Git{Repo: s.repo, Name: remoteName}, remoteName
+}
+
+// liveRemoteName is the live remote's name: LORE_LIVE_REMOTE, else the
+// settings' live.remote.
+func (s *liveSession) liveRemoteName() string {
+	if v := os.Getenv(EnvLiveRemote); v != "" {
+		return v
+	}
+	return s.cfg.Remote
+}
+
+// newRef is the session's live ref on remote (named remoteName), signed
+// by sig.
+func (s *liveSession) newRef(remote gitremote.Remote, remoteName string, sig gitref.Signature) *live.Ref {
+	return &live.Ref{
+		Repo: s.repo, Name: live.RefLive, Remote: remote, RemoteName: remoteName, RemoteURL: s.remoteURL,
+		StateDir: s.stateDir, Clock: s.clk, Signature: sig,
+		IgnoreKeys: []string{updatedAtKey}, PushRetries: s.cfg.PushRetries, Backoff: liveBackoff,
+	}
 }
 
 // loreSignature signs live commits when git has no identity (FLAG4): the
@@ -279,7 +317,14 @@ func (s *liveSession) prepare(ctx context.Context) {
 	if s.still {
 		return // live_still.go: the refs the clone has, as they are
 	}
-	l, err := acquireLiveLock(ctx, s.stateDir)
+	early := s.takePrefetch()
+	var l *liveLock
+	var err error
+	if early != nil {
+		l, err = early.lock, early.lockErr
+	} else {
+		l, err = acquireLiveLock(ctx, s.stateDir)
+	}
 	if err != nil {
 		s.warn(err.Error())
 		return
@@ -298,19 +343,26 @@ func (s *liveSession) prepare(ctx context.Context) {
 			s.warn("tracking refspec: " + err.Error())
 		}
 	}
-	now := s.clk.Now()
+	if early.fetchedFor(s.ref) {
+		s.fetchDone(early.at, early.err) // the early fetch is this run's fetch (devco:D-1026)
+	} else if now := s.clk.Now(); live.ShouldFetch(s.fetchInputs(now)) {
+		s.fetch(ctx, now)
+	}
+	s.integrate(ctx)
+}
+
+// fetchInputs is the fetch decision's inputs at now: the session's TTL (a
+// write's shorter one, M-4), stamps and kind.
+func (s *liveSession) fetchInputs(now time.Time) live.FetchInputs {
 	ttl := s.cfg.FetchTTL
 	if !s.read {
 		ttl = orgconf.ForWrite(ttl) // M-4: only reads reuse a fetch for the whole TTL
 	}
-	if live.ShouldFetch(live.FetchInputs{
+	return live.FetchInputs{
 		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: ttl,
 		Kind: s.kind, Autopush: !s.offline, HasRemote: s.ref.Remote != nil,
 		LastFailure: live.FetchFailed(s.stateDir), Backoff: s.cfg.FetchTTL, // devco:U-6
-	}) {
-		s.fetch(ctx, now)
 	}
-	s.integrate(ctx)
 }
 
 // liveNeverPushedLine is said when the remote (%s) has no live ref and
@@ -335,10 +387,22 @@ func (s *liveSession) integrate(ctx context.Context) {
 
 // fetch is F3 step 2: refs/lore/* and the default branch, then the stamp.
 func (s *liveSession) fetch(ctx context.Context, now time.Time) {
-	err := s.ref.Fetch(ctx, s.defaultBranch(ctx))
+	s.fetchDone(now, fetchLiveRefs(ctx, s.ref, s.defaultBranch(ctx)))
+}
+
+// fetchLiveRefs fetches ref's refs/lore/* and branch from its remote (all
+// of refs/lore/* alone when the remote has no such branch yet).
+func fetchLiveRefs(ctx context.Context, ref *live.Ref, branch string) error {
+	err := ref.Fetch(ctx, branch)
 	if errors.Is(err, gitremote.ErrRemoteRefMissing) {
-		err = s.ref.Fetch(ctx) // a remote without the default branch yet
+		err = ref.Fetch(ctx) // a remote without the default branch yet
 	}
+	return err
+}
+
+// fetchDone records the fetch made at now with outcome err: the stamp, or
+// the failure stamp of an unreached remote (the next commands back off).
+func (s *liveSession) fetchDone(now time.Time, err error) {
 	if err != nil {
 		s.fetchErr = err
 		if errors.Is(err, gitremote.ErrUnconfirmed) {
@@ -392,12 +456,18 @@ func (s *liveSession) fetchAge() string {
 
 // defaultBranch is config's default_branch, else <remote>/HEAD, else main.
 func (s *liveSession) defaultBranch(ctx context.Context) string {
-	if s.cfg.DefaultBranch != "" {
-		return s.cfg.DefaultBranch
+	return liveDefaultBranch(ctx, s.repo, s.cfg.DefaultBranch, s.ref.RemoteName)
+}
+
+// liveDefaultBranch is configured (config's default_branch) when set,
+// else <remote>/HEAD, else main.
+func liveDefaultBranch(ctx context.Context, repo *gitref.Repo, configured, remote string) string {
+	if configured != "" {
+		return configured
 	}
-	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "refs/remotes/" + s.ref.RemoteName + "/HEAD"}})
+	out, err := repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "refs/remotes/" + remote + "/HEAD"}})
 	if err == nil {
-		if b := strings.TrimPrefix(strings.TrimSpace(string(out)), s.ref.RemoteName+"/"); b != "" {
+		if b := strings.TrimPrefix(strings.TrimSpace(string(out)), remote+"/"); b != "" {
 			return b
 		}
 	}

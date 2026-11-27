@@ -159,6 +159,19 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 	want := setOf(remotes)
 	var unknown, stale, forks, unrelated, otherOrgs []string
 	scanned := 0
+	// every org's due stores at the same time, not one org after another
+	// (devco:D-1026): each entryLinks below takes its stores' results
+	var orgs []*orgconf.Org
+	for i := range g.Config.Orgs {
+		if g.Only == nil || g.Only[g.Config.Orgs[i].Name] {
+			orgs = append(orgs, &g.Config.Orgs[i])
+		}
+	}
+	fctx := ctx
+	if g.Always {
+		fctx = withHeadRefresh(ctx) // lore sync asks each store for its HEAD branch again, as entryLinks does
+	}
+	ctx = context.WithValue(ctx, prefetchedKey{}, g.fetchDue(fctx, orgs))
 	for i := range g.Config.Orgs {
 		o := &g.Config.Orgs[i]
 		if g.Only != nil && !g.Only[o.Name] {
@@ -282,7 +295,7 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 	if g.Always {
 		ctx = withHeadRefresh(ctx) // lore sync asks each store for its HEAD branch again
 	}
-	fetched := g.prefetch(ctx, o, ttl)
+	fetched := g.prefetch(ctx, o)
 	for _, sc := range o.Stores {
 		if sc.AdminsOnly() {
 			// D-442: no repo links to an admins-only store, so the link
@@ -385,32 +398,52 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 	return out, status, o.Name, nil
 }
 
-// prefetch fetches every store of o that is due (g.Always, never fetched,
-// or its last fetch older than ttl) at the same time, one goroutine per
-// clone, and returns each fetched clone's result by folder (nil: fetched).
-// Owner item M-4: a read on a Mac fetched three org stores one after
-// another, ~3 s each over ssh. A store whose url does not parse or whose
-// clone cannot be made is left to entryLinks, which reports it.
-func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org, ttl time.Duration) map[string]error {
+// prefetchedKey is the context key of the stores Links fetched for every
+// org at once (fetchDue): map clone folder → fetch result.
+type prefetchedKey struct{}
+
+// prefetch is the fetch results entryLinks takes for o's stores: the ones
+// Links already fetched for every org at once when it did, else o's due
+// stores fetched now (fetchDue). A store in neither is fetched by
+// entryLinks itself when due.
+func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org) map[string]error {
+	if pre, ok := ctx.Value(prefetchedKey{}).(map[string]error); ok {
+		return pre
+	}
+	return g.fetchDue(ctx, []*orgconf.Org{o})
+}
+
+// fetchDue fetches every store of orgs that is due (g.Always, never
+// fetched, or its last fetch older than its org's fetch TTL) at the same
+// time, one goroutine per clone, and returns each fetched clone's result
+// by folder (nil: fetched). Owner item M-4: a read on a Mac fetched three
+// org stores one after another, ~3 s each over ssh; devco:D-1026: the
+// stores of two orgs still went one org after the other. A store whose
+// url does not parse or whose clone cannot be made is left to entryLinks,
+// which reports it.
+func (g *GitLinks) fetchDue(ctx context.Context, orgs []*orgconf.Org) map[string]error {
 	type job struct{ dir, url, norm string }
 	var jobs []job
 	seen := map[string]bool{}
-	for _, sc := range o.Stores {
-		norm, err := repourl.NormalizeStore(sc.URL)
-		if err != nil || sc.AdminsOnly() {
-			continue // entryLinks never reads an admins-only store (D-442)
-		}
-		dir, _ := cloneDir(g.Home, norm)
-		if seen[dir] {
-			continue
-		}
-		seen[dir] = true
-		if gitbackend.NoAccessSkips(dir) && !g.Always {
-			continue // D-726: skipped until the next lore sync (D-741: only with no copy here)
-		}
-		last := lastFetch(dir)
-		if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
-			jobs = append(jobs, job{dir: dir, url: sc.URL, norm: norm})
+	for _, o := range orgs {
+		ttl := g.Config.FetchTTL(o)
+		for _, sc := range o.Stores {
+			norm, err := repourl.NormalizeStore(sc.URL)
+			if err != nil || sc.AdminsOnly() {
+				continue // entryLinks never reads an admins-only store (D-442)
+			}
+			dir, _ := cloneDir(g.Home, norm)
+			if seen[dir] {
+				continue
+			}
+			seen[dir] = true
+			if gitbackend.NoAccessSkips(dir) && !g.Always {
+				continue // D-726: skipped until the next lore sync (D-741: only with no copy here)
+			}
+			last := lastFetch(dir)
+			if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
+				jobs = append(jobs, job{dir: dir, url: sc.URL, norm: norm})
+			}
 		}
 	}
 	out := map[string]error{}
