@@ -472,6 +472,7 @@ lore 0.1.18: a new core under every command, and the first release whose source 
 - A list or search without `--repo` shows project-wide rows only, even inside a repo.
 - Add commands take the body from `--body` (use `--body "$(cat file)"`); piping a body in was never supported.
 - `--not-a-secret` commits the value together with its allow entry, on purpose; the commit hook refuses only credentials with no allow entry.
+- The compaction guide ([Folding old history](docs/team/identity-and-stores.md#folding-old-history-lore-store-compact)) says when to compact: a store with a very long history gets a short first sync for every new clone (on a synthetic 1M-commit store, first fetch 1,524 MB to 439 MB, first `lore sync` 726 s to 209 s), with the trust rules unchanged.
 
 ## [0.1.17] - 2026-11-03
 

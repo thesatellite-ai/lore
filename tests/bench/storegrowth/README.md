@@ -55,6 +55,8 @@ LORE_BENCH_BIN=/tmp/lore-bench/lore STOREGROWTH_COMMITS=100000 go test -tags ben
 LORE_BENCH_BIN=/tmp/lore-bench/lore STOREGROWTH_COMMITS=1000000 STOREGROWTH_LIMIT=90m go test -tags bench -run '^TestBenchCompaction$' -timeout 600m ./tests/bench/storegrowth/
 ```
 
+Measured at 1M commits, keeping the newest 1%: a fresh clone's first fetch 1,524 MB / 319 s before and 439 MB / 31.5 s after; its cold first `lore sync` 726 s before and 209 s after; the compaction itself 244 s; the planted held changes stayed held. This is why the compaction guide ([docs/team/identity-and-stores.md](../../../docs/team/identity-and-stores.md#folding-old-history-lore-store-compact)) names compaction as the way a store with a very long history gets a short first sync.
+
 `STOREGROWTH_TRACE=1` prints the compaction's output with `LORE_TRACE=1`. Like every big size, run it under the machine's test lock and memory limit.
 
 ## Tests
