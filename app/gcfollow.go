@@ -85,8 +85,15 @@ func liveHeap() (int64, bool) {
 
 // gcSentinel is an object nothing refers to: its finalizer runs after
 // the collection that finds it unreachable, and arms it again for the
-// next one.
-type gcSentinel struct{ _ byte }
+// next one. It holds a pointer so the runtime never puts it in a tiny
+// block. Why (bug hunt H-286, devco:D-1024): a pointer-free object under
+// 16 bytes shares a 16-byte block with other small objects, and its
+// finalizer runs only once the whole block is unreachable; the 1-byte
+// sentinel often sat next to an object that lived on, so the follower
+// never ran in that process. The first lore doctor of a 20,001-memory
+// store then kept the 39 MB limit its cache build began with: ~840
+// collections and 9 s in about 3 of 10 runs, 70 and 5 s in the others.
+type gcSentinel struct{ _ *gcSentinel }
 
 // armAfterGC makes s's finalizer run after the next collection.
 func armAfterGC(s *gcSentinel) { runtime.SetFinalizer(s, afterGC) }

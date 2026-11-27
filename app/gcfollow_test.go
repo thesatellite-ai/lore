@@ -3,6 +3,7 @@ package app
 import (
 	"runtime"
 	"runtime/debug"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -67,6 +68,31 @@ func TestSoftLimitFollowsKeptHeap(t *testing.T) {
 	}
 	if got := debug.SetMemoryLimit(-1); got < want {
 		t.Errorf("soft memory limit %d MB with %d MB kept over a %d MB floor, want at least %d MB", got>>20, kept>>20, floor>>20, want>>20)
+	}
+	runtime.KeepAlive(held)
+}
+
+// TestFollowerSentinelIsCollectedNextToLiveObjects (bug hunt H-286,
+// devco:D-1024): the follower's sentinel is finalized after a collection
+// even when it was allocated right after small objects that stay alive.
+// A 1-byte pointer-free sentinel went into the runtime's tiny block with
+// them and was never finalized while they lived: the follower never ran
+// and a cache build kept its first, tiny limit (~840 collections).
+func TestFollowerSentinelIsCollectedNextToLiveObjects(t *testing.T) {
+	const n = 64
+	held := make([]*[8]byte, n) // small pointer-free objects that live on
+	var ran atomic.Int32
+	for i := range n {
+		held[i] = new([8]byte)
+		runtime.SetFinalizer(new(gcSentinel), func(*gcSentinel) { ran.Add(1) })
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for ran.Load() < n && time.Now().Before(deadline) {
+		runtime.GC()
+		time.Sleep(10 * time.Millisecond) // finalizers run after the collection
+	}
+	if got := ran.Load(); got < n {
+		t.Errorf("%d of %d sentinels finalized next to live small objects, want all", got, n)
 	}
 	runtime.KeepAlive(held)
 }
