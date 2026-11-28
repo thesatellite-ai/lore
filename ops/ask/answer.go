@@ -858,8 +858,8 @@ func subjectOf(r *textRow, toks map[string]bool, ms []match) bool {
 		if slices.Contains(r.Refs, m.res.ID) {
 			return true
 		}
-		for _, n := range m.res.names() {
-			if allWords(toks, nameKey(n)) {
+		for _, k := range m.res.memo().keys {
+			if allWords(toks, k) {
 				return true
 			}
 		}
@@ -1079,18 +1079,8 @@ func score(q question, ms []match, r *textRow) (scored, bool) {
 // about the question for saying it, it is about the resource.
 func namesResource(w string, ms []match) bool {
 	for _, m := range ms {
-		if slices.Contains(m.said, w) {
+		if slices.Contains(m.said, w) || m.res.namesWord(w) {
 			return true
-		}
-		if ws := keyWords(nameKey(m.res.Name)); len(ws) > 1 && slices.Contains(ws, w) {
-			return true
-		}
-		for i, n := range m.res.names() {
-			// an alias (names()[1:]) is a typo only from four letters on:
-			// cto is not the alias CFO
-			if w == n || ((i == 0 || len([]rune(w)) >= 4) && osa(w, n) <= typoBudget(w)) {
-				return true
-			}
 		}
 	}
 	return false

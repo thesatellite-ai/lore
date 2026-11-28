@@ -25,18 +25,85 @@ type resourceRow struct {
 	Fields []fieldValue
 	// History is the field history, oldest first.
 	History []historyEntry
+	// nm is what the name checks read of the row (nameMemo), built on the
+	// first one.
+	nm *nameMemo
+}
+
+// nameMemo is what ask's name checks read of one resource, built once per
+// ask and kept on the row: every ask loads its resources afresh
+// (loadTyped) and reads them in one goroutine, so it needs no lock. Why
+// (devco D-1036, bug hunt H-300): namesResource runs for every question
+// word against every identifier of every scored row, and it rebuilt the
+// names through a regexp (aliasKey) on each call; a question of twenty
+// words over notes full of identifiers took 5 s where others take 0.5 s.
+type nameMemo struct {
+	// name and aliases are what it was built from (aliases a copy): a row
+	// copied with another name or aliases (a test's fixture) builds anew.
+	name    string
+	aliases []string
+	// names is names(): the name in lower case, then each alias key.
+	names []string
+	// keys is nameKey of each of names (widget_api as "widget api").
+	keys []string
+	// aliasKeys is aliasKey of each alias, in Aliases' order.
+	aliasKeys []string
+	// parts are the words of the name's key when there are two or more
+	// (widget api), else nil.
+	parts []string
+	// named holds namesWord's answer for each word asked so far.
+	named map[string]bool
+}
+
+// memo is r's nameMemo, built on the first call and again when r's name
+// or aliases are no longer the ones it was built from.
+func (r *resourceRow) memo() *nameMemo {
+	if m := r.nm; m != nil && m.name == r.Name && slices.Equal(m.aliases, r.Aliases) {
+		return m
+	}
+	m := &nameMemo{name: r.Name, aliases: slices.Clone(r.Aliases), names: []string{strings.ToLower(r.Name)}, named: map[string]bool{}}
+	for _, a := range r.Aliases {
+		k := aliasKey(a)
+		m.aliasKeys = append(m.aliasKeys, k)
+		if k != "" && !slices.Contains(m.names, k) {
+			m.names = append(m.names, k)
+		}
+	}
+	for _, n := range m.names {
+		m.keys = append(m.keys, nameKey(n))
+	}
+	if ws := keyWords(nameKey(r.Name)); len(ws) > 1 {
+		m.parts = ws
+	}
+	r.nm = m
+	return m
 }
 
 // names are r's name and each alias, as question tokens read them (lower
-// case; a several-word alias as its words joined by one space).
-func (r *resourceRow) names() []string {
-	out := []string{strings.ToLower(r.Name)}
-	for _, a := range r.Aliases {
-		if k := aliasKey(a); k != "" && !slices.Contains(out, k) {
-			out = append(out, k)
-		}
+// case; a several-word alias as its words joined by one space). The slice
+// is shared (nameMemo): callers only read it.
+func (r *resourceRow) names() []string { return r.memo().names }
+
+// namesWord reports whether word w is (a typo of) r's name or an alias,
+// or a word of a name the words split (api of widget_api); the answer is
+// kept per word (nameMemo), so a question word costs one check per
+// resource per ask, whatever the number of rows and identifiers.
+func (r *resourceRow) namesWord(w string) bool {
+	m := r.memo()
+	if v, ok := m.named[w]; ok {
+		return v
 	}
-	return out
+	v := slices.Contains(m.parts, w)
+	for i, n := range m.names {
+		if v {
+			break
+		}
+		// an alias (names[1:]) is a typo only from four letters on: cto is
+		// not the alias CFO
+		v = w == n || ((i == 0 || len([]rune(w)) >= 4) && osa(w, n) <= typoBudget(w))
+	}
+	m.named[w] = v
+	return v
 }
 
 // fieldValue is one field of a resource.
@@ -101,13 +168,13 @@ func matchResources(q question, rs []resourceRow) []match {
 	byAlias := map[string][]*resourceRow{}
 	var longNames []int // names of several words as tokens (widget_api)
 	for i := range rs {
-		k := nameKey(rs[i].Name)
+		nm := rs[i].memo()
+		k := nm.keys[0]
 		byName[k] = append(byName[k], &rs[i])
-		if len(keyWords(k)) > 1 {
+		if nm.parts != nil {
 			longNames = append(longNames, i)
 		}
-		for _, a := range rs[i].Aliases {
-			k := aliasKey(a)
+		for _, k := range nm.aliasKeys {
 			byAlias[k] = append(byAlias[k], &rs[i])
 		}
 	}
@@ -140,7 +207,7 @@ func matchResources(q question, rs []resourceRow) []match {
 		}
 	}
 	for _, i := range longNames {
-		if strings.Contains(said, " "+nameKey(rs[i].Name)+" ") {
+		if strings.Contains(said, " "+rs[i].memo().keys[0]+" ") {
 			add(&rs[i], MatchName, "", "")
 		}
 	}
@@ -166,8 +233,8 @@ func matchResources(q question, rs []resourceRow) []match {
 				if name != t && slices.Contains(strings.FieldsFunc(name, isNameSep), t) {
 					add(&rs[i], MatchName, "", t)
 				}
-				for _, a := range rs[i].Aliases {
-					if slices.Contains(strings.FieldsFunc(aliasKey(a), isNameSep), t) {
+				for _, k := range rs[i].memo().aliasKeys {
+					if slices.Contains(strings.FieldsFunc(k, isNameSep), t) {
 						add(&rs[i], MatchAlias, "", t)
 					}
 				}
@@ -214,8 +281,7 @@ func typoIndex(rs []resourceRow) *fuzzyname.Index {
 	idx := fuzzyname.New()
 	for i := range rs {
 		idx.Add(rs[i].Name, i)
-		for _, a := range rs[i].Aliases {
-			k := aliasKey(a)
+		for _, k := range rs[i].memo().aliasKeys {
 			idx.Add(k, i)
 			if ws := strings.Fields(k); len(ws) > 1 {
 				for _, w := range ws {
