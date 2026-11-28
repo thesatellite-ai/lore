@@ -66,30 +66,40 @@ func TestGrowWidenKeepsQuestionWord(t *testing.T) {
 
 // TestGrowLongRowOffSubject: a long row whose printed part holds none of
 // the question's rare words gets no wider slot; one holding a rare word
-// does, and a short row always does; with no subject terms (a store of
-// fewer than rareFloor scored rows) a long row stays cut.
+// does for the first slot, and for a later one only with a key word; a
+// short row always does; with no subject terms (a store of fewer than
+// rareFloor scored rows) a long row stays cut.
 func TestGrowLongRowOffSubject(t *testing.T) {
 	t.Parallel()
 	o := Out{q: parseQuestion("where does the zebra label printer log", now)}
 	st := &subjectTerms{weight: map[string]float64{}, rare: map[string]bool{"zebra": true}}
 	long := strings.Repeat("The label printer logs to the dock journal. ", 40)
 	off := Row{ID: "anr_off", Body: long, FullChars: 3000, Matched: []string{"zebra", "label"}, subject: st}
-	if o.onSubject(off) {
+	if o.onSubject(off, true) {
 		t.Errorf("a long row printing only common words is on the subject")
 	}
 	on := off
 	on.Body = "The zebra printer logs to the dock journal. " + long
-	if !o.onSubject(on) {
+	if !o.onSubject(on, true) {
 		t.Errorf("a long row printing the rare word zebra is off the subject")
 	}
 	nosub := on
 	nosub.subject = nil
-	if o.onSubject(nosub) {
+	if o.onSubject(nosub, true) {
 		t.Errorf("a long row with no subject terms gets a wider slot")
 	}
 	short := Row{ID: "mem_short", Body: "The label printer logs to the dock journal.", Matched: []string{"label"}, subject: st}
-	if !o.onSubject(short) {
+	if !o.onSubject(short, true) || !o.onSubject(short, false) {
 		t.Errorf("a short row is off the subject")
+	}
+	// a later slot (devco D-1035): a rare word is not enough, the row
+	// must hold a key word of the question
+	if o.onSubject(on, false) {
+		t.Errorf("a long row holding a rare word that is not key took a later slot")
+	}
+	st.key = map[string]bool{"zebra": true}
+	if !o.onSubject(on, false) {
+		t.Errorf("a long row holding the key word zebra was refused a later slot")
 	}
 }
 

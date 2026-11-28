@@ -8,7 +8,8 @@ package ask
 //	grow             ─▶ the cut row printed whole when it fits next to
 //	                    the first minCandidates lines, else its excerpt
 //	                    widened to the room left; then the next rows
-//	                    printed whole while they fit, up to maxFull
+//	                    printed whole while they fit (bytes decide how
+//	                    many: --max-chars, at most --top)
 //
 // Why: on a store of long notes cap cut the answering row to its best
 // sections (longRoom) and filled the rest with candidate lines, so the
@@ -24,17 +25,16 @@ import (
 	"strings"
 )
 
-// maxFull is the most rows grow prints whole or widened: enough for a
-// two- or three-row answer, few enough that the candidate list stays.
-const maxFull = 3
-
 // grow spends what cap and the candidate list left of maxChars on the
 // rows: each printed cut row, in order, is printed whole when that fits
 // next to the first minCandidates candidate lines, else its excerpt is
 // widened to the room left; then the rows cap did not print (all, then
-// more) are printed whole while they fit, until maxFull rows (or --top,
-// when lower) are printed; a row the list leaves out on purpose (dropped,
-// the same text as another row) is never promoted.
+// more) are printed whole while they fit, at most --top rows; a row the
+// list leaves out on purpose (dropped, the same text as another row) is
+// never promoted. No fixed count (devco D-1035, bug hunt H-296 ask f):
+// the docs said "up to three rows" while rows already whole stayed past
+// three; the byte budget, next to the first minCandidates candidate
+// lines, is what holds.
 // all are the rows before cap cut them, list the candidate list so far
 // and dropped the rows candidatesOf left out of it; it returns both for
 // the rows still unprinted.
@@ -53,7 +53,7 @@ func (o *Out) grow(all, more []Row, cards []Candidate, memo map[string]Candidate
 	fits := func(l []Candidate) bool {
 		return len(o.items())+len(candText(l[:min(minCandidates, len(l))])) <= maxChars
 	}
-	limit := maxFull
+	limit := len(all) + len(more)
 	if o.top > 0 {
 		limit = min(limit, o.top) // --top caps the rows printed in full
 	}
@@ -68,7 +68,7 @@ func (o *Out) grow(all, more []Row, cards []Candidate, memo map[string]Candidate
 		}
 		rows++
 		r, w := &o.Rows[i], whole[it.ID]
-		if r.FullChars == 0 || w.ID == "" || !o.onSubject(*r) {
+		if r.FullChars == 0 || w.ID == "" || !o.onSubject(*r, rows == 1) {
 			continue
 		}
 		cut := *r
@@ -114,7 +114,7 @@ func (o *Out) grow(all, more []Row, cards []Candidate, memo map[string]Candidate
 				slices.ContainsFunc(dropped, func(d Dropped) bool { return d.ID == w.ID }) {
 				continue // printed, or left out of the list on purpose (same text as another row)
 			}
-			if len(w.Body) > longRow && !o.onSubject(w) {
+			if len(w.Body) > longRow && !o.onSubject(w, rows == 0) {
 				continue // a big note off the subject stays a candidate
 			}
 			o.Rows = append(o.Rows, w)
@@ -252,10 +252,20 @@ func (o *Out) dropped(now, was string, words []string) string {
 }
 
 // onSubject reports whether row r is short (at most longRow characters)
-// or what it printed holds a rare word of the question (subject.go):
-// only such a row gets a wider slot. Among fewer than rareFloor scored
-// rows no word is rare and a long row stays cut.
-func (o *Out) onSubject(r Row) bool {
+// or what it printed holds a rare word of the question (subject.go) for
+// the first slot, a key word of it (keyFrac) for a later one: only such
+// a row gets a wider slot. Among fewer than rareFloor scored rows no
+// word is rare and a long row stays cut.
+//
+// Why key for a later slot (devco D-1035, bug hunt H-296 ask a): a word
+// at most a quarter of the store holds is "rare" to a 4,000-row store,
+// and a several-KB overview note holds some such word of nearly
+// every question about the product, so on the team-store benchmark such
+// notes took the second and third full slots unused while a short row
+// holding most of the question's words was a candidate line. The first
+// row keeps the wider bar: search ranked it first, and the note that
+// answers is often a long one sharing the question's common words.
+func (o *Out) onSubject(r Row, first bool) bool {
 	if len(r.Body) <= longRow && r.FullChars <= longRow {
 		return true
 	}
@@ -266,7 +276,11 @@ func (o *Out) onSubject(r Row) bool {
 	}
 	toks := tokensOf(r.Title + "\n" + cmp.Or(r.readBody, r.Body))
 	for _, w := range r.Matched {
-		if r.subject.isRare(w) && (hasWord(toks, w) || identWord(o.q, toks, w)) {
+		on := r.subject.isRare(w)
+		if !first {
+			on = r.subject.isKey(w)
+		}
+		if on && (hasWord(toks, w) || identWord(o.q, toks, w)) {
 			return true
 		}
 	}

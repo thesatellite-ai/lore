@@ -39,6 +39,9 @@ import (
 type subjectTerms struct {
 	weight map[string]float64
 	rare   map[string]bool
+	// key are the question's key words (keyFrac): the words a long
+	// note must hold to take a full slot (slots.go).
+	key map[string]bool
 }
 
 // subjectTermsOf is the subject terms of q's words and topics among the
@@ -50,7 +53,8 @@ func subjectTermsOf(all []scored, ix *hybrid.Index) *subjectTerms {
 		return nil
 	}
 	df := wordSpread(all)
-	st := &subjectTerms{weight: make(map[string]float64, len(df)), rare: map[string]bool{}}
+	st := &subjectTerms{weight: make(map[string]float64, len(df)), rare: map[string]bool{}, key: map[string]bool{}}
+	best := 0.0 // the heaviest word's weight
 	for w, d := range df {
 		n, wt := len(all), 0.0
 		if ix != nil {
@@ -62,6 +66,12 @@ func subjectTermsOf(all []scored, ix *hybrid.Index) *subjectTerms {
 		st.weight[w] = wt
 		if wt >= hybrid.IDF(n, max(n/4, 1)) {
 			st.rare[w] = true
+		}
+		best = max(best, wt)
+	}
+	for w, wt := range st.weight {
+		if wt >= keyFrac*best {
+			st.key[w] = true
 		}
 	}
 	return st
@@ -89,6 +99,11 @@ func (st *subjectTerms) of(w string) float64 {
 		return v
 	}
 	return 1
+}
+
+// isKey reports whether w is one of the question's key words (keyFrac).
+func (st *subjectTerms) isKey(w string) bool {
+	return st != nil && st.key[strings.ToLower(w)]
 }
 
 // isRare reports whether w is one of the question's distinctive words.

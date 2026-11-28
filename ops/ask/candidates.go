@@ -120,6 +120,7 @@ func (o *Out) splitCards(order []Ranked) ([]Ranked, []Candidate) {
 // warm budget; dropping from the end renders it once per dropped item.
 func (o *Out) fitCandidates(order []Ranked, maxChars int, more []Row, cards []Candidate) {
 	all := slices.Clone(o.Rows) // whole, before cap cuts them
+	order = o.slotOrder(order)  // slots.go: who takes the full slots
 	o.cap(order, maxChars)
 	memo := map[string]Candidate{}
 	list, dropped := o.candidatesOf(all, more, cards, memo)
