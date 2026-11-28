@@ -126,6 +126,7 @@ func (o *Out) fitCandidates(order []Ranked, maxChars int, more []Row, cards []Ca
 	list, dropped := o.candidatesOf(all, more, cards, memo)
 	if len(list) == 0 {
 		o.grow(all, more, cards, memo, list, dropped, maxChars) // grow.go
+		o.pullNamed(o.find, maxChars)                           // named.go
 		return
 	}
 	items := len(o.items())
@@ -140,6 +141,7 @@ func (o *Out) fitCandidates(order []Ranked, maxChars int, more []Row, cards []Ca
 		list = list[:len(list)-1]
 	}
 	o.Candidates, o.Dropped = list, droppedBefore(dropped, list)
+	o.pullNamed(o.find, maxChars) // named.go: a row a printed row names by id
 }
 
 // droppedBefore is the dropped rows search ranks before the list's last

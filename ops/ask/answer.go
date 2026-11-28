@@ -205,6 +205,10 @@ type data struct {
 	// view is the question's view of every live row the call read
 	// (corpus.go); nil builds it from rows (a test's data).
 	view *meaningView
+	// corp is every live row the call read (corpus.go), where a row a
+	// printed row names by id is found (named.go); nil in a test's data,
+	// which finds it among rows alone.
+	corp *corpus
 }
 
 // Defaults of ask.
@@ -505,7 +509,8 @@ func build(q question, d data, top, maxChars int) Out {
 		}
 	}
 	names := nameIndex(d.resources)
-	out.names = names // H-270: candidates past ask's own rows are read the same way
+	out.names = names      // H-270: candidates past ask's own rows are read the same way
+	out.find = lookupOf(d) // D-1037: a row a printed row names by id (named.go)
 	for _, rs := range [][]Row{out.Rows, more} {
 		for i := range rs {
 			r := &rs[i]

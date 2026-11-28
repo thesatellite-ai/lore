@@ -144,6 +144,9 @@ type Out struct {
 	// names maps a ${res:…} reference to the resource's name (nameIndex):
 	// a candidate the full rows did not read is read with it
 	names map[string]string
+	// find looks up a row a printed row names by id (named.go, devco
+	// D-1037): it is printed or leads the candidate list.
+	find rowLookup
 	// lead is how many of Rows (the first ones) are an everything-about
 	// answer's newest row of each folder, printed one line each (devco
 	// D-822); 0 for any other question.
@@ -346,7 +349,7 @@ func run(ctx context.Context, env Env, in RunIn) (Out, error) {
 		var c *corpus
 		var fill func(*textRow)
 		d.rows, c, fill, lerr = loadRows(ctx, run, q, ms, keeps)
-		corp = c
+		corp, d.corp = c, c
 		if lerr == nil && c != nil {
 			vf, _ := env.(VectorFile)
 			d.view = viewOf(q, c, vf)
