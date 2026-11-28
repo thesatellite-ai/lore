@@ -369,4 +369,36 @@ func TestStoryOStaleFactFlagged(t *testing.T) {
 			t.Fatalf("lore ask after a new commit ran %d evidence git logs, want one (a new HEAD asks again)", logs)
 		}
 	})
+
+	// devco:D-1033 (bug hunt H-298): a team wrote fact_evidence as people
+	// do, one text value with the repo's folder in front, semicolons,
+	// line-range lists, a note in brackets and a bare file after a path in
+	// its folder; the old comma split read it as paths git never knew, so
+	// none of their stale notes was flagged. Now the note is stale where it
+	// should be, and a file the repo does not hold next to one it does is
+	// said (the check could not run for it; lint names it). Asked from
+	// outside the code repo, ask says nothing of it (no line per note) and
+	// lint and doctor count the notes they could not check.
+	s.Step("D-1033/free-form-evidence-and-ask-outside-the-code-repo", func() {
+		written := oAddedID(t, ada.Lore(pc.Dir, "memory", "add", "--body", "narwhal refunds: a refund goes back to the original card",
+			"--meta", "fact_evidence=billing/card.go:3 (origin/main 1a2b3c4); platform/billing/refund.go:1-3,4", "--meta", "fact_verified_at=2026-11-02", "--json").OK(t))
+		gone := oAddedID(t, ada.Lore(pc.Dir, "memory", "add", "--body", "narwhal refunds: the refund log lists every refund",
+			"--meta", "fact_evidence=billing/card.go:3, docs/gone.md:2", "--meta", "fact_verified_at=2026-11-02", "--json").OK(t))
+		ada.Lore(pc.Dir, "lint", "--code", "stale_fact").OK(t).Says(t, "stale_fact "+written, "changed after 2026-11-02: billing/refund.go (in ")
+		ada.Lore(pc.Dir, "lint", "--code", "unchecked_fact").OK(t).Says(t, "unchecked_fact "+gone, "(docs/gone.md), so it could not be checked")
+		ada.Lore(pc.Dir, "ask", "--query", "narwhal refunds").OK(t).
+			Says(t, "[stale: evidence changed since 2026-11-02 (billing/refund.go)]", "evidence could not be checked: "+gone)
+		ada.Lore(pc.Dir, "show", "--id", gone).OK(t).Says(t, "  evidence could not be checked (not in this repo: docs/gone.md)")
+		outside := filepath.Dir(pc.Dir)
+		for _, cmd := range [][]string{{"ask", "--query", "narwhal refunds"}, {"search", "--query", "narwhal refunds"}} {
+			out := ada.Lore(outside, cmd...).OK(t).Says(t, written).Stdout
+			if strings.Contains(out, "could not be checked") || strings.Contains(out, "[stale") {
+				t.Fatalf("lore %s outside the code repo prints a line about evidence it cannot check:\n%s", cmd[0], out)
+			}
+		}
+		ada.Lore(outside, "lint", "--code", "unchecked_fact").OK(t).Says(t, "row(s) name fact_evidence that could not be checked: there is no git repo here")
+		// doctor reads rows only in a project (outside one it skips them):
+		// in the repo it counts the note naming a file the repo lacks
+		ada.Lore(pc.Dir, "doctor").Says(t, "unchecked_fact: 1 row(s)' evidence (fact_evidence) could not be checked")
+	})
 }

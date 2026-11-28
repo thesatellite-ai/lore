@@ -61,6 +61,10 @@ type Evidence struct {
 	Line int
 	// Commit is the sha of a commit item, lowercase.
 	Commit string
+	// Near is, for a path item naming a bare file (no folder), the folder
+	// of the path item written before it: `a/b/x.go:12, y.go:4` names
+	// a/b/y.go when the repo has no top-level y.go (bug hunt H-298).
+	Near string
 }
 
 // Claim is what a row says about its own evidence.
@@ -92,15 +96,67 @@ var reCommit = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 // reLine is the line part of a path item: 42 or a range 42-50.
 var reLine = regexp.MustCompile(`^([0-9]+)(?:-[0-9]+)?$`)
 
-// ParseEvidence reads fact_evidence items; an item that names no safe
-// repo-relative file and no commit (an absolute path, a `..` step, an
-// empty item) is returned in bad and never handed to git.
-func ParseEvidence(items []string) (ev []Evidence, bad []string) {
+// reLineOnly is a piece that is only a line or a line range: the rest of
+// the item before it (`a.go:12-20,40-44` lists two ranges of a.go).
+var reLineOnly = regexp.MustCompile(`^[0-9]{1,6}(?:-[0-9]+)?$`)
+
+// reNote is a parenthesised note inside an item (`(origin/dev 7813f13)`,
+// `(executeCore)`): words about the evidence, never evidence.
+var reNote = regexp.MustCompile(`\([^()]*\)`)
+
+// SplitEvidence cuts fact_evidence as people write it into items (bug
+// hunt H-298: a team wrote `x/a.go:1-5,9; a.go:7 (origin/dev 1a2b3c4);
+// b.go:3` as one text value, and the old comma split read most of it as
+// one path git never knew, so no row was ever stale). Items are separated
+// by commas, semicolons and line breaks; a parenthesised note is dropped;
+// a piece holding a word that cannot be evidence (`Evidence: a.go`) keeps
+// only its words that can (a folder or an extension, or a commit sha),
+// else it is one item (a path with a space); a piece that is
+// only a line range belongs to the item before it and is dropped.
+func SplitEvidence(items []string) []string {
+	var out []string
 	for _, raw := range items {
-		s := strings.TrimSpace(raw)
-		if s == "" {
-			continue
+		for _, piece := range strings.FieldsFunc(reNote.ReplaceAllString(raw, " "), func(r rune) bool {
+			return r == ',' || r == ';' || r == '\n' || r == '\r'
+		}) {
+			words := strings.Fields(piece)
+			if len(words) < 2 || !slices.ContainsFunc(words, func(w string) bool { return !evidenceWord(w) }) {
+				out = appendPiece(out, strings.TrimSpace(piece)) // one item, a path with a space kept whole
+				continue
+			}
+			for _, w := range words {
+				if evidenceWord(w) {
+					out = appendPiece(out, w)
+				}
+			}
 		}
+	}
+	return out
+}
+
+// evidenceWord reports whether a word of a piece can be (part of) an
+// evidence item: it has a folder or an extension, or it is a commit sha.
+func evidenceWord(w string) bool {
+	return strings.ContainsAny(strings.TrimRight(w, ".:"), "/.") || reCommit.MatchString(strings.ToLower(w))
+}
+
+// appendPiece appends one evidence piece, its trailing punctuation cut;
+// an empty piece or a bare line range is left out.
+func appendPiece(out []string, p string) []string {
+	p = strings.TrimRight(strings.TrimSpace(p), ".:")
+	if p == "" || reLineOnly.MatchString(p) {
+		return out
+	}
+	return append(out, p)
+}
+
+// ParseEvidence reads fact_evidence items (as SplitEvidence cuts them); an
+// item that names no safe repo-relative file and no commit (an absolute
+// path, a `..` step, an empty item) is returned in bad and never handed
+// to git.
+func ParseEvidence(items []string) (ev []Evidence, bad []string) {
+	near := ""
+	for _, s := range SplitEvidence(items) {
 		if low := strings.ToLower(s); reCommit.MatchString(low) {
 			ev = append(ev, Evidence{Kind: KindCommit, Commit: low})
 			continue
@@ -119,7 +175,13 @@ func ParseEvidence(items []string) (ev []Evidence, bad []string) {
 			bad = append(bad, s)
 			continue
 		}
-		ev = append(ev, Evidence{Kind: KindPath, Path: p, Line: line})
+		e := Evidence{Kind: KindPath, Path: p, Line: line}
+		if i := strings.LastIndexByte(p, '/'); i > 0 {
+			near = p[:i]
+		} else {
+			e.Near = near
+		}
+		ev = append(ev, e)
 	}
 	return ev, bad
 }
@@ -156,11 +218,7 @@ func ParseVerified(s string) (time.Time, bool) {
 // fact_verified_at value were read as text (ask reads them from the
 // cache); ok is false when it names no evidence.
 func ClaimOfItems(evidence []string, verified string) (Claim, bool) {
-	var items []string
-	for _, e := range evidence {
-		items = append(items, strings.Split(e, ",")...) // a text key holds the list comma-joined
-	}
-	ev, _ := ParseEvidence(items)
+	ev, _ := ParseEvidence(evidence) // a text key holds the list joined (SplitEvidence cuts it)
 	if len(ev) == 0 {
 		return Claim{}, false
 	}
@@ -240,7 +298,37 @@ type Verdict struct {
 	// written, else the evidence commit's day).
 	Since   string
 	Changed []Change
+	// Unfound is each path item the code repo holds no file or folder for
+	// under any reading while another item of the claim is there (bug hunt
+	// H-298): the repo is the right one but the check could not run for
+	// that file, so it is said, never taken as fresh. Empty when the
+	// checker has no view of the work tree (WithFiles).
+	Unfound []string
+	// Unreachable is set when none of the claim's path items is in this
+	// repo: the row is about code this repo does not hold (a command run
+	// in another repo), so ask and search say nothing and lint and doctor
+	// count it.
+	Unreachable bool
 }
+
+// NoRepo is why no row's evidence is checked when the command runs
+// outside a git work tree (bug hunt H-298: asked from the folder above the
+// code repo, every stale row read as fresh); show prints it, lint and
+// doctor count such rows.
+const NoRepo = "evidence could not be checked: no git repo here (fact_evidence paths are relative to the code repo; run the command in it)"
+
+// Unchecked is the line search, ask, show and lint print for evidence the
+// check could not find, "" when every item was found:
+// `stale check: evidence not found in this repo (billing/refund.go)`.
+func (v Verdict) Unchecked() string {
+	if len(v.Unfound) == 0 {
+		return ""
+	}
+	return UnfoundLead + " (not in this repo: " + strings.Join(v.Unfound, ", ") + ")"
+}
+
+// UnfoundLead starts the Unchecked line of evidence the repo does not hold.
+const UnfoundLead = "evidence could not be checked"
 
 // Note is the mark search and ask print on a stale row, "" when fresh:
 // `stale: evidence changed since 2026-11-22 (billing/refund.go)`.
@@ -294,6 +382,66 @@ type Checker struct {
 	// memo keeps the answers across commands at one HEAD (nil: none).
 	memo  Memo
 	dirty bool
+	// exists reports whether the work tree holds a repo-relative path (nil:
+	// paths are asked of git as written).
+	exists   func(path string) bool
+	resolved map[string]string
+}
+
+// WithFiles lets the checker read evidence paths as people write them
+// (bug hunt H-298): exists reports whether the work tree holds a
+// repo-relative file or folder. A path item the tree does not hold is
+// read, in order, as a bare file in the folder of the item before it, and
+// with its first folder cut (`myrepo/billing/refund.go` written from the
+// folder above the repo is billing/refund.go); the first reading the tree
+// holds is the one git is asked about. No reading found: the path is asked
+// as written (a file deleted since is still a change) and, when git knows
+// no change either, the verdict lists it in Unfound.
+func (c *Checker) WithFiles(exists func(path string) bool) *Checker {
+	c.exists = exists
+	return c
+}
+
+// path is the repo path git is asked about for a path item (see WithFiles).
+func (c *Checker) path(e Evidence) string {
+	if c.exists == nil {
+		return e.Path
+	}
+	key := e.Near + "\x00" + e.Path
+	if p, ok := c.resolved[key]; ok {
+		return p
+	}
+	cands := []string{e.Path}
+	if e.Near != "" {
+		cands = append(cands, e.Near+"/"+e.Path)
+	}
+	got := ""
+	for _, cand := range cands {
+		if c.exists(cand) {
+			got = cand
+			break
+		}
+	}
+	for _, cand := range cands {
+		// one folder only (the repo's own, written from the folder above
+		// it): cutting more would match an unrelated README.md
+		if _, rest, ok := strings.Cut(cand, "/"); ok && got == "" && c.exists(rest) {
+			got = rest
+		}
+	}
+	if got == "" {
+		got = e.Path
+	}
+	if c.resolved == nil {
+		c.resolved = map[string]string{}
+	}
+	c.resolved[key] = got
+	return got
+}
+
+// found reports whether the work tree holds p (true without WithFiles).
+func (c *Checker) found(p string) bool {
+	return c.exists == nil || c.exists(p)
 }
 
 // Memo keeps a Checker's answers between commands (bug hunt H-213). The
@@ -384,17 +532,18 @@ func (c *Checker) Prime(ctx context.Context, claims []Claim) {
 		for _, e := range cl.Evidence {
 			switch e.Kind {
 			case KindPath:
-				if cl.Verified.IsZero() || c.known("p\x00"+e.Path, cl.Verified) {
+				p := c.path(e)
+				if cl.Verified.IsZero() || c.known("p\x00"+p, cl.Verified) {
 					continue
 				}
-				if want["p\x00"+e.Path] {
+				if want["p\x00"+p] {
 					if cl.Verified.Before(since) {
 						since = cl.Verified
 					}
 					continue
 				}
-				want["p\x00"+e.Path] = true
-				paths = append(paths, e.Path)
+				want["p\x00"+p] = true
+				paths = append(paths, p)
 				if since.IsZero() || cl.Verified.Before(since) {
 					since = cl.Verified
 				}
@@ -524,6 +673,7 @@ const shortSHA = 7
 func (c *Checker) Check(ctx context.Context, cl Claim) Verdict {
 	v := Verdict{Since: cl.VerifiedRaw}
 	seen := map[string]bool{}
+	paths, foundAny := 0, false
 	add := func(ch Change) {
 		if !seen[ch.Path] {
 			seen[ch.Path] = true
@@ -536,8 +686,16 @@ func (c *Checker) Check(ctx context.Context, cl Claim) Verdict {
 			if cl.Verified.IsZero() {
 				continue // never verified: not stale, unchecked
 			}
-			for _, ch := range c.pathChanges(ctx, e.Path, cl.Verified) {
+			p := c.path(e)
+			changes := c.pathChanges(ctx, p, cl.Verified)
+			for _, ch := range changes {
 				add(ch)
+			}
+			paths++
+			if len(changes) == 0 && !c.found(p) {
+				v.Unfound = append(v.Unfound, e.Path)
+			} else {
+				foundAny = true
 			}
 		case KindCommit:
 			at, changes := c.commitChanges(ctx, e.Commit, cl.Verified)
@@ -548,6 +706,9 @@ func (c *Checker) Check(ctx context.Context, cl Claim) Verdict {
 				add(ch)
 			}
 		}
+	}
+	if paths > 0 && !foundAny {
+		v.Unfound, v.Unreachable = nil, true // code this repo does not hold
 	}
 	v.Stale = len(v.Changed) > 0
 	return v

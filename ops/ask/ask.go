@@ -270,6 +270,9 @@ type Row struct {
 	// Reverify is what clears Stale after reading the row and the code
 	// again (devco:D-953), the words lore lint and lore show print.
 	Reverify string `json:"reverify,omitempty" desc:"set with stale: when it still holds: lore meta set --id <id> [--store <store>] --pair fact_verified_at=<day>; when it does not: edit the row and its fact_evidence"`
+	// Unchecked says why this row's stale check could not run (bug hunt
+	// H-298), so a row lore could not check never reads as fresh.
+	Unchecked string `json:"unchecked,omitempty" desc:"set when a file the row names in fact_evidence is not in this repo while another one is: evidence could not be checked (not in this repo: <paths>)"`
 	// ContradictedBy is set on a row whose planned / not-yet claim a newer
 	// row on the same subject states as done (devco:D-1027, bug hunt
 	// H-289): that row's id; Stale then says so too.

@@ -50,7 +50,7 @@ const (
 // Codes lists every finding code.
 func Codes() []Code {
 	return []Code{UnknownScheme, DanglingRef, VarOldName, VarShadowed, VarShareableDiffers,
-		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate, CopiedID, StaleFact, StaleClaim}
+		ParentCycle, LongSpan, TimeEntriesMany, DuplicateImport, MetaUnknownKey, SecretFound, StaleHolderLabel, HolderArchived, NearDuplicate, CopiedID, StaleFact, UncheckedFact, StaleClaim}
 }
 
 // ManyTimeEntries is where lint warns that a task should be split (TQ4,
@@ -86,6 +86,9 @@ type Finding struct {
 	Message string `json:"message"`
 	// Fix is the command that fixes it ("" when a person must decide).
 	Fix string `json:"fix,omitempty"`
+	// Rows is how many rows a finding without an id counts (unchecked_fact:
+	// the rows whose evidence this repo cannot check, bug hunt H-298).
+	Rows int `json:"rows,omitempty"`
 }
 
 // RunOut is the output of lint.run.

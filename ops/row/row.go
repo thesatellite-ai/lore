@@ -295,7 +295,10 @@ type ShowOut struct {
 	// words lore lint, search and ask print (devco:D-953, bug hunt H-212).
 	Stale    string `json:"stale,omitempty"`
 	Reverify string `json:"reverify,omitempty"`
-	prov     *Origin
+	// Unchecked says why the row's stale check could not run (bug hunt
+	// H-298: no code repo here, or evidence the repo does not hold).
+	Unchecked string `json:"unchecked,omitempty"`
+	prov      *Origin
 }
 
 // FactEnv is the Env upgrade that checks a row's fact evidence against the
@@ -318,9 +321,14 @@ func (o ops) markStale(ctx context.Context, src store.Source, r row.Row, out *Sh
 	}
 	chk := fe.FactChecker(ctx)
 	if chk == nil {
+		out.Unchecked = factstale.NoRepo
 		return
 	}
 	v := chk.Check(ctx, cl)
+	out.Unchecked = v.Unchecked()
+	if v.Unreachable {
+		out.Unchecked = factstale.UnfoundLead + ": none of its files are in this repo (run the command in the code repo it is about)"
+	}
 	st := ""
 	if src != store.SourceRepo {
 		st = string(src)
@@ -767,6 +775,9 @@ func (o ShowOut) Text() string {
 	}
 	if o.Stale != "" { // devco:D-953: the mark and its fix, as lint prints them
 		b.WriteString("  " + o.Stale + "\n  fix: " + o.Reverify + "\n")
+	}
+	if o.Unchecked != "" {
+		b.WriteString("  " + o.Unchecked + "\n")
 	}
 	b.WriteString(auditrec.LineAt(o.CreatedAt, o.CreatedBy, o.UpdatedAt, o.UpdatedBy))
 	b.WriteString(expand.RefsText(o.Refs))

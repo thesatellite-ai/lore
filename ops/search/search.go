@@ -258,6 +258,9 @@ type Hit struct {
 	// (fact_verified_at, devco:D-941): it may no longer hold, so it ranks
 	// below a fresh hit with the same match.
 	Stale string `json:"stale,omitempty" desc:"set when the row states a fact whose evidence files (fact_evidence) changed in git after it was verified (fact_verified_at): stale: evidence changed since <day> (<files>); check it before relying on it, it ranks below a fresh row with the same match"`
+	// Unchecked says why the hit's stale check could not run (bug hunt
+	// H-298), so a row lore could not check never reads as fresh.
+	Unchecked string `json:"unchecked,omitempty" desc:"set when a file the row names in fact_evidence is not in this repo while another one is: evidence could not be checked (not in this repo: <paths>)"`
 	// Fact is the hit row's evidence claim (nil when it names none), read
 	// by the wire layer to set Stale; never in --json.
 	Fact *factstale.Claim `json:"-"`
@@ -705,6 +708,8 @@ func (o RunOut) Text() string {
 		}
 		if h.Stale != "" {
 			body += "  [" + h.Stale + "]"
+		} else if h.Unchecked != "" {
+			body += "  [" + h.Unchecked + "]"
 		}
 		if h.CommentOn.ID != "" {
 			// D-942: a comment says which row it is on and that it is history

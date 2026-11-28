@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/dates"
+	"github.com/thesatellite-ai/lore/logic/factstale"
 	"github.com/thesatellite-ai/lore/logic/hybrid"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/refs"
@@ -47,6 +48,10 @@ type textRow struct {
 	// (markStale, devco:D-941), "" when fresh or unchecked; Reverify is
 	// the command that clears it (devco:D-953).
 	Stale, Reverify string
+	// Unchecked says why the row's stale check could not run (bug hunt
+	// H-298: no code repo here, or evidence the repo does not hold), ""
+	// when it ran or the row names no checkable evidence.
+	Unchecked string
 	// NewerBy is the newer row that says this row's planned claim is
 	// done (markContradicted, devco:D-1027), "" when none.
 	NewerBy string
@@ -1440,7 +1445,7 @@ func rowDay(r *textRow) string {
 
 // rowOf is row r as the answer prints it.
 func rowOf(r *textRow, matched []string) Row {
-	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale, Reverify: r.Reverify, ContradictedBy: r.NewerBy, factState: r.FactState, verified: r.Verified}
+	out := Row{ID: r.ID, Table: r.Table, Place: r.Place, Title: r.Title, Body: r.Body, Matched: matched, Stale: r.Stale, Reverify: r.Reverify, Unchecked: r.Unchecked, ContradictedBy: r.NewerBy, factState: r.FactState, verified: r.Verified}
 	if r.Day != "" {
 		out.At = r.Day
 	} else if !r.At.IsZero() {
@@ -1632,10 +1637,48 @@ func (o Out) reverifyText() string {
 	for _, r := range o.Rows {
 		add(r.ID, r.Reverify)
 	}
-	if b.Len() == 0 {
-		return ""
+	out := ""
+	if b.Len() > 0 {
+		out = "\nre-verify each stale row (its evidence changed after fact_verified_at):\n" + b.String()
 	}
-	return "\nre-verify each stale row (its evidence changed after fact_verified_at):\n" + b.String()
+	return out + o.uncheckedText()
+}
+
+// uncheckedText is one line per reason a printed row's stale check could
+// not run, naming the rows (bug hunt H-298: a row whose evidence lore
+// could not check was printed like a fresh one). Rows whose evidence the
+// repo does not hold share one line (their paths are in --json and lore
+// show), so an ask in a repo the notes are not about stays short.
+func (o Out) uncheckedText() string {
+	var reasons []string
+	ids := map[string][]string{}
+	for _, id := range o.Cited {
+		for _, r := range o.Rows {
+			why := r.Unchecked
+			if strings.HasPrefix(why, factstale.UnfoundLead) {
+				why = factstale.UnfoundLead
+			}
+			if r.ID != id || why == "" || slices.Contains(ids[why], id) {
+				continue
+			}
+			if ids[why] == nil {
+				reasons = append(reasons, why)
+			}
+			ids[why] = append(ids[why], id)
+		}
+	}
+	var b strings.Builder
+	for _, why := range reasons {
+		line := why + ": " + strings.Join(ids[why], ", ")
+		if why == factstale.UnfoundLead {
+			line += " (a file their fact_evidence names is not in this repo; lore show --id <id> names it)"
+		}
+		b.WriteString(line + "\n")
+	}
+	if b.Len() > 0 {
+		return "\n" + b.String()
+	}
+	return ""
 }
 
 // textCited is the ids the text's cited line names: every cited item but

@@ -250,6 +250,22 @@ func (a *App) doctorStaleFacts(ctx context.Context, warn func(string)) {
 		warn(string(opslint.StaleFact) + ": the rows could not be read: " + err.Error())
 		return
 	}
+	unchecked := 0
+	stale := found[:0:0]
+	for _, f := range found {
+		switch {
+		case f.Code == opslint.UncheckedFact && f.ID == "":
+			unchecked += f.Rows
+		case f.Code == opslint.UncheckedFact:
+			unchecked++
+		default:
+			stale = append(stale, f)
+		}
+	}
+	found = stale
+	if unchecked > 0 { // bug hunt H-298: never quietly fresh
+		warn(string(opslint.UncheckedFact) + ": " + strconv.Itoa(unchecked) + " row(s)' evidence (fact_evidence) could not be checked (run inside the code repo they are about): lore lint --code " + string(opslint.UncheckedFact))
+	}
 	if len(found) == 0 {
 		return
 	}

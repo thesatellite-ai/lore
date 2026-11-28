@@ -120,7 +120,7 @@ func markStale(ctx context.Context, env Env, rows []textRow, facts map[string]fa
 	}
 	chk := fe.FactChecker(ctx)
 	if chk == nil {
-		return
+		return // no code repo here: nothing said (lint and doctor count it, bug hunt H-298)
 	}
 	// bug hunt H-209: one git log for every row's evidence, not one per
 	// item (every row naming its evidence made each ask take ~15 s)
@@ -128,6 +128,6 @@ func markStale(ctx context.Context, env Env, rows []textRow, facts map[string]fa
 	now := opclock.Now(env)
 	for i, cl := range claims {
 		v := chk.Check(ctx, cl)
-		rows[i].Stale, rows[i].Reverify = v.Note(), factstale.Reverify(rows[i].ID, storeFlag(rows[i].Place), v, now)
+		rows[i].Stale, rows[i].Reverify, rows[i].Unchecked = v.Note(), factstale.Reverify(rows[i].ID, storeFlag(rows[i].Place), v, now), v.Unchecked()
 	}
 }

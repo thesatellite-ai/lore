@@ -7235,6 +7235,10 @@
                           },
                           "title": {
                             "type": "string"
+                          },
+                          "unchecked": {
+                            "type": "string",
+                            "description": "set when a file the row names in fact_evidence is not in this repo while another one is: evidence could not be checked (not in this repo: \u003cpaths\u003e)"
                           }
                         },
                         "required": [
@@ -32065,6 +32069,9 @@
                           },
                           "message": {
                             "type": "string"
+                          },
+                          "rows": {
+                            "type": "integer"
                           },
                           "store": {
                             "type": "string"
@@ -74134,6 +74141,9 @@
                         ]
                       }
                     },
+                    "unchecked": {
+                      "type": "string"
+                    },
                     "updated_at": {
                       "type": "string"
                     },
@@ -79366,6 +79376,10 @@
                                 "type": "string",
                                 "description": "the row's title or name; empty for a kind without one"
                               },
+                              "unchecked": {
+                                "type": "string",
+                                "description": "set when a file the row names in fact_evidence is not in this repo while another one is: evidence could not be checked (not in this repo: \u003cpaths\u003e)"
+                              },
                               "via_comment": {
                                 "type": "string",
                                 "description": "set on a row listed only because a comment on it matched: that comment's id, listed under it"
@@ -79497,6 +79511,10 @@
                               "title": {
                                 "type": "string",
                                 "description": "the row's title or name; empty for a kind without one"
+                              },
+                              "unchecked": {
+                                "type": "string",
+                                "description": "set when a file the row names in fact_evidence is not in this repo while another one is: evidence could not be checked (not in this repo: \u003cpaths\u003e)"
                               },
                               "via_comment": {
                                 "type": "string",

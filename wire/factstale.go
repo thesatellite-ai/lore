@@ -30,9 +30,20 @@ func (a *App) FactChecker(ctx context.Context) *factstale.Checker {
 	out, err := run(ctx, "rev-parse", "--verify", "--quiet", "HEAD")
 	head := strings.TrimSpace(string(out))
 	if err != nil || head == "" {
-		return factstale.NewChecker(run) // no commit yet: nothing to keep
+		return factstale.NewChecker(run).WithFiles(inTree(top)) // no commit yet: nothing to keep
 	}
-	return factstale.NewMemoChecker(run, factMemo{path: a.factMemoPath(top), top: top, head: head})
+	return factstale.NewMemoChecker(run, factMemo{path: a.factMemoPath(top), top: top, head: head}).WithFiles(inTree(top))
+}
+
+// inTree reports whether the work tree at top holds a repo-relative path,
+// so the checker reads evidence written from another folder (`myrepo/a.go`,
+// a bare `b.go` after `pkg/a.go`) as the file the repo holds (bug hunt
+// H-298). One lstat per distinct item, no git.
+func inTree(top string) func(string) bool {
+	return func(p string) bool {
+		_, err := os.Lstat(filepath.Join(top, filepath.FromSlash(p)))
+		return err == nil
+	}
 }
 
 // factMemoDir is the folder under the lore home's cache that keeps each
@@ -97,12 +108,13 @@ func (a *App) markStaleHits(ctx context.Context, hits []opssearch.Hit) {
 	}
 	chk := a.FactChecker(ctx)
 	if chk == nil {
-		return
+		return // no code repo here: nothing said (lint and doctor count it, bug hunt H-298)
 	}
 	chk.Prime(ctx, claims) // bug hunt H-209: one git log for every hit's evidence
 	for i := range hits {
 		if hits[i].Fact != nil && !hits[i].InTrash {
-			hits[i].Stale = chk.Check(ctx, *hits[i].Fact).Note()
+			v := chk.Check(ctx, *hits[i].Fact)
+			hits[i].Stale, hits[i].Unchecked = v.Note(), v.Unchecked()
 		}
 	}
 }
