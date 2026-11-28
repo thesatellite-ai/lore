@@ -142,3 +142,44 @@ func TestColonParts(t *testing.T) {
 		t.Errorf("Parse with key = %+v, want a Cond and a Text", got)
 	}
 }
+
+// TestApostropheIsNoQuote (devco:D-1034, bug hunt H-299): a single quote
+// inside a word is an apostrophe, so it neither joins the rest of the
+// query into one phrase nor swallows a key:value after it; a single quote
+// at a word's start (or after key:) still quotes.
+func TestApostropheIsNoQuote(t *testing.T) {
+	keys := map[string]bool{"owner": true, "status": true}
+	isKey := func(n string) bool { return keys[n] }
+	words := func(ts []Term) []string {
+		var out []string
+		for _, x := range ts {
+			switch x.Kind {
+			case Cond:
+				out = append(out, "cond("+x.Name()+"="+x.Value+")")
+			default:
+				out = append(out, x.Word)
+			}
+		}
+		return out
+	}
+	cases := []struct {
+		q    string
+		want []string
+		fts  string
+	}{
+		{"the app's base url (billing) changed?", []string{"the", "app's", "base", "url", "(billing)", "changed?"}, "the app's base url (billing) changed?"},
+		{"don't deploy status:open", []string{"don't", "deploy", "cond(status=open)"}, "don't deploy"},
+		{"acme's 2's rule", []string{"acme's", "2's", "rule"}, "acme's 2's rule"},
+		{"owner:'alice ng' deploy", []string{"cond(owner=alice ng)", "deploy"}, "deploy"},
+		{"'two words' deploy", []string{"'two words'", "deploy"}, "'two words' deploy"},
+	}
+	for _, c := range cases {
+		ts := Parse(c.q, isKey)
+		if got := words(ts); !slices.Equal(got, c.want) {
+			t.Errorf("%q: terms %q, want %q", c.q, got, c.want)
+		}
+		if got := FTS(ts); got != c.fts {
+			t.Errorf("%q: FTS %q, want %q", c.q, got, c.fts)
+		}
+	}
+}

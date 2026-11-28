@@ -2,6 +2,7 @@ package metaquery
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
 )
@@ -154,11 +155,17 @@ func unquote(v string) string {
 	return v
 }
 
-// split cuts q at spaces outside double or single quotes.
+// split cuts q at spaces outside double or single quotes. A single
+// quote opens a quote only where no letter or digit stands before it (a
+// word's start, owner:'alice ng'): inside a word it is an apostrophe
+// (app's, don't). Why (devco:D-1034, bug hunt H-299): read as a quote,
+// the apostrophe of "a custom app's base url … (x)?" made the rest of the
+// question one FTS5 phrase that no row holds, and swallowed every
+// key:value after it.
 func split(q string) []string {
 	var out []string
 	var b strings.Builder
-	var quote rune
+	var quote, prev rune
 	flush := func() {
 		if b.Len() > 0 {
 			out = append(out, b.String())
@@ -172,7 +179,7 @@ func split(q string) []string {
 			if r == quote {
 				quote = 0
 			}
-		case r == '"' || r == '\'':
+		case r == '"' || r == '\'' && !unicode.IsLetter(prev) && !unicode.IsDigit(prev):
 			quote = r
 			b.WriteRune(r)
 		case r == ' ' || r == '\t' || r == '\n':
@@ -180,6 +187,7 @@ func split(q string) []string {
 		default:
 			b.WriteRune(r)
 		}
+		prev = r
 	}
 	flush()
 	return out

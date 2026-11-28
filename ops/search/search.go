@@ -279,6 +279,9 @@ type Hit struct {
 	// set when ranked is; RankScore reads it.
 	rank   float64
 	ranked bool
+	// follows is set on a card that comes after every knowledge row
+	// (CardsFollow, devco:D-1034); Before reads it.
+	follows bool
 	// Text is the row's whole text (its body, else its longest searched
 	// field other than the title), set only with --full (devco D-758,
 	// owner P-8): the snippet stops after a few words, and reading a note
@@ -344,11 +347,47 @@ func Rerank(hits []Hit, n int, share []float64) {
 	}
 }
 
+// CardsFollow marks the cards of a long natural question (n topic words,
+// at least searchrank.LongQuestion) to follow every knowledge row
+// (devco:D-1034, bug hunt H-299): a question about how something works
+// is answered by notes, decisions and rules, and the org's people and
+// teams each holding a word or two of it (a product name that is also a
+// team handle, the company name in every email) filled the first
+// results. A card keeps its place by score when the question asks about
+// people (people: searchrank.AsksAboutPeople: who owns it, which team)
+// or when its name or handle holds at least half the question's words
+// (the question names it). Cards are never dropped, only listed later.
+func CardsFollow(hits []Hit, n int, people bool) {
+	if people || n < searchrank.LongQuestion {
+		return
+	}
+	for i := range hits {
+		h := &hits[i]
+		if !Card(h.Entity) || len(h.Held) != n {
+			continue
+		}
+		named := 0
+		for k := range h.Held {
+			if h.Held[k] && k < len(h.NameHeld) && h.NameHeld[k] {
+				named++
+			}
+		}
+		h.follows = 2*named < n
+	}
+}
+
 // Before is the merged order of two current hits (devco D-436, D-941,
-// D-1007): the higher RankScore first, and at an equal one a knowledge
-// row before a card. -1 when a goes first, 1 when b does, 0 to keep
-// their order (kind order).
+// D-1007, D-1034): a card that follows the knowledge rows (CardsFollow)
+// after every hit that does not, then the higher RankScore first, and at
+// an equal one a knowledge row before a card. -1 when a goes first, 1
+// when b does, 0 to keep their order (kind order).
 func Before(a, b Hit) int {
+	if a.follows != b.follows {
+		if a.follows {
+			return 1
+		}
+		return -1
+	}
 	if c := cmp.Compare(RankScore(b), RankScore(a)); c != 0 {
 		return c
 	}

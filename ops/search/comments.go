@@ -114,6 +114,12 @@ func GroupComments(hits []Hit, parent CommentParent) []Hit {
 			}
 			return 1
 		}
+		if a.follows != b.follows { // devco:D-1034: as Before orders the hits
+			if b.follows {
+				return -1
+			}
+			return 1
+		}
 		if c := cmp.Compare(b.rank, a.rank); c != 0 {
 			return c
 		}
@@ -139,6 +145,7 @@ type hitGroup struct {
 	history bool    // the group stands after the current hits
 	rank    float64 // the group's place among groups of its kind, best first
 	card    bool    // head is a card: after a knowledge group of the same rank (Before)
+	follows bool    // head is a card that follows every knowledge row (CardsFollow)
 }
 
 // groupOf ranks head and its comments as one: a row that is history
@@ -146,7 +153,7 @@ type hitGroup struct {
 // hits; otherwise the group takes its best match (the row rises to its
 // best comment), cut by staleRank when head is a stale fact (RankScore).
 func groupOf(head Hit, comments []Hit) hitGroup {
-	g := hitGroup{hits: append([]Hit{head}, comments...), card: Card(head.Entity)}
+	g := hitGroup{hits: append([]Hit{head}, comments...), card: Card(head.Entity), follows: head.follows}
 	if head.History != "" && head.ViaComment == "" {
 		g.history, g.rank = true, RankScore(head)
 		return g

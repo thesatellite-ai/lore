@@ -69,8 +69,12 @@ func (a *App) searchRoster(ctx context.Context, t opssearch.Target, w searchrank
 			return nil, err
 		}
 		for _, m := range out.Members {
-			// a person's name, handle, email and GitHub login all name them
-			add(m.ID, m.Name, rosterHandle(m.Handle)+" "+m.Email, []string{m.Name, m.Handle, m.Email, m.GitHub})
+			// a person's name, handle, GitHub login and email name them;
+			// the email's domain is the company's, shared by everyone, so
+			// it is held but names nobody (devco:D-1034): a question with
+			// the company's name in it held every person in full
+			local, _, _ := strings.Cut(m.Email, "@")
+			add(m.ID, m.Name, rosterHandle(m.Handle)+" "+m.Email, []string{m.Name, m.Handle, local, m.GitHub}, m.Email)
 		}
 	case opssearch.EntityTeam:
 		var out opsteam.TeamListOut

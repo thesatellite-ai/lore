@@ -180,10 +180,19 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	r.PerTable++
 	// devco:D-1007: how many knowledge rows each topic word's own search
 	// found, over every kind but the cards (their words are what is
-	// weighed), for each word's rarity (searchrank.Share, Rerank)
+	// weighed), for each word's rarity (searchrank.Share, Rerank). Sized
+	// by the words the tables ran with (devco:D-1034): a question FTS5
+	// refused as syntax runs as its plain words (opsmemory.MatchWords),
+	// which are natural although the text as written is not.
 	var df []int
-	if words.Natural {
-		df = make([]int, len(words.Terms))
+	// devco:D-1034 (bug hunt H-299): the roster matches words, never FTS5
+	// syntax, so it ranks by the query's plain words. Read as syntax, a
+	// question holding a parenthesis or a quote was not natural there, and
+	// searchrank.Order counted every person and team holding one word of
+	// twenty as holding all twenty: the first results were all cards.
+	roster := words
+	if plain, ok := words.Plain(); ok {
+		roster = plain
 	}
 	for _, t := range r.Targets {
 		var hits []opssearch.Hit
@@ -191,7 +200,7 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		case t.Roster && (len(mconds) > 0 || len(conds) > 0 || r.Store != "" || r.Repo != "" || r.BornBranch != "" || !r.Window.IsZero()):
 			continue // people and teams carry no metadata, fields, store, repo, branch or date
 		case t.Roster:
-			hits, err = a.searchRoster(ctx, t, words, r.PerTable)
+			hits, err = a.searchRoster(ctx, t, roster, r.PerTable)
 		case len(mconds) > 0:
 			hits, err = a.searchMetaTable(ctx, eng, t, mconds, msens, narrow, sc, r.PerTable)
 			scoreInOrder(hits, words.Terms)
@@ -203,6 +212,9 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		default:
 			var tdf []int
 			hits, tdf, err = a.searchCoreTable(ctx, eng, t, words, sc, r.PerTable)
+			if df == nil && len(tdf) > 0 && !opssearch.Card(t.Entity) {
+				df = make([]int, len(tdf))
+			}
 			if len(tdf) == len(df) && !opssearch.Card(t.Entity) {
 				for k := range df {
 					df[k] += tdf[k]
@@ -237,6 +249,11 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	// by their rarity, and a card follows a knowledge row of equal rank,
 	// so neither leads on the question's common words
 	opssearch.Rerank(res.Hits, len(df), searchrank.Share(df))
+	// devco:D-1034: in a long question that does not ask about people, a
+	// person or team its name does not answer follows every knowledge row
+	if roster.Natural {
+		opssearch.CardsFollow(res.Hits, len(roster.Terms), searchrank.AsksAboutPeople(text))
+	}
 	sort.SliceStable(res.Hits, func(i, j int) bool {
 		if hi, hj := res.Hits[i].History != "", res.Hits[j].History != ""; hi != hj {
 			return hj
